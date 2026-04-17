@@ -2,3 +2,4 @@ node_modules
 dist
 AgregarDatosExcel/output/*
 perfil_temporal_robot
+.env
