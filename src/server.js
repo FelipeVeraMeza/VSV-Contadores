@@ -117,7 +117,7 @@ app.use((err, req, res, next) => {
 });
 
 const server = app.listen(PORT, () => {
-    console.log(`Servidor en : http://localhost:${PORT}`);
+  console.log(`✅ Servidor corriendo en el puerto ${PORT}`);
 });
 
 // --- Cierre Seguro ---
