@@ -5,16 +5,6 @@ const { Client } = pkg;
 
 dotenv.config();
 
-// Inicializamos el cliente de Base de Datos PostgreSQL
-const client = new Client({
-    user: process.env.DBS_USER,
-    host: process.env.DBS_HOST,
-    database: process.env.DBS_DATABASE,
-    password: process.env.DBS_PASSWORD,
-    port: process.env.DBS_PORT,
-    ssl: { rejectUnauthorized: false }
-});
-
 // Helper para pausas exactas
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -47,24 +37,37 @@ const limpiarYTipar = async (page, selector, texto) => {
 
 // 🚀 Exportamos la función para que el servidor (Express) pueda usarla
 export async function emitirFacturaPuppeteer(datos) {
-    // Conectamos a la BD antes de empezar
+    
+    // ==============================================================
+    // NUEVO: CREAMOS LA CONEXIÓN A LA BD *DENTRO* DE LA FUNCIÓN 
+    // Esto evita que el sistema se quede pegado en la 2da factura
+    // ==============================================================
+    const client = new Client({
+        user: process.env.DBS_USER,
+        host: process.env.DBS_HOST,
+        database: process.env.DBS_DATABASE,
+        password: process.env.DBS_PASSWORD,
+        port: process.env.DBS_PORT,
+        ssl: { rejectUnauthorized: false }
+    });
+
     try {
         await client.connect();
         console.log("🔌 Búnker PostgreSQL conectado para facturación.");
     } catch (dbConnErr) {
-        console.log("⚠️ Advertencia: Error inicial conectando a BD o ya estaba conectada.", dbConnErr.message);
+        console.log("⚠️ Error conectando a BD:", dbConnErr.message);
     }
 
     const browser = await puppeteer.launch({ 
-    headless: true, // <--- ¡CAMBIA ESTO A FALSE SI QUIERES VERLO! 👀
-    defaultViewport: null, 
-    args: [
-        '--no-sandbox', 
-        '--disable-setuid-sandbox', 
-        '--start-maximized', 
-        '--disable-blink-features=AutomationControlled'
-    ] 
-});
+        headless: true, // <--- ¡CÁMBIALO A FALSE SI QUIERES VER AL ROBOT TRABAJAR!
+        defaultViewport: null, 
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox', 
+            '--start-maximized', 
+            '--disable-blink-features=AutomationControlled'
+        ] 
+    });
 
     const page = await browser.newPage();
     
@@ -73,7 +76,7 @@ export async function emitirFacturaPuppeteer(datos) {
         await navegarAEmision(page);
 
         // ==============================================================
-        // 1. LOGIN CON TUS CLAVES Y SELECCIÓN FORZADA DE LA 2DA EMPRESA
+        // 1. LOGIN CON TUS CLAVES Y SELECCIÓN FORZADA DE LA EMPRESA
         // ==============================================================
         const inputRutExiste = await page.$('#rutcntr');
         if (inputRutExiste) {
@@ -95,24 +98,16 @@ export async function emitirFacturaPuppeteer(datos) {
                 const valueSegundaEmpresa = await page.evaluate(() => {
                     const selectElement = document.querySelector('select[name="RUT_EMP"]');
                     if (selectElement && selectElement.options.length > 0) {
-                        // Opcion 0 suele ser "--- Seleccione ---"
-                        // Opcion 1 es la primera empresa
-                        // Opcion 2 es la SEGUNDA empresa
                         let targetIndex = 1;
-                        
-                        // Verificamos si la primera opción es texto de relleno
                         if (selectElement.options[0].text.toLowerCase().includes('seleccione')) {
-                            // Si tiene texto de relleno y hay al menos 3 opciones, tomamos la index 2 (2da empresa)
                             if (selectElement.options.length > 2) {
                                 targetIndex = 2;
                             }
                         } else {
-                            // Si no hay texto de relleno, la index 1 es la 2da empresa
                             if (selectElement.options.length > 1) {
                                 targetIndex = 1;
                             }
                         }
-                        
                         return selectElement.options[targetIndex].value;
                     }
                     return null;
@@ -120,12 +115,11 @@ export async function emitirFacturaPuppeteer(datos) {
 
                 if (valueSegundaEmpresa) {
                     console.log(`✅ Forzando selección de la 2da empresa (Value: ${valueSegundaEmpresa})...`);
-                    await page.click('select[name="RUT_EMP"]'); // Hacemos clic físico en la caja
+                    await page.click('select[name="RUT_EMP"]'); 
                     await delay(500);
                     await page.select('select[name="RUT_EMP"]', valueSegundaEmpresa);
                     await delay(500);
                     
-                    // Click en botón continuar
                     await Promise.all([
                         page.waitForNavigation({ waitUntil: 'networkidle2' }),
                         page.evaluate(() => {
@@ -133,8 +127,6 @@ export async function emitirFacturaPuppeteer(datos) {
                             if (btnSubmit) btnSubmit.click();
                         })
                     ]);
-                } else {
-                    console.log('⚠️ No se encontraron empresas en la lista.');
                 }
             }
         }
@@ -154,7 +146,6 @@ export async function emitirFacturaPuppeteer(datos) {
         await page.type('#EFXP_DV_RECEP', datos.dvReceptor, { delay: 50 });
         await page.keyboard.press('Tab');
         
-        // 🚨 PAUSA CRÍTICA: Esperar que el SII cargue la Razón Social de su propia base de datos
         console.log('⏳ Esperando que el SII cargue la Razón Social automáticamente...');
         await delay(6000); 
 
@@ -197,11 +188,9 @@ export async function emitirFacturaPuppeteer(datos) {
         // ==============================================================
         console.log('✅ Validando montos en el SII...');
         
-        // 1. Clic en Validar y visualizar
         await page.click('button[name="Button_Update"]');
         await delay(3500); 
         
-        // 🚨 CAZADOR DE ALERTA DE TRIBUTACIÓN SIMPLIFICADA (MIPYME) 🚨
         console.log('👀 Revisando si existe alerta de Tributación Simplificada...');
         try {
             const alertaAceptada = await page.evaluate(() => {
@@ -219,9 +208,7 @@ export async function emitirFacturaPuppeteer(datos) {
                 console.log('⚠️ Alerta MIPYME detectada: Aceptando generación de asientos...');
                 await delay(2000); 
             }
-        } catch (e) {
-            console.log('👍 No se detectó alerta (o ya estaba aceptada).');
-        }
+        } catch (e) {}
         
         console.log('✍️  Intentando abrir cuadro de firma...');
         
@@ -232,9 +219,7 @@ export async function emitirFacturaPuppeteer(datos) {
             try {
                 await page.evaluate(() => {
                     const btn = document.querySelector('input[name="btnSign"]');
-                    if (btn && !btn.disabled) {
-                        btn.click();
-                    }
+                    if (btn && !btn.disabled) btn.click();
                 });
 
                 await page.waitForSelector('#myPass', { visible: true, timeout: 3500 });
@@ -267,9 +252,9 @@ export async function emitirFacturaPuppeteer(datos) {
         ]);
         
         // ==============================================================
-        // 4. CAPTURA DEL FOLIO Y CIERRE
+        // 4. CAPTURA DEL FOLIO Y GUARDADO (EL MOMENTO EXACTO)
         // ==============================================================
-        console.log('🔍 Buscando el Folio generado...');
+        console.log('🔍 Buscando el Folio generado en la pantalla de éxito...');
         let folio = null;
         for (let j = 0; j < 30; j++) {
             const text = await page.evaluate(() => document.body.innerText).catch(() => "");
@@ -283,65 +268,94 @@ export async function emitirFacturaPuppeteer(datos) {
         
         if (!folio) throw new Error("No se pudo obtener el folio en la pantalla final. Revisa en el SII si se emitió.");
         
-        console.log(`🎉 ¡Éxito Absoluto! Folio generado: ${folio}`);
+        console.log(`🎉 ¡Éxito Absoluto! Folio generado en el SII: ${folio}`);
 
-        // =========================================================
-        // NUEVO: GUARDAR EN LA BASE DE DATOS (POSTGRESQL / PG)
-        // =========================================================
-        console.log('Intentando guardar documento en BD Principal...');
+// ==============================================================
+        // 🌟 RECIÉN AHORA SE GUARDA EN LA BASE DE DATOS (ENLAZADO)
+        // ==============================================================
+        console.log('💾 Guardando documento en la Base de Datos...');
         
-        const tipoDte = datos.tipo_documento === '34' ? 34 : 33; // 33 Afecta, 34 Exenta
-        const montoNeto = parseInt(datos.producto.precio);
-        const montoIva = tipoDte === 33 ? Math.round(montoNeto * 0.19) : 0;
-        const montoTotal = tipoDte === 33 ? (montoNeto + montoIva) : montoNeto;
+        let empresaIdFinal = datos.empresa_id;
+        const rutOriginal = `${datos.rutReceptor}-${datos.dvReceptor}`;
 
-        try {
-            const queryInsert = `
-                INSERT INTO documentos_emitidos 
-                (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, monto_exento, monto_iva, monto_total, fecha_emision, estado)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Emitido')
-                ON CONFLICT ON CONSTRAINT unique_empresa_tipo_folio DO NOTHING
-                RETURNING id;
-            `;
+        // LÓGICA DE MODO GLOBAL: Si la empresa no existía y la buscamos manual
+        if (empresaIdFinal === 'EXTERNO') {
+            console.log(`⚠️ Cliente externo detectado: ${datos.razonSocial}. Creándolo en el CRM...`);
+            try {
+                const { createHash } = await import('crypto');
+                const rutHash = createHash('sha256').update(rutOriginal).digest('hex');
+                const { encrypt } = await import('../utils/crypto.js'); 
+                const rutEncrypted = encrypt(rutOriginal);
 
-            const valores = [
-                datos.empresa_id, 
-                `${datos.rutReceptor}-${datos.dvReceptor}`, 
-                tipoDte, 
-                folio, 
-                tipoDte === 33 ? montoNeto : 0,  // Monto Neto (Afecto)
-                tipoDte === 34 ? montoNeto : 0,  // Monto Exento
-                montoIva, 
-                montoTotal,
-                new Date().toISOString().split('T')[0] // Fecha local (hoy)
-            ];
-
-            const resDB = await client.query(queryInsert, valores);
-            
-            if (resDB.rowCount > 0) {
-                console.log(`💾 ¡Factura ${folio} guardada exitosamente en el Historial de la empresa!`);
-            } else {
-                console.log(`⚠️ La factura ${folio} ya existía en la BD. Omitiendo duplicado.`);
+                const insertEmpresaQuery = `
+                    INSERT INTO empresa (razon_social, rut_encrypted, rut_hash, giro, regimen_tributario, activo)
+                    VALUES ($1, $2, $3, 'Por definir', 'Por definir', true)
+                    RETURNING id;
+                `;
+                const resultEmpresa = await client.query(insertEmpresaQuery, [datos.razonSocial || 'CLIENTE NUEVO SII', rutEncrypted, rutHash]);
+                empresaIdFinal = resultEmpresa.rows[0].id;
+                console.log(`✅ ¡Cliente nuevo creado con éxito! ID: ${empresaIdFinal}`);
+            } catch (errCreacion) {
+                console.error("❌ Error al crear la nueva empresa en la BD:", errCreacion.message);
+                empresaIdFinal = null; 
             }
-        } catch (dbError) {
-            console.error('❌ Error guardando en Base de Datos:', dbError.message);
         }
-        // =========================================================
 
-        console.log('🧹 Cerrando sesión...');
+        // GUARDADO DE LA FACTURA VINCULADA (AJUSTADO A TU ESQUEMA REAL)
+        if (empresaIdFinal) {
+            const tipoDte = datos.tipo_documento ? parseInt(datos.tipo_documento) : 33; 
+            const montoNeto = parseInt(datos.producto.precio);
+            const fechaEmision = new Date().toISOString(); // Usa el formato exacto timestamp with timezone que pide Supabase
+
+            try {
+                // 1. Verificamos si la factura ya existe para no duplicar (y evitar el error de Constraint)
+                const checkQuery = `SELECT id FROM documentos_emitidos WHERE rut_cliente = $1 AND tipo_dte = $2 AND folio = $3`;
+                const checkRes = await client.query(checkQuery, [rutOriginal, tipoDte, folio]);
+
+                if (checkRes.rows.length === 0) {
+                    // 2. Si no existe, la insertamos SOLO usando tus columnas reales
+                    const queryInsert = `
+                        INSERT INTO documentos_emitidos 
+                        (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, fecha_emision, url_pdf)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        RETURNING id;
+                    `;
+
+                    const valores = [
+                        empresaIdFinal, 
+                        rutOriginal, 
+                        tipoDte, 
+                        folio, 
+                        montoNeto,  
+                        fechaEmision,
+                        null // url_pdf se queda vacío por ahora
+                    ];
+
+                    const resDB = await client.query(queryInsert, valores);
+                    
+                    if (resDB.rowCount > 0) {
+                        console.log(`✅ ¡Factura ${folio} enlazada exitosamente a la empresa!`);
+                    }
+                } else {
+                    console.log(`⚠️ La factura ${folio} ya existía en la BD. Omitiendo duplicado.`);
+                }
+            } catch (dbError) {
+                console.error('❌ Error fatal guardando la factura en la BD:', dbError.message);
+            }
+        }
+
+        console.log('🧹 Cerrando sesión del SII...');
         try { 
             await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { waitUntil: 'networkidle2', timeout: 10000 }); 
         } catch (e) {}
 
-        
         return { ok: true, folio: folio, fileName: `Factura_${folio}.pdf` };
         
     } catch (error) {
-        console.error(`❌ Error fatal en Puppeteer: ${error.message}`);
+        console.error(`❌ Error en Puppeteer: ${error.message}`);
         throw new Error(error.message);
     } finally {
         await browser.close(); 
-        // Cerramos conexión a BD para evitar leaks de memoria en el servidor
         try { await client.end(); } catch (e) {} 
     }
 }
