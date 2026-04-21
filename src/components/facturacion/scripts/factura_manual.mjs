@@ -1,7 +1,19 @@
 import puppeteer from 'puppeteer';
 import dotenv from 'dotenv';
+import pkg from 'pg'; 
+const { Client } = pkg;
 
 dotenv.config();
+
+// Inicializamos el cliente de Base de Datos PostgreSQL
+const client = new Client({
+    user: process.env.DBS_USER,
+    host: process.env.DBS_HOST,
+    database: process.env.DBS_DATABASE,
+    password: process.env.DBS_PASSWORD,
+    port: process.env.DBS_PORT,
+    ssl: { rejectUnauthorized: false }
+});
 
 // Helper para pausas exactas
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -35,8 +47,16 @@ const limpiarYTipar = async (page, selector, texto) => {
 
 // 🚀 Exportamos la función para que el servidor (Express) pueda usarla
 export async function emitirFacturaPuppeteer(datos) {
+    // Conectamos a la BD antes de empezar
+    try {
+        await client.connect();
+        console.log("🔌 Búnker PostgreSQL conectado para facturación.");
+    } catch (dbConnErr) {
+        console.log("⚠️ Advertencia: Error inicial conectando a BD o ya estaba conectada.", dbConnErr.message);
+    }
+
     const browser = await puppeteer.launch({ 
-    headless: true, // <--- ¡CAMBIA ESTO A FALSE! 👀
+    headless: true, // <--- ¡CAMBIA ESTO A FALSE SI QUIERES VERLO! 👀
     defaultViewport: null, 
     args: [
         '--no-sandbox', 
@@ -265,11 +285,55 @@ export async function emitirFacturaPuppeteer(datos) {
         
         console.log(`🎉 ¡Éxito Absoluto! Folio generado: ${folio}`);
 
+        // =========================================================
+        // NUEVO: GUARDAR EN LA BASE DE DATOS (POSTGRESQL / PG)
+        // =========================================================
+        console.log('Intentando guardar documento en BD Principal...');
+        
+        const tipoDte = datos.tipo_documento === '34' ? 34 : 33; // 33 Afecta, 34 Exenta
+        const montoNeto = parseInt(datos.producto.precio);
+        const montoIva = tipoDte === 33 ? Math.round(montoNeto * 0.19) : 0;
+        const montoTotal = tipoDte === 33 ? (montoNeto + montoIva) : montoNeto;
+
+        try {
+            const queryInsert = `
+                INSERT INTO documentos_emitidos 
+                (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, monto_exento, monto_iva, monto_total, fecha_emision, estado)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Emitido')
+                ON CONFLICT ON CONSTRAINT unique_empresa_tipo_folio DO NOTHING
+                RETURNING id;
+            `;
+
+            const valores = [
+                datos.empresa_id, 
+                `${datos.rutReceptor}-${datos.dvReceptor}`, 
+                tipoDte, 
+                folio, 
+                tipoDte === 33 ? montoNeto : 0,  // Monto Neto (Afecto)
+                tipoDte === 34 ? montoNeto : 0,  // Monto Exento
+                montoIva, 
+                montoTotal,
+                new Date().toISOString().split('T')[0] // Fecha local (hoy)
+            ];
+
+            const resDB = await client.query(queryInsert, valores);
+            
+            if (resDB.rowCount > 0) {
+                console.log(`💾 ¡Factura ${folio} guardada exitosamente en el Historial de la empresa!`);
+            } else {
+                console.log(`⚠️ La factura ${folio} ya existía en la BD. Omitiendo duplicado.`);
+            }
+        } catch (dbError) {
+            console.error('❌ Error guardando en Base de Datos:', dbError.message);
+        }
+        // =========================================================
+
         console.log('🧹 Cerrando sesión...');
         try { 
             await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { waitUntil: 'networkidle2', timeout: 10000 }); 
         } catch (e) {}
 
+        
         return { ok: true, folio: folio, fileName: `Factura_${folio}.pdf` };
         
     } catch (error) {
@@ -277,5 +341,7 @@ export async function emitirFacturaPuppeteer(datos) {
         throw new Error(error.message);
     } finally {
         await browser.close(); 
+        // Cerramos conexión a BD para evitar leaks de memoria en el servidor
+        try { await client.end(); } catch (e) {} 
     }
 }

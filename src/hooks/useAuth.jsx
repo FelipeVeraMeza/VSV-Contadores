@@ -11,7 +11,6 @@ const AuthContext = createContext(null);
 
 const getInitialState = (key, fallback) => {
     try {
-        // Leemos también la memoria que dejamos en el CRM para que esté sincronizado
         const item = localStorage.getItem(key) || localStorage.getItem('empresaActivaCRM');
         return item ? JSON.parse(item) : fallback;
     } catch (error) {
@@ -30,16 +29,58 @@ export const AuthProvider = ({ children }) => {
         setLoading(false);
     }, []);
 
-    // ❌ ELIMINADO: El useEffect que te forzaba a seleccionar la primera empresa.
-    // Ahora, si tú decides dejarlo en blanco, el sistema se quedará en blanco.
-
-    const logout = useCallback(() => {
+    const logout = useCallback((param) => {
+        // 1. Borramos los estados de React
         setUser(null);
         setSelectedCompany(null);
+        
+        // 2. Limpiamos toda la basura del navegador
         localStorage.clear();
         queryClient.clear();
-        navigate('/login');
-    }, [navigate, queryClient]);
+        
+        // 3. Diferenciamos si fue el Temporizador o un Clic Manual
+        // Si "param" es un texto y dice "inactividad", mandamos el parámetro por URL
+        if (typeof param === 'string' && param.includes("inactividad")) {
+            window.location.href = '/login?expired=true';
+        } else {
+            window.location.href = '/login';
+        }
+    }, [queryClient]);
+
+    // ============================================================
+    // 🛡️ SISTEMA DE SEGURIDAD: CIERRE POR INACTIVIDAD (10 SEGUNDOS)
+    // ============================================================
+    const TIEMPO_INACTIVIDAD_MS = 5 * 60 * 1000; // 10 segundos
+
+    useEffect(() => {
+        let temporizador;
+
+        const resetTimer = () => {
+            if (temporizador) clearTimeout(temporizador);
+            
+            if (user) {
+                temporizador = setTimeout(() => {
+                    // Le enviamos el texto clave a la función logout
+                    logout("inactividad");
+                }, TIEMPO_INACTIVIDAD_MS);
+            }
+        };
+
+        if (user) {
+            resetTimer(); 
+            
+            // Sensores de movimiento
+            const eventos = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
+
+            eventos.forEach(evento => window.addEventListener(evento, resetTimer));
+
+            return () => {
+                if (temporizador) clearTimeout(temporizador);
+                eventos.forEach(evento => window.removeEventListener(evento, resetTimer));
+            };
+        }
+    }, [user, logout]);
+    // ============================================================
 
     const handleResponse = useCallback(async (res) => {
         if (res.status === 401) {
@@ -60,8 +101,6 @@ export const AuthProvider = ({ children }) => {
                 setUser(data);
                 localStorage.setItem('user', JSON.stringify(data));
 
-                // ❌ ELIMINADO: La inyección de la primera empresa al hacer login.
-                // Nos aseguramos de que el sistema inicie limpio.
                 setSelectedCompany(null);
                 localStorage.removeItem('selectedCompany');
                 localStorage.removeItem('empresaActivaCRM');
@@ -152,7 +191,7 @@ export const AuthProvider = ({ children }) => {
         user, 
         isAuthenticated: !!user, 
         selectedCompany,
-        setSelectedCompany, // ✅ AÑADIDO: Permite cambiar la empresa sin redireccionar
+        setSelectedCompany, 
         loading,
         login, 
         logout, 

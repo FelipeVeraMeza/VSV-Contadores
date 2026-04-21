@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,28 +11,42 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
-import { Building2, Mail, CreditCard, Loader2, Tag } from "lucide-react";
+import { 
+  Building2, Mail, CreditCard, Loader2, Tag, 
+  Search, CheckCircle2, X, Plus, UserPlus 
+} from "lucide-react";
 import { API_BASE_URL } from "../../../../../config.js";
 import { cleanRut } from "@/lib/rut.js";
 
-// IMPORTAMOS EL CONTEXTO GLOBAL PARA LEER LA EMPRESA
+// CONTEXTO Y SERVICIOS
 import { useAuth } from "@/hooks/useAuth.jsx"; 
+import { getCrmDataApi } from "@/services/crmService.js";
 
+// --- CONFIGURACIONES ---
 const DOC_CONFIG = {
-  title: "Crear Factura Electrónica",
-  description: "Emite una Factura Electrónica (DTE 33) automatizada usando los datos de la empresa activa.",
+  title: "Facturador Electrónico",
+  code: "DTE 33",
+  description: "Emisión sincronizada con el SII y registro automático en el Búnker.",
 };
 
-const FACTURA_TABS = {
-  UNICA: "unica",
-  MASIVA: "masiva",
-};
-
+// --- UTILIDADES ---
 const todayLocalISO = () => {
   const d = new Date();
   const offset = d.getTimezoneOffset();
   const local = new Date(d.getTime() - offset * 60 * 1000);
   return local.toISOString().slice(0, 10);
+};
+
+const formatRutSimple = (rut) => {
+  if (!rut) return "";
+  const cleaned = rut.replace(/[^0-9kK]/g, '').toUpperCase();
+  if (cleaned.length <= 1) return cleaned;
+  return cleaned.slice(0, -1) + '-' + cleaned.slice(-1);
+};
+
+const cleanStr = (str) => {
+  if (!str) return '';
+  return String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 };
 
 const createEmptyItem = () => ({
@@ -52,451 +66,299 @@ const createEmptyItem = () => ({
   descripcionProducto: "", 
 });
 
-// --- FUNCIONES DE PARSEO CSV ---
-const normalizeHeader = (value) =>
-  String(value || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-
-const CSV_HEADERS = {
-  rutFacturar: ["rutfacturar", "rut_facturar", "rutreceptor", "rut"],
-  ciudadReceptor: ["ciudadreceptor", "ciudad_receptor"],
-  name: ["name", "item", "nombreitem", "nombre", "nmbitem", "plancontable", "plan"],
-  cantidad: ["cantidad", "qtyitem", "qty", "cantidaditem"],
-  precio: ["precio", "prcitem", "valor", "monto", "neto"],
-  fecha: ["fecha", "fchemis", "fechadeemision", "fechaemision"],
-  metodo: ["metodo", "formadepago", "forma_pago"],
-  ciudadEmisor: ["ciudademisor", "ciudad_emisor", "ciudadorigen"],
-  telefonoEmisor: ["telefonoemisor", "telefono_emisor", "telefono"],
-  contactoReceptor: ["contactoreceptor", "contacto_receptor", "contacto", "correo", "email", "e_mail"],
-  rutSolicita: ["rutsolicita", "rut_solicita"],
-  unidadProducto: ["unidadproducto", "unidad_producto", "uniitem"],
-  descripcionProducto: ["descripcionproducto", "descripcion", "descripcion_item"],
-};
-
-const parseCsvLine = (line) => {
-  const result = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const char = line[i];
-    const next = line[i + 1];
-    if (char === '"') {
-      if (inQuotes && next === '"') { current += '"'; i += 1; } 
-      else { inQuotes = !inQuotes; }
-      continue;
-    }
-    if (char === "," && !inQuotes) { result.push(current.trim()); current = ""; continue; }
-    current += char;
-  }
-  result.push(current.trim());
-  return result;
-};
-
-const parseCsvText = (content) => {
-  const lines = String(content || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  if (lines.length < 2) return [];
-  const rawHeaders = parseCsvLine(lines[0]);
-  const normalizedHeaders = rawHeaders.map(normalizeHeader);
-  return lines.slice(1).map((line) => {
-    const values = parseCsvLine(line);
-    return normalizedHeaders.reduce((acc, key, idx) => {
-      acc[key] = values[idx] ?? "";
-      return acc;
-    }, {});
-  });
-};
-
-const getCsvValue = (row, aliases = []) => {
-  for (const alias of aliases) {
-    const value = row[alias];
-    if (value !== undefined && String(value).trim() !== "") return String(value).trim();
-  }
-  return "";
-};
-
-const mapCsvRowToItem = (row) => {
-  const base = createEmptyItem();
-  Object.entries(CSV_HEADERS).forEach(([key, aliases]) => {
-    const normalizedAliases = aliases.map(normalizeHeader);
-    const value = getCsvValue(row, normalizedAliases);
-    if (value !== "") base[key] = value;
-  });
-
-  const rawNeto = getCsvValue(row, ["neto", "monto", "valor", "precio", "prcitem"]);
-  base.precio = rawNeto !== "" ? String(rawNeto || "").trim().replace(/[^0-9]/g, "") : "";
-  const rawPlan = getCsvValue(row, ["plancontable", "plan", "tipo_plan"]);
-  base.name = rawPlan || "Sin Plan";
-  
-  return base;
-};
-// --------------------------------
-
 export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
-  // Extraemos la empresa activa de la memoria global
-  const { selectedCompany } = useAuth();
+  const { selectedCompany, user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState(FACTURA_TABS.UNICA);
+  // ESTADOS DEL FORMULARIO
   const [item, setItem] = useState(createEmptyItem());
-  
-  const [bulkRows, setBulkRows] = useState([]);
-  const [bulkPreviewRows, setBulkPreviewRows] = useState([]);
-  const [bulkFileName, setBulkFileName] = useState("");
-  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
-  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [folioGenerado, setFolioGenerado] = useState(null);
 
-  // Variables calculadas de la empresa para la UI (Blindadas contra nulos)
-  const razonSocialSegura = selectedCompany?.razon_social || selectedCompany?.razonSocial || 'Razón Social Desconocida';
+  // ESTADOS DEL BUSCADOR
+  const [allClientes, setAllClientes] = useState([]); 
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [empresaEncontrada, setEmpresaEncontrada] = useState(null);
+  const [isLoadingCrm, setIsLoadingCrm] = useState(false);
+  
+  // IDENTIFICACIÓN DE EMPRESA ACTIVA
+  const empresaEfectiva = selectedCompany || empresaEncontrada;
+  const isExternal = empresaEncontrada?.id === 'EXTERNO';
+  const razonSocialSegura = empresaEfectiva?.razon_social || empresaEfectiva?.razonSocial || (searchTerm.length > 0 ? 'Buscando...' : '---');
 
+  // CARGA DE DATOS CRM
   useEffect(() => {
-    if (isOpen) {
-      setActiveTab(FACTURA_TABS.UNICA);
-      setBulkRows([]);
-      setBulkPreviewRows([]);
-      setBulkFileName("");
-      setIsFinished(false);
-      setFolioGenerado(null);
+    if (!isOpen) return;
+    setIsFinished(false);
+    setFolioGenerado(null);
+    setEmpresaEncontrada(null); 
+    setSearchTerm("");
+    setShowSuggestions(false);
 
-      // INYECCIÓN INTELIGENTE DE DATOS: 
-      if (selectedCompany) {
-        // FILTRO PARA TOMAR SOLO EL PRIMER CORREO
-        const correosCrudos = selectedCompany.email_corporativo || selectedCompany.correo || selectedCompany.email || "";
-        const primerCorreo = correosCrudos.split(/[,;/\s]+/)[0].trim();
-
-        setItem({
-          ...createEmptyItem(),
-          rutFacturar: selectedCompany.rut_encrypted || selectedCompany.rut || "",
-          contactoReceptor: primerCorreo,
-          rutSolicita: selectedCompany.rut_rep_encrypted || selectedCompany.repRut || "",
-          // Cargamos el plan por defecto, pero el usuario podrá borrarlo o cambiarlo en el formulario
-          name: selectedCompany.plan_nombre || selectedCompany.plan || "", 
-          precio: selectedCompany.impuesto_pagar || selectedCompany.neto || "",
-          descripcionProducto: "Servicios Contables",
-        });
-      } else {
-        setItem(createEmptyItem());
-      }
+    if (!selectedCompany && user?.sessionId) {
+      setIsLoadingCrm(true);
+      getCrmDataApi(user.sessionId, null)
+        .then(res => res.json())
+        .then(payload => {
+          if (payload?.clients) setAllClientes(payload.clients);
+        })
+        .catch(err => console.error("Error CRM:", err))
+        .finally(() => setIsLoadingCrm(false));
+      setItem(createEmptyItem());
+    } else if (selectedCompany) {
+      const email = (selectedCompany.email_corporativo || selectedCompany.correo || "").split(/[,;/\s]+/)[0].trim();
+      setItem({
+        ...createEmptyItem(),
+        rutFacturar: formatRutSimple(selectedCompany.rut_encrypted || selectedCompany.rut || ""),
+        contactoReceptor: email,
+        name: selectedCompany.plan_nombre || selectedCompany.plan || "", 
+        precio: selectedCompany.impuesto_pagar || selectedCompany.neto || "",
+        descripcionProducto: "Servicios Contables",
+      });
     }
-  }, [isOpen, selectedCompany]);
+  }, [isOpen, selectedCompany, user]);
 
-  const validate = (sourceItem = item) => {
-    const errors = [];
-    const precioNum = Number(sourceItem.precio);
+  // LÓGICA DE BÚSQUEDA
+  const filteredSuggestions = useMemo(() => {
+    if (!searchTerm || searchTerm.length < 2) return [];
+    const term = cleanStr(searchTerm);
+    return allClientes.filter(c => {
+      const rs = cleanStr(c.razon_social || c.razonSocial);
+      const rut = cleanRut(c.rut_encrypted || c.rut || "");
+      return rs.includes(term) || rut.includes(cleanRut(searchTerm));
+    }).slice(0, 5);
+  }, [searchTerm, allClientes]);
 
-    if (!sourceItem.rutFacturar.trim() || !cleanRut(sourceItem.rutFacturar).includes("-")) errors.push("Falta RUT Receptor en la BD");
-    if (!sourceItem.name.trim()) errors.push("Falta el Nombre del Plan en la BD");
-    if (!sourceItem.descripcionProducto.trim()) errors.push("Debes ingresar el Mes / Descripción");
-    if (!Number.isFinite(precioNum) || precioNum <= 0) errors.push("Debes ingresar un Precio (Neto) válido");
-
-    if (errors.length > 0) {
-      toast({ variant: "destructive", title: "Datos incompletos", description: `Revisa: ${errors.join(", ")}.` });
-      return false;
+  const handleSearchChange = (e) => {
+    const val = e.target.value;
+    setSearchTerm(val);
+    setEmpresaEncontrada(null);
+    setShowSuggestions(true);
+    if (/^[0-9kK\.\-]+$/.test(val)) {
+      setItem(prev => ({ ...prev, rutFacturar: formatRutSimple(val) }));
     }
-    return true;
   };
 
-  const emitirDte = async (sourceItem) => {
-    // 1. Separamos los RUTs y sus Dígitos Verificadores (DV)
-    const rutLimpio = cleanRut(sourceItem.rutFacturar);
-    const [rutFull, dv] = rutLimpio.includes('-') ? rutLimpio.split('-') : [rutLimpio, ''];
+  const onSelectCliente = (cliente) => {
+    setEmpresaEncontrada(cliente);
+    setSearchTerm(cliente.razon_social || cliente.razonSocial);
+    setShowSuggestions(false);
     
-    const rutSoliLimpio = cleanRut(sourceItem.rutSolicita);
-    const [rutSoli, dvSoli] = rutSoliLimpio.includes('-') ? rutSoliLimpio.split('-') : [rutSoliLimpio, ''];
+    const rut = formatRutSimple(cliente.rut_encrypted || cliente.rut || "");
+    const email = (cliente.email_corporativo || cliente.correo || "").split(/[,;/\s]+/)[0].trim();
 
-    // 2. Construimos el PAYLOAD EXACTO que espera Puppeteer
-    const payloadBackend = {
-      empresa_id: selectedCompany.id, 
-      razonSocial: selectedCompany?.razon_social || selectedCompany?.razonSocial || '',
-      rutReceptor: rutFull || '',
-      dvReceptor: dv || '',
-      ciudadEmisor: 'Santiago',       // FIJO
-      telefonoEmisor: '56978278733',  // FIJO
-      ciudadReceptor: 'Santiago',     // FIJO
-      contactoReceptor: sourceItem.contactoReceptor || '',
-      rutSolicita: rutSoli || '',
-      dvSolicita: dvSoli || '',
-      producto: {
-          nombre: sourceItem.name.trim(), // Usa lo que esté escrito en el input
-          cantidad: '1',                            
-          unidad: '1',                              
-          precio: String(sourceItem.precio).replace(/[^0-9]/g, ''), 
-          descripcion: sourceItem.descripcionProducto 
-      }
+    setItem(prev => ({
+      ...prev,
+      rutFacturar: rut,
+      contactoReceptor: email,
+      name: cliente.plan_nombre || cliente.plan || prev.name,
+      precio: cliente.impuesto_pagar || cliente.neto || prev.precio,
+      descripcionProducto: "Servicios Contables"
+    }));
+  };
+
+  const handleForzarEmpresa = () => {
+    const rutParaAgregar = formatRutSimple(searchTerm);
+    if (!rutParaAgregar.includes('-')) {
+      toast({ variant: "destructive", title: "RUT Incompleto", description: "Ingresa el RUT con guion." });
+      return;
+    }
+
+    const provisional = { 
+      id: 'EXTERNO', 
+      razon_social: 'CLIENTE EXTERNO (NUEVO)', 
+      rut: rutParaAgregar 
     };
 
-    console.log("📦 PAQUETE ENVIADO A PUPPETEER:", payloadBackend);
-
-    // 3. ENVÍO REAL AL BACKEND
-    const res = await fetch(`${API_BASE_URL}/dte/emitir-manual`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payloadBackend),
-    });
-
-    const data = await res.json();
-    if (!res.ok || data?.ok === false) {
-      throw new Error(data?.error || "Error al emitir el documento en el servidor");
-    }
-    
-    return data; // Nos devuelve el Folio y el archivo generado
+    setEmpresaEncontrada(provisional);
+    setItem(prev => ({ ...prev, rutFacturar: rutParaAgregar, contactoReceptor: "" }));
+    setShowSuggestions(false);
+    toast({ title: "Modo Externo", description: "Puedes ingresar un correo (opcional) o emitir directamente." });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validate(item)) return;
+    if (!empresaEfectiva) return toast({ variant: "destructive", title: "Falta Cliente", description: "Busca o registra una empresa." });
+    
+    // VALIDACIÓN DE CORREO SOLO SI NO ESTÁ VACÍO
+    if (item.contactoReceptor && !item.contactoReceptor.includes('@')) {
+        return toast({ variant: "destructive", title: "Correo Inválido", description: "Si ingresas un correo, debe tener formato válido." });
+    }
 
     setIsSubmitting(true);
     try {
-      const data = await emitirDte(item);
+      const rutLimpio = cleanRut(item.rutFacturar);
+      const [rutFull, dv] = rutLimpio.includes('-') ? rutLimpio.split('-') : [rutLimpio, ''];
+      
+      const payload = {
+        empresa_id: empresaEfectiva.id,
+        razonSocial: razonSocialSegura,
+        rutReceptor: rutFull,
+        dvReceptor: dv,
+        ciudadEmisor: 'Santiago',
+        telefonoEmisor: '56978278733',
+        ciudadReceptor: item.ciudadReceptor,
+        contactoReceptor: item.contactoReceptor, // Puede ir vacío ahora
+        producto: {
+          nombre: item.name,
+          cantidad: '1',
+          unidad: '1',
+          precio: String(item.precio).replace(/[^0-9]/g, ''),
+          descripcion: item.descripcionProducto
+        }
+      };
+
+      const res = await fetch(`${API_BASE_URL}/dte/emitir-manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data?.ok === false) throw new Error(data?.error || "Error SII");
+      
       setFolioGenerado(data.folio);
       setIsFinished(true);
-      toast({ title: "¡Éxito!", description: `DTE emitido correctamente. Folio: ${data.folio}` });
     } catch (err) {
-      toast({ variant: "destructive", title: "Error de Emisión", description: err.message });
+      toast({ variant: "destructive", title: "Fallo de Emisión", description: err.message });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Carga de Excel Masivo
-  const handleCsvFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const content = await file.text();
-      const parsedRows = parseCsvText(content);
-      const rows = parsedRows.map(mapCsvRowToItem);
-      const previewRows = rows.map((row) => ({
-        plan: row.name, neto: row.precio, rut: row.rutFacturar, contacto: row.contactoReceptor, estado: "pendiente"
-      }));
-
-      setBulkRows(rows);
-      setBulkPreviewRows(previewRows);
-      setBulkFileName(file.name);
-      toast({ title: "CSV cargado", description: `Se detectaron ${rows.length} filas.` });
-    } catch (error) {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo leer el CSV." });
-    }
-  };
-
-  const handleBulkSubmit = async () => {
-    if (bulkRows.length === 0) return;
-    setIsBulkSubmitting(true);
-
-    const facturasAProcesar = [];
-    
-    bulkRows.forEach((rowItem) => {
-      const rutLimpio = cleanRut(rowItem.rutFacturar);
-      const [rutFull, dv] = rutLimpio.includes("-") ? rutLimpio.split("-") : [rutLimpio, ""];
-      const rutSoliLimpio = cleanRut(rowItem.rutSolicita);
-      const [rutSoli, dvSoli] = rutSoliLimpio.includes("-") ? rutSoliLimpio.split("-") : [rutSoliLimpio, ""];
-
-      facturasAProcesar.push({
-        rutReceptor: rutFull,
-        dvReceptor: dv,
-        ciudadEmisor: rowItem.ciudadEmisor || "Santiago",
-        telefonoEmisor: rowItem.telefonoEmisor || "56978278733",
-        ciudadReceptor: rowItem.ciudadReceptor || "Santiago",
-        contactoReceptor: rowItem.contactoReceptor,
-        rutSolicita: rutSoli,
-        dvSolicita: dvSoli,
-        producto: {
-          nombre: rowItem.name,
-          cantidad: rowItem.cantidad || "1",
-          unidad: rowItem.unidadProducto || "1",
-          precio: rowItem.precio,
-          descripcion: rowItem.descripcionProducto,
-        },
-      });
-    });
-
-    try {
-      setBulkPreviewRows(prev => prev.map(r => ({ ...r, estado: "procesando" })));
-      
-      const res = await fetch(`${API_BASE_URL}/dte/emitir-masivo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ facturas: facturasAProcesar }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error en lote");
-
-      toast({ title: "¡Lote Procesado!", description: "La facturación masiva ha concluido." });
-      setBulkPreviewRows(prev => prev.map(r => ({ ...r, estado: "emitida" })));
-    } catch (error) {
-      toast({ variant: "destructive", title: "Fallo masivo", description: error.message });
-    } finally {
-      setIsBulkSubmitting(false);
-    }
-  };
-
   return (
-    <Dialog open={isOpen} onOpenChange={(val) => { if(!isSubmitting && !isBulkSubmitting) setIsOpen(val); }}>
-      <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-white/10 text-white">
+    <Dialog open={isOpen} onOpenChange={(val) => !isSubmitting && setIsOpen(val)}>
+      <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-white/10 text-white overflow-visible p-0 shadow-2xl">
         
-        {/* PANTALLA DE CARGA / ÉXITO */}
+        {/* OVERLAY DE CARGA / ÉXITO */}
         {(isSubmitting || isFinished) && (
-          <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-zinc-950/95 backdrop-blur-sm pointer-events-auto rounded-lg">
-            <div className="flex flex-col items-center gap-6 p-10 text-center w-full max-w-sm">
-              {isSubmitting ? (
-                <>
-                  <span className="h-16 w-16 animate-spin rounded-full border-4 border-white/10 border-t-blue-500" />
-                  <h3 className="text-xl font-bold">Procesando en el SII...</h3>
-                </>
-              ) : (
-                <>
-                  <div className="h-20 w-20 rounded-full bg-green-500/20 flex items-center justify-center">
-                    <svg className="h-10 w-10 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <h3 className="text-2xl font-bold text-white uppercase italic tracking-tighter">¡Factura Emitida!</h3>
-                  <p className="text-gray-400 font-mono">Folio N° {folioGenerado}</p>
-                  <Button onClick={() => setIsOpen(false)} className="bg-blue-600 hover:bg-blue-700 w-full mt-4 rounded-xl uppercase font-black tracking-widest text-[10px]">
-                    Finalizar Operación
-                  </Button>
-                </>
-              )}
-            </div>
+          <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-zinc-950/95 backdrop-blur-md rounded-lg">
+            {isSubmitting ? (
+              <div className="flex flex-col items-center gap-4">
+                <Loader2 className="h-16 w-16 animate-spin text-blue-500" />
+                <h3 className="text-xl font-bold uppercase italic tracking-tighter">Emitiendo en el SII...</h3>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-6 text-center">
+                <CheckCircle2 className="h-20 w-20 text-green-500" />
+                <h3 className="text-3xl font-black uppercase italic tracking-tighter">¡Documento Emitido!</h3>
+                <p className="font-mono text-lg text-gray-400 italic">Folio SII N° {folioGenerado}</p>
+                <Button onClick={() => setIsOpen(false)} className="bg-blue-600 hover:bg-blue-700 w-full mt-4 rounded-xl font-black uppercase tracking-widest">Finalizar</Button>
+              </div>
+            )}
           </div>
         )}
 
-        <div className="p-6">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-black italic uppercase tracking-tighter">{DOC_CONFIG.title}</DialogTitle>
-            <DialogDescription className="text-gray-400">{DOC_CONFIG.description}</DialogDescription>
+        <div className="p-8">
+          <DialogHeader className="mb-6">
+            <div className="flex items-center gap-3">
+               <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                  <Building2 className="text-blue-500" size={24} />
+               </div>
+               <div>
+                  <DialogTitle className="text-2xl font-black italic uppercase tracking-tighter leading-none">{DOC_CONFIG.title}</DialogTitle>
+                  <DialogDescription className="text-gray-500 text-[10px] uppercase font-bold tracking-[0.2em] mt-1">{DOC_CONFIG.code} • {DOC_CONFIG.description}</DialogDescription>
+               </div>
+            </div>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-2 mt-6">
-            <Button variant={activeTab === FACTURA_TABS.UNICA ? "default" : "secondary"} onClick={() => setActiveTab(FACTURA_TABS.UNICA)} className={activeTab === FACTURA_TABS.UNICA ? 'bg-blue-600 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'}>Factura única</Button>
-            <Button variant={activeTab === FACTURA_TABS.MASIVA ? "default" : "secondary"} onClick={() => setActiveTab(FACTURA_TABS.MASIVA)} className={activeTab === FACTURA_TABS.MASIVA ? 'bg-blue-600 text-white' : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'}>Factura masiva (CSV)</Button>
-          </div>
+          <form onSubmit={handleSubmit} className="space-y-8">
+            <div className="bg-white/[0.02] border border-white/5 rounded-[2rem] p-6 shadow-inner relative">
+              <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Search size={14} /> {selectedCompany ? 'Cliente Seleccionado' : 'Buscador de Clientes Búnker'}
+              </h4>
 
-          {activeTab === FACTURA_TABS.UNICA && (
-            <form onSubmit={handleSubmit} className="space-y-6 mt-6">
-              
-              {/* TARJETA DE RESUMEN DEL CLIENTE (Solo lectura) */}
-              <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 shadow-inner">
-                <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <Building2 size={14} /> Facturando a
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Razón Social</p>
-                        <p className="text-sm font-black text-white truncate">{razonSocialSegura}</p>
-                    </div>
-                    <div>
-                        <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">RUT</p>
-                        <p className="text-sm font-mono text-blue-400">{item.rutFacturar || 'Sin RUT'}</p>
-                    </div>
-                    <div>
-                        <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest flex items-center gap-1"><Mail size={10} /> Correo de Envío</p>
-                        <p className="text-sm text-gray-300 truncate">{item.contactoReceptor || 'Sin correo registrado'}</p>
-                    </div>
-                </div>
-              </div>
-
-              {/* CAMPOS EDITABLES */}
-              <div className="space-y-4">
-                
-                <div className="space-y-2">
-                    <Label className="text-xs font-bold text-gray-300">Plan Contratado / Producto</Label>
-                    <div className="relative">
-                        <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
-                        <Input 
-                            type="text" 
-                            value={item.name} 
-                            onChange={(e) => setItem({...item, name: e.target.value})} 
-                            className="pl-10 bg-black/40 border-white/10 focus:border-blue-500 h-12 rounded-xl text-md"
-                            placeholder="Ej: Plan Executive"
-                        />
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                      <Label className="text-xs font-bold text-gray-300">Precio (Neto)</Label>
-                      <div className="relative">
-                          <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
-                          <Input 
-                              type="number" 
-                              value={item.precio} 
-                              onChange={(e) => setItem({...item, precio: e.target.value})} 
-                              className="pl-10 bg-black/40 border-white/10 focus:border-blue-500 h-12 rounded-xl text-lg font-mono"
-                              placeholder="Ej: 50000"
-                          />
-                      </div>
+              {!selectedCompany && (
+                <div className="mb-6 relative">
+                  <div className="relative">
+                    <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${empresaEncontrada ? 'text-emerald-500' : 'text-gray-500'}`} size={18} />
+                    <Input 
+                      placeholder="Nombre de Empresa o RUT..."
+                      value={searchTerm}
+                      onChange={handleSearchChange}
+                      onFocus={() => setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                      className="pl-12 h-12 bg-black/40 border-white/10 rounded-2xl text-md focus:border-blue-500 shadow-xl transition-all"
+                    />
                   </div>
-                  <div className="space-y-2">
-                      <Label className="text-xs font-bold text-gray-300">Mes / Descripción</Label>
-                      <Input 
-                          value={item.descripcionProducto} 
-                          onChange={(e) => setItem({ ...item, descripcionProducto: e.target.value })} 
-                          className="bg-black/40 border-white/10 focus:border-blue-500 h-12 rounded-xl"
-                          placeholder="Ej: Servicios de Marzo" 
-                      />
-                  </div>
-                </div>
-              </div>
 
-              <DialogFooter className="mt-6 border-t border-white/5 pt-6">
-                <Button type="button" variant="ghost" onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white">Cancelar</Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-500 rounded-xl px-8 shadow-lg shadow-blue-500/20 font-black uppercase text-[10px] tracking-widest">
-                    Emitir Factura Ahora
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-
-          {activeTab === FACTURA_TABS.MASIVA && (
-            <div className="space-y-4 mt-6">
-              <div className="space-y-2">
-                <Label>Archivo CSV</Label>
-                <Input type="file" accept=".csv,text/csv" onChange={handleCsvFileChange} disabled={isBulkSubmitting} className="bg-black/40 border-white/10 file:text-white file:bg-white/10 file:rounded-lg file:border-0 hover:file:bg-white/20" />
-              </div>
-              {bulkPreviewRows.length > 0 && (
-                <div className="max-h-56 overflow-auto rounded-xl border border-white/10 mt-4 custom-scrollbar">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-white/5 sticky top-0 backdrop-blur-md">
-                        <tr>
-                            <th className="p-3 font-black text-gray-400 uppercase tracking-widest">Plan</th>
-                            <th className="p-3 font-black text-gray-400 uppercase tracking-widest">Neto</th>
-                            <th className="p-3 font-black text-gray-400 uppercase tracking-widest">RUT</th>
-                            <th className="p-3 font-black text-gray-400 uppercase tracking-widest">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {bulkPreviewRows.map((row, i) => (
-                        <tr key={i} className="hover:bg-white/[0.02]">
-                          <td className="p-3 font-medium">{row.plan}</td>
-                          <td className="p-3 text-emerald-400 font-mono">${row.neto}</td>
-                          <td className="p-3 text-gray-300 font-mono">{row.rut}</td>
-                          <td className="p-3">
-                              {row.estado === "procesando" ? (
-                                  <span className="text-blue-400 flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> Procesando</span>
-                              ) : row.estado === "emitida" ? (
-                                  <span className="text-emerald-400 font-bold">Completado</span>
-                              ) : (
-                                  <span className="text-gray-500">En espera</span>
-                              )}
-                          </td>
-                        </tr>
+                  {showSuggestions && (
+                    <div className="absolute top-full left-0 w-full mt-2 bg-zinc-800 border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2">
+                      {filteredSuggestions.map((c, i) => (
+                        <div key={i} onClick={() => onSelectCliente(c)} className="px-5 py-4 cursor-pointer hover:bg-blue-600/20 border-b border-white/5 flex justify-between items-center group transition-colors">
+                          <div>
+                            <div className="text-sm font-bold text-white">{c.razon_social || c.razonSocial}</div>
+                            <div className="text-[10px] text-gray-500 font-mono mt-1 tracking-widest">{formatRutSimple(c.rut_encrypted || c.rut)}</div>
+                          </div>
+                          <CheckCircle2 size={16} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-all" />
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                      {searchTerm.length >= 3 && (
+                        <button type="button" onClick={handleForzarEmpresa} className="w-full p-4 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border-t border-white/5 transition-all">
+                          <UserPlus size={16} /> REGISTRAR EMPRESA EXTERNA: {searchTerm}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
-              <DialogFooter className="mt-6 border-t border-white/5 pt-6">
-                <Button variant="ghost" onClick={() => setIsOpen(false)} className="text-gray-400">Cancelar</Button>
-                <Button className="bg-blue-600 hover:bg-blue-500 rounded-xl px-8 shadow-lg shadow-blue-500/20 font-black uppercase text-[10px] tracking-widest" onClick={handleBulkSubmit} disabled={isBulkSubmitting || bulkRows.length === 0}>
-                  {isBulkSubmitting ? "Emitiendo Lote..." : "Iniciar Emisión Masiva"}
-                </Button>
-              </DialogFooter>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-5 bg-black/30 rounded-2xl border border-white/5">
+                <div>
+                  <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Razón Social</p>
+                  <p className={`text-sm font-black truncate ${empresaEfectiva ? 'text-white' : 'text-gray-700'}`}>{razonSocialSegura}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">RUT Receptor</p>
+                  <p className={`text-sm font-mono font-bold ${empresaEfectiva ? 'text-blue-400' : 'text-gray-700'}`}>{item.rutFacturar || '---'}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-1">
+                    <Mail size={10} /> Correo Receptor
+                  </p>
+                  {isExternal ? (
+                    <Input 
+                      placeholder="(Opcional) email@..."
+                      value={item.contactoReceptor}
+                      onChange={(e) => setItem({...item, contactoReceptor: e.target.value})}
+                      className="h-8 bg-blue-500/10 border-blue-500/30 text-xs rounded-xl focus:border-blue-500 text-blue-300 placeholder:text-blue-500/40"
+                    />
+                  ) : (
+                    <p className={`text-sm truncate font-medium ${empresaEfectiva ? 'text-gray-300' : 'text-gray-700'}`}>{item.contactoReceptor || '---'}</p>
+                  )}
+                </div>
+              </div>
             </div>
-          )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Plan / Concepto</Label>
+                <div className="relative">
+                  <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                  <Input value={item.name} onChange={(e) => setItem({...item, name: e.target.value})} className="pl-11 h-12 bg-black/40 border-white/10 rounded-xl" placeholder="Ej: Plan GO" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Valor Neto ($)</Label>
+                <div className="relative">
+                  <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                  <Input type="number" value={item.precio} onChange={(e) => setItem({...item, precio: e.target.value})} className="pl-11 h-12 bg-black/40 border-white/10 rounded-xl font-mono text-lg font-bold text-emerald-500" />
+                </div>
+              </div>
+              <div className="md:col-span-2 space-y-2">
+                <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Observaciones / Mes</Label>
+                <Input value={item.descripcionProducto} onChange={(e) => setItem({ ...item, descripcionProducto: e.target.value })} className="h-12 bg-black/40 border-white/10 rounded-xl" placeholder="Ej: Servicios correspondientes a..." />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t border-white/5">
+              <Button type="button" variant="ghost" onClick={() => setIsOpen(false)} className="flex-1 uppercase font-black text-[10px] tracking-widest h-12 rounded-xl text-gray-400 hover:text-white transition-all">Cancelar Operación</Button>
+              <Button type="submit" disabled={!empresaEfectiva || isSubmitting} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[10px] tracking-[0.2em] h-12 rounded-xl shadow-lg shadow-blue-500/20 transition-all">
+                {isSubmitting ? 'Procesando...' : 'Emitir Documento SII'}
+              </Button>
+            </div>
+          </form>
         </div>
       </DialogContent>
     </Dialog>
