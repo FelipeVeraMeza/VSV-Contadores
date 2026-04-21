@@ -358,4 +358,4 @@ export async function emitirFacturaPuppeteer(datos) {
         await browser.close(); 
         try { await client.end(); } catch (e) {} 
     }
-}
+} 
