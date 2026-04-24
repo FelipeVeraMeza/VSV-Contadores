@@ -155,12 +155,12 @@ export async function emitirFacturaPuppeteer(datos) {
         }
 
         // =======================================================================
-        // 6. EXTRACCIÓN DE LA RAZÓN SOCIAL DEL RECEPTOR
+        // 6. EXTRACCIÓN DE LA RAZÓN SOCIAL DEL RECEPTOR (Velocidad Optimizada)
         // =======================================================================
         console.log('⏳ Extrayendo la Razón Social del RECEPTOR...');
         
         let nombreEncontrado = null;
-        for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < 6; i++) { // ⬅️ CAMBIADO A 6 INTENTOS
             nombreEncontrado = await page.evaluate(() => {
                 const inputExacto = document.querySelector('#EFXP_NMB_RECEP') || document.querySelector('input[name="EFXP_NMB_RECEP"]');
                 if (inputExacto && inputExacto.value && inputExacto.value.trim().length > 2) return inputExacto.value.trim();
@@ -196,7 +196,7 @@ export async function emitirFacturaPuppeteer(datos) {
                 console.log(`✅ ¡Nombre capturado para la Base de Datos!: "${razonSocialCapturadaDelSII}"`);
                 break; 
             }
-            await delay(1000);
+            await delay(500); // ⬅️ CAMBIADO A 500MS
         }
 
         if (!nombreEncontrado) {

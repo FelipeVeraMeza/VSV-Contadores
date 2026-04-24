@@ -119,14 +119,27 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     }
   }, [isOpen, selectedCompany, user]);
 
-  // LÓGICA DE BÚSQUEDA
+  // =======================================================
+  // 🔥 LÓGICA DE BÚSQUEDA CORREGIDA (INMEDIATA Y PRECISA)
+  // =======================================================
   const filteredSuggestions = useMemo(() => {
-    if (!searchTerm || searchTerm.length < 2) return [];
-    const term = cleanStr(searchTerm);
+    // Ya no bloqueamos por menos de 2 letras. Busca desde la primera.
+    if (!searchTerm || searchTerm.trim() === "") return [];
+
+    const termStr = cleanStr(searchTerm);
+    // Creamos una versión de la búsqueda solo con números y K para buscar el RUT sin puntos
+    const termRut = searchTerm.replace(/[^0-9kK]/gi, '').toLowerCase();
+
     return allClientes.filter(c => {
-      const rs = cleanStr(c.razon_social || c.razonSocial);
-      const rut = cleanRut(c.rut_encrypted || c.rut || "");
-      return rs.includes(term) || rut.includes(cleanRut(searchTerm));
+      const rs = cleanStr(c.razon_social || c.razonSocial || "");
+      // Limpiamos el RUT de la base de datos de puntos y guiones
+      const rutPuro = (c.rut_encrypted || c.rut || "").replace(/[^0-9kK]/gi, '').toLowerCase();
+
+      const matchName = rs.includes(termStr);
+      // Solo busca por RUT si realmente hay números escritos
+      const matchRut = termRut !== "" && rutPuro.includes(termRut);
+
+      return matchName || matchRut;
     }).slice(0, 5);
   }, [searchTerm, allClientes]);
 
@@ -135,6 +148,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     setSearchTerm(val);
     setEmpresaEncontrada(null);
     setShowSuggestions(true);
+    // Si escribe puros números y guiones, lo mandamos directo al item de facturar también
     if (/^[0-9kK\.\-]+$/.test(val)) {
       setItem(prev => ({ ...prev, rutFacturar: formatRutSimple(val) }));
     }
@@ -181,7 +195,6 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     e.preventDefault();
     if (!empresaEfectiva) return toast({ variant: "destructive", title: "Falta Cliente", description: "Busca o registra una empresa." });
     
-    // VALIDACIÓN DE CORREO SOLO SI NO ESTÁ VACÍO
     if (item.contactoReceptor && !item.contactoReceptor.includes('@')) {
         return toast({ variant: "destructive", title: "Correo Inválido", description: "Si ingresas un correo, debe tener formato válido." });
     }
@@ -199,7 +212,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
         ciudadEmisor: 'Santiago',
         telefonoEmisor: '56978278733',
         ciudadReceptor: item.ciudadReceptor,
-        contactoReceptor: item.contactoReceptor, // Puede ir vacío ahora
+        contactoReceptor: item.contactoReceptor, 
         producto: {
           nombre: item.name,
           cantidad: '1',
