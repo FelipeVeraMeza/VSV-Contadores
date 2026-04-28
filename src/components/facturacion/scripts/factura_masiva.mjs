@@ -34,13 +34,14 @@ async function navegarAEmision(page) {
         try {
             await page.goto('https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=33&TIPO=4', { 
                 waitUntil: 'domcontentloaded', 
-                timeout: 40000 
+                // 🔥 Bajamos el tiempo general de espera para darnos cuenta más rápido si se pegó
+                timeout: 20000 
             });
             await delay(2000); 
             exito = true; 
         } catch (error) {
             intentos++;
-            console.log(`⚠️ Intento ${intentos} de acceder a Emisión falló. Reintentando en 3s...`);
+            console.log(`⚠️ La página no cargó. Reintentando poner la URL (Intento ${intentos})...`);
             await delay(3000);
         }
     }
@@ -60,11 +61,11 @@ const limpiarYTipar = async (page, selector, texto) => {
 };
 
 // =========================================================================
-// 🚀 MOTOR DE FACTURACIÓN MASIVA (CON SOFT-RESET)
+// 🚀 MOTOR DE FACTURACIÓN MASIVA
 // =========================================================================
 export async function emitirLotePuppeteer(facturasFront) {
     console.log('\n==================================================');
-    console.log('[INFO] AUDITORÍA: Iniciando Motor Masivo...');
+    console.log('[INFO] AUDITORÍA: Iniciando Motor Masivo por Lotes...');
     
     const logText = fs.readFileSync(RUTA_LOG, 'utf-8').toUpperCase();
     const logLineas = logText.split('\n');
@@ -88,284 +89,326 @@ export async function emitirLotePuppeteer(facturasFront) {
     estadoRobot.errores = 0;
 
     const resultados = [];
-
-    // Abrimos un ÚNICO navegador para todo el proceso
-    const browser = await puppeteer.launch({ 
-        headless: false, defaultViewport: null, 
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--start-maximized', '--disable-blink-features=AutomationControlled'] 
-    });
-
-    const page = (await browser.pages())[0];
-    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-    page.on('dialog', async d => await d.accept());
+    const TAMANO_LOTE = 3; 
 
     // =======================================================================
-    // 🔄 CICLO DE FACTURACIÓN
+    // 🔄 CICLO EXTERNO: GESTIÓN DE LOTES
     // =======================================================================
-    for (let i = 0; i < pendientes.length; i++) {
-        const f = pendientes[i];
+    for (let i = 0; i < pendientes.length; i += TAMANO_LOTE) {
+        const loteActual = pendientes.slice(i, i + TAMANO_LOTE);
         
-        estadoRobot.actual = i + 1;
-        estadoRobot.rutActual = f.rutReceptor;
+        console.log(`\n📦 INICIANDO LOTE DE FACTURAS (Procesando del ${i + 1} al ${i + loteActual.length} de ${pendientes.length})`);
 
-        // 🔥 REGLA DE ORO: Cada 3 facturas, vamos a la página principal a limpiar la sesión
-        if (i > 0 && i % 3 === 0) {
-            console.log('\n🧹 [LIMPIEZA PREVENTIVA] Se han procesado 3 facturas. Yendo al menú principal...');
-            try { 
-                await page.goto('https://misiir.sii.cl/cgi_misii/siihome.cgi', { waitUntil: 'domcontentloaded', timeout: 15000 }); 
-            } catch(e) {}
-            console.log('⏳ Esperando 3 segundos de gracia...');
-            await delay(3000);
-        }
+        const browser = await puppeteer.launch({ 
+            headless: false, defaultViewport: null, 
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--start-maximized', '--disable-blink-features=AutomationControlled'] 
+        });
 
-        let intentoRealizado = 0;
-        const MAX_INTENTOS = 3;
-        let facturaCompletada = false;
+        const page = (await browser.pages())[0];
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+        page.on('dialog', async d => await d.accept());
 
-        // CICLO DE AUTO-CURACIÓN (Intenta hasta 3 veces por cada factura)
-        while (intentoRealizado < MAX_INTENTOS && !facturaCompletada) {
-            intentoRealizado++;
-            let razonSocialCapturadaDelSII = null;
+        // =======================================================================
+        // 🔄 CICLO INTERNO: FACTURACIÓN
+        // =======================================================================
+        for (let j = 0; j < loteActual.length; j++) {
+            const f = loteActual[j];
+            const indiceGlobal = i + j + 1; 
+            
+            estadoRobot.actual = indiceGlobal;
+            estadoRobot.rutActual = f.rutReceptor;
 
-            console.log(`\n==================================================`);
-            console.log(`[INFO] FACTURANDO: RUT ${f.rutReceptor} (Intento ${intentoRealizado}/${MAX_INTENTOS}) | Progreso Global: ${i + 1}/${pendientes.length}`);
+            let intentoRealizado = 0;
+            const MAX_INTENTOS = 3;
+            let facturaCompletada = false;
 
-            try {
-                // 🔥 SI ES UN REINTENTO POR ERROR: Vamos al Home para desatascar al SII
-                if (intentoRealizado > 1) {
-                    console.log('🔄 [DESATASCO] El intento anterior falló. Yendo al Menú Principal para limpiar errores...');
-                    try { 
-                        await page.goto('https://misiir.sii.cl/cgi_misii/siihome.cgi', { waitUntil: 'domcontentloaded', timeout: 15000 }); 
-                    } catch(e) {}
-                    console.log('⏳ Esperando 3 segundos...');
-                    await delay(3000);
-                }
+            while (intentoRealizado < MAX_INTENTOS && !facturaCompletada) {
+                intentoRealizado++;
+                let razonSocialCapturadaDelSII = null;
 
-                console.log('🔄 Cargando portal de emisión...');
-                await navegarAEmision(page);
-                await delay(2000);
-                
-                // 1. Validar Login
-                const inputRutExiste = await page.$('#rutcntr');
-                if (inputRutExiste) {
-                    console.log(`🔑 Restaurando sesión en el SII...`);
-                    await page.type('#rutcntr', `${process.env.DTE_RUT}-${process.env.DTE_DV}`, { delay: 150 });
-                    await page.type('#clave', process.env.DTE_PASS, { delay: 150 });
-                    await Promise.all([page.waitForNavigation(), page.click('#bt_ingresar')]);
-                    await delay(2000); 
-                    
-                    await navegarAEmision(page); 
-                    await delay(2000);
-                }
+                console.log(`\n==================================================`);
+                console.log(`[INFO] FACTURANDO: RUT ${f.rutReceptor} (Intento ${intentoRealizado}/${MAX_INTENTOS}) | Progreso Global: ${indiceGlobal}/${pendientes.length}`);
 
-                // 2. Validar Empresa Emisora
-                const selectBox = await page.$('select[name="RUT_EMP"]');
-                if (selectBox) {
-                    console.log('🏢 Seleccionando empresa emisora...');
-                    const valueSegundaEmpresa = await page.evaluate(() => {
-                        const selectElement = document.querySelector('select[name="RUT_EMP"]');
-                        if (selectElement && selectElement.options.length > 0) {
-                            let targetIndex = 1; 
-                            if (selectElement.options[0].text.toLowerCase().includes('seleccione')) {
-                                if (selectElement.options.length > 2) targetIndex = 2;
-                            } else {
-                                if (selectElement.options.length > 1) targetIndex = 1;
-                            }
-                            return selectElement.options[targetIndex].value;
-                        }
-                        return null;
-                    });
-                    if (valueSegundaEmpresa) {
-                        await page.select('select[name="RUT_EMP"]', valueSegundaEmpresa);
-                        await delay(500);
-                        await Promise.all([
-                            page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-                            page.evaluate(() => { document.querySelector('button[type="submit"], input[type="submit"]').click(); })
-                        ]);
-                        await delay(2000);
-                    }
-                }
-
-                console.log('⏳ Página cargada. Esperando 5 segundos antes de tipear...');
-                await delay(5000); 
-
-                await page.waitForSelector('input[name="EFXP_RUT_RECEP"], #EFXP_RUT_RECEP', { visible: true, timeout: 25000 });
-                await delay(1000); 
-
-                const rutInputSelector = await page.$('#EFXP_RUT_RECEP') ? '#EFXP_RUT_RECEP' : 'input[name="EFXP_RUT_RECEP"]';
-                const dvInputSelector = await page.$('#EFXP_DV_RECEP') ? '#EFXP_DV_RECEP' : 'input[name="EFXP_DV_RECEP"]';
-
-                await page.click(rutInputSelector);
-                await page.type(rutInputSelector, f.rutReceptor, { delay: 150 }); 
-                await page.keyboard.press('Tab');
-                await delay(300);
-                await page.type(dvInputSelector, f.dvReceptor, { delay: 150 });
-                await page.keyboard.press('Tab');
-                await page.mouse.click(10, 10); 
-                await delay(2000); 
-
-                await limpiarYTipar(page, 'input[name="EFXP_CIUDAD_ORIGEN"]', f.ciudadEmisor || 'Santiago');
-                await limpiarYTipar(page, 'input[name="EFXP_FONO_EMISOR"]', TEL_EMISOR);
-                await limpiarYTipar(page, 'input[name="EFXP_CIUDAD_RECEP"]', f.ciudadReceptor || 'Santiago');
-                if (f.contactoReceptor) await limpiarYTipar(page, 'input[name="EFXP_CONTACTO"]', f.contactoReceptor);
-
-                let nombreEncontrado = null;
-                for (let k = 0; k < 6; k++) {
-                    nombreEncontrado = await page.evaluate(() => {
-                        const inputExacto = document.querySelector('#EFXP_NMB_RECEP') || document.querySelector('input[name="EFXP_NMB_RECEP"]');
-                        if (inputExacto && inputExacto.value && inputExacto.value.trim().length > 2) return inputExacto.value.trim();
-                        return null;
-                    });
-                    if (nombreEncontrado) {
-                        razonSocialCapturadaDelSII = nombreEncontrado;
-                        break; 
-                    }
-                    await delay(500); 
-                }
-
-                if (!nombreEncontrado) {
-                   razonSocialCapturadaDelSII = f.razonSocial || 'CLIENTE MASIVO SII';
-                }
-                
-                console.log(`✅ [RAZÓN SOCIAL A GUARDAR]: "${razonSocialCapturadaDelSII}"`);
-
-                await page.type('input[name="EFXP_NMB_01"]', f.producto.nombre || 'Servicio', { delay: 150 });
-                await page.type('input[name="EFXP_QTY_01"]', '1', { delay: 150 });
-                await limpiarYTipar(page, 'input[name="EFXP_PRC_01"]', String(f.producto.precio || 0));
-                
-                const checkbox = await page.waitForSelector('input[name="DESCRIP_01"]', { visible: true });
-                await checkbox.click(); 
-                try { await page.waitForSelector('textarea[name="EFXP_DSC_ITEM_01"]', { visible: true, timeout: 5000 }); } catch (e) { await checkbox.click(); }
-                await page.type('textarea[name="EFXP_DSC_ITEM_01"]', f.producto.descripcion || 'Servicios Contables', { delay: 150 });
-                await page.select('select[name="EFXP_FMA_PAGO"]', '1'); 
-
-                await page.click('button[name="Button_Update"]');
-                await delay(3500); 
-                
                 try {
-                    const alertaAceptada = await page.evaluate(() => {
-                        const botones = Array.from(document.querySelectorAll('input[type="button"], button'));
-                        const btnAceptar = botones.find(b => b.value.includes('Aceptar') || b.innerText.includes('Aceptar'));
-                        if (btnAceptar && btnAceptar.offsetParent !== null) { btnAceptar.click(); return true; }
-                        return false;
-                    });
-                    if (alertaAceptada) await delay(2000); 
-                } catch (e) {}
+                    // Limpiador preventivo
+                    try { 
+                        if (intentoRealizado > 1 || (i > 0 && j === 0)) {
+                            console.log('🔄 Borrando caché visual o desatascando...');
+                            await page.goto('about:blank'); 
+                            await delay(1000);
+                        }
+                    } catch(e) {}
 
-                let intentosFirma = 0, cajaVisible = false;
-                while (intentosFirma < 5 && !cajaVisible) {
-                    try {
-                        await page.evaluate(() => {
-                            const btn = document.querySelector('input[name="btnSign"]');
-                            if (btn && !btn.disabled) btn.click();
-                        });
-                        await page.waitForSelector('#myPass', { visible: true, timeout: 3500 });
-                        cajaVisible = true;
-                    } catch (e) {
-                        intentosFirma++;
-                        await page.click('button[name="Button_Update"]').catch(()=> {}); 
-                        await delay(2000);
-                    }
-                }
-
-                if (!cajaVisible) throw new Error("El SII no cargó la caja para la clave digital.");
-
-                await page.focus('#myPass');
-                await page.type('#myPass', process.env.SII_PFX_PASS, { delay: 150 }); 
-                await delay(1000); 
-
-                await Promise.all([
-                    page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {}),
-                    page.evaluate(() => {
-                        const btnEnviar = document.querySelector('#btnFirma');
-                        if (btnEnviar) btnEnviar.click();
-                    })
-                ]);
-                
-                let folio = null;
-                for (let k = 0; k < 30; k++) {
-                    const text = await page.evaluate(() => document.body.innerText).catch(() => "");
-                    const match = text.match(/N[°º]\s*(\d+)/i) || text.match(/Folio\s*(\d+)/i);
-                    if (match) { folio = match[1]; break; }
-                    await delay(1000); 
-                }
-
-                if (folio) {
-                    console.log(`🎉 ¡ÉXITO! Folio N°: ${folio}`);
-                    fs.appendFileSync(RUTA_LOG, `${f.rutReceptor} - Folio: ${folio}\n`); 
-                    resultados.push({ rut: f.rutReceptor, nombre: razonSocialCapturadaDelSII, estado: 'exito', folio: folio });
+                    console.log('🔄 Cargando portal de emisión...');
+                    await navegarAEmision(page);
+                    await delay(2000);
                     
-                    estadoRobot.exitos++; 
-                    facturaCompletada = true; 
+                    // ============================================================
+                    // 1. 🔥 VALIDAR LOGIN CON SISTEMA ANTI-CONGELAMIENTO
+                    // ============================================================
+                    let loginCompletado = false;
+                    let intentosLogin = 0;
 
-                    // ==============================================================
-                    // 🔥 CONEXIÓN "FLASH" A SUPABASE
-                    // ==============================================================
-                    const dbClient = new Client({
-                        user: process.env.DBS_USER, host: process.env.DBS_HOST,
-                        database: process.env.DBS_DATABASE, password: process.env.DBS_PASSWORD,
-                        port: process.env.DBS_PORT, ssl: { rejectUnauthorized: false }
-                    });
-
-                    try {
-                        await dbClient.connect();
-                        let empresaIdFinal = f.empresa_id;
-                        const rutOriginal = `${f.rutReceptor}-${f.dvReceptor}`;
-                        
-                        if (empresaIdFinal === 'EXTERNO') {
+                    while (!loginCompletado && intentosLogin < 3) {
+                        const inputRutExiste = await page.$('#rutcntr');
+                        if (inputRutExiste) {
+                            intentosLogin++;
+                            console.log(`🔑 [Intento Login ${intentosLogin}/3] Iniciando sesión en el SII...`);
+                            
                             try {
-                                const rutHash = crypto.createHash('sha256').update(rutOriginal).digest('hex');
-                                const rutEncrypted = encrypt(rutOriginal);
-                                const insertEmpresaQuery = `INSERT INTO empresa (razon_social, rut_encrypted, rut_hash, giro, regimen_tributario, activo) VALUES ($1, $2, $3, 'Por definir', 'Por definir', true) RETURNING id;`;
-                                const resEmp = await dbClient.query(insertEmpresaQuery, [razonSocialCapturadaDelSII, rutEncrypted, rutHash]);
-                                empresaIdFinal = resEmp.rows[0].id;
-                            } catch (err) { empresaIdFinal = null; }
-                        }
+                                // Limpiar cajas por si quedaron a medio escribir
+                                await page.evaluate(() => {
+                                    if (document.querySelector('#rutcntr')) document.querySelector('#rutcntr').value = '';
+                                    if (document.querySelector('#clave')) document.querySelector('#clave').value = '';
+                                });
 
-                        if (empresaIdFinal) {
-                            const checkQuery = `SELECT id FROM documentos_emitidos WHERE rut_cliente = $1 AND tipo_dte = 33 AND folio = $2`;
-                            const checkRes = await dbClient.query(checkQuery, [rutOriginal, folio]);
-                            if (checkRes.rows.length === 0) {
-                                await dbClient.query(`INSERT INTO documentos_emitidos (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, fecha_emision) VALUES ($1, $2, 33, $3, $4, $5)`, [empresaIdFinal, rutOriginal, folio, parseInt(f.producto.precio), new Date().toISOString()]);
-                                console.log(`✅ Guardado en Bóveda Historial.`);
+                                await page.type('#rutcntr', `${process.env.DTE_RUT}-${process.env.DTE_DV}`, { delay: 100 });
+                                await page.type('#clave', process.env.DTE_PASS, { delay: 100 });
+                                
+                                // 🔥 MAGIA AQUÍ: Le damos 15 segundos máximo. Si no entra, aborta.
+                                await Promise.all([
+                                    page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
+                                    page.click('#bt_ingresar')
+                                ]);
+                                
+                                await delay(2000); 
+                                await navegarAEmision(page); 
+                                await delay(2000);
+                                
+                                const sigueEnLogin = await page.$('#rutcntr');
+                                if (sigueEnLogin) throw new Error("Rebotó de vuelta al login.");
+
+                                loginCompletado = true;
+                            } catch (errLogin) {
+                                console.log(`⚠️ El login se congeló o falló. Volviendo a colocar la URL...`);
+                                await navegarAEmision(page);
+                                console.log(`⏳ Esperando 3 segundos antes de volver a tipear las claves...`);
+                                await delay(3000); // ⬅️ Tus 3 segundos de gracia solicitados
                             }
+                        } else {
+                            loginCompletado = true; // Ya estaba logueado
                         }
-                    } catch (dbErr) {
-                        console.log(`⚠️ Error de Red BD:`, dbErr.message);
-                    } finally {
-                        await dbClient.end(); 
                     }
 
-                } else {
-                    throw new Error("No se detectó el folio.");
-                }
+                    if (!loginCompletado) throw new Error("El SII no permitió iniciar sesión después de 3 intentos.");
 
-            } catch (e) {
-                console.log(`❌ [ERROR] Intento ${intentoRealizado} falló en ${f.rutReceptor}: ${e.message}`);
-                
-                if (intentoRealizado >= MAX_INTENTOS) {
-                    console.log(`🚫 Se agotaron los 3 reintentos. Saltando a la siguiente factura.`);
-                    fs.appendFileSync(RUTA_LOG, `FALLO: ${f.rutReceptor} - ${f.producto.nombre || ''}\n`);
-                    resultados.push({ rut: f.rutReceptor, estado: 'error', error: e.message });
-                    estadoRobot.errores++; 
+                    // 2. Validar Empresa Emisora
+                    const selectBox = await page.$('select[name="RUT_EMP"]');
+                    if (selectBox) {
+                        console.log('🏢 Seleccionando empresa emisora...');
+                        const valueSegundaEmpresa = await page.evaluate(() => {
+                            const selectElement = document.querySelector('select[name="RUT_EMP"]');
+                            if (selectElement && selectElement.options.length > 0) {
+                                let targetIndex = 1; 
+                                if (selectElement.options[0].text.toLowerCase().includes('seleccione')) {
+                                    if (selectElement.options.length > 2) targetIndex = 2;
+                                } else {
+                                    if (selectElement.options.length > 1) targetIndex = 1;
+                                }
+                                return selectElement.options[targetIndex].value;
+                            }
+                            return null;
+                        });
+                        if (valueSegundaEmpresa) {
+                            await page.select('select[name="RUT_EMP"]', valueSegundaEmpresa);
+                            await delay(500);
+                            await Promise.all([
+                                page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+                                page.evaluate(() => { document.querySelector('button[type="submit"], input[type="submit"]').click(); })
+                            ]);
+                            await delay(2000);
+                        }
+                    }
+
+                    console.log('⏳ Página cargada. Esperando 5 segundos antes de tipear la factura...');
+                    await delay(5000); 
+
+                    await page.waitForSelector('input[name="EFXP_RUT_RECEP"], #EFXP_RUT_RECEP', { visible: true, timeout: 25000 });
+                    await delay(1000); 
+
+                    const rutInputSelector = await page.$('#EFXP_RUT_RECEP') ? '#EFXP_RUT_RECEP' : 'input[name="EFXP_RUT_RECEP"]';
+                    const dvInputSelector = await page.$('#EFXP_DV_RECEP') ? '#EFXP_DV_RECEP' : 'input[name="EFXP_DV_RECEP"]';
+
+                    await page.click(rutInputSelector);
+                    await page.type(rutInputSelector, f.rutReceptor, { delay: 150 }); 
+                    await page.keyboard.press('Tab');
+                    await delay(300);
+                    await page.type(dvInputSelector, f.dvReceptor, { delay: 150 });
+                    await page.keyboard.press('Tab');
+                    await page.mouse.click(10, 10); 
+                    await delay(2000); 
+
+                    await limpiarYTipar(page, 'input[name="EFXP_CIUDAD_ORIGEN"]', f.ciudadEmisor || 'Santiago');
+                    await limpiarYTipar(page, 'input[name="EFXP_FONO_EMISOR"]', TEL_EMISOR);
+                    await limpiarYTipar(page, 'input[name="EFXP_CIUDAD_RECEP"]', f.ciudadReceptor || 'Santiago');
+                    if (f.contactoReceptor) await limpiarYTipar(page, 'input[name="EFXP_CONTACTO"]', f.contactoReceptor);
+
+                    let nombreEncontrado = null;
+                    for (let k = 0; k < 6; k++) {
+                        nombreEncontrado = await page.evaluate(() => {
+                            const inputExacto = document.querySelector('#EFXP_NMB_RECEP') || document.querySelector('input[name="EFXP_NMB_RECEP"]');
+                            if (inputExacto && inputExacto.value && inputExacto.value.trim().length > 2) return inputExacto.value.trim();
+                            return null;
+                        });
+                        if (nombreEncontrado) {
+                            razonSocialCapturadaDelSII = nombreEncontrado;
+                            break; 
+                        }
+                        await delay(500); 
+                    }
+
+                    if (!nombreEncontrado) {
+                       razonSocialCapturadaDelSII = f.razonSocial || 'CLIENTE MASIVO SII';
+                    }
+                    
+                    console.log(`✅ [RAZÓN SOCIAL A GUARDAR]: "${razonSocialCapturadaDelSII}"`);
+
+                    await page.type('input[name="EFXP_NMB_01"]', f.producto.nombre || 'Servicio', { delay: 150 });
+                    await page.type('input[name="EFXP_QTY_01"]', '1', { delay: 150 });
+                    await limpiarYTipar(page, 'input[name="EFXP_PRC_01"]', String(f.producto.precio || 0));
+                    
+                    const checkbox = await page.waitForSelector('input[name="DESCRIP_01"]', { visible: true });
+                    await checkbox.click(); 
+                    try { await page.waitForSelector('textarea[name="EFXP_DSC_ITEM_01"]', { visible: true, timeout: 5000 }); } catch (e) { await checkbox.click(); }
+                    await page.type('textarea[name="EFXP_DSC_ITEM_01"]', f.producto.descripcion || 'Servicios Contables', { delay: 150 });
+                    await page.select('select[name="EFXP_FMA_PAGO"]', '1'); 
+
+                    await page.click('button[name="Button_Update"]');
+                    await delay(3500); 
+                    
+                    try {
+                        const alertaAceptada = await page.evaluate(() => {
+                            const botones = Array.from(document.querySelectorAll('input[type="button"], button'));
+                            const btnAceptar = botones.find(b => b.value.includes('Aceptar') || b.innerText.includes('Aceptar'));
+                            if (btnAceptar && btnAceptar.offsetParent !== null) { btnAceptar.click(); return true; }
+                            return false;
+                        });
+                        if (alertaAceptada) await delay(2000); 
+                    } catch (e) {}
+
+                    let intentosFirma = 0, cajaVisible = false;
+                    while (intentosFirma < 5 && !cajaVisible) {
+                        try {
+                            await page.evaluate(() => {
+                                const btn = document.querySelector('input[name="btnSign"]');
+                                if (btn && !btn.disabled) btn.click();
+                            });
+                            await page.waitForSelector('#myPass', { visible: true, timeout: 3500 });
+                            cajaVisible = true;
+                        } catch (e) {
+                            intentosFirma++;
+                            await page.click('button[name="Button_Update"]').catch(()=> {}); 
+                            await delay(2000);
+                        }
+                    }
+
+                    if (!cajaVisible) throw new Error("El SII no cargó la caja para la clave digital.");
+
+                    await page.focus('#myPass');
+                    await page.type('#myPass', process.env.SII_PFX_PASS, { delay: 150 }); 
+                    await delay(1000); 
+
+                    await Promise.all([
+                        page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {}),
+                        page.evaluate(() => {
+                            const btnEnviar = document.querySelector('#btnFirma');
+                            if (btnEnviar) btnEnviar.click();
+                        })
+                    ]);
+                    
+                    let folio = null;
+                    for (let k = 0; k < 30; k++) {
+                        const text = await page.evaluate(() => document.body.innerText).catch(() => "");
+                        const match = text.match(/N[°º]\s*(\d+)/i) || text.match(/Folio\s*(\d+)/i);
+                        if (match) { folio = match[1]; break; }
+                        await delay(1000); 
+                    }
+
+                    if (folio) {
+                        console.log(`🎉 ¡ÉXITO! Folio N°: ${folio}`);
+                        fs.appendFileSync(RUTA_LOG, `${f.rutReceptor} - Folio: ${folio}\n`); 
+                        resultados.push({ rut: f.rutReceptor, nombre: razonSocialCapturadaDelSII, estado: 'exito', folio: folio });
+                        
+                        estadoRobot.exitos++; 
+                        facturaCompletada = true; 
+
+                        // ==============================================================
+                        // 🔥 CONEXIÓN "FLASH" A SUPABASE
+                        // ==============================================================
+                        const dbClient = new Client({
+                            user: process.env.DBS_USER, host: process.env.DBS_HOST,
+                            database: process.env.DBS_DATABASE, password: process.env.DBS_PASSWORD,
+                            port: process.env.DBS_PORT, ssl: { rejectUnauthorized: false }
+                        });
+
+                        try {
+                            await dbClient.connect();
+                            let empresaIdFinal = f.empresa_id;
+                            const rutOriginal = `${f.rutReceptor}-${f.dvReceptor}`;
+                            
+                            if (empresaIdFinal === 'EXTERNO') {
+                                try {
+                                    const rutHash = crypto.createHash('sha256').update(rutOriginal).digest('hex');
+                                    const rutEncrypted = encrypt(rutOriginal);
+                                    const insertEmpresaQuery = `INSERT INTO empresa (razon_social, rut_encrypted, rut_hash, giro, regimen_tributario, activo) VALUES ($1, $2, $3, 'Por definir', 'Por definir', true) RETURNING id;`;
+                                    const resEmp = await dbClient.query(insertEmpresaQuery, [razonSocialCapturadaDelSII, rutEncrypted, rutHash]);
+                                    empresaIdFinal = resEmp.rows[0].id;
+                                } catch (err) { empresaIdFinal = null; }
+                            }
+
+                            if (empresaIdFinal) {
+                                const checkQuery = `SELECT id FROM documentos_emitidos WHERE rut_cliente = $1 AND tipo_dte = 33 AND folio = $2`;
+                                const checkRes = await dbClient.query(checkQuery, [rutOriginal, folio]);
+                                if (checkRes.rows.length === 0) {
+                                    await dbClient.query(`INSERT INTO documentos_emitidos (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, fecha_emision) VALUES ($1, $2, 33, $3, $4, $5)`, [empresaIdFinal, rutOriginal, folio, parseInt(f.producto.precio), new Date().toISOString()]);
+                                    console.log(`✅ Guardado en Bóveda Historial.`);
+                                }
+                            }
+                        } catch (dbErr) {
+                            console.log(`⚠️ Error de Red BD:`, dbErr.message);
+                        } finally {
+                            await dbClient.end(); 
+                        }
+
+                    } else {
+                        throw new Error("No se detectó el folio.");
+                    }
+
+                } catch (e) {
+                    console.log(`❌ [ERROR] Intento ${intentoRealizado} falló en ${f.rutReceptor}: ${e.message}`);
+                    
+                    if (intentoRealizado >= MAX_INTENTOS) {
+                        console.log(`🚫 Se agotaron los 3 reintentos. Saltando a la siguiente factura.`);
+                        fs.appendFileSync(RUTA_LOG, `FALLO: ${f.rutReceptor} - ${f.producto.nombre || ''}\n`);
+                        resultados.push({ rut: f.rutReceptor, estado: 'error', error: e.message });
+                        estadoRobot.errores++; 
+                    }
                 }
+            } // Fin del While de reintentos
+            
+            if (j < loteActual.length - 1 && indiceGlobal < pendientes.length) {
+                console.log('⏱️ Factura registrada. Enfriando conexión por 20 segundos antes de la siguiente empresa...');
+                await delay(20000); 
+            } else {
+                 console.log('⏱️ Factura procesada. Finalizando ciclo del lote...');
+                 await delay(5000); 
             }
-        } // Fin del While de reintentos
-        
-        if (i < pendientes.length - 1) {
-            console.log('⏱️ Factura registrada. Enfriando conexión por 20 segundos antes de la siguiente empresa...');
-            await delay(20000); 
-        } else {
-             console.log('⏱️ Última factura procesada. Finalizando proceso...');
-             await delay(5000); 
+        } 
+
+        // 🔥 AL TERMINAR EL LOTE DE 3, CERRAMOS EL NAVEGADOR
+        console.log(`\n🧹 [LOTE DE 3 FINALIZADO] Cerrando navegador para limpiar memoria del SII...`);
+        try { await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { timeout: 5000 }); } catch (err) {}
+        await browser.close();
+
+        // 🔥 DESCANSO CORTO ENTRE LOTES
+        if (i + TAMANO_LOTE < pendientes.length) {
+            console.log('⏱️ Descansando 3 segundos antes de abrir el próximo navegador limpio...');
+            await delay(3000); // ⬅️ Cambiado a 3 segundos
         }
     } 
     
     estadoRobot.activo = false;
     console.log('🏁 ¡PROCESO TOTAL COMPLETADO!');
-
-    try { await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { timeout: 5000 }); } catch (err) {}
-    await browser.close();
 
     return { ok: true, mensaje: "Lote masivo completado.", detalle: resultados };
 }
