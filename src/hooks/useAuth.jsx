@@ -38,8 +38,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.clear();
         queryClient.clear();
         
-        // 3. Diferenciamos si fue el Temporizador o un Clic Manual
-        // Si "param" es un texto y dice "inactividad", mandamos el parámetro por URL
+        // 3. Redirección
         if (typeof param === 'string' && param.includes("inactividad")) {
             window.location.href = '/login?expired=true';
         } else {
@@ -48,38 +47,7 @@ export const AuthProvider = ({ children }) => {
     }, [queryClient]);
 
     // ============================================================
-    // 🛡️ SISTEMA DE SEGURIDAD: CIERRE POR INACTIVIDAD (10 SEGUNDOS)
-    // ============================================================
-    const TIEMPO_INACTIVIDAD_MS = 60 * 60 * 1000;
-
-    useEffect(() => {
-        let temporizador;
-
-        const resetTimer = () => {
-            if (temporizador) clearTimeout(temporizador);
-            
-            if (user) {
-                temporizador = setTimeout(() => {
-                    // Le enviamos el texto clave a la función logout
-                    logout("inactividad");
-                }, TIEMPO_INACTIVIDAD_MS);
-            }
-        };
-
-        if (user) {
-            resetTimer(); 
-            
-            // Sensores de movimiento
-            const eventos = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart'];
-
-            eventos.forEach(evento => window.addEventListener(evento, resetTimer));
-
-            return () => {
-                if (temporizador) clearTimeout(temporizador);
-                eventos.forEach(evento => window.removeEventListener(evento, resetTimer));
-            };
-        }
-    }, [user, logout]);
+    // 🛡️ EL SISTEMA DE INACTIVIDAD HA SIDO ELIMINADO COMPLETAMENTE
     // ============================================================
 
     const handleResponse = useCallback(async (res) => {
@@ -176,6 +144,7 @@ export const AuthProvider = ({ children }) => {
         return false;
     };
 
+    // Mantiene los datos sincronizados en LocalStorage para que al F5 no se pierda nada
     useEffect(() => {
         if (user) {
             localStorage.setItem('user', JSON.stringify(user));
