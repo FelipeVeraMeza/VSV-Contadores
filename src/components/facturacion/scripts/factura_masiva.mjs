@@ -91,7 +91,7 @@ export async function emitirLotePuppeteer(facturasFront) {
 
     // Abrimos un ÚNICO navegador para todo el proceso
     const browser = await puppeteer.launch({ 
-        headless: false, defaultViewport: null,
+        headless: false, defaultViewport: null, 
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--start-maximized', '--disable-blink-features=AutomationControlled'] 
     });
 
