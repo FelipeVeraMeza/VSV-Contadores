@@ -6,7 +6,8 @@ import { crear_cliente } from '../controllers/clientes.controllers.js';
 // Importamos el script de Puppeteer para la factura manual, masiva y exenta
 import { emitirFacturaPuppeteer } from '../components/facturacion/scripts/factura_manual.mjs';
 import { emitirExentaPuppeteer } from '../components/facturacion/scripts/exenta_manual.mjs';
-import { emitirLotePuppeteer } from '../components/facturacion/scripts/factura_masiva.mjs';
+import { emitirLotePuppeteer, estadoRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
+
 
 // ==========================================
 // CONTROLADOR: Emisión Manual Puppeteer
@@ -63,15 +64,29 @@ export const emitirMasivoController = async (req, res) => {
             return res.status(400).json({ ok: false, error: "No se proporcionó un array de facturas válido." });
         }
 
-        console.log(`Iniciando emisión MASIVA para ${facturas.length} registros...`);
+        console.log(`[INFO] Recepción de lote MASIVO para ${facturas.length} registros. Iniciando en 2do plano...`);
 
-        // Ejecutamos el script masivo de Puppeteer
-        const resultado = await emitirLotePuppeteer(facturas);
+        // 1. RESPONDEMOS INMEDIATAMENTE AL FRONTEND (Libera la página web)
+        res.status(200).json({ 
+            ok: true, 
+            mensaje: "Lote recibido correctamente. Procesando facturas en segundo plano." 
+        });
 
-        res.status(200).json(resultado);
+        // 2. EJECUTAMOS PUPPETEER POR DEBAJO (Sin "await")
+        emitirLotePuppeteer(facturas)
+            .then(resultado => {
+                console.log(`\n✅ Lote masivo completado en segundo plano.`);
+            })
+            .catch(error => {
+                console.error(`\n❌ Error en proceso masivo en 2do plano:`, error);
+            });
+
     } catch (error) {
         console.error("Error en emitirMasivoController:", error);
-        res.status(500).json({ ok: false, error: error.message || "Error interno al procesar el lote en Puppeteer." });
+        // Si hay un error antes de responder, lo enviamos
+        if (!res.headersSent) {
+            res.status(500).json({ ok: false, error: error.message || "Error interno al iniciar el lote." });
+        }
     }
 };
 
@@ -389,4 +404,11 @@ export const getHistorialController = async (req, res) => {
         console.error("Error al obtener historial:", error);
         res.status(500).json({ ok: false, error: error.message });
     }
+};
+
+// ==========================================
+// NUEVO: Consultar Progreso Masivo en Vivo
+// ==========================================
+export const obtenerProgresoMasivoController = (req, res) => {
+    res.status(200).json(estadoRobot);
 };

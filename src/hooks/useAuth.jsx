@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }) => {
     // ============================================================
     // 🛡️ SISTEMA DE SEGURIDAD: CIERRE POR INACTIVIDAD (10 SEGUNDOS)
     // ============================================================
-    const TIEMPO_INACTIVIDAD_MS = 5 * 60 * 1000; // 10 segundos
+    const TIEMPO_INACTIVIDAD_MS = 60 * 60 * 1000;
 
     useEffect(() => {
         let temporizador;

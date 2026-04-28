@@ -41,6 +41,11 @@ const todayLocalISO = () => {
   return local.toISOString().slice(0, 10);
 };
 
+const getCurrentMonth = () => {
+  const meses = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+  return meses[new Date().getMonth()];
+};
+
 const formatRutSimple = (rut) => {
   if (!rut) return "";
   const cleaned = String(rut).replace(/[^0-9kK]/g, '').toUpperCase();
@@ -67,80 +72,129 @@ const createEmptyItem = () => ({
   rutSolicita: "", 
   unidadProducto: "1",  
   descuentoPct: "", 
-  descripcionProducto: "", 
+  descripcionProducto: `SERVICIOS CORRESPONDIENTES A ${getCurrentMonth()}`, 
 });
 
 // =======================================================
-// 🚀 PARSER AVANZADO DE CSV (MÉTODO FORENSE CON REGEX)
+// 🚀 PARSER AVANZADO DE CSV
 // =======================================================
-const rutRegex = /\d{7,8}-[0-9Kk]/;
-const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+const rutRegex = /\d{7,8}-[0-9Kk]/i;
 const montoRegex = /\$\s?[\d.,]+/g;
 
 function limpiarMonto(m) {
   if (!m) return 0;
-  return Number(
-    m.replace("$", "")
-      .replace(/\./g, "")
-      .replace(/,/g, "")
-  );
+  return Number(m.replace("$", "").replace(/\./g, "").replace(/,/g, ""));
 }
 
 function parseLineaAvanzada(linea) {
   const rutMatch = linea.match(rutRegex);
-  if (!rutMatch) return null; // Si no hay RUT, se ignora la línea (basura o títulos)
-  const rut = rutMatch[0];
+  if (!rutMatch) return null; 
+  const rut = rutMatch[0].toUpperCase();
 
-  const correoMatch = linea.match(emailRegex);
-  const correo = correoMatch ? correoMatch[0] : "";
+  const correosCrudos = linea.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
+  const correo = correosCrudos && correosCrudos.length > 0 ? correosCrudos[0].toLowerCase() : "";
 
   const montos = linea.match(montoRegex) || [];
+  const netoNum = montos.length > 0 ? limpiarMonto(montos[0]) : 0;
+  const netoStr = montos.length > 0 ? String(netoNum) : "0";
 
-  // Razón social = Todo el texto que está ANTES del primer monto o antes del RUT
-  let razonSocial = "NUEVO CLIENTE";
+  let textoPrevio = "";
   if (montos.length > 0) {
-    razonSocial = linea.split(montos[0])[0];
+    textoPrevio = linea.split(montos[0])[0];
   } else {
-    razonSocial = linea.split(rut)[0];
+    textoPrevio = linea.split(rut)[0];
   }
 
-  // Limpiamos las comillas y comas que deja el Excel
-  razonSocial = razonSocial.replace(/"/g, "").replace(/;/g, "").replace(/,+$/, "").trim();
-  
-  const neto = montos.length > 0 ? limpiarMonto(montos[0]) : 0;
+  textoPrevio = textoPrevio.replace(/"/g, "").trim();
+  if (textoPrevio.endsWith(',')) textoPrevio = textoPrevio.slice(0, -1);
+  if (textoPrevio.endsWith(';')) textoPrevio = textoPrevio.slice(0, -1);
 
-  return { rut, correo, neto, razonSocial };
+  const partes = textoPrevio.split(/,|;/);
+  let plan = "";
+  let razonSocial = textoPrevio;
+
+  if (partes.length >= 2) {
+    plan = partes.pop().trim(); 
+    razonSocial = partes.join(" ").trim(); 
+  }
+
+  return { rut, correo, netoNum, netoStr, razonSocial, plan };
 }
 
 export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   const { selectedCompany, user } = useAuth();
 
-  // ESTADOS DEL FORMULARIO Y TABS
   const [activeTab, setActiveTab] = useState(TABS.UNICA);
   const [item, setItem] = useState(createEmptyItem());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [folioGenerado, setFolioGenerado] = useState(null);
 
-  // ESTADOS DEL BUSCADOR PRINCIPAL
   const [allClientes, setAllClientes] = useState([]); 
   const [searchTerm, setSearchTerm] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [empresaEncontrada, setEmpresaEncontrada] = useState(null);
   const [isLoadingCrm, setIsLoadingCrm] = useState(false);
 
-  // ESTADOS MASIVOS
   const [bulkRows, setBulkRows] = useState([]);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   const [activeRowIndex, setActiveRowIndex] = useState(null); 
   const fileInputRef = useRef(null);
   
-  // IDENTIFICACIÓN DE EMPRESA ACTIVA
+  // 🌟 ESTADOS DEL RASTREADOR DE PROGRESO
+  const [progresoRobot, setProgresoRobot] = useState({ activo: false, actual: 0, total: 0, rutActual: "", exitos: 0, errores: 0 });
+  const prevExitosRef = useRef(0);
+
   const empresaEfectiva = selectedCompany || empresaEncontrada;
   const isExternal = empresaEncontrada?.id === 'EXTERNO';
   const razonSocialSegura = empresaEfectiva?.razon_social || empresaEfectiva?.razonSocial || (searchTerm.length > 0 ? 'Buscando...' : '---');
 
-  // CARGA DE DATOS CRM
+  // ====================================================
+  // 🌟 ESCUCHADOR DE PROGRESO EN VIVO
+  // ====================================================
+  useEffect(() => {
+      let interval;
+      if (isOpen && activeTab === TABS.MASIVA) {
+          interval = setInterval(async () => {
+              try {
+                  const res = await fetch(`${API_BASE_URL}/dte/progreso-masivo`);
+                  if (res.ok) {
+                      const data = await res.json();
+                      setProgresoRobot(data);
+                  }
+              } catch (e) { }
+          }, 2000);
+      }
+      return () => clearInterval(interval);
+  }, [isOpen, activeTab]);
+
+  // ====================================================
+  // 🌟 GATILLADOR DE TOASTS DE ÉXITO EN VIVO
+  // ====================================================
+  useEffect(() => {
+    // 1. Alerta cuando se suma un éxito
+    if (progresoRobot.exitos > prevExitosRef.current) {
+        toast({
+            title: "🎉 ¡Factura Emitida!",
+            description: `El robot generó con éxito la factura para el RUT: ${progresoRobot.rutActual}.`,
+            duration: 5000,
+        });
+        prevExitosRef.current = progresoRobot.exitos; 
+    }
+
+    // 2. Alerta cuando el robot termina todo el lote completo
+    if (progresoRobot.total > 0 && !progresoRobot.activo && progresoRobot.actual >= progresoRobot.total) {
+        toast({
+            title: "🏁 PROCESO MASIVO COMPLETADO",
+            description: `El robot finalizó. Éxitos: ${progresoRobot.exitos} | Errores: ${progresoRobot.errores}`,
+            duration: 10000,
+        });
+        setIsBulkSubmitting(false); // Liberamos la UI
+        prevExitosRef.current = 0; 
+    }
+  }, [progresoRobot.exitos, progresoRobot.activo, progresoRobot.total, progresoRobot.actual, progresoRobot.rutActual, progresoRobot.errores]);
+
+  // CARGA INICIAL
   useEffect(() => {
     if (!isOpen) return;
     setIsFinished(false);
@@ -151,6 +205,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     setBulkRows([]);
     setActiveRowIndex(null);
     setActiveTab(TABS.UNICA);
+    setIsBulkSubmitting(false);
 
     if (!selectedCompany && user?.sessionId) {
       setIsLoadingCrm(true);
@@ -170,12 +225,11 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
         contactoReceptor: email,
         name: selectedCompany.plan_nombre || selectedCompany.plan || "", 
         precio: selectedCompany.impuesto_pagar || selectedCompany.neto || "",
-        descripcionProducto: "Servicios Contables",
+        descripcionProducto: `SERVICIOS CORRESPONDIENTES A ${getCurrentMonth()}`,
       });
     }
   }, [isOpen, selectedCompany, user]);
 
-  // LÓGICA DE BÚSQUEDA PRINCIPAL
   const filteredSuggestions = useMemo(() => {
     if (!searchTerm || String(searchTerm).trim() === "") return [];
     const termStr = cleanStr(searchTerm);
@@ -184,9 +238,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     return allClientes.filter(c => {
       const rs = cleanStr(c.razon_social || c.razonSocial || "");
       const rutPuro = String(c.rut_encrypted || c.rut || "").replace(/[^0-9kK]/gi, '').toLowerCase();
-      const matchName = rs.includes(termStr);
-      const matchRut = termRut !== "" && rutPuro.includes(termRut);
-      return matchName || matchRut;
+      return rs.includes(termStr) || (termRut !== "" && rutPuro.includes(termRut));
     }).slice(0, 5);
   }, [searchTerm, allClientes]);
 
@@ -214,34 +266,26 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
       contactoReceptor: email,
       name: cliente.plan_nombre || cliente.plan || prev.name,
       precio: cliente.impuesto_pagar || cliente.neto || prev.precio,
-      descripcionProducto: "Servicios Contables"
+      descripcionProducto: `SERVICIOS CORRESPONDIENTES A ${getCurrentMonth()}`
     }));
   };
 
   const handleForzarEmpresa = () => {
     const rutParaAgregar = formatRutSimple(searchTerm);
-    if (!rutParaAgregar.includes('-')) {
-      toast({ variant: "destructive", title: "RUT Incompleto", description: "Ingresa el RUT con guion." });
-      return;
-    }
-    const provisional = { id: 'EXTERNO', razon_social: 'CLIENTE EXTERNO (NUEVO)', rut: rutParaAgregar };
-    setEmpresaEncontrada(provisional);
+    if (!rutParaAgregar.includes('-')) return toast({ variant: "destructive", title: "RUT Incompleto", description: "Ingresa el RUT con guion." });
+    
+    setEmpresaEncontrada({ id: 'EXTERNO', razon_social: 'CLIENTE EXTERNO (NUEVO)', rut: rutParaAgregar });
     setItem(prev => ({ ...prev, rutFacturar: rutParaAgregar, contactoReceptor: "" }));
     setShowSuggestions(false);
     toast({ title: "Modo Externo", description: "Puedes ingresar un correo (opcional) o emitir directamente." });
   };
 
-  // ==========================================
-  // 🚀 LÓGICA DE FACTURACIÓN MASIVA
-  // ==========================================
   const handleCsvUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
       const text = await file.text();
-      
-      // Limpiamos los saltos de línea y separamos el archivo
       const lineas = text
         .replace(/\t/g, ",")
         .replace(/;+/g, ",")
@@ -249,57 +293,68 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
         .map(l => l.trim())
         .filter(l => l.length > 5);
 
-      // Si la primera línea tiene títulos, la ignoramos
-      if (lineas.length > 0 && (lineas[0].toLowerCase().includes('rut') || lineas[0].toLowerCase().includes('razon'))) {
-         lineas.shift();
-      }
-
+      lineas.shift();
       if (lineas.length === 0) return toast({ variant: "destructive", title: "CSV Vacío o Inválido" });
 
-      const rowsData = lineas.map(linea => {
-        // Ejecutamos tu analizador Forense
-        const parsed = parseLineaAvanzada(linea);
-        if (!parsed) return null;
+      const rowsData = lineas.map((linea, index) => {
+        try {
+            const parsed = parseLineaAvanzada(linea);
+            if (!parsed) return null;
 
-        const rutLimpio = formatRutSimple(parsed.rut);
-        const rutParaBuscar = cleanRut(rutLimpio);
-        const precioNum = parsed.neto;
+            const rutLimpio = formatRutSimple(parsed.rut);
+            const rutParaBuscar = cleanRut(rutLimpio);
 
-        // Cruce Automático con tu CRM
-        const crmMatch = allClientes.find(c => cleanRut(c.rut_encrypted || c.rut || "") === rutParaBuscar);
+            const crmMatch = allClientes.find(c => {
+                try { return cleanRut(c.rut_encrypted || c.rut || "") === rutParaBuscar; } 
+                catch (err) { return false; }
+            });
 
-        // Decisión Inteligente: Si el Excel dice $0 o está vacío, se omite.
-        const estadoFila = precioNum > 0 ? 'pendiente' : 'omitido';
+            const planFinal = parsed.plan ? parsed.plan : (crmMatch ? (crmMatch.plan_nombre || crmMatch.plan || '') : 'SERVICIOS');
+            const correoFinal = parsed.correo ? parsed.correo : (crmMatch ? (crmMatch.email_corporativo || '') : '');
+            
+            let precioFinal = "";
+            if (parsed.netoNum > 0) {
+                precioFinal = parsed.netoStr;
+            } else if (linea.includes("$0")) {
+                precioFinal = "0"; 
+            } else {
+                precioFinal = crmMatch ? String(crmMatch.impuesto_pagar || crmMatch.neto || '') : '';
+            }
 
-        return {
-          id: crmMatch ? crmMatch.id : 'EXTERNO',
-          searchQuery: rutLimpio, 
-          rut: rutLimpio,
-          razonSocial: crmMatch ? (crmMatch.razon_social || crmMatch.razonSocial) : parsed.razonSocial,
-          plan: crmMatch ? (crmMatch.plan_nombre || crmMatch.plan || '') : 'Servicio Contable',
-          precio: precioNum > 0 ? String(precioNum) : '', 
-          observacion: 'Servicios correspondientes',
-          contacto: parsed.correo || (crmMatch ? (crmMatch.email_corporativo || '') : ''),
-          estado: estadoFila
-        };
-      }).filter(Boolean); // Filtra los nulls (basura que no tenía RUT)
+            const razonFinal = parsed.razonSocial.length > 2 ? parsed.razonSocial : (crmMatch ? (crmMatch.razon_social || crmMatch.razonSocial) : 'NUEVO CLIENTE (SII)');
+            const estadoFila = Number(precioFinal) > 0 ? 'pendiente' : 'omitido';
 
-      // Auto-Ordenamiento: Los facturables quedan arriba, los omitidos bajan al fondo.
-      rowsData.sort((a, b) => (a.estado === 'omitido' ? 1 : -1));
+            return {
+              id: crmMatch ? crmMatch.id : 'EXTERNO',
+              searchQuery: rutLimpio, 
+              rut: rutLimpio,
+              razonSocial: razonFinal,
+              plan: planFinal,
+              precio: precioFinal === "0" ? "" : precioFinal, 
+              observacion: `SERVICIOS CORRESPONDIENTES A ${getCurrentMonth()}`,
+              contacto: correoFinal,
+              estado: estadoFila
+            };
+        } catch (innerError) {
+            return null; 
+        }
+      }).filter(Boolean);
 
-      // Acumulamos por si el usuario sube otro archivo o agrega a mano
-      setBulkRows(prev => [...prev, ...rowsData]);
+      const filasValidas = rowsData.filter(r => r.rut);
+      filasValidas.sort((a, b) => (a.estado === 'omitido' ? 1 : -1));
+
+      setBulkRows(prev => [...prev, ...filasValidas]);
       
-      const facturables = rowsData.filter(r => r.estado === 'pendiente').length;
-      const omitidos = rowsData.filter(r => r.estado === 'omitido').length;
+      const facturables = filasValidas.filter(r => r.estado === 'pendiente').length;
+      const omitidos = filasValidas.filter(r => r.estado === 'omitido').length;
 
       toast({ 
-          title: "Planilla Procesada Perfectamente", 
-          description: `Detectados: ${facturables} a Facturar y ${omitidos} en $0 (Omitidos).` 
+          title: "Planilla Procesada", 
+          description: `Se detectaron ${facturables} a facturar y ${omitidos} en $0 (Omitidos).` 
       });
 
     } catch (err) {
-      toast({ variant: "destructive", title: "Error leyendo archivo" });
+      toast({ variant: "destructive", title: "Error leyendo archivo", description: "El archivo tiene caracteres corruptos." });
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
@@ -313,7 +368,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
       razonSocial: '---',
       plan: '',
       precio: '',
-      observacion: 'Servicios correspondientes',
+      observacion: `SERVICIOS CORRESPONDIENTES A ${getCurrentMonth()}`,
       contacto: '',
       estado: 'pendiente'
     }, ...bulkRows]);
@@ -322,9 +377,21 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   const handleBulkSearchChange = (index, val) => {
     const newRows = [...bulkRows];
     newRows[index].searchQuery = val;
-    if (/^[0-9kK\.\-]+$/.test(val)) {
+    
+    if (val.length > 7 && /^[0-9kK.\-]+$/.test(val)) {
       newRows[index].rut = formatRutSimple(val);
+      const rutParaBuscar = cleanRut(val);
+      const match = allClientes.find(c => cleanRut(c.rut_encrypted || c.rut || "") === rutParaBuscar);
+      
+      if (match) {
+        newRows[index].id = match.id;
+        newRows[index].razonSocial = match.razon_social || match.razonSocial;
+        newRows[index].plan = match.plan_nombre || match.plan || "Servicio Contable";
+        newRows[index].precio = match.impuesto_pagar || match.neto || "";
+        newRows[index].contacto = (match.email_corporativo || match.correo || "").split(/[,;/\s]+/)[0].trim();
+      }
     }
+    
     setBulkRows(newRows);
   };
 
@@ -337,7 +404,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     newRows[index].razonSocial = cliente.razon_social || cliente.razonSocial;
     newRows[index].plan = cliente.plan_nombre || cliente.plan || newRows[index].plan;
     newRows[index].precio = cliente.impuesto_pagar || cliente.neto || newRows[index].precio;
-    newRows[index].contacto = cliente.email_corporativo || '';
+    newRows[index].contacto = (cliente.email_corporativo || '').split(/[,;/\s]+/)[0].trim();
     setBulkRows(newRows);
     setActiveRowIndex(null);
   };
@@ -364,9 +431,6 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   };
 
   const handleBulkSubmit = async () => {
-    setIsBulkSubmitting(true);
-    
-    // Solo se facturarán los que estén en estado "pendiente" y tengan RUT
     const facturasAProcesar = bulkRows.filter(r => r.rut && r.estado === 'pendiente').map(row => {
       const rutLimpio = cleanRut(row.rut);
       const [rutFull, dv] = rutLimpio.includes("-") ? rutLimpio.split("-") : [rutLimpio, ""];
@@ -391,30 +455,30 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     });
 
     if (facturasAProcesar.length === 0) {
-      setIsBulkSubmitting(false);
       return toast({ variant: "destructive", title: "Sin datos", description: "No hay filas válidas para procesar." });
     }
 
-    try {
-      setBulkRows(prev => prev.map(r => r.estado === 'pendiente' ? { ...r, estado: "procesando" } : r));
-      
-      const res = await fetch(`${API_BASE_URL}/dte/emitir-masivo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ facturas: facturasAProcesar }),
-      });
+    setIsBulkSubmitting(true);
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error procesando el lote");
+    toast({ 
+      title: "🚀 Robot Iniciado en Segundo Plano", 
+      description: `Procesando ${facturasAProcesar.length} facturas. No cierres esta ventana para ver el progreso.`,
+      duration: 8000
+    });
 
-      toast({ title: "Lote Finalizado", description: "Se ha procesado la facturación masiva exitosamente." });
-      setBulkRows(prev => prev.map(r => r.estado === 'procesando' ? { ...r, estado: "completado" } : r));
-    } catch (error) {
-      toast({ variant: "destructive", title: "Fallo Masivo", description: error.message });
-      setBulkRows(prev => prev.map(r => r.estado === 'procesando' ? { ...r, estado: "error" } : r));
-    } finally {
-      setIsBulkSubmitting(false);
-    }
+    // 🌟 DEJAMOS DE CERRAR EL MODAL AUTOMÁTICAMENTE PARA VER LA BARRA DE PROGRESO
+    // setIsOpen(false); 
+
+    setBulkRows(prev => prev.map(r => r.estado === 'pendiente' ? { ...r, estado: "procesando" } : r));
+
+    fetch(`${API_BASE_URL}/dte/emitir-masivo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ facturas: facturasAProcesar }),
+    }).catch(err => {
+        console.error("Error al enviar lote al servidor:", err);
+        setIsBulkSubmitting(false);
+    });
   };
 
   const handleSubmitUnica = async (e) => {
@@ -467,16 +531,12 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   };
 
   return (
-    // BLOQUEO ABSOLUTO DURANTE EMISIÓN
     <Dialog open={isOpen} onOpenChange={(val) => { if (!isSubmitting && !isBulkSubmitting) setIsOpen(val); }}>
-      
-      {/* 🚀 EL TAMAÑO CAMBIA MAGÍCAMENTE DEPENDIENDO DE LA PESTAÑA */}
       <DialogContent className={`w-full bg-[#0a0a0a] border-white/10 text-white overflow-hidden p-0 shadow-2xl flex flex-col transition-all duration-500 max-h-[95vh] ${
-          activeTab === TABS.MASIVA ? 'sm:max-w-[1150px]' : 'sm:max-w-[850px]'
+          activeTab === TABS.MASIVA ? 'max-w-[95vw] lg:max-w-[1250px]' : 'sm:max-w-[800px]'
       }`}>
         
-        {/* OVERLAY DE BLOQUEO / CARGA (PANTALLA DE PROTECCIÓN) */}
-        {(isSubmitting || isBulkSubmitting || isFinished) && (
+        {(isSubmitting || isFinished) && activeTab === TABS.UNICA && (
           <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-md">
             {!isFinished ? (
               <div className="flex flex-col items-center gap-6 text-center px-4">
@@ -488,7 +548,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                 </div>
                 <div>
                   <h3 className="text-2xl font-black uppercase italic tracking-widest text-white mb-2">
-                    {isBulkSubmitting ? 'Facturando Lote...' : 'Emitiendo al SII...'}
+                    Emitiendo al SII...
                   </h3>
                   <p className="text-red-400 font-bold uppercase tracking-widest text-xs animate-pulse bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20">
                     ⚠️ SISTEMA BLOQUEADO MIENTRAS SE EMITE. NO CIERRE LA VENTANA.
@@ -499,11 +559,11 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
               <div className="flex flex-col items-center gap-6 text-center p-8">
                 <CheckCircle2 className="h-24 w-24 text-emerald-500" />
                 <div>
-                  <h3 className="text-3xl font-black uppercase italic tracking-tighter mb-1">¡Documento Emitido!</h3>
-                  <p className="font-mono text-xl text-emerald-400 font-bold">Folio N° {folioGenerado || 'Múltiple'}</p>
+                  <h3 className="text-3xl font-black uppercase italic tracking-tighter mb-1">¡Proceso Finalizado!</h3>
+                  <p className="font-mono text-xl text-emerald-400 font-bold">Folio N° {folioGenerado}</p>
                 </div>
                 <Button onClick={() => setIsOpen(false)} className="bg-blue-600 hover:bg-blue-700 w-full mt-4 rounded-xl font-black uppercase tracking-widest h-14">
-                  Finalizar y Volver al CRM
+                  Volver al CRM
                 </Button>
               </div>
             )}
@@ -512,7 +572,6 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
 
         <div className="p-8 flex flex-col h-full overflow-hidden">
           
-          {/* HEADER FIJO */}
           <div className="flex-shrink-0">
             <DialogHeader className="mb-6">
               <div className="flex items-center justify-between">
@@ -528,10 +587,9 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
               </div>
             </DialogHeader>
 
-            {/* BOTONES INTERRUPTORES */}
-            <div className="flex bg-black/50 p-1.5 rounded-2xl border border-white/10 mb-8 flex-shrink-0">
-                <button onClick={() => setActiveTab(TABS.UNICA)} className={`flex-1 flex items-center justify-center gap-2 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === TABS.UNICA ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}>Factura Única</button>
-                <button onClick={() => setActiveTab(TABS.MASIVA)} className={`flex-1 flex items-center justify-center gap-2 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === TABS.MASIVA ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}><FileText size={14} /> Factura Masiva (CSV / Manual)</button>
+            <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 mb-6">
+                <button onClick={() => setActiveTab(TABS.UNICA)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.UNICA ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}>Factura Única</button>
+                <button onClick={() => setActiveTab(TABS.MASIVA)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.MASIVA ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}><FileText size={14} /> Factura Masiva (CSV o Manual)</button>
             </div>
           </div>
 
@@ -640,6 +698,31 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
               {activeTab === TABS.MASIVA && (
                 <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-300">
                   
+                  {/* 🌟 BARRA DE PROGRESO EN VIVO (SE MUESTRA SOLO CUANDO EL ROBOT TRABAJA) */}
+                  {progresoRobot.activo && (
+                      <div className="bg-blue-600/20 border border-blue-500 rounded-xl p-4 mb-4 flex items-center justify-between shadow-[0_0_20px_rgba(59,130,246,0.3)] animate-pulse">
+                          <div className="flex items-center gap-4">
+                              <Loader2 className="animate-spin text-blue-400 w-8 h-8" />
+                              <div>
+                                  <p className="text-white font-black uppercase text-sm tracking-widest">
+                                      Robot Facturando en Segundo Plano...
+                                  </p>
+                                  <p className="text-blue-300 text-xs font-mono mt-1">
+                                      Procesando RUT: {progresoRobot.rutActual || '...'}
+                                  </p>
+                              </div>
+                          </div>
+                          <div className="text-right">
+                              <p className="text-3xl font-black text-white italic">
+                                  {progresoRobot.actual} / {progresoRobot.total}
+                              </p>
+                              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
+                                  Éxitos: <span className="text-emerald-400">{progresoRobot.exitos}</span> | Errores: <span className="text-red-400">{progresoRobot.errores}</span>
+                              </p>
+                          </div>
+                      </div>
+                  )}
+
                   <div className="flex gap-4 mb-4 flex-shrink-0">
                     <div className="flex-1 bg-blue-900/10 border border-blue-500/30 rounded-xl p-4 flex flex-col items-center justify-center border-dashed cursor-pointer hover:bg-blue-900/20 transition-all" onClick={() => fileInputRef.current?.click()}>
                       <UploadCloud size={24} className="text-blue-400 mb-2" />
@@ -671,7 +754,6 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                         </div>
                       </div>
 
-                      {/* Espacio extra abajo (pb-32) para que el dropdown no se corte */}
                       <div className="flex-1 overflow-auto custom-scrollbar min-h-[250px] pb-32">
                         <table className="w-full text-left whitespace-nowrap border-collapse">
                           <thead className="bg-[#121212] sticky top-0 z-10 border-b border-white/10 shadow-lg">
@@ -693,7 +775,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                               const isOmitted = row.estado === 'omitido';
 
                               return (
-                                <tr key={i} className={`transition-colors group ${activeRowIndex === i ? 'bg-blue-900/10 relative z-50' : 'hover:bg-white/[0.04] relative z-0'} ${isOmitted ? 'opacity-40 grayscale' : ''}`}>
+                                <tr key={i} className={`transition-all duration-200 group ${activeRowIndex === i ? 'bg-blue-600/10 z-50 relative' : 'hover:bg-white/[0.04] z-0 relative'} ${isOmitted ? 'opacity-40 grayscale' : ''}`}>
                                   
                                   {/* 1. BUSCADOR INTELIGENTE EN CADA FILA */}
                                   <td className={`px-4 py-2 relative ${activeRowIndex === i ? 'z-50' : 'z-0'}`}>
