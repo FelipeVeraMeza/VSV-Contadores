@@ -14,12 +14,19 @@ dotenv.config();
 // ==========================================
 export const estadoRobot = {
     activo: false,
+    cancelar: false, // 🔥 NUEVO: Bandera de cancelación
     total: 0,
     actual: 0,
     rutActual: "",
     exitos: 0,
     errores: 0
 };
+
+// 🔥 NUEVO: Función para apretar el botón de pánico desde afuera
+export function detenerRobot() {
+    estadoRobot.cancelar = true;
+    console.log('\n🛑 [SEÑAL DE ABORTO] Se ha ordenado detener el robot. Abortando de forma segura...');
+}
 
 const RUTA_LOG = path.join(process.cwd(), 'facturas_emitidas_nombres_log.txt'); 
 const TEL_EMISOR = '56978278733'; 
@@ -31,6 +38,7 @@ async function navegarAEmision(page) {
     let exito = false;
     let intentos = 0;
     while (!exito && intentos < 5) {
+        if (estadoRobot.cancelar) throw new Error("Operación cancelada por el usuario."); // Freno de emergencia
         try {
             await page.goto('https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=33&TIPO=4', { 
                 waitUntil: 'domcontentloaded', 
@@ -48,7 +56,7 @@ async function navegarAEmision(page) {
 }
 
 const limpiarYTipar = async (page, selector, texto) => {
-    if (!texto) return; 
+    if (!texto || estadoRobot.cancelar) return; 
     try {
         await page.waitForSelector(selector, { visible: true, timeout: 5000 });
         await page.click(selector, { clickCount: 3 }); 
@@ -81,7 +89,9 @@ export async function emitirLotePuppeteer(facturasFront) {
 
     if (pendientes.length === 0) return { ok: true, mensaje: "No hay facturas pendientes." };
 
+    // INICIALIZAR EL RASTREADOR LIMPIO
     estadoRobot.activo = true;
+    estadoRobot.cancelar = false; // 🔥 Aseguramos que empiece sin orden de cancelar
     estadoRobot.total = pendientes.length;
     estadoRobot.actual = 0;
     estadoRobot.exitos = 0;
@@ -94,9 +104,11 @@ export async function emitirLotePuppeteer(facturasFront) {
     // 🔄 CICLE EXTERN: GESTIÓ DE LOTS
     // =======================================================================
     for (let i = 0; i < pendientes.length; i += TAMANO_LOTE) {
+        if (estadoRobot.cancelar) break; // 🔥 SI APRETARON EL BOTÓN, SALIMOS DEL CICLO MAYOR
+
         const loteActual = pendientes.slice(i, i + TAMANO_LOTE);
         
-        console.log(`\n📦 INICIANDO LOTE DE FACTURAS (Processant del ${i + 1} al ${i + loteActual.length} de ${pendientes.length})`);
+        console.log(`\n📦 INICIANDO LOTE DE FACTURAS (Procesando del ${i + 1} al ${Math.min(i + loteActual.length, pendientes.length)} de ${pendientes.length})`);
 
         // 🔥 OBRIM NAVEGADOR
         let browser = await puppeteer.launch({ 
@@ -113,6 +125,8 @@ export async function emitirLotePuppeteer(facturasFront) {
         // 🔄 CICLE INTERN: FACTURACIÓ
         // =======================================================================
         for (let j = 0; j < loteActual.length; j++) {
+            if (estadoRobot.cancelar) break; // 🔥 SI APRETARON EL BOTÓN, SALIMOS DEL CICLO MENOR
+            
             const f = loteActual[j];
             const indiceGlobal = i + j + 1; 
             
@@ -123,17 +137,17 @@ export async function emitirLotePuppeteer(facturasFront) {
             const MAX_INTENTOS = 3;
             let facturaCompletada = false;
 
-            while (intentoRealizado < MAX_INTENTOS && !facturaCompletada) {
+            while (intentoRealizado < MAX_INTENTOS && !facturaCompletada && !estadoRobot.cancelar) {
                 intentoRealizado++;
                 let razonSocialCapturadaDelSII = null;
 
                 console.log(`\n==================================================`);
-                console.log(`[INFO] FACTURANDO: RUT ${f.rutReceptor} (Intent ${intentoRealizado}/${MAX_INTENTOS}) | Progrés Global: ${indiceGlobal}/${pendientes.length}`);
+                console.log(`[INFO] FACTURANDO: RUT ${f.rutReceptor} (Intento ${intentoRealizado}/${MAX_INTENTOS}) | Progreso Global: ${indiceGlobal}/${pendientes.length}`);
 
                 try {
                     // Si és un reintent, matamos el navegador i n'obrim un de nou completament fresc (Hard Reset)
                     if (intentoRealizado > 1) {
-                        console.log('🔄 [HARD RESET] Tancant navegador i obrint-ne un de nou per desatascar...');
+                        console.log('🔄 [HARD RESET] Cerrando navegador y abriendo uno nuevo para desatascar...');
                         try { await browser.close(); } catch(e) {}
                         await delay(2000);
                         
@@ -148,14 +162,15 @@ export async function emitirLotePuppeteer(facturasFront) {
                     } else if (i > 0 && j === 0) {
                         // Netejador preventiu només al primer intent del lot (si no és el primer lot)
                         try { 
-                            console.log('🔄 Esborrant la memòria cau visual...');
+                            console.log('🔄 Borrando la caché visual...');
                             await page.goto('about:blank'); 
                             await delay(1000);
                         } catch(e) {}
                     }
 
-                    console.log('🔄 Carregant portal d\'emissió...');
+                    console.log('🔄 Cargando portal de emisión...');
                     await navegarAEmision(page);
+                    if (estadoRobot.cancelar) throw new Error("Operación cancelada por el usuario.");
                     await delay(2000);
                     
                     // ============================================================
@@ -164,11 +179,11 @@ export async function emitirLotePuppeteer(facturasFront) {
                     let loginCompletado = false;
                     let intentosLogin = 0;
 
-                    while (!loginCompletado && intentosLogin < 3) {
+                    while (!loginCompletado && intentosLogin < 3 && !estadoRobot.cancelar) {
                         const inputRutExiste = await page.$('#rutcntr');
                         if (inputRutExiste) {
                             intentosLogin++;
-                            console.log(`🔑 [Intent Login ${intentosLogin}/3] Iniciant sessió al SII...`);
+                            console.log(`🔑 [Intento Login ${intentosLogin}/3] Iniciando sesión en el SII...`);
                             
                             try {
                                 await page.evaluate(() => {
@@ -189,11 +204,11 @@ export async function emitirLotePuppeteer(facturasFront) {
                                 await delay(2000);
                                 
                                 const sigueEnLogin = await page.$('#rutcntr');
-                                if (sigueEnLogin) throw new Error("Ha rebotat de nou al login.");
+                                if (sigueEnLogin) throw new Error("Rebotó de nuevo al login.");
 
                                 loginCompletado = true;
                             } catch (errLogin) {
-                                console.log(`⚠️ El login ha fallat. Tornant a intentar...`);
+                                console.log(`⚠️ El login falló. Volviendo a intentar...`);
                                 await navegarAEmision(page);
                                 await delay(3000); 
                             }
@@ -202,12 +217,13 @@ export async function emitirLotePuppeteer(facturasFront) {
                         }
                     }
 
-                    if (!loginCompletado) throw new Error("El SII no ha permès iniciar sessió després de 3 intents.");
+                    if (estadoRobot.cancelar) throw new Error("Operación cancelada por el usuario.");
+                    if (!loginCompletado) throw new Error("El SII no permitió iniciar sesión después de 3 intentos.");
 
-                    // 2. Validar Empresa Emissora
+                    // 2. Validar Empresa Emisora
                     const selectBox = await page.$('select[name="RUT_EMP"]');
                     if (selectBox) {
-                        console.log('🏢 Seleccionant empresa emissora...');
+                        console.log('🏢 Seleccionando empresa emisora...');
                         const valueSegundaEmpresa = await page.evaluate(() => {
                             const selectElement = document.querySelector('select[name="RUT_EMP"]');
                             if (selectElement && selectElement.options.length > 0) {
@@ -232,7 +248,9 @@ export async function emitirLotePuppeteer(facturasFront) {
                         }
                     }
 
-                    console.log('⏳ Pàgina carregada. Esperant 5 segons abans de teclejar la factura...');
+                    if (estadoRobot.cancelar) throw new Error("Operación cancelada por el usuario.");
+
+                    console.log('⏳ Página cargada. Esperando 5 segundos antes de tipear la factura...');
                     await delay(5000); 
 
                     await page.waitForSelector('input[name="EFXP_RUT_RECEP"], #EFXP_RUT_RECEP', { visible: true, timeout: 25000 });
@@ -273,7 +291,7 @@ export async function emitirLotePuppeteer(facturasFront) {
                        razonSocialCapturadaDelSII = f.razonSocial || 'CLIENTE MASIVO SII';
                     }
                     
-                    console.log(`✅ [RAÓ SOCIAL A GUARDAR]: "${razonSocialCapturadaDelSII}"`);
+                    console.log(`✅ [RAZÓN SOCIAL A GUARDAR]: "${razonSocialCapturadaDelSII}"`);
 
                     await page.type('input[name="EFXP_NMB_01"]', f.producto.nombre || 'Servicio', { delay: 150 });
                     await page.type('input[name="EFXP_QTY_01"]', '1', { delay: 150 });
@@ -284,6 +302,8 @@ export async function emitirLotePuppeteer(facturasFront) {
                     try { await page.waitForSelector('textarea[name="EFXP_DSC_ITEM_01"]', { visible: true, timeout: 5000 }); } catch (e) { await checkbox.click(); }
                     await page.type('textarea[name="EFXP_DSC_ITEM_01"]', f.producto.descripcion || 'Servicios Contables', { delay: 150 });
                     await page.select('select[name="EFXP_FMA_PAGO"]', '1'); 
+
+                    if (estadoRobot.cancelar) throw new Error("Operación cancelada por el usuario.");
 
                     await page.click('button[name="Button_Update"]');
                     await delay(3500); 
@@ -299,24 +319,25 @@ export async function emitirLotePuppeteer(facturasFront) {
                     } catch (e) {}
 
                     let intentosFirma = 0, cajaVisible = false;
-                    while (intentosFirma < 5 && !cajaVisible) {
+                    while (intentosFirma < 5 && !cajaVisible && !estadoRobot.cancelar) {
                         try {
                             await page.evaluate(() => {
                                 const btn = document.querySelector('input[name="btnSign"]');
                                 if (btn && !btn.disabled) btn.click();
                             });
-                            // 🔥 Canvi clau: Es redueix el temps d'espera i si falla tira l'error que atraparà el CATCH i farà HARD RESET
+                            // 🔥 Se reduce el tiempo de espera y si falla lanza error que atrapará el CATCH y hará HARD RESET
                             await page.waitForSelector('#myPass', { visible: true, timeout: 6000 });
                             cajaVisible = true;
                         } catch (e) {
                             intentosFirma++;
-                            console.log(`⚠️ [Intent Firma ${intentosFirma}/5] Botó no trobat o bloquejat...`);
+                            console.log(`⚠️ [Intento Firma ${intentosFirma}/5] Botón no encontrado o bloqueado...`);
                             await page.click('button[name="Button_Update"]').catch(()=> {}); 
                             await delay(2000);
                         }
                     }
 
-                    if (!cajaVisible) throw new Error("El SII no ha carregat la caixa per a la clau digital (input[name='btnSign'] no detectat o penjat).");
+                    if (estadoRobot.cancelar) throw new Error("Operación cancelada por el usuario.");
+                    if (!cajaVisible) throw new Error("El SII no cargó la caja para la clave digital (input[name='btnSign'] no detectado o pegado).");
 
                     await page.focus('#myPass');
                     await page.type('#myPass', process.env.SII_PFX_PASS, { delay: 150 }); 
@@ -332,6 +353,7 @@ export async function emitirLotePuppeteer(facturasFront) {
                     
                     let folio = null;
                     for (let k = 0; k < 30; k++) {
+                        if (estadoRobot.cancelar) throw new Error("Operación cancelada por el usuario.");
                         const text = await page.evaluate(() => document.body.innerText).catch(() => "");
                         const match = text.match(/N[°º]\s*(\d+)/i) || text.match(/Folio\s*(\d+)/i);
                         if (match) { folio = match[1]; break; }
@@ -339,7 +361,7 @@ export async function emitirLotePuppeteer(facturasFront) {
                     }
 
                     if (folio) {
-                        console.log(`🎉 ¡ÈXIT! Foli N°: ${folio}`);
+                        console.log(`🎉 ¡ÉXITO! Folio N°: ${folio}`);
                         fs.appendFileSync(RUTA_LOG, `${f.rutReceptor} - Folio: ${folio}\n`); 
                         resultados.push({ rut: f.rutReceptor, nombre: razonSocialCapturadaDelSII, estado: 'exito', folio: folio });
                         
@@ -347,7 +369,7 @@ export async function emitirLotePuppeteer(facturasFront) {
                         facturaCompletada = true; 
 
                         // ==============================================================
-                        // 🔥 CONNEXIÓ "FLASH" A SUPABASE
+                        // 🔥 CONEXIÓN "FLASH" A SUPABASE
                         // ==============================================================
                         const dbClient = new Client({
                             user: process.env.DBS_USER, host: process.env.DBS_HOST,
@@ -375,55 +397,64 @@ export async function emitirLotePuppeteer(facturasFront) {
                                 const checkRes = await dbClient.query(checkQuery, [rutOriginal, folio]);
                                 if (checkRes.rows.length === 0) {
                                     await dbClient.query(`INSERT INTO documentos_emitidos (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, fecha_emision) VALUES ($1, $2, 33, $3, $4, $5)`, [empresaIdFinal, rutOriginal, folio, parseInt(f.producto.precio), new Date().toISOString()]);
-                                    console.log(`✅ Guardat a la Volta Historial.`);
+                                    console.log(`✅ Guardado en Bóveda Historial.`);
                                 }
                             }
                         } catch (dbErr) {
-                            console.log(`⚠️ Error de Xarxa BD:`, dbErr.message);
+                            console.log(`⚠️ Error de Red BD:`, dbErr.message);
                         } finally {
                             await dbClient.end(); 
                         }
 
                     } else {
-                        throw new Error("No s'ha detectat el foli.");
+                        throw new Error("No se detectó el folio.");
                     }
 
                 } catch (e) {
-                    console.log(`❌ [ERROR] Intent ${intentoRealizado} ha fallat en ${f.rutReceptor}: ${e.message}`);
+                    console.log(`❌ [ERROR] Intento ${intentoRealizado} falló en ${f.rutReceptor}: ${e.message}`);
                     
-                    if (intentoRealizado >= MAX_INTENTOS) {
-                        console.log(`🚫 S'han esgotat els 3 reintents. Saltant a la següent factura.`);
-                        fs.appendFileSync(RUTA_LOG, `FALLO: ${f.rutReceptor} - ${f.producto.nombre || ''}\n`);
+                    if (estadoRobot.cancelar || intentoRealizado >= MAX_INTENTOS) {
+                        if(!estadoRobot.cancelar) {
+                             console.log(`🚫 Se agotaron los 3 reintentos. Saltando a la siguiente factura.`);
+                             fs.appendFileSync(RUTA_LOG, `FALLO: ${f.rutReceptor} - ${f.producto.nombre || ''}\n`);
+                        }
                         resultados.push({ rut: f.rutReceptor, estado: 'error', error: e.message });
                         estadoRobot.errores++; 
                     }
-                    // Si estem en un reintent (intent >= 1) i ha fallat, el while farà el HARD RESET al principi de la volta següent.
                 }
-            } // Fi del While de reintents
+            } // Fin del While de reintentos
             
+            if (estadoRobot.cancelar) break; // 🔥 Salimos si cancelan
+
             if (j < loteActual.length - 1 && indiceGlobal < pendientes.length) {
-                console.log('⏱️ Factura registrada. Refredant connexió per 20 segons abans de la següent empresa...');
+                console.log('⏱️ Factura registrada. Enfriando conexión por 20 segundos antes de la siguiente empresa...');
                 await delay(20000); 
             } else {
-                 console.log('⏱️ Factura processada. Finalitzant cicle del lot...');
+                 console.log('⏱️ Factura procesada. Finalizando ciclo del lote...');
                  await delay(5000); 
             }
         } 
 
-        // 🔥 AL TERMINAR EL LOT DE 3, TANQUEM EL NAVEGADOR
-        console.log(`\n🧹 [LOT DE 3 FINALITZAT] Tancant navegador per netejar la memòria del SII...`);
+        // 🔥 AL TERMINAR EL LOTE DE 3, CERRAMOS EL NAVEGADOR
+        console.log(`\n🧹 [LOTE DE 3 FINALIZADO / O CANCELADO] Cerrando navegador para limpiar memoria del SII...`);
         try { await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { timeout: 5000 }); } catch (err) {}
         try { await browser.close(); } catch(e) {}
 
-        // 🔥 DESCANS CURT ENTRE LOTS
+        if (estadoRobot.cancelar) {
+             console.log('🛑 [SISTEMA DETENIDO] El proceso fue abortado correctamente por el usuario.');
+             break; // 🔥 Salimos del ciclo principal definitivamente
+        }
+
+        // 🔥 DESCANSO CORTO ENTRE LOTES
         if (i + TAMANO_LOTE < pendientes.length) {
-            console.log('⏱️ Descansant 3 segons abans d\'obrir el proper navegador net...');
+            console.log('⏱️ Descansando 3 segundos antes de abrir el próximo navegador limpio...');
             await delay(3000); 
         }
     } 
     
     estadoRobot.activo = false;
-    console.log('🏁 ¡PROCÉS TOTAL COMPLETAT!');
+    estadoRobot.cancelar = false; // Lo reseteamos para el futuro
+    console.log('🏁 ¡PROCESO TOTAL FINALIZADO!');
 
-    return { ok: true, mensaje: "Lot massiu completat.", detalle: resultados };
+    return { ok: true, mensaje: "Proceso concluido.", detalle: resultados };
 }

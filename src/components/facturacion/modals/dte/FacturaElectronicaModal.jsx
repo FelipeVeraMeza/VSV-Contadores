@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
 import { 
   Building2, Mail, CreditCard, Loader2, Tag, 
-  Search, CheckCircle2, UserPlus, UploadCloud, AlertCircle, FileText, Plus, X
+  Search, CheckCircle2, UserPlus, UploadCloud, AlertCircle, FileText, Plus, X,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import { API_BASE_URL } from "../../../../../config.js";
 import { cleanRut } from "@/lib/rut.js";
@@ -140,6 +141,10 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   const [activeRowIndex, setActiveRowIndex] = useState(null); 
   const fileInputRef = useRef(null);
+
+  // 🔥 ESTADOS PARA LA PAGINACIÓN
+  const [currentPage, setCurrentPage] = useState(1);
+  const ROWS_PER_PAGE = 6; // ⬅️ LÍMITE DE 6 FILAS CONFIGURADO
   
   // 🌟 ESTADOS DEL RASTREADOR DE PROGRESO
   const [progresoRobot, setProgresoRobot] = useState({ activo: false, actual: 0, total: 0, rutActual: "", exitos: 0, errores: 0 });
@@ -148,6 +153,19 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   const empresaEfectiva = selectedCompany || empresaEncontrada;
   const isExternal = empresaEncontrada?.id === 'EXTERNO';
   const razonSocialSegura = empresaEfectiva?.razon_social || empresaEfectiva?.razonSocial || (searchTerm.length > 0 ? 'Buscando...' : '---');
+
+  // ====================================================
+  // 🔥 LÓGICA DE PAGINACIÓN DE LA TABLA
+  // ====================================================
+  const totalPages = Math.ceil(bulkRows.length / ROWS_PER_PAGE) || 1;
+  
+  const currentRows = useMemo(() => {
+    const startIndex = (currentPage - 1) * ROWS_PER_PAGE;
+    return bulkRows.slice(startIndex, startIndex + ROWS_PER_PAGE);
+  }, [bulkRows, currentPage]);
+
+  const goToNextPage = () => setCurrentPage((prev) => Math.min(prev + 1, totalPages));
+  const goToPrevPage = () => setCurrentPage((prev) => Math.max(prev - 1, 1));
 
   // ====================================================
   // 🌟 ESCUCHADOR DE PROGRESO EN VIVO
@@ -161,18 +179,24 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                   if (res.ok) {
                       const data = await res.json();
                       setProgresoRobot(data);
+
+                      if (data.activo && data.actual > 0) {
+                          const pagDelRobot = Math.ceil(data.actual / ROWS_PER_PAGE);
+                          if (pagDelRobot !== currentPage) {
+                              setCurrentPage(pagDelRobot);
+                          }
+                      }
                   }
               } catch (e) { }
           }, 2000);
       }
       return () => clearInterval(interval);
-  }, [isOpen, activeTab]);
+  }, [isOpen, activeTab, currentPage]);
 
   // ====================================================
   // 🌟 GATILLADOR DE TOASTS DE ÉXITO EN VIVO
   // ====================================================
   useEffect(() => {
-    // 1. Alerta cuando se suma un éxito
     if (progresoRobot.exitos > prevExitosRef.current) {
         toast({
             title: "🎉 ¡Factura Emitida!",
@@ -182,14 +206,13 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
         prevExitosRef.current = progresoRobot.exitos; 
     }
 
-    // 2. Alerta cuando el robot termina todo el lote completo
     if (progresoRobot.total > 0 && !progresoRobot.activo && progresoRobot.actual >= progresoRobot.total) {
         toast({
             title: "🏁 PROCESO MASIVO COMPLETADO",
             description: `El robot finalizó. Éxitos: ${progresoRobot.exitos} | Errores: ${progresoRobot.errores}`,
             duration: 10000,
         });
-        setIsBulkSubmitting(false); // Liberamos la UI
+        setIsBulkSubmitting(false); 
         prevExitosRef.current = 0; 
     }
   }, [progresoRobot.exitos, progresoRobot.activo, progresoRobot.total, progresoRobot.actual, progresoRobot.rutActual, progresoRobot.errores]);
@@ -203,6 +226,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     setSearchTerm("");
     setShowSuggestions(false);
     setBulkRows([]);
+    setCurrentPage(1); 
     setActiveRowIndex(null);
     setActiveTab(TABS.UNICA);
     setIsBulkSubmitting(false);
@@ -344,6 +368,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
       filasValidas.sort((a, b) => (a.estado === 'omitido' ? 1 : -1));
 
       setBulkRows(prev => [...prev, ...filasValidas]);
+      setCurrentPage(1); 
       
       const facturables = filasValidas.filter(r => r.estado === 'pendiente').length;
       const omitidos = filasValidas.filter(r => r.estado === 'omitido').length;
@@ -372,62 +397,79 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
       contacto: '',
       estado: 'pendiente'
     }, ...bulkRows]);
+    setCurrentPage(1); 
   };
 
-  const handleBulkSearchChange = (index, val) => {
+  const handleBulkSearchChange = (absoluteIndex, val) => {
     const newRows = [...bulkRows];
-    newRows[index].searchQuery = val;
+    newRows[absoluteIndex].searchQuery = val;
     
     if (val.length > 7 && /^[0-9kK.\-]+$/.test(val)) {
-      newRows[index].rut = formatRutSimple(val);
+      newRows[absoluteIndex].rut = formatRutSimple(val);
       const rutParaBuscar = cleanRut(val);
       const match = allClientes.find(c => cleanRut(c.rut_encrypted || c.rut || "") === rutParaBuscar);
       
       if (match) {
-        newRows[index].id = match.id;
-        newRows[index].razonSocial = match.razon_social || match.razonSocial;
-        newRows[index].plan = match.plan_nombre || match.plan || "Servicio Contable";
-        newRows[index].precio = match.impuesto_pagar || match.neto || "";
-        newRows[index].contacto = (match.email_corporativo || match.correo || "").split(/[,;/\s]+/)[0].trim();
+        newRows[absoluteIndex].id = match.id;
+        newRows[absoluteIndex].razonSocial = match.razon_social || match.razonSocial;
+        newRows[absoluteIndex].plan = match.plan_nombre || match.plan || "Servicio Contable";
+        newRows[absoluteIndex].precio = match.impuesto_pagar || match.neto || "";
+        newRows[absoluteIndex].contacto = (match.email_corporativo || match.correo || "").split(/[,;/\s]+/)[0].trim();
       }
     }
     
     setBulkRows(newRows);
   };
 
-  const applyClientToRow = (index, cliente) => {
+  const applyClientToRow = (absoluteIndex, cliente) => {
     const newRows = [...bulkRows];
     const rutLimpio = formatRutSimple(cliente.rut_encrypted || cliente.rut);
-    newRows[index].id = cliente.id;
-    newRows[index].rut = rutLimpio;
-    newRows[index].searchQuery = rutLimpio;
-    newRows[index].razonSocial = cliente.razon_social || cliente.razonSocial;
-    newRows[index].plan = cliente.plan_nombre || cliente.plan || newRows[index].plan;
-    newRows[index].precio = cliente.impuesto_pagar || cliente.neto || newRows[index].precio;
-    newRows[index].contacto = (cliente.email_corporativo || '').split(/[,;/\s]+/)[0].trim();
+    newRows[absoluteIndex].id = cliente.id;
+    newRows[absoluteIndex].rut = rutLimpio;
+    newRows[absoluteIndex].searchQuery = rutLimpio;
+    newRows[absoluteIndex].razonSocial = cliente.razon_social || cliente.razonSocial;
+    newRows[absoluteIndex].plan = cliente.plan_nombre || cliente.plan || newRows[absoluteIndex].plan;
+    newRows[absoluteIndex].precio = cliente.impuesto_pagar || cliente.neto || newRows[absoluteIndex].precio;
+    newRows[absoluteIndex].contacto = (cliente.email_corporativo || '').split(/[,;/\s]+/)[0].trim();
     setBulkRows(newRows);
     setActiveRowIndex(null);
   };
 
-  const setRowAsExternal = (index, val) => {
+  const setRowAsExternal = (absoluteIndex, val) => {
     const newRows = [...bulkRows];
     const rutLimpio = formatRutSimple(val);
-    newRows[index].id = 'EXTERNO';
-    newRows[index].rut = rutLimpio;
-    newRows[index].searchQuery = rutLimpio;
-    newRows[index].razonSocial = 'CLIENTE EXTERNO (NUEVO)';
+    newRows[absoluteIndex].id = 'EXTERNO';
+    newRows[absoluteIndex].rut = rutLimpio;
+    newRows[absoluteIndex].searchQuery = rutLimpio;
+    newRows[absoluteIndex].razonSocial = 'CLIENTE EXTERNO (NUEVO)';
     setBulkRows(newRows);
     setActiveRowIndex(null);
   };
 
-  const updateBulkRow = (index, field, value) => {
+  const updateBulkRow = (absoluteIndex, field, value) => {
     const newRows = [...bulkRows];
-    newRows[index][field] = value;
+    newRows[absoluteIndex][field] = value;
     setBulkRows(newRows);
   };
 
-  const removeBulkRow = (index) => {
-    setBulkRows(bulkRows.filter((_, i) => i !== index));
+  const removeBulkRow = (absoluteIndex) => {
+    setBulkRows(bulkRows.filter((_, i) => i !== absoluteIndex));
+  };
+
+  const handleDetenerMasivo = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/dte/detener-masivo`, { method: "POST" });
+      toast({ 
+        title: "🛑 Deteniendo Robot", 
+        description: "El robot abortará de forma segura apenas termine su paso actual.",
+        variant: "destructive"
+      });
+      setIsBulkSubmitting(false); 
+      setBulkRows(prev => prev.map(r => r.estado === 'procesando' ? { ...r, estado: "pendiente" } : r));
+      setProgresoRobot(prev => ({ ...prev, activo: false }));
+    } catch (err) {
+      console.error("Error al detener el robot:", err);
+    }
   };
 
   const handleBulkSubmit = async () => {
@@ -465,9 +507,6 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
       description: `Procesando ${facturasAProcesar.length} facturas. No cierres esta ventana para ver el progreso.`,
       duration: 8000
     });
-
-    // 🌟 DEJAMOS DE CERRAR EL MODAL AUTOMÁTICAMENTE PARA VER LA BARRA DE PROGRESO
-    // setIsOpen(false); 
 
     setBulkRows(prev => prev.map(r => r.estado === 'pendiente' ? { ...r, estado: "procesando" } : r));
 
@@ -570,10 +609,10 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
           </div>
         )}
 
-        <div className="p-8 flex flex-col h-full overflow-hidden">
+        <div className="py-6 px-8 flex flex-col h-full overflow-hidden">
           
           <div className="flex-shrink-0">
-            <DialogHeader className="mb-6">
+            <DialogHeader className="mb-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                    <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
@@ -587,7 +626,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
               </div>
             </DialogHeader>
 
-            <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 mb-6">
+            <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 mb-4">
                 <button onClick={() => setActiveTab(TABS.UNICA)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.UNICA ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}>Factura Única</button>
                 <button onClick={() => setActiveTab(TABS.MASIVA)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.MASIVA ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}><FileText size={14} /> Factura Masiva (CSV o Manual)</button>
             </div>
@@ -698,102 +737,110 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
               {activeTab === TABS.MASIVA && (
                 <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-300">
                   
-                  {/* 🌟 BARRA DE PROGRESO EN VIVO (SE MUESTRA SOLO CUANDO EL ROBOT TRABAJA) */}
+                  {/* 🔥 BARRA DE PROGRESO EN VIVO */}
                   {progresoRobot.activo && (
-                      <div className="bg-blue-600/20 border border-blue-500 rounded-xl p-4 mb-4 flex items-center justify-between shadow-[0_0_20px_rgba(59,130,246,0.3)] animate-pulse">
+                      <div className="bg-blue-600/20 border border-blue-500 rounded-xl p-3 mb-3 flex items-center justify-between shadow-[0_0_20px_rgba(59,130,246,0.3)] animate-pulse flex-shrink-0">
                           <div className="flex items-center gap-4">
-                              <Loader2 className="animate-spin text-blue-400 w-8 h-8" />
+                              <Loader2 className="animate-spin text-blue-400 w-6 h-6" />
                               <div>
-                                  <p className="text-white font-black uppercase text-sm tracking-widest">
+                                  <p className="text-white font-black uppercase text-xs tracking-widest">
                                       Robot Facturando en Segundo Plano...
                                   </p>
-                                  <p className="text-blue-300 text-xs font-mono mt-1">
+                                  <p className="text-blue-300 text-[10px] font-mono mt-0.5">
                                       Procesando RUT: {progresoRobot.rutActual || '...'}
                                   </p>
                               </div>
                           </div>
-                          <div className="text-right">
-                              <p className="text-3xl font-black text-white italic">
-                                  {progresoRobot.actual} / {progresoRobot.total}
-                              </p>
-                              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">
-                                  Éxitos: <span className="text-emerald-400">{progresoRobot.exitos}</span> | Errores: <span className="text-red-400">{progresoRobot.errores}</span>
-                              </p>
+                          <div className="flex items-center gap-4 text-right">
+                              <div>
+                                  <p className="text-2xl font-black text-white italic leading-none">
+                                      {progresoRobot.actual} / {progresoRobot.total}
+                                  </p>
+                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                                      Éxitos: <span className="text-emerald-400">{progresoRobot.exitos}</span> | Errores: <span className="text-red-400">{progresoRobot.errores}</span>
+                                  </p>
+                              </div>
+                              <Button onClick={handleDetenerMasivo} variant="destructive" className="h-10 px-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-red-500/20 hover:bg-red-600 transition-all text-xs">
+                                  <X size={16} className="mr-1" /> Detener
+                              </Button>
                           </div>
                       </div>
                   )}
 
-                  <div className="flex gap-4 mb-4 flex-shrink-0">
-                    <div className="flex-1 bg-blue-900/10 border border-blue-500/30 rounded-xl p-4 flex flex-col items-center justify-center border-dashed cursor-pointer hover:bg-blue-900/20 transition-all" onClick={() => fileInputRef.current?.click()}>
-                      <UploadCloud size={24} className="text-blue-400 mb-2" />
-                      <span className="text-xs font-bold text-white uppercase tracking-widest">Subir Excel / CSV</span>
+                  <div className="flex gap-4 mb-3 flex-shrink-0">
+                    <div className="flex-1 bg-blue-900/10 border border-blue-500/30 rounded-xl p-3 flex flex-col items-center justify-center border-dashed cursor-pointer hover:bg-blue-900/20 transition-all" onClick={() => fileInputRef.current?.click()}>
+                      <UploadCloud size={20} className="text-blue-400 mb-1" />
+                      <span className="text-[10px] font-bold text-white uppercase tracking-widest">Subir Excel / CSV</span>
                       <Input ref={fileInputRef} type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" disabled={isBulkSubmitting}/>
                     </div>
 
-                    <div className="flex-1 bg-emerald-900/10 border border-emerald-500/30 rounded-xl p-4 flex flex-col items-center justify-center border-dashed cursor-pointer hover:bg-emerald-900/20 transition-all" onClick={handleAddManualRow}>
-                      <Plus size={24} className="text-emerald-400 mb-2" />
-                      <span className="text-xs font-bold text-white uppercase tracking-widest">+ Fila Manual</span>
+                    <div className="flex-1 bg-emerald-900/10 border border-emerald-500/30 rounded-xl p-3 flex flex-col items-center justify-center border-dashed cursor-pointer hover:bg-emerald-900/20 transition-all" onClick={handleAddManualRow}>
+                      <Plus size={20} className="text-emerald-400 mb-1" />
+                      <span className="text-[10px] font-bold text-white uppercase tracking-widest">+ Fila Manual</span>
                     </div>
                   </div>
 
                   {bulkRows.length > 0 && (
                     <div className="flex-1 flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a] shadow-2xl">
                       
-                      <div className="bg-[#121212] px-6 py-3 border-b border-white/10 flex justify-between items-center flex-shrink-0">
+                      <div className="bg-[#121212] px-6 py-2 border-b border-white/10 flex justify-between items-center flex-shrink-0">
                         <div className="flex gap-6">
-                          <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
                             A Facturar: <span className="text-white">{bulkRows.filter(r => r.estado !== 'omitido').length}</span>
                           </span>
-                          <span className="text-xs text-gray-400 font-bold uppercase tracking-widest flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
                             Ignoradas ($0): <span className="text-red-400">{bulkRows.filter(r => r.estado === 'omitido').length}</span>
                           </span>
                         </div>
-                        <div className="text-sm text-gray-400 font-black uppercase tracking-widest">
-                          Proyección Neta: <span className="text-emerald-400 font-mono tracking-tighter text-lg">${bulkRows.filter(r => r.estado !== 'omitido').reduce((acc, curr) => acc + (Number(curr.precio) || 0), 0).toLocaleString('es-CL')}</span>
+                        <div className="text-[11px] text-gray-400 font-black uppercase tracking-widest">
+                          Proyección Neta: <span className="text-emerald-400 font-mono tracking-tighter text-sm">${bulkRows.filter(r => r.estado !== 'omitido').reduce((acc, curr) => acc + (Number(curr.precio) || 0), 0).toLocaleString('es-CL')}</span>
                         </div>
                       </div>
 
-                      <div className="flex-1 overflow-auto custom-scrollbar min-h-[250px] pb-32">
+                      {/* 🔥 CONTENEDOR DE LA TABLA COMPACTA (Scrollea solo en móvil) */}
+                      <div className="flex-1 overflow-x-auto overflow-y-auto md:overflow-y-hidden custom-scrollbar">
                         <table className="w-full text-left whitespace-nowrap border-collapse">
-                          <thead className="bg-[#121212] sticky top-0 z-10 border-b border-white/10 shadow-lg">
-                            <tr className="text-gray-500 font-black uppercase tracking-widest text-[10px]">
-                              <th className="px-6 py-3 w-56 text-blue-400">Buscador de Clientes Búnker</th>
-                              <th className="px-4 py-3 min-w-[150px]">Razón Social</th>
-                              <th className="px-4 py-3 w-32">RUT Receptor</th>
-                              <th className="px-4 py-3 min-w-[150px]">Correo Receptor</th>
-                              <th className="px-4 py-3 w-40">Plan / Concepto</th>
-                              <th className="px-4 py-3 w-28 text-right">Valor Neto ($)</th>
-                              <th className="px-4 py-3 min-w-[180px]">Observaciones / Mes</th>
-                              <th className="px-4 py-3 w-24 text-center">Estado</th>
-                              <th className="px-2 py-3 w-10"></th>
+                          <thead className="bg-[#121212] sticky top-0 z-10 border-b border-white/10">
+                            <tr className="text-gray-500 font-black uppercase tracking-widest text-[9px]">
+                              <th className="px-4 py-2.5 w-56 text-blue-400">Buscador Búnker</th>
+                              <th className="px-3 py-2.5 min-w-[140px]">Razón Social</th>
+                              <th className="px-3 py-2.5 w-28">RUT Receptor</th>
+                              <th className="px-3 py-2.5 min-w-[140px]">Correo Receptor</th>
+                              <th className="px-3 py-2.5 w-36">Plan / Concepto</th>
+                              <th className="px-3 py-2.5 w-24 text-right">Valor Neto ($)</th>
+                              <th className="px-3 py-2.5 min-w-[160px]">Observaciones / Mes</th>
+                              <th className="px-3 py-2.5 w-20 text-center">Estado</th>
+                              <th className="px-2 py-2.5 w-8"></th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-white/5">
-                            {bulkRows.map((row, i) => {
+                            {/* 🔥 SOLO MAPEA LAS 6 FILAS DE LA PÁGINA ACTUAL */}
+                            {currentRows.map((row, relativeIndex) => {
+                              const absoluteIndex = (currentPage - 1) * ROWS_PER_PAGE + relativeIndex;
                               const formatData = (str) => String(str || '').normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
                               const isOmitted = row.estado === 'omitido';
 
                               return (
-                                <tr key={i} className={`transition-all duration-200 group ${activeRowIndex === i ? 'bg-blue-600/10 z-50 relative' : 'hover:bg-white/[0.04] z-0 relative'} ${isOmitted ? 'opacity-40 grayscale' : ''}`}>
+                                <tr key={absoluteIndex} className={`transition-all duration-200 group ${activeRowIndex === absoluteIndex ? 'bg-blue-600/10 z-50 relative' : 'hover:bg-white/[0.04] z-0 relative'} ${isOmitted ? 'opacity-40 grayscale' : ''}`}>
                                   
                                   {/* 1. BUSCADOR INTELIGENTE EN CADA FILA */}
-                                  <td className={`px-4 py-2 relative ${activeRowIndex === i ? 'z-50' : 'z-0'}`}>
+                                  <td className={`px-4 py-1.5 relative ${activeRowIndex === absoluteIndex ? 'z-50' : 'z-0'}`}>
                                     <div className="flex items-center gap-2">
-                                      <Search size={14} className={`absolute left-6 transition-colors z-20 ${activeRowIndex === i ? 'text-blue-400' : 'text-gray-500'}`} />
+                                      <Search size={12} className={`absolute left-6 transition-colors z-20 ${activeRowIndex === absoluteIndex ? 'text-blue-400' : 'text-gray-500'}`} />
                                       <Input 
                                         value={row.searchQuery !== undefined ? row.searchQuery : row.rut} 
-                                        onChange={(e) => handleBulkSearchChange(i, e.target.value)} 
-                                        onFocus={() => setActiveRowIndex(i)}
+                                        onChange={(e) => handleBulkSearchChange(absoluteIndex, e.target.value)} 
+                                        onFocus={() => setActiveRowIndex(absoluteIndex)}
                                         onBlur={() => setTimeout(() => setActiveRowIndex(null), 250)}
-                                        className={`h-10 pl-8 bg-black/40 border-white/10 hover:border-white/30 focus:bg-black/80 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/50 text-xs font-bold rounded-lg shadow-none uppercase transition-all relative z-10 ${activeRowIndex === i ? 'text-blue-300' : 'text-gray-300 font-mono'}`} 
+                                        className={`h-9 pl-7 bg-black/40 border-white/10 hover:border-white/30 focus:bg-black/80 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 text-[10px] font-bold rounded-lg shadow-none uppercase transition-all relative z-10 ${activeRowIndex === absoluteIndex ? 'text-blue-300' : 'text-gray-300 font-mono'}`} 
                                         placeholder="BUSCAR..." 
                                         disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                       />
                                     </div>
                                     
                                     {/* DROPDOWN DESPLEGABLE */}
-                                    {activeRowIndex === i && (row.searchQuery || row.rut)?.length >= 2 && !isOmitted && (
+                                    {activeRowIndex === absoluteIndex && (row.searchQuery || row.rut)?.length >= 2 && !isOmitted && (
                                       <div className="absolute top-[calc(100%-4px)] left-4 w-[350px] bg-[#1a1a1a] border-2 border-blue-500 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-[9999] overflow-hidden animate-in fade-in slide-in-from-top-2">
                                         {(() => {
                                            const term = cleanStr(row.searchQuery !== undefined ? row.searchQuery : row.rut);
@@ -807,18 +854,18 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                            return (
                                              <>
                                                {matches.map((c, idx) => (
-                                                 <div key={idx} onMouseDown={() => applyClientToRow(i, c)} className="px-5 py-3 cursor-pointer hover:bg-blue-600/20 border-b border-white/5 flex justify-between items-center group transition-colors">
+                                                 <div key={idx} onMouseDown={() => applyClientToRow(absoluteIndex, c)} className="px-5 py-2.5 cursor-pointer hover:bg-blue-600/20 border-b border-white/5 flex justify-between items-center group transition-colors">
                                                    <div>
-                                                     <div className="text-sm font-bold text-white">{cleanStr(c.razon_social || c.razonSocial)}</div>
-                                                     <div className="text-[10px] text-gray-500 font-mono mt-0.5 tracking-widest">{formatRutSimple(c.rut_encrypted || c.rut)}</div>
+                                                     <div className="text-xs font-bold text-white">{cleanStr(c.razon_social || c.razonSocial)}</div>
+                                                     <div className="text-[9px] text-gray-500 font-mono mt-0.5 tracking-widest">{formatRutSimple(c.rut_encrypted || c.rut)}</div>
                                                    </div>
-                                                   <CheckCircle2 size={16} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-all" />
+                                                   <CheckCircle2 size={14} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-all" />
                                                  </div>
                                                ))}
                                                
                                                {(term.length >= 3 || termRut.length >= 3) && (
-                                                 <button type="button" onMouseDown={() => setRowAsExternal(i, (row.searchQuery || row.rut))} className="w-full p-4 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border-t border-white/5 transition-all">
-                                                   <UserPlus size={16} /> Registrar Empresa Externa
+                                                 <button type="button" onMouseDown={() => setRowAsExternal(absoluteIndex, (row.searchQuery || row.rut))} className="w-full p-3 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 border-t border-white/5 transition-all">
+                                                   <UserPlus size={14} /> Registrar Empresa Externa
                                                  </button>
                                                )}
                                              </>
@@ -829,86 +876,86 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                   </td>
 
                                   {/* 2. RAZÓN SOCIAL */}
-                                  <td className="px-4 py-2">
+                                  <td className="px-3 py-1.5">
                                     <Input 
                                       value={formatData(row.razonSocial)} 
-                                      onChange={(e) => updateBulkRow(i, 'razonSocial', e.target.value)} 
-                                      className="h-10 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[10px] font-bold text-gray-200 rounded-lg shadow-none uppercase transition-all" 
+                                      onChange={(e) => updateBulkRow(absoluteIndex, 'razonSocial', e.target.value)} 
+                                      className="h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[9px] font-bold text-gray-200 rounded-lg shadow-none uppercase transition-all" 
                                       placeholder="RAZÓN SOCIAL..." 
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
-                                    {row.id === 'EXTERNO' && <span className="block text-[8px] text-orange-400 font-black tracking-widest ml-3 mt-0.5">⚠️ EXTERNO</span>}
+                                    {row.id === 'EXTERNO' && <span className="block text-[7px] text-orange-400 font-black tracking-widest ml-3 mt-0.5">⚠️ EXTERNO</span>}
                                   </td>
 
                                   {/* 3. RUT RECEPTOR */}
-                                  <td className="px-4 py-2">
+                                  <td className="px-3 py-1.5">
                                     <Input 
                                       value={row.rut} 
-                                      onChange={(e) => updateBulkRow(i, 'rut', formatRutSimple(e.target.value))} 
-                                      className="w-full min-w-[100px] max-w-[130px] h-10 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[11px] font-mono font-bold text-blue-400 rounded-lg shadow-none uppercase transition-all" 
+                                      onChange={(e) => updateBulkRow(absoluteIndex, 'rut', formatRutSimple(e.target.value))} 
+                                      className="w-full min-w-[90px] h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[10px] font-mono font-bold text-blue-400 rounded-lg shadow-none uppercase transition-all" 
                                       placeholder="RUT..." 
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
                                   </td>
 
                                   {/* 4. CORREO RECEPTOR */}
-                                  <td className="px-4 py-2">
+                                  <td className="px-3 py-1.5">
                                     <Input 
                                       value={row.contacto} 
-                                      onChange={(e) => updateBulkRow(i, 'contacto', e.target.value)} 
-                                      className="h-10 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[10px] font-medium text-gray-300 rounded-lg shadow-none transition-all" 
+                                      onChange={(e) => updateBulkRow(absoluteIndex, 'contacto', e.target.value)} 
+                                      className="h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[9px] font-medium text-gray-300 rounded-lg shadow-none transition-all" 
                                       placeholder="EMAIL@..." 
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
                                   </td>
 
                                   {/* 5. PLAN / CONCEPTO */}
-                                  <td className="px-4 py-2">
+                                  <td className="px-3 py-1.5">
                                     <Input 
                                       value={formatData(row.plan)} 
-                                      onChange={(e) => updateBulkRow(i, 'plan', e.target.value)} 
-                                      className="h-10 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[10px] font-bold text-gray-300 rounded-lg shadow-none uppercase transition-all" 
+                                      onChange={(e) => updateBulkRow(absoluteIndex, 'plan', e.target.value)} 
+                                      className="h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[9px] font-bold text-gray-300 rounded-lg shadow-none uppercase transition-all" 
                                       placeholder="CONCEPTO..." 
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
                                   </td>
 
                                   {/* 6. VALOR NETO ($) */}
-                                  <td className="px-4 py-2">
+                                  <td className="px-3 py-1.5">
                                     <Input 
                                       type="number" 
                                       value={row.precio} 
-                                      onChange={(e) => updateBulkRow(i, 'precio', e.target.value)} 
-                                      className="h-10 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[12px] font-black font-mono text-emerald-400 rounded-lg shadow-none transition-all text-right" 
+                                      onChange={(e) => updateBulkRow(absoluteIndex, 'precio', e.target.value)} 
+                                      className="h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[11px] font-black font-mono text-emerald-400 rounded-lg shadow-none transition-all text-right" 
                                       placeholder="0" 
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
                                   </td>
 
                                   {/* 7. OBSERVACIONES / MES */}
-                                  <td className="px-4 py-2">
+                                  <td className="px-3 py-1.5">
                                     <Input 
                                       value={formatData(row.observacion)} 
-                                      onChange={(e) => updateBulkRow(i, 'observacion', e.target.value)} 
-                                      className="h-10 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[10px] font-medium text-gray-400 rounded-lg shadow-none uppercase transition-all" 
+                                      onChange={(e) => updateBulkRow(absoluteIndex, 'observacion', e.target.value)} 
+                                      className="h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[9px] font-medium text-gray-400 rounded-lg shadow-none uppercase transition-all" 
                                       placeholder="GLOSA FACTURA..." 
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
                                   </td>
 
-                                  <td className="px-4 py-2 text-center">
+                                  <td className="px-3 py-1.5 text-center">
                                     <div className="flex justify-center">
-                                      {isOmitted && <span className="px-3 py-1.5 rounded-full bg-gray-500/10 text-gray-500 font-black text-[8px] uppercase border border-gray-500/20 tracking-widest">🚫 Omite ($0)</span>}
-                                      {row.estado === "pendiente" && <span className="px-3 py-1.5 rounded-full bg-white/5 text-gray-400 font-black text-[8px] uppercase border border-white/10 tracking-widest">En Fila</span>}
-                                      {row.estado === "completado" && <span className="px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 font-black text-[8px] uppercase border border-emerald-500/20 flex items-center gap-1.5"><CheckCircle2 size={10}/> Listo</span>}
-                                      {row.estado === "procesando" && <span className="px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-400 font-black text-[8px] uppercase border border-blue-500/20 flex items-center gap-1.5"><Loader2 size={10} className="animate-spin"/> Emite</span>}
-                                      {row.estado === "error" && <span className="px-3 py-1.5 rounded-full bg-red-500/10 text-red-400 font-black text-[8px] uppercase border border-red-500/20 flex items-center gap-1.5"><AlertCircle size={10}/> Error</span>}
+                                      {isOmitted && <span className="px-2 py-1 rounded-full bg-gray-500/10 text-gray-500 font-black text-[7px] uppercase border border-gray-500/20 tracking-widest">🚫 Omite</span>}
+                                      {row.estado === "pendiente" && <span className="px-2 py-1 rounded-full bg-white/5 text-gray-400 font-black text-[7px] uppercase border border-white/10 tracking-widest">En Fila</span>}
+                                      {row.estado === "completado" && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 font-black text-[7px] uppercase border border-emerald-500/20 flex items-center gap-1"><CheckCircle2 size={8}/> Listo</span>}
+                                      {row.estado === "procesando" && <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-400 font-black text-[7px] uppercase border border-blue-500/20 flex items-center gap-1"><Loader2 size={8} className="animate-spin"/> Emite</span>}
+                                      {row.estado === "error" && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-400 font-black text-[7px] uppercase border border-red-500/20 flex items-center gap-1"><AlertCircle size={8}/> Error</span>}
                                     </div>
                                   </td>
 
-                                  <td className="px-2 py-2 text-center">
+                                  <td className="px-1 py-1.5 text-center">
                                      {!isBulkSubmitting && (
-                                       <button onClick={() => removeBulkRow(i)} className="text-red-500/40 hover:text-red-500 transition-all p-2 hover:bg-red-500/10 rounded-lg" title="Quitar Fila"><X size={16} /></button>
+                                       <button onClick={() => removeBulkRow(absoluteIndex)} className="text-red-500/40 hover:text-red-500 transition-all p-1.5 hover:bg-red-500/10 rounded-lg" title="Quitar Fila"><X size={14} /></button>
                                      )}
                                   </td>
                                 </tr>
@@ -917,21 +964,54 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                           </tbody>
                         </table>
                       </div>
+                      
+                      {/* 🔥 BARRA DE PAGINACIÓN */}
+                      {totalPages > 1 && (
+                        <div className="bg-[#0f0f0f] border-t border-white/10 px-6 py-2.5 flex items-center justify-between flex-shrink-0">
+                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                            Mostrando {((currentPage - 1) * ROWS_PER_PAGE) + 1} - {Math.min(currentPage * ROWS_PER_PAGE, bulkRows.length)} de {bulkRows.length} facturas
+                          </p>
+                          <div className="flex items-center gap-3">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={goToPrevPage} 
+                              disabled={currentPage === 1 || isBulkSubmitting}
+                              className="bg-black/40 border-white/10 text-white hover:bg-white/10 hover:text-white h-7 text-[10px] px-3"
+                            >
+                              <ChevronLeft size={14} className="mr-1"/> Anterior
+                            </Button>
+                            <span className="text-[11px] font-black font-mono text-gray-300">
+                              PAG {currentPage} / {totalPages}
+                            </span>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={goToNextPage} 
+                              disabled={currentPage === totalPages || isBulkSubmitting}
+                              className="bg-black/40 border-white/10 text-white hover:bg-white/10 hover:text-white h-7 text-[10px] px-3"
+                            >
+                              Siguiente <ChevronRight size={14} className="ml-1"/>
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
                     </div>
                   )}
                 </div>
               )}
           </div>
 
-          <div className="flex gap-4 pt-6 mt-4 border-t border-white/5 flex-shrink-0 relative z-20">
-            <Button type="button" onClick={() => setIsOpen(false)} className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 uppercase font-black text-[11px] tracking-widest h-12 rounded-xl transition-all">Cerrar</Button>
+          <div className="flex gap-4 pt-4 mt-2 border-t border-white/5 flex-shrink-0 relative z-20">
+            <Button type="button" onClick={() => setIsOpen(false)} className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 uppercase font-black text-[11px] tracking-widest h-10 rounded-xl transition-all">Cerrar</Button>
             
             {activeTab === TABS.UNICA ? (
-              <Button onClick={handleSubmitUnica} disabled={!empresaEfectiva || isSubmitting} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[11px] tracking-widest h-12 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
+              <Button onClick={handleSubmitUnica} disabled={!empresaEfectiva || isSubmitting} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
                 {isSubmitting ? 'Procesando...' : 'Emitir Factura Individual'}
               </Button>
             ) : (
-              <Button onClick={handleBulkSubmit} disabled={isBulkSubmitting || bulkRows.filter(r => r.estado === 'pendiente').length === 0} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[11px] tracking-widest h-12 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
+              <Button onClick={handleBulkSubmit} disabled={isBulkSubmitting || bulkRows.filter(r => r.estado === 'pendiente').length === 0} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
                 {isBulkSubmitting ? 'Procesando Lote...' : `Facturar Todo el Lote (${bulkRows.filter(r => r.estado === 'pendiente').length})`}
               </Button>
             )}

@@ -18,7 +18,8 @@ import path from 'path';
 import fs from 'fs';
 
 // 🔥 RUTA CORREGIDA: Salimos de routes (../) para entrar a components
-import { estadoRobot } from '../components/facturacion/scripts/factura_masiva.mjs'; 
+// Añade detenerRobot a la importación
+import { estadoRobot, detenerRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
 
 const dteRoutes = Router();
 
@@ -47,10 +48,16 @@ dteRoutes.post('/emitir-manual', emitirManualController);
 dteRoutes.post('/emitir-masivo', emitirMasivoController);
 
 // ==========================================
-// 🔥 RUTA PARA EL PROGRESS BAR
+// 🔥 NUEVA RUTA PARA EL PROGRESS BAR
 // ==========================================
 dteRoutes.get('/progreso-masivo', (req, res) => {
     res.json(estadoRobot);
+});
+
+// 🔥 NUEVA RUTA PARA DETENER EL ROBOT
+dteRoutes.post('/detener-masivo', (req, res) => {
+    detenerRobot(); // Llamamos a la función de pánico
+    res.json({ ok: true, message: "Orden de detención enviada." });
 });
 
 dteRoutes.get('/historial', getHistorialController);
@@ -66,5 +73,6 @@ dteRoutes.get('/download/:fileName', (req, res) => {
         res.status(404).send("El archivo no existe.");
     }
 });
+
 
 export default dteRoutes;
