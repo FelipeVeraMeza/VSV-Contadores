@@ -15,7 +15,7 @@ async function navegarAEmisionExenta(page) {
     let intentos = 0;
     while (!exito && intentos < 5) {
         try {
-            // URL MANTENIDA INTACTA PARA FACTURA EXENTA (DTE 34)
+            // URL ESPECÍFICA PARA FACTURA EXENTA (DTE 34)
             await page.goto('https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=34&TIPO=4', { 
                 waitUntil: 'networkidle2', 
                 timeout: 30000 
@@ -63,10 +63,10 @@ export async function emitirExentaPuppeteer(datos) {
 
     try {
         await client.connect();
-        console.log("🔌 Búnker PostgreSQL conectado para emisión Exenta.");
+        console.log("🔌 Búnker PostgreSQL conectado para emisión Exenta Manual.");
 
         browser = await puppeteer.launch({ 
-            headless: true, // 👁️ Ponlo en 'false' si quieres ver el proceso en tu pantalla
+            headless: false, // 👁️ Ponlo en 'false' si quieres ver el proceso en tu pantalla
             defaultViewport: null, 
             args: [
                 '--no-sandbox', 
@@ -158,12 +158,11 @@ export async function emitirExentaPuppeteer(datos) {
         }
 
         // =======================================================================
-        // 5. EXTRACCIÓN DE LA RAZÓN SOCIAL DEL RECEPTOR (Polling Optimizado)
+        // 5. EXTRACCIÓN DE LA RAZÓN SOCIAL DEL RECEPTOR
         // =======================================================================
         console.log('⏳ Extrayendo la Razón Social del RECEPTOR...');
         
         let nombreEncontrado = null;
-        // 🚀 BUCLE SÚPER RÁPIDO: 6 intentos de medio segundo (3 segundos máximo)
         for (let i = 0; i < 6; i++) {
             nombreEncontrado = await page.evaluate(() => {
                 const inputExacto = document.querySelector('#EFXP_NMB_RECEP') || document.querySelector('input[name="EFXP_NMB_RECEP"]');
@@ -200,7 +199,7 @@ export async function emitirExentaPuppeteer(datos) {
                 console.log(`✅ ¡Nombre capturado para la Base de Datos!: "${razonSocialCapturadaDelSII}"`);
                 break; 
             }
-            await delay(500); // 🚀 Espera de 500 milisegundos
+            await delay(500); 
         }
 
         if (!nombreEncontrado) {
@@ -291,7 +290,6 @@ export async function emitirExentaPuppeteer(datos) {
         let empresaIdFinal = datos.empresa_id;
         const rutOriginal = `${datos.rutReceptor}-${datos.dvReceptor}`;
 
-        // A. SI LA EMPRESA ES NUEVA: CREARLA EN LA BD
         if (empresaIdFinal === 'EXTERNO') {
             console.log(`⚠️ Cliente externo detectado. Creando la empresa: "${razonSocialCapturadaDelSII}" en el CRM...`);
             try {
@@ -312,9 +310,7 @@ export async function emitirExentaPuppeteer(datos) {
             }
         }
 
-        // B. GUARDAR LA FACTURA EXENTA EN EL HISTORIAL
         if (empresaIdFinal) {
-            // Documento 34 por defecto para Exentas si no viene especificado
             const tipoDte = datos.tipo_documento ? parseInt(datos.tipo_documento) : 34; 
             const montoNeto = parseInt(datos.producto.precio);
             const fechaEmision = new Date().toISOString(); 
@@ -350,9 +346,6 @@ export async function emitirExentaPuppeteer(datos) {
         console.error(`❌ Error durante el proceso: ${error.message}`);
         throw error;
     } finally {
-        // ==============================================================
-        // 🔒 CIERRE DE SESIÓN GARANTIZADO
-        // ==============================================================
         if (page && !page.isClosed()) {
             console.log('🧹 Cerrando sesión del SII...');
             try { await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { timeout: 5000 }); } catch (e) {}

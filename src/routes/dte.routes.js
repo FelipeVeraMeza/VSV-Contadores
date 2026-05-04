@@ -1,9 +1,18 @@
 import { Router } from "express";
+import path from 'path';
+import fs from 'fs';
+
+// ==========================================
+// 🧠 CONTROLADORES
+// ==========================================
 import { 
     emitirDTE, 
     cerrarSesion,
     emitirManualController,
     emitirMasivoController,
+    emitirExentaManualController,
+    emitirExentaMasivaController,
+    emitirNotaController, // <-- NUEVO CONTROLADOR INTEGRADO
     getDtesEmitidos,
     testConnection,
     loginDTE,
@@ -14,53 +23,60 @@ import {
     emitirBoletaHonorarios,
     getHistorialController 
 } from "../controllers/dte.controllers.js";
-import path from 'path';
-import fs from 'fs';
 
-// 🔥 RUTA CORREGIDA: Salimos de routes (../) para entrar a components
-// Añade detenerRobot a la importación
+// ==========================================
+// 🛑 BOTONES DE PÁNICO (TRACKERS)
+// ==========================================
 import { estadoRobot, detenerRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
+import { estadoRobotExenta, detenerRobotExenta } from '../components/facturacion/scripts/exenta_masiva.mjs';
 
 const dteRoutes = Router();
 
 // ==========================================
-// RUTAS ORIGINALES Y DE SESIÓN
-// ==========================================
-dteRoutes.post('/emitir-dte', emitirDTE);
-dteRoutes.post('/cerrar-sesion', cerrarSesion);
-
-// ==========================================
-// OTRAS RUTAS BASE DEL SISTEMA
+// 🔗 RUTAS BÁSICAS DEL SISTEMA
 // ==========================================
 dteRoutes.post('/login', loginDTE);
+dteRoutes.post('/cerrar-sesion', cerrarSesion);
 dteRoutes.get('/status', checkSIIStatus);
 dteRoutes.get('/session-data', getSessionData);
-dteRoutes.post('/dtes-emitidos', getDtesEmitidos);
-dteRoutes.get('/test-conexion', testConnection);
 dteRoutes.get('/verificar-sesion', verificarSesion);
-dteRoutes.post('/obtener-pdf', obtenerPDF);
-dteRoutes.post('/emitir-boleta', emitirBoletaHonorarios);
+dteRoutes.get('/test-conexion', testConnection);
 
 // ==========================================
-// RUTAS PARA PUPPETEER (EMISIÓN)
+// 🚀 RUTAS DE PUPPETEER: DTE 33 (AFECTA)
 // ==========================================
 dteRoutes.post('/emitir-manual', emitirManualController);
 dteRoutes.post('/emitir-masivo', emitirMasivoController);
-
-// ==========================================
-// 🔥 NUEVA RUTA PARA EL PROGRESS BAR
-// ==========================================
-dteRoutes.get('/progreso-masivo', (req, res) => {
-    res.json(estadoRobot);
-});
-
-// 🔥 NUEVA RUTA PARA DETENER EL ROBOT
+dteRoutes.get('/progreso-masivo', (req, res) => res.json(estadoRobot));
 dteRoutes.post('/detener-masivo', (req, res) => {
-    detenerRobot(); // Llamamos a la función de pánico
-    res.json({ ok: true, message: "Orden de detención enviada." });
+    detenerRobot(); 
+    res.json({ ok: true, message: "Orden de detención enviada (DTE 33)." });
 });
 
+// ==========================================
+// 🌟 RUTAS DE PUPPETEER: DTE 34 (EXENTA)
+// ==========================================
+dteRoutes.post('/emitir-exenta-manual', emitirExentaManualController);
+dteRoutes.post('/emitir-masivo-exenta', emitirExentaMasivaController);
+dteRoutes.get('/progreso-masivo-exenta', (req, res) => res.json(estadoRobotExenta));
+dteRoutes.post('/detener-robot-exenta', (req, res) => {
+    detenerRobotExenta(); 
+    res.json({ ok: true, message: "Orden de detención enviada (DTE 34)." });
+});
+
+// ==========================================
+// 🔄 RUTAS DE PUPPETEER: DTE 61 / 56 (NOTAS C/D)
+// ==========================================
+dteRoutes.post('/emitir-nota', emitirNotaController);
+
+// ==========================================
+// 📊 RUTAS DE HISTORIAL Y DESCARGAS
+// ==========================================
 dteRoutes.get('/historial', getHistorialController);
+dteRoutes.post('/emitir-dte', emitirDTE);
+dteRoutes.post('/dtes-emitidos', getDtesEmitidos);
+dteRoutes.post('/obtener-pdf', obtenerPDF);
+dteRoutes.post('/emitir-boleta', emitirBoletaHonorarios);
 
 dteRoutes.get('/download/:fileName', (req, res) => {
     const { fileName } = req.params;
@@ -73,6 +89,5 @@ dteRoutes.get('/download/:fileName', (req, res) => {
         res.status(404).send("El archivo no existe.");
     }
 });
-
 
 export default dteRoutes;

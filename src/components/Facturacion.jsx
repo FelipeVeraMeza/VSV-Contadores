@@ -5,14 +5,15 @@ import { toast } from '@/components/ui/use-toast';
 import { useSii } from '@/contexts/SiiContext.jsx';
 import { useAuth } from '@/hooks/useAuth.jsx';
 
+// IMPORTACIONES
 import SIILoginModal from '@/components/facturacion/modals/SIILoginModal';
-import EmisionDTE from './facturacion/tabs/EmisionDTE';
-import DocumentosDTE from './facturacion/tabs/DocumentosDTE';
+import EmisionDTE from '@/components/facturacion/tabs/EmisionDTE';
+import DocumentosDTE from '@/components/facturacion/tabs/DocumentosDTE';
 
-// IMPORTACIÓN DE MODALES ESPECÍFICOS
 import FacturaElectronicaModal from '@/components/facturacion/modals/dte/FacturaElectronicaModal';
-import ExentaElectronicaModal from '@/components/facturacion/modals/dte/ExentaElectronicaModal'; // ¡Asegúrate de que esta línea NO esté comentada!
+import ExentaElectronicaModal from '@/components/facturacion/modals/dte/ExentaElectronicaModal'; 
 import GuiaDespachoModal from '@/components/facturacion/modals/dte/GuiaDespachoModal';
+import NotaCreditoDebitoModal from '@/components/facturacion/modals/dte/NotaCreditoDebitoModal';
 
 const Facturacion = () => {
   const { dtes } = useSii();
@@ -43,49 +44,25 @@ const Facturacion = () => {
     toast({ title: "Borrador Guardado", description: "El documento está listo para procesar." });
   };
 
-  // ========================================================
-  // LÓGICA DE RENDERIZADO DE MODALES (CORREGIDA)
-  // ========================================================
   const renderModal = () => {
     if (!tipoDocumentoSeleccionado) return null;
     const tipo = tipoDocumentoSeleccionado.toLowerCase();
 
-    // 1. Factura Electrónica (DTE 33)
     if (tipo === 'factura') {
-      return <FacturaElectronicaModal 
-                isOpen={isDocumentoModalOpen} 
-                setIsOpen={setIsDocumentoModalOpen} 
-                onAddFactura={handleAddFactura} 
-             />;
+      return <FacturaElectronicaModal isOpen={isDocumentoModalOpen} setIsOpen={setIsDocumentoModalOpen} onAddFactura={handleAddFactura} />;
     }
 
-    // 2. Factura Exenta (DTE 34) -> AHORA ATRAPA "exenta" y "excenta"
     if (tipo === 'exenta' || tipo === 'excenta') {
-      return <ExentaElectronicaModal 
-                isOpen={isDocumentoModalOpen} 
-                setIsOpen={setIsDocumentoModalOpen} 
-                onAddFactura={handleAddFactura} 
-             />;
+      return <ExentaElectronicaModal isOpen={isDocumentoModalOpen} setIsOpen={setIsDocumentoModalOpen} onAddFactura={handleAddFactura} />;
     }
     
-    // 3. Guía de Despacho (DTE 52)
     if (tipo === 'guia_despacho') {
-      return <GuiaDespachoModal 
-                isOpen={isDocumentoModalOpen} 
-                setIsOpen={setIsDocumentoModalOpen} 
-                onAddFactura={handleAddFactura} 
-             />;
+      return <GuiaDespachoModal isOpen={isDocumentoModalOpen} setIsOpen={setIsDocumentoModalOpen} onAddFactura={handleAddFactura} />;
     }
 
-    // 4. Notas de Crédito y Débito (Por ahora usamos el genérico)
-    if (tipo === 'nota_credito' || tipo === 'nota_debito' || tipo === 'boleta') {
-        return <FacturaElectronicaModal 
-                  isOpen={isDocumentoModalOpen} 
-                  setIsOpen={setIsDocumentoModalOpen} 
-                  onAddFactura={handleAddFactura} 
-                  tipoDte={tipo} 
-               />;
-      }
+    if (tipo === 'nota_credito_debito' || tipo === 'boleta') {
+        return <NotaCreditoDebitoModal isOpen={isDocumentoModalOpen} setIsOpen={setIsDocumentoModalOpen} />;
+    }
     
     return null;
   };
@@ -140,7 +117,6 @@ const Facturacion = () => {
               {activeTab === 'emision' && (
                 <EmisionDTE 
                   onEmitir={(tipo) => { 
-                    console.log("Intentando abrir modal de tipo:", tipo); // LOG DE AYUDA
                     setTipoDocumentoSeleccionado(tipo); 
                     setIsDocumentoModalOpen(true); 
                   }} 
