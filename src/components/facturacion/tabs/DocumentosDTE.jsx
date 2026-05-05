@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth.jsx';
 import { obtenerHistorialBunker, obtenerComprasBunker } from '@/services/dteConsultasService';
+import { API_BASE_URL } from '../../../../config.js'; 
 
 const NOMBRES_DTE = {
   33: "Factura Electrónica",
@@ -16,7 +17,7 @@ const NOMBRES_DTE = {
   110: "Factura Exportación"
 };
 
-// UTILIDAD PARA BUSCADOR (Quita tildes y pasa a minúsculas)
+// UTILIDAD PARA BUSCADOR
 const normalizeText = (text) => {
   if (!text) return "";
   return text.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -27,7 +28,7 @@ const cleanRutForSearch = (rut) => {
   return rut.toString().replace(/[^0-9kK]/gi, '').toLowerCase();
 };
 
-// UTILIDAD PARA MOSTRAR DATOS EN LA TABLA
+// UTILIDAD PARA MOSTRAR DATOS
 const formatDisplay = (str) => {
   if (!str) return '';
   return str.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
@@ -37,6 +38,7 @@ const DocumentosDTE = () => {
   const { selectedCompany } = useAuth();
   const [documentos, setDocumentos] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false); 
 
   const [tipoVista, setTipoVista] = useState('VENTAS'); 
   const [vistaGlobal, setVistaGlobal] = useState(false); 
@@ -60,7 +62,6 @@ const DocumentosDTE = () => {
     setCurrentPage(1);
   }, [searchTerm, filterTipo, filterMes, filterAnio, tipoVista, vistaGlobal, selectedCompany]);
 
-  // SCROLL DE PANTALLA COMPLETA AL INICIO DE LA TABLA
   useEffect(() => {
     if (tableContainerRef.current && currentPage > 1) {
       tableContainerRef.current.scrollIntoView({
@@ -99,10 +100,68 @@ const DocumentosDTE = () => {
     cargarHistorial();
   }, [cargarHistorial]);
 
+  // ======================================================================
+  // 🤖 FUNCIÓN INTELIGENTE: Sincroniza TODO en cadena (Ventas -> Compras)
+  // ======================================================================
+  const handleSincronizarSII = async () => {
+    setIsSyncing(true);
+
+    try {
+      // --- PASO 1: SINCRONIZAR VENTAS ---
+      toast({
+        title: "🤖 Robot Iniciado [1/2]",
+        description: "Extrayendo historial de VENTAS desde el SII...",
+      });
+
+      const responseVentas = await fetch(`${API_BASE_URL}/sincronizar-sii`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tipo: 'VENTAS' }) 
+      });
+      const dataVentas = await responseVentas.json();
+      if (!dataVentas.success) throw new Error(dataVentas.message);
+
+
+      // --- PASO 2: SINCRONIZAR COMPRAS ---
+      toast({
+        title: "🤖 Robot Trabajando [2/2]",
+        description: "Ventas listas. Ahora extrayendo COMPRAS...",
+      });
+
+      const responseCompras = await fetch(`${API_BASE_URL}/sincronizar-sii`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tipo: 'COMPRAS' }) 
+      });
+      const dataCompras = await responseCompras.json();
+      if (!dataCompras.success) throw new Error(dataCompras.message);
+
+
+      // --- FINALIZADO CON ÉXITO ---
+      toast({
+        title: "✅ Sincronización Total Exitosa",
+        description: "Ventas y Compras han sido actualizadas en la base de datos.",
+        className: "bg-emerald-600 text-white border-none",
+      });
+      
+      // Recargamos la tabla visual para mostrar lo nuevo
+      await cargarHistorial(); 
+      
+    } catch (error) {
+      console.error(error);
+      toast({
+        variant: "destructive",
+        title: "Error de Sincronización",
+        description: "El robot del SII encontró un problema al extraer o subir los datos."
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const documentosFiltrados = useMemo(() => {
     return documentos.filter(doc => {
       const fecha = new Date(doc.fecha_emision);
-      
       const termText = normalizeText(searchTerm);
       const termRut = cleanRutForSearch(searchTerm);
       
@@ -217,13 +276,36 @@ const DocumentosDTE = () => {
         <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${tipoVista === 'VENTAS' ? 'text-blue-500' : 'text-emerald-500'}`}>
           <FileText size={12} /> {documentosFiltrados.length} {tipoVista} encontradas
         </span>
-        <Button onClick={cargarHistorial} variant="ghost" size="sm" className="text-gray-400 hover:text-white text-[10px] font-bold uppercase transition-colors">
-          Refrescar Bóveda
+        
+        {/* ========================================================== */}
+        {/* BOTÓN MÁGICO DE SINCRONIZACIÓN TOTAL */}
+        {/* ========================================================== */}
+        <Button 
+            onClick={handleSincronizarSII} 
+            disabled={isSyncing} 
+            variant="outline" 
+            size="sm" 
+            className={`text-[10px] font-black uppercase tracking-widest transition-all border ${
+                isSyncing 
+                ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/50 cursor-wait' 
+                : 'bg-black/40 text-gray-400 hover:text-white hover:bg-white/10 border-white/10'
+            }`}
+        >
+            {isSyncing ? (
+                <>
+                    <Loader2 size={14} className="mr-2 animate-spin" />
+                    Sincronizando Todo...
+                </>
+            ) : (
+                <>
+                    <Globe size={14} className="mr-2 text-indigo-400" />
+                    Sincronizar Todo el SII
+                </>
+            )}
         </Button>
       </div>
 
       <div ref={tableContainerRef} className="overflow-hidden rounded-2xl border border-white/5 bg-black/20 backdrop-blur-xl shadow-2xl flex flex-col pt-2 scroll-mt-24">
-        {/* ELIMINAMOS EL SCROLL INTERNO VERTICAL: Dejamos que crezca libremente */}
         <div className="overflow-x-auto custom-scrollbar w-full">
           <table className="w-full text-left border-collapse min-w-[900px]">
             <thead className="bg-white/5 border-b border-white/10">

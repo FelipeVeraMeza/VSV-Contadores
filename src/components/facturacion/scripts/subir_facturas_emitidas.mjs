@@ -3,7 +3,7 @@ const { Client } = pkg;
 import dotenv from 'dotenv';
 import fs from 'fs';
 import crypto from 'crypto'; // <-- Agregado para el Hash
-import { decrypt, encrypt } from '../utils/crypto.js'; // <-- Importamos encrypt también
+import { decrypt, encrypt } from '../../../utils/crypto.js'; // <-- Importamos encrypt también
 
 dotenv.config();
 
@@ -39,7 +39,7 @@ async function inyectarHistorial() {
         console.log("🔌 Búnker conectado. Preparando módulo de VENTAS con AUTO-CREACIÓN...");
 
         // 1. Cargamos el JSON
-        const jsonPath = 'C:\\Users\\felip\\OneDrive\\Documentos\\VS\\VSV-Contadores\\src\\sii_core\\sii_historial_DTE\\documentos emitidos\\folios_documentos_emitidos.json';
+        const jsonPath = 'src/sii_core/sii_historial_DTE/documentos emitidos/folios_documentos_emitidos.json';
         const documentos = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
         // 2. Cargamos las empresas y sus RUTs encriptados

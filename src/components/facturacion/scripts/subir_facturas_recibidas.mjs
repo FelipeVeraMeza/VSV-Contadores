@@ -2,8 +2,14 @@ import pkg from 'pg';
 const { Client } = pkg;
 import dotenv from 'dotenv';
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import crypto from 'crypto';
-import { decrypt, encrypt } from '../utils/crypto.js'; 
+import { decrypt, encrypt } from '../../../utils/crypto.js'; 
+
+// Configuración para usar __dirname en módulos (.mjs)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
@@ -25,7 +31,8 @@ const MAPEO_DTE = {
     "Factura Electronica": 33,
     "Nota de Credito Electronica": 61,
     "Factura Exenta Electronica": 34,
-    "Guia de Despacho Electronica": 52
+    "Guia de Despacho Electronica": 52,
+    "Boleta Electronica": 39
 };
 
 async function inyectarCompras() {
@@ -38,11 +45,18 @@ async function inyectarCompras() {
         await client.connect();
         console.log("🔌 Búnker conectado. Preparando módulo de COMPRAS con AUTO-CREACIÓN...");
 
-        // 1. Ruta de tu JSON de RECIBIDOS
-        const jsonPath = 'C:\\Users\\felip\\OneDrive\\Documentos\\VS\\VSV-Contadores\\src\\sii_core\\sii_historial_DTE\\documentos recibidos\\folios_documentos_recibidos.json';
+        // 1. Ruta de tu JSON de RECIBIDOS (Dinámica y segura)
+        // Viaja 3 carpetas hacia atrás desde 'scripts' hasta llegar a 'src', y luego entra a 'sii_core...'
+        const jsonPath = path.join(__dirname, '../../../sii_core/sii_historial_DTE/documentos recibidos/folios_documentos_recibidos.json');
+        
+        if (!fs.existsSync(jsonPath)) {
+            console.log(`⚠️ No se encontró el archivo JSON de compras en la ruta:\n${jsonPath}\nAbortando inyección.`);
+            return;
+        }
+
         const documentos = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
 
-        // 2. Mapear empresas del CRM
+        // 2. Mapear empresas del CRM para asignar el ID correctamente
         console.log("🔍 Mapeando empresas del sistema...");
         const resEmpresas = await client.query("SELECT id, rut_encrypted FROM empresa");
         
@@ -57,7 +71,7 @@ async function inyectarCompras() {
         console.log(`🚀 Procesando ${documentos.length} facturas recibidas...`);
 
         for (const doc of documentos) {
-            // Validar que el documento tenga los datos completos del SII
+            // Validar que el documento tenga el detalle extraído del SII
             if (!doc.detalleCompleto || !doc.detalleCompleto.cabecera) {
                 sinDetalle++;
                 continue; 
@@ -70,10 +84,10 @@ async function inyectarCompras() {
             let empresaId = mapaEmpresas.get(rutReceptorLimpio);
 
             // ========================================================
-            // ✨ MAGIA: SI LA EMPRESA NO EXISTE, LA CREAMOS AL INSTANTE
+            // ✨ MAGIA: SI LA EMPRESA RECEPTORA NO EXISTE, LA CREAMOS
             // ========================================================
             if (!empresaId) {
-                console.log(`⚠️ Empresa faltante detectada: ${nombreReceptor}. Creándola en el CRM...`);
+                console.log(`⚠️ Empresa receptora faltante: ${nombreReceptor}. Creándola en el CRM...`);
                 
                 const rutEncrypted = encrypt(rutReceptorOriginal);
                 const rutHash = crypto.createHash('sha256').update(rutReceptorOriginal).digest('hex');
@@ -86,7 +100,6 @@ async function inyectarCompras() {
                 const resultEmpresa = await client.query(insertEmpresaQuery, [nombreReceptor, rutEncrypted, rutHash]);
                 empresaId = resultEmpresa.rows[0].id;
                 
-                // Lo guardamos en el mapa para no volver a crearlo si sale otra factura
                 mapaEmpresas.set(rutReceptorLimpio, empresaId);
                 empresasCreadas++;
                 console.log(`✅ ¡Empresa ${nombreReceptor} creada con éxito! ID: ${empresaId}`);
@@ -100,10 +113,14 @@ async function inyectarCompras() {
             const rutProveedor = limpiarRut(doc.rutEmisor);
             const razonSocialProveedor = doc.razonSocial;
             
-            // Limpiamos montos por si vienen con puntos o vacíos
+            // Lógica inteligente de montos (Prioriza el detalle del SII, si falla calcula manual)
             const montoTotal = parseInt((doc.montoTotal || '0').toString().replace(/\./g, ''));
-            const montoNeto = doc.detalleCompleto.cabecera.montoNeto ? parseInt(doc.detalleCompleto.cabecera.montoNeto) : Math.round(montoTotal / 1.19);
-            const montoIva = doc.detalleCompleto.cabecera.montoIva ? parseInt(doc.detalleCompleto.cabecera.montoIva) : Math.round(montoTotal - montoNeto);
+            const montoNeto = doc.detalleCompleto.cabecera.montoNeto 
+                ? parseInt(doc.detalleCompleto.cabecera.montoNeto.toString().replace(/\./g, '')) 
+                : Math.round(montoTotal / 1.19);
+            const montoIva = doc.detalleCompleto.cabecera.montoIva 
+                ? parseInt(doc.detalleCompleto.cabecera.montoIva.toString().replace(/\./g, '')) 
+                : Math.round(montoTotal - montoNeto);
 
             const queryInsert = `
                 INSERT INTO documentos_recibidos 
@@ -126,8 +143,8 @@ async function inyectarCompras() {
 
         console.log("\n" + "=".repeat(50));
         console.log("🏁 RESUMEN FINAL DEL REGISTRO DE COMPRAS:");
-        console.log(`🏢 Empresas auto-creadas en el CRM: ${empresasCreadas}`);
-        console.log(`🛒 Nuevas compras registradas: ${insertados}`);
+        console.log(`🏢 Empresas (Clientes) auto-creadas en el CRM: ${empresasCreadas}`);
+        console.log(`🛒 Nuevas compras registradas en la DB: ${insertados}`);
         console.log(`⏭️  Compras duplicadas omitidas: ${duplicados}`);
         if (sinDetalle > 0) console.log(`❓ Documentos sin leer omitidos: ${sinDetalle}`);
         console.log("=".repeat(50) + "\n");

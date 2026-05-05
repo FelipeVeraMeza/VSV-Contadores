@@ -1,836 +1,36 @@
 [
   {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "76835",
-    "fecha": "2026-02-27",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "76835",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "-PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "-SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LTDA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "27 de Febrero del 2026",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "76796",
-    "fecha": "2026-02-27",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "76796",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "-PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "-SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LTDA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "27 de Febrero del 2026",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "76792",
-    "fecha": "2026-02-27",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "76792",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "-PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LTDA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "27 de Febrero del 2026",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "76779",
-    "fecha": "2026-02-27",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "76779",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "-PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "-SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LTDA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "27 de Febrero del 2026",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "76764",
-    "fecha": "2026-02-27",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "76764",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "-PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "-SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LTDA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "27 de Febrero del 2026",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "76659",
-    "fecha": "2026-02-26",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "76659",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "-PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "-SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LTDA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "26 de Febrero del 2026",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "76654",
-    "fecha": "2026-02-26",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "76654",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LIMITADA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "26 de Febrero del 2026",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "76649",
-    "fecha": "2026-02-26",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "76649",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LIMITADA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "26 de Febrero del 2026",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "75156",
-    "fecha": "2026-02-05",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "75156",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LIMITADA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "05 de Febrero del 2026",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
     "rutEmisor": "76830014-3",
     "razonSocial": "FLOW S A",
     "documento": "Factura Electronica",
-    "folio": "482256",
-    "fecha": "2026-01-31",
-    "montoTotal": "28191",
-    "estado": "DTE Recibido Sin Reparos",
+    "folio": "505590",
+    "fecha": "2026-04-30",
+    "montoTotal": 61732,
     "procesado": true,
     "detalleCompleto": {
       "cabecera": {
-        "numeroFactura": "482256",
-        "emisorNombre": "FLOW S A",
-        "emisorRut": "76.830.014-3",
-        "giro": "PROCESAMIENTO DE PAGOS A EMISORES Y U OPERADORES DE",
-        "direccion": "PADRE MARIANO 103 NUMERO DE OFICINA 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "",
-        "receptorNombre": "VOLLAIRE &AMP; OLIVOS SIMPLE PYME LIMITADA",
         "receptorRut": "78.306.207-0",
-        "fechaEmision": "31 de Enero del 2026",
-        "montoNeto": 23690,
-        "montoIva": 4501,
-        "montoTotal": 28191
-      },
-      "detalles": []
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 51876,
+        "montoIva": 9856
+      }
     }
   },
   {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
+    "rutEmisor": "76846926-1",
+    "razonSocial": "GRAFICA NOELIA ARACELY QUEZADA L?PEZ E.I.R.L.",
     "documento": "Factura Electronica",
-    "folio": "74200",
-    "fecha": "2026-01-26",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
+    "folio": "1720",
+    "fecha": "2026-04-29",
+    "montoTotal": 33000,
     "procesado": true,
     "detalleCompleto": {
       "cabecera": {
-        "numeroFactura": "74200",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "santiago",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LIMITADA",
         "receptorRut": "78.306.207-0",
-        "fechaEmision": "26 de Enero del 2026",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "77631083-2",
-    "razonSocial": "DELAQUEBRADA SPA",
-    "documento": "Factura Electronica",
-    "folio": "2372",
-    "fecha": "2026-01-21",
-    "montoTotal": "11900",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "2372",
-        "emisorNombre": "DELAQUEBRADA SPA",
-        "emisorRut": "77.631.083-2",
-        "giro": "IMPORTACIÓN COMERCIALIZACIÓN Y DISTRIBUCIÓN DE AGUA",
-        "direccion": "P MARIANO 103 OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME LIMITADA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "21 de Enero del 2026",
-        "montoNeto": 10000,
-        "montoIva": 1900,
-        "montoTotal": 11900
-      },
-      "detalles": []
-    }
-  },
-  {
-    "rutEmisor": "76473580-3",
-    "razonSocial": "EKONO S.A.",
-    "documento": "Factura Electronica",
-    "folio": "36303851",
-    "fecha": "2026-01-20",
-    "montoTotal": "49220",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "36303851",
-        "emisorNombre": "EKONO S.A.",
-        "emisorRut": "76.473.580-3",
-        "giro": "Supermercados Construccion todo tipo inmuebles",
-        "direccion": "padre mariano 103 of 201",
-        "comuna": "providencia",
-        "ciudad": "santiago",
-        "receptorNombre": "vollaire y olivos simple pyme",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "20 de Enero del 2026",
-        "montoNeto": 41361,
-        "montoIva": 7859,
-        "montoTotal": 49220
-      },
-      "detalles": []
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "73311",
-    "fecha": "2026-01-14",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "73311",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "proviencia",
-        "ciudad": "santiago",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LIMITADA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "14 de Enero del 2026",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "15714181-3",
-    "razonSocial": "CRISTIAN ALEJANDRO ALVARADO DIAZ",
-    "documento": "Factura Electronica",
-    "folio": "217",
-    "fecha": "2026-01-09",
-    "montoTotal": "55930",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "217",
-        "emisorNombre": "CRISTIAN ALEJANDRO ALVARADO DIAZ",
-        "emisorRut": "15.714.181-3",
-        "giro": "ASESORIA INFORMATICA SOPORTE SOFTWARE Y HARDWARE",
-        "direccion": "P MARIANO 103 OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME LIMITADA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "09 de Enero del 2026",
-        "montoNeto": 47000,
-        "montoIva": 8930,
-        "montoTotal": 55930
-      },
-      "detalles": []
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "72883",
-    "fecha": "2026-01-07",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "72883",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "padre mariano 103, of 201",
-        "comuna": "providencia",
-        "ciudad": "santiago",
-        "receptorNombre": "vollaire y olivos simple pyme ltda",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "07 de Enero del 2026",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76830014-3",
-    "razonSocial": "FLOW S A",
-    "documento": "Factura Electronica",
-    "folio": "476115",
-    "fecha": "2025-12-31",
-    "montoTotal": "11555",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "476115",
-        "emisorNombre": "FLOW S A",
-        "emisorRut": "76.830.014-3",
-        "giro": "PROCESAMIENTO DE PAGOS A EMISORES Y U OPERADORES DE",
-        "direccion": "PADRE MARIANO 103 NUMERO DE OFICINA 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "",
-        "receptorNombre": "VOLLAIRE &AMP; OLIVOS SIMPLE PYME LIMITADA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "31 de Diciembre del 2025",
-        "montoNeto": 9710,
-        "montoIva": 1845,
-        "montoTotal": 11555
-      },
-      "detalles": []
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "71694",
-    "fecha": "2025-12-19",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "71694",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LIMITADA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "19 de Diciembre del 2025",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "71440",
-    "fecha": "2025-12-16",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "71440",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "vollaire & olivos consultoria limitada",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "16 de Diciembre del 2025",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "71422",
-    "fecha": "2025-12-16",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "71422",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LIMITADA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "16 de Diciembre del 2025",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "60501000-8",
-    "razonSocial": "SUBSECRETARIA DEL INTERIOR",
-    "documento": "Factura Electronica",
-    "folio": "231187",
-    "fecha": "2025-12-09",
-    "montoTotal": "35724",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "231187",
-        "emisorNombre": "SUBSECRETARIA DEL INTERIOR",
-        "emisorRut": "60.501.000-8",
-        "giro": "ACTIVIDADES DE LA ADMINISTRACION",
-        "direccion": "PADRE MARIANO 103",
-        "comuna": "Providencia",
-        "ciudad": "Providencia",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LTDA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "09 de Diciembre del 2025",
-        "montoNeto": 30020,
-        "montoIva": 5704,
-        "montoTotal": 35724
-      },
-      "detalles": []
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "70509",
-    "fecha": "2025-12-03",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "70509",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "santiago",
-        "receptorNombre": "vollaire & olivos simple pyme limitada",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "03 de Diciembre del 2025",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "70501",
-    "fecha": "2025-12-03",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "70501",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "vollaire & olivos simple pyme limitada",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "03 de Diciembre del 2025",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
-    }
-  },
-  {
-    "rutEmisor": "76610718-4",
-    "razonSocial": "BPO ADVISORS SPA",
-    "documento": "Factura Electronica",
-    "folio": "70451",
-    "fecha": "2025-12-02",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
-    "procesado": true,
-    "detalleCompleto": {
-      "cabecera": {
-        "numeroFactura": "70451",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LIMITADA",
-        "receptorRut": "78.306.207-0",
-        "fechaEmision": "02 de Diciembre del 2025",
-        "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 27731,
+        "montoIva": 5269
+      }
     }
   },
   {
@@ -839,35 +39,15 @@
     "documento": "Factura Electronica",
     "folio": "81397",
     "fecha": "2026-04-20",
-    "montoTotal": "540",
-    "estado": "DTE Recibido Sin Reparos",
+    "montoTotal": 540,
     "procesado": true,
     "detalleCompleto": {
       "cabecera": {
-        "numeroFactura": "81397",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "santiago",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LIMITADA",
         "receptorRut": "78.306.207-0",
-        "fechaEmision": "20 de Abril del 2026",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
         "montoNeto": 454,
-        "montoIva": 86,
-        "montoTotal": 540
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": null,
-          "precioTotal": null
-        }
-      ]
+        "montoIva": 86
+      }
     }
   },
   {
@@ -876,26 +56,15 @@
     "documento": "Factura Electronica",
     "folio": "29844419",
     "fecha": "2026-04-08",
-    "montoTotal": "5926",
-    "estado": "DTE Recibido Sin Reparos",
+    "montoTotal": 5926,
     "procesado": true,
     "detalleCompleto": {
       "cabecera": {
-        "numeroFactura": "29844419",
-        "emisorNombre": "BANCO DE CREDITO E INVERSIONES",
-        "emisorRut": "97.006.000-6",
-        "giro": "BANCO COMERCIAL",
-        "direccion": "P MARIANO 103 OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME LIMITADA",
         "receptorRut": "78.306.207-0",
-        "fechaEmision": "08 de Abril del 2026",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
         "montoNeto": 4980,
-        "montoIva": 946,
-        "montoTotal": 5926
-      },
-      "detalles": []
+        "montoIva": 946
+      }
     }
   },
   {
@@ -904,35 +73,15 @@
     "documento": "Factura Electronica",
     "folio": "80665",
     "fecha": "2026-04-10",
-    "montoTotal": "540",
-    "estado": "DTE Recibido Sin Reparos",
+    "montoTotal": 540,
     "procesado": true,
     "detalleCompleto": {
       "cabecera": {
-        "numeroFactura": "80665",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS SIMPLE PYME LIMITADA",
         "receptorRut": "78.306.207-0",
-        "fechaEmision": "10 de Abril del 2026",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
         "montoNeto": 454,
-        "montoIva": 86,
-        "montoTotal": 540
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": null,
-          "precioTotal": null
-        }
-      ]
+        "montoIva": 86
+      }
     }
   },
   {
@@ -941,26 +90,15 @@
     "documento": "Factura Electronica",
     "folio": "3371227",
     "fecha": "2026-04-02",
-    "montoTotal": "71298",
-    "estado": "DTE Recibido Sin Reparos",
+    "montoTotal": 71298,
     "procesado": true,
     "detalleCompleto": {
       "cabecera": {
-        "numeroFactura": "3371227",
-        "emisorNombre": "EMPRESA NACIONAL DE CERTIFICACION",
-        "emisorRut": "96.928.180-5",
-        "giro": "ACREDITACION Y CERTIFICACION ELECTRONICA",
-        "direccion": "PADRE MARIANO 103 OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "PROVIDENCIA",
-        "receptorNombre": "VOLLAIRE OLIVOS SIMPLE PYME LTDA",
         "receptorRut": "78.306.207-0",
-        "fechaEmision": "02 de Abril del 2026",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
         "montoNeto": 59914,
-        "montoIva": 11384,
-        "montoTotal": 71298
-      },
-      "detalles": []
+        "montoIva": 11384
+      }
     }
   },
   {
@@ -969,26 +107,15 @@
     "documento": "Factura Electronica",
     "folio": "497162",
     "fecha": "2026-03-31",
-    "montoTotal": "76817",
-    "estado": "DTE Recibido Sin Reparos",
+    "montoTotal": 76817,
     "procesado": true,
     "detalleCompleto": {
       "cabecera": {
-        "numeroFactura": "497162",
-        "emisorNombre": "FLOW S A",
-        "emisorRut": "76.830.014-3",
-        "giro": "PROCESAMIENTO DE PAGOS A EMISORES Y U OPERADORES DE",
-        "direccion": "PADRE MARIANO 103 NUMERO DE OFICINA 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "",
-        "receptorNombre": "VOLLAIRE &AMP; OLIVOS SIMPLE PYME LIMITADA",
         "receptorRut": "78.306.207-0",
-        "fechaEmision": "31 de Marzo del 2026",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
         "montoNeto": 64552,
-        "montoIva": 12265,
-        "montoTotal": 76817
-      },
-      "detalles": []
+        "montoIva": 12265
+      }
     }
   },
   {
@@ -997,26 +124,15 @@
     "documento": "Factura Electronica",
     "folio": "36321222",
     "fecha": "2026-03-25",
-    "montoTotal": "26190",
-    "estado": "DTE Recibido Sin Reparos",
+    "montoTotal": 26190,
     "procesado": true,
     "detalleCompleto": {
       "cabecera": {
-        "numeroFactura": "36321222",
-        "emisorNombre": "EKONO S.A.",
-        "emisorRut": "76.473.580-3",
-        "giro": "Supermercados Construccion todo tipo inmuebles",
-        "direccion": "padre mariano 103 of 201",
-        "comuna": "providencia",
-        "ciudad": "santiago",
-        "receptorNombre": "vollaire y olivos simple pyme",
         "receptorRut": "78.306.207-0",
-        "fechaEmision": "25 de Marzo del 2026",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
         "montoNeto": 22008,
-        "montoIva": 4182,
-        "montoTotal": 26190
-      },
-      "detalles": []
+        "montoIva": 4182
+      }
     }
   },
   {
@@ -1025,35 +141,423 @@
     "documento": "Factura Electronica",
     "folio": "78937",
     "fecha": "2026-03-23",
-    "montoTotal": "750",
-    "estado": "DTE Recibido Sin Reparos",
+    "montoTotal": 750,
     "procesado": true,
     "detalleCompleto": {
       "cabecera": {
-        "numeroFactura": "78937",
-        "emisorNombre": "BPO ADVISORS SPA",
-        "emisorRut": "76.610.718-4",
-        "giro": "SERVICIO DE DIGITALIZACIÓN, VALIDACIÓN, FIRMA ELECTRÓNICA",
-        "direccion": "PADRE MARIANO 103, OF 201",
-        "comuna": "PROVIDENCIA",
-        "ciudad": "SANTIAGO",
-        "receptorNombre": "VOLLAIRE & OLIVOS CONSULTORIA LTDA",
         "receptorRut": "78.306.207-0",
-        "fechaEmision": "23 de Marzo del 2026",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
         "montoNeto": 630,
-        "montoIva": 120,
-        "montoTotal": 750
-      },
-      "detalles": [
-        {
-          "codigo": "INT1-FEA101",
-          "descripcion": "FIRMA ELECTRONICA AVANZADA - PACK PP - TE1D",
-          "cantidad": 1,
-          "unidad": "UN",
-          "precioUnitario": 630,
-          "precioTotal": 630
-        }
-      ]
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "76835",
+    "fecha": "2026-02-27",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "76796",
+    "fecha": "2026-02-27",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "76792",
+    "fecha": "2026-02-27",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "76779",
+    "fecha": "2026-02-27",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "76764",
+    "fecha": "2026-02-27",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "76659",
+    "fecha": "2026-02-26",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "76654",
+    "fecha": "2026-02-26",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "76649",
+    "fecha": "2026-02-26",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "75156",
+    "fecha": "2026-02-05",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76830014-3",
+    "razonSocial": "FLOW S A",
+    "documento": "Factura Electronica",
+    "folio": "482256",
+    "fecha": "2026-01-31",
+    "montoTotal": 28191,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 23690,
+        "montoIva": 4501
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "74200",
+    "fecha": "2026-01-26",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "77631083-2",
+    "razonSocial": "DELAQUEBRADA SPA",
+    "documento": "Factura Electronica",
+    "folio": "2372",
+    "fecha": "2026-01-21",
+    "montoTotal": 11900,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutEmisor": "76473580-3",
+    "razonSocial": "EKONO S.A.",
+    "documento": "Factura Electronica",
+    "folio": "36303851",
+    "fecha": "2026-01-20",
+    "montoTotal": 49220,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 41361,
+        "montoIva": 7859
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "73311",
+    "fecha": "2026-01-14",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "15714181-3",
+    "razonSocial": "CRISTIAN ALEJANDRO ALVARADO DIAZ",
+    "documento": "Factura Electronica",
+    "folio": "217",
+    "fecha": "2026-01-09",
+    "montoTotal": 55930,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 47000,
+        "montoIva": 8930
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "72883",
+    "fecha": "2026-01-07",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76830014-3",
+    "razonSocial": "FLOW S A",
+    "documento": "Factura Electronica",
+    "folio": "476115",
+    "fecha": "2025-12-31",
+    "montoTotal": 11555,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 9710,
+        "montoIva": 1845
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "71694",
+    "fecha": "2025-12-19",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "71440",
+    "fecha": "2025-12-16",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "71422",
+    "fecha": "2025-12-16",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "60501000-8",
+    "razonSocial": "SUBSECRETARIA DEL INTERIOR",
+    "documento": "Factura Electronica",
+    "folio": "231187",
+    "fecha": "2025-12-09",
+    "montoTotal": 35724,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 30020,
+        "montoIva": 5704
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "70509",
+    "fecha": "2025-12-03",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "70501",
+    "fecha": "2025-12-03",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "70451",
+    "fecha": "2025-12-02",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
     }
   }
 ]
