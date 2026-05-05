@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/components/ui/use-toast";
-import { ArrowDownToLine, ArrowUpFromLine, Search, CheckCircle2, Loader2, FileText } from "lucide-react";
+import { ArrowDownUp, Search, CheckCircle2, Loader2, FileText, ChevronRight, User, Hash } from "lucide-react";
 import { cleanRut } from "@/lib/rut.js";
 import { useAuth } from "@/hooks/useAuth.jsx";
 import { API_BASE_URL } from "../../../../../config.js";
@@ -13,23 +13,37 @@ import { API_BASE_URL } from "../../../../../config.js";
 import { getCrmDataApi } from "@/services/crmService.js";
 import { obtenerHistorialBunker } from '@/services/dteConsultasService';
 
-const formatRutSimple = (rut) => {
+// ==========================================
+// 🛠️ UTILIDADES DE BÚSQUEDA Y FORMATO
+// ==========================================
+const formatRutEstricto = (rut) => {
   if (!rut) return "";
   const cleaned = String(rut).replace(/[^0-9kK]/g, '').toUpperCase();
   if (cleaned.length <= 1) return cleaned;
   return cleaned.slice(0, -1) + '-' + cleaned.slice(-1);
 };
 
-const cleanStr = (str) => {
+const superNormalize = (str) => {
   if (!str) return '';
-  return String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+  return String(str)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") 
+    .replace(/[^a-zA-Z0-9]/g, "")    
+    .toLowerCase();
 };
 
-export default function NotaCreditoDebitoModal({ isOpen, setIsOpen }) {
+const formatTextoVisual = (str) => {
+    if (!str) return '';
+    return String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+};
+
+const NOMBRES_DTE = { 33: "FACTURA ELECTRONICA", 34: "FACTURA EXENTA", 61: "NOTA DE CREDITO", 56: "NOTA DE DEBITO" };
+
+export default function NotaCreditoDebitoModal({ isOpen, setIsOpen, prefillData }) {
   const { selectedCompany, user } = useAuth();
   
   // ==========================================
-  // ESTADOS Y TEMA DINÁMICO
+  // 🎨 ESTADOS UI Y TEMA DINÁMICO
   // ==========================================
   const [tipoNota, setTipoNota] = useState('61'); 
   const isCredito = tipoNota === '61';
@@ -37,308 +51,369 @@ export default function NotaCreditoDebitoModal({ isOpen, setIsOpen }) {
   const theme = {
     color: isCredito ? 'purple' : 'amber',
     textClass: isCredito ? 'text-purple-400' : 'text-amber-400',
-    bgClass: isCredito ? 'bg-purple-600 hover:bg-purple-500' : 'bg-amber-600 hover:bg-amber-500',
-    shadowClass: isCredito ? 'shadow-purple-600/20' : 'shadow-amber-600/20',
-    iconBg: isCredito ? 'bg-purple-500/10 border-purple-500/20' : 'bg-amber-500/10 border-amber-500/20',
-    title: isCredito ? 'Nota de Crédito' : 'Nota de Débito',
-    code: isCredito ? 'DTE 61' : 'DTE 56',
-    Icon: isCredito ? ArrowDownToLine : ArrowUpFromLine
+    bgClass: isCredito ? 'bg-purple-600 hover:bg-purple-500' : 'bg-amber-600 hover:bg-amber-500'
   };
 
-  const [item, setItem] = useState({
-    rutFacturar: "", razonSocial: "", contactoReceptor: "",
-    tipoDocumentoRef: "33", folioRef: "", codigoRef: "1", 
-    motivoTexto: "", monto: ""
-  });
-
+  const [isLoadingDatos, setIsLoadingDatos] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isFinished, setIsFinished] = useState(false);
-  const [folioGenerado, setFolioGenerado] = useState(null);
-
+  
   const [allClientes, setAllClientes] = useState([]); 
   const [historialGlobal, setHistorialGlobal] = useState([]);
-  const [facturasDelCliente, setFacturasDelCliente] = useState([]); 
+  
+  // Buscadores
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchFolio, setSearchFolio] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [isLoadingDatos, setIsLoadingDatos] = useState(false);
-  const [facturaSeleccionadaId, setFacturaSeleccionadaId] = useState("");
+  const [clienteSel, setClienteSeleccionado] = useState(null);
+
+  // Documentos
+  const [facturasDelCliente, setFacturasDelCliente] = useState([]);
+  const [documentoOriginal, setDocumentoOriginal] = useState(null);
+
+  // Estados Automáticos 
+  const [codigoSii, setCodigoSii] = useState("1");
+  const [glosa, setGlosa] = useState("ANULA DOCUMENTO");
+  const [montoAjuste, setMontoAjuste] = useState("");
 
   // ==========================================
-  // EFECTOS Y CARGA
+  // 🔄 CARGA INICIAL
   // ==========================================
   useEffect(() => {
-    setItem(prev => ({ ...prev, motivoTexto: isCredito ? "ANULA FACTURA" : "AUMENTA VALOR", codigoRef: "1" }));
-  }, [isCredito]);
-
-  useEffect(() => {
-    if (!isOpen) return; 
-
-    setIsFinished(false); setFolioGenerado(null);
-    setSearchTerm(""); setShowSuggestions(false);
-    setFacturasDelCliente([]); setFacturaSeleccionadaId("");
-    setTipoNota('61'); 
-    setItem(prev => ({ ...prev, rutFacturar: "", razonSocial: "", folioRef: "", monto: "", motivoTexto: "ANULA FACTURA" }));
-
-    const cargarDatos = async () => {
+    if (isOpen && user?.sessionId) {
       setIsLoadingDatos(true);
-      try {
-          if (user?.sessionId) {
-              try {
-                  const resCrm = await getCrmDataApi(user.sessionId, null);
-                  const dataCrm = await resCrm.json();
-                  if (dataCrm?.clients) setAllClientes(dataCrm.clients);
-              } catch (e) {}
-          }
-          const targetId = selectedCompany ? selectedCompany.id : 'ALL';
-          try {
-              const resHistorial = await obtenerHistorialBunker(targetId);
-              if (resHistorial && resHistorial.ok && resHistorial.documentos) {
-                  const facturasValidas = resHistorial.documentos.filter(d => d.tipo_dte === 33 || d.tipo_dte === 34);
-                  setHistorialGlobal(facturasValidas);
-              }
-          } catch (e) {}
-      } finally {
-          setIsLoadingDatos(false);
-      }
-    };
-    cargarDatos();
-  }, [isOpen, selectedCompany, user]);
+      setDocumentoOriginal(null);
+      setClienteSeleccionado(null);
+      setSearchTerm("");
+      setSearchFolio("");
+      setTipoNota('61');
+      setIsSubmitting(false);
+
+      const targetId = selectedCompany?.id || 'ALL';
+      
+      Promise.all([
+        getCrmDataApi(user.sessionId, null).then(r => r.json()).catch(() => null),
+        obtenerHistorialBunker(targetId).catch(() => null)
+      ]).then(([crm, hist]) => {
+        if (crm?.clients) setAllClientes(crm.clients);
+        if (hist?.ok && hist.documentos) {
+            const validos = hist.documentos.filter(d => [33, 34, 61, 56].includes(d.tipo_dte));
+            validos.sort((a, b) => new Date(b.fecha_emision) - new Date(a.fecha_emision));
+            setHistorialGlobal(validos);
+            
+            if (prefillData?.doc) {
+                handleSelectDocumentFromTable(prefillData.doc, validos);
+            }
+        }
+      }).finally(() => setIsLoadingDatos(false));
+    }
+  }, [isOpen, selectedCompany, user, prefillData]);
 
   // ==========================================
-  // BUSCADOR Y SELECCIÓN
+  // 🔍 LÓGICA DE BÚSQUEDA
   // ==========================================
   const filteredSuggestions = useMemo(() => {
-    if (!searchTerm || String(searchTerm).trim() === "") return [];
-    const termStr = cleanStr(searchTerm);
-    const termRut = String(searchTerm).replace(/[^0-9kK]/gi, '').toLowerCase();
-    const mapaClientes = new Map();
+    const term = superNormalize(searchTerm);
+    if (!term) return [];
     
+    const mapaClientes = new Map();
     allClientes.forEach(c => {
-        const rut = formatRutSimple(c.rut_encrypted || c.rut || "");
-        if (rut) mapaClientes.set(rut, { razonSocial: c.razon_social || c.razonSocial, rut: rut, correo: c.email_corporativo || c.correo });
+        const r = formatRutEstricto(c.rut_encrypted || c.rut);
+        const n = c.razon_social || c.razonSocial || "";
+        if (r && (superNormalize(n).includes(term) || superNormalize(r).includes(term))) {
+            mapaClientes.set(r, { nombre: n, rut: r });
+        }
     });
-
     historialGlobal.forEach(d => {
-        const rut = formatRutSimple(d.rut_cliente);
-        if (rut && !mapaClientes.has(rut)) mapaClientes.set(rut, { razonSocial: d.razon_social, rut: rut, correo: "" });
+        const r = formatRutEstricto(d.rut_cliente);
+        const n = d.razon_social || "";
+        if (r && !mapaClientes.has(r) && (superNormalize(n).includes(term) || superNormalize(r).includes(term))) {
+            mapaClientes.set(r, { nombre: n, rut: r });
+        }
     });
 
-    return Array.from(mapaClientes.values()).filter(c => {
-        const rs = cleanStr(c.razonSocial);
-        const rutPuro = cleanStr(c.rut).replace(/[^0-9kK]/gi, '');
-        return rs.includes(termStr) || (termRut !== "" && rutPuro.includes(termRut));
-    }).slice(0, 6);
+    return Array.from(mapaClientes.values()).slice(0, 5);
   }, [searchTerm, allClientes, historialGlobal]);
 
-  const onSelectCliente = (cliente) => {
-    setSearchTerm(cliente.razonSocial);
+  const selectCliente = (c) => {
+    setClienteSeleccionado(c);
+    setSearchTerm("");
+    setSearchFolio(""); 
     setShowSuggestions(false);
-    setItem(prev => ({ ...prev, rutFacturar: cliente.rut, razonSocial: cliente.razonSocial, contactoReceptor: cliente.correo || "" }));
-
-    const rutBuscador = cleanRut(cliente.rut);
-    const facturasEncontradas = historialGlobal.filter(doc => cleanRut(doc.rut_cliente) === rutBuscador);
-    setFacturasDelCliente(facturasEncontradas);
-    setFacturaSeleccionadaId("");
+    setDocumentoOriginal(null); 
+    
+    const docs = historialGlobal.filter(d => formatRutEstricto(d.rut_cliente) === c.rut);
+    setFacturasDelCliente(docs);
   };
 
-  const handleSelectFactura = (e) => {
-      const id = e.target.value;
-      setFacturaSeleccionadaId(id);
-      if (!id) {
-          setItem(prev => ({ ...prev, folioRef: "", monto: "", tipoDocumentoRef: "33" }));
-          return;
+  const datosTabla = useMemo(() => {
+      if (searchFolio.trim() !== "") {
+          return historialGlobal.filter(doc => String(doc.folio) === searchFolio.trim());
       }
-      const fac = facturasDelCliente.find(f => String(f.id) === String(id));
-      if (fac) {
-          setItem(prev => ({ 
-              ...prev, tipoDocumentoRef: String(fac.tipo_dte), folioRef: String(fac.folio), monto: String(fac.monto_total || fac.monto_neto) 
-          }));
+      if (clienteSel) {
+          return facturasDelCliente;
       }
+      return historialGlobal.slice(0, 4);
+  }, [searchFolio, clienteSel, historialGlobal, facturasDelCliente]);
+
+  // ==========================================
+  // 🛡️ SELECCIÓN Y REGLA ESTRICTA DE BLOQUEO
+  // ==========================================
+  const handleSelectDocumentFromTable = (doc, historialAUsar = historialGlobal) => {
+      if (!clienteSel) {
+          const rutCliente = formatRutEstricto(doc.rut_cliente);
+          setClienteSeleccionado({ rut: rutCliente, nombre: doc.razon_social });
+          setFacturasDelCliente(historialAUsar.filter(d => formatRutEstricto(d.rut_cliente) === rutCliente));
+          setSearchFolio(""); 
+      }
+
+      setDocumentoOriginal(doc);
+      setMontoAjuste(doc.monto_total || doc.monto_neto || 0);
+      setCodigoSii("1"); 
+
+      if (doc.tipo_dte === 61) {
+          setTipoNota('56'); 
+          setGlosa("ANULA NOTA DE CREDITO");
+      } else {
+          setTipoNota('61');
+          if (doc.tipo_dte === 56) {
+              setGlosa("ANULA NOTA DE DEBITO");
+          } else {
+              setGlosa("ANULA DOCUMENTO");
+          }
+      }
+  };
+
+  const handleTipoNotaChange = (tipo) => {
+      setTipoNota(tipo);
+      setGlosa(tipo === "61" ? "ANULA DOCUMENTO" : "ANULA NOTA DE CREDITO");
   };
 
   // ==========================================
-  // ENVÍO AL BACKEND
+  // 🚀 EMISIÓN EN SEGUNDO PLANO (BACKGROUND)
   // ==========================================
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!item.rutFacturar || !item.folioRef || !item.monto) {
-      return toast({ variant: "destructive", title: "Faltan Datos", description: "Selecciona una factura a referenciar en el paso 2." });
+  const handleEmitir = async () => {
+    if (!documentoOriginal || !montoAjuste) {
+        return toast({ variant: "destructive", title: "Error", description: "Seleccione un documento válido." });
     }
 
     setIsSubmitting(true);
+    
     try {
-      const rutLimpio = cleanRut(item.rutFacturar);
-      const [rutFull, dv] = rutLimpio.includes('-') ? rutLimpio.split('-') : [rutLimpio, ''];
-      
+      const [rutF, dv] = cleanRut(clienteSel.rut).split('-');
       const payload = {
-        empresa_id: selectedCompany?.id || 'EXTERNO',
-        tipo_documento: isCredito ? 61 : 56,
-        rutReceptor: rutFull, dvReceptor: dv, razonSocial: item.razonSocial || "CLIENTE",
-        contactoReceptor: item.contactoReceptor,
-        producto: { nombre: item.motivoTexto, precio: String(item.monto).replace(/[^0-9]/g, '') },
-        referencia: { tipoDocumento: item.tipoDocumentoRef, folio: item.folioRef, codigo: item.codigoRef, razon: item.motivoTexto }
+        empresa_id: selectedCompany?.id || null, // <- Corrección vital agregada aquí
+        tipo_documento: parseInt(tipoNota),
+        rutReceptor: rutF, dvReceptor: dv,
+        razonSocial: clienteSel.nombre,
+        producto: { precio: String(montoAjuste).replace(/[^0-9]/g, '') },
+        referencia: { folio: documentoOriginal.folio, codigo: codigoSii, razon: glosa }
       };
 
+      // 1. AVISAMOS AL USUARIO QUE EL ROBOT INICIÓ
+      toast({
+        title: "🤖 Robot Iniciado en Segundo Plano",
+        description: `Procesando Nota de ${isCredito ? 'Crédito' : 'Débito'} en el SII. Puedes seguir utilizando el sistema.`,
+        duration: 8000,
+      });
+
+      // 2. CERRAMOS EL MODAL INMEDIATAMENTE PARA LIBERAR LA PANTALLA
+      setIsOpen(false);
+
+      // 3. ENVIAMOS LA PETICIÓN AL BACKEND
       const res = await fetch(`${API_BASE_URL}/dte/emitir-nota`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
-
       const data = await res.json();
-      if (!res.ok || data?.ok === false) throw new Error(data?.error || "Error SII");
       
-      setFolioGenerado(data.folio);
-      setIsFinished(true);
-    } catch (err) {
-      toast({ variant: "destructive", title: "Fallo de Emisión", description: err.message });
+      if (!data.ok) throw new Error(data.error || "Error de comunicación con el SII.");
+      
+      // 4. AVISAMOS CUANDO TERMINÓ (Aparecerá sin importar donde esté el usuario)
+      toast({
+        title: "✅ ¡Documento Emitido con Éxito!",
+        description: `Folio Oficial N° ${data.folio} generado correctamente.`,
+        duration: 10000,
+        className: "bg-emerald-600 border-none text-white", // Opcional: lo hace verde
+      });
+
+    } catch (e) {
+      toast({ variant: "destructive", title: "❌ Fallo de Emisión", description: e.message, duration: 15000 });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const IconComponent = theme.Icon;
-
   return (
     <Dialog open={isOpen} onOpenChange={(val) => !isSubmitting && setIsOpen(val)}>
-      <DialogContent className={`sm:max-w-[700px] bg-[#0a0a0a] border-${theme.color}-500/20 text-white overflow-visible p-0 shadow-[0_0_50px_rgba(0,0,0,0.5)] transition-colors duration-500`}>
+      <DialogContent className="sm:max-w-[850px] w-[95vw] bg-[#09090b] border-white/10 text-white p-0 shadow-2xl overflow-hidden rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)]">
         
-        {(isSubmitting || isFinished) && (
-          <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-md rounded-lg">
-            {isSubmitting ? (
-              <div className="flex flex-col items-center gap-4">
-                <Loader2 className={`h-16 w-16 animate-spin ${theme.textClass}`} />
-                <h3 className={`text-xl font-bold uppercase italic tracking-tighter ${theme.textClass}`}>Generando {theme.title}...</h3>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-6 text-center p-8">
-                <CheckCircle2 className={`h-24 w-24 ${theme.textClass}`} />
-                <div>
-                  <h3 className="text-3xl font-black uppercase italic tracking-tighter mb-1">¡Proceso Finalizado!</h3>
-                  <p className={`font-mono text-xl font-bold ${theme.textClass}`}>Folio N° {folioGenerado}</p>
+        {/* LA PANTALLA NEGRA DE CARGA FUE ELIMINADA PARA PERMITIR TRABAJO EN SEGUNDO PLANO */}
+
+        <div className="p-6 md:p-8 pb-4 border-b border-white/5 bg-white/[0.02]">
+            <DialogHeader>
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+                    <div className={`p-4 rounded-2xl border bg-white/5 ${theme.textClass} w-fit`}>
+                        <ArrowDownUp size={28} />
+                    </div>
+                    <div>
+                        <DialogTitle className="text-2xl font-black uppercase tracking-tighter italic leading-none">Nota de Crédito / Débito</DialogTitle>
+                        <DialogDescription className="text-gray-500 text-xs uppercase font-bold tracking-[0.2em] mt-1">Sincronizado con SII</DialogDescription>
+                    </div>
                 </div>
-                <Button onClick={() => setIsOpen(false)} className={`${theme.bgClass} w-full mt-4 rounded-xl font-black uppercase tracking-widest h-14 text-white`}>Volver al Menú</Button>
-              </div>
-            )}
-          </div>
-        )}
+            </DialogHeader>
+        </div>
 
-        <div className="p-8">
-          <div className="flex p-1 bg-black/60 rounded-xl border border-white/5 mb-6 relative z-10 w-full">
-            <button type="button" onClick={() => setTipoNota('61')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all duration-300 ${isCredito ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}>
-                <ArrowDownToLine size={14} /> Nota de Crédito (61)
-            </button>
-            <button type="button" onClick={() => setTipoNota('56')} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest transition-all duration-300 ${!isCredito ? 'bg-amber-600 text-white shadow-lg shadow-amber-500/20' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}>
-                <ArrowUpFromLine size={14} /> Nota de Débito (56)
-            </button>
-          </div>
-
-          <DialogHeader className="mb-6">
-            <div className="flex items-center gap-3 transition-colors duration-500">
-               <div className={`p-3 rounded-xl border ${theme.iconBg}`}><IconComponent className={theme.textClass} size={26} /></div>
-               <div>
-                  <DialogTitle className="text-2xl font-black italic uppercase tracking-tighter leading-none">{theme.title}</DialogTitle>
-                  <DialogDescription className="text-gray-500 text-[10px] uppercase font-bold tracking-[0.2em] mt-1">{theme.code} • Sincronizado con SII</DialogDescription>
-               </div>
-            </div>
-          </DialogHeader>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="p-6 md:p-8 space-y-8 max-h-[75vh] overflow-y-auto custom-scrollbar bg-black/20 w-full">
             
-            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5 relative">
-              <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2"><Search size={14} /> 1. Buscar Empresa Destino</h4>
-              <div className="mb-4 relative z-50">
-                  <div className="relative">
-                    <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors z-10 ${item.rutFacturar ? theme.textClass : 'text-gray-500'}`} size={18} />
-                    <Input placeholder="Escribe Razón Social o RUT..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setShowSuggestions(true); }} onFocus={() => setShowSuggestions(true)} onBlur={() => setTimeout(() => setShowSuggestions(false), 200)} className={`pl-12 h-12 bg-black/40 border-white/10 rounded-xl text-sm focus:border-${theme.color}-500 shadow-xl transition-all uppercase`} disabled={isLoadingDatos}/>
-                    {isLoadingDatos && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-gray-500" size={16} />}
-                  </div>
-                  {showSuggestions && filteredSuggestions.length > 0 && (
-                    <div className="absolute top-full left-0 w-full mt-2 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[60]">
-                      {filteredSuggestions.map((c, i) => (
-                        <div key={i} onMouseDown={() => onSelectCliente(c)} className={`px-5 py-3 cursor-pointer hover:${theme.bgClass}/20 border-b border-white/5 flex justify-between items-center group transition-colors`}>
-                          <div>
-                            <div className="text-sm font-bold text-white">{cleanStr(c.razonSocial)}</div>
-                            <div className="text-[10px] text-gray-500 font-mono mt-0.5 tracking-widest">{c.rut}</div>
-                          </div>
-                          <CheckCircle2 size={16} className={`${theme.textClass} opacity-0 group-hover:opacity-100 transition-all`} />
+            <section className="space-y-3 w-full">
+                <div className="flex items-center justify-between">
+                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">1. Buscar Empresa o N° Factura</Label>
+                    {clienteSel && (
+                        <button onClick={() => {setClienteSeleccionado(null); setDocumentoOriginal(null); setSearchTerm("");}} className="text-[10px] font-black uppercase text-blue-500 hover:text-blue-400 transition-colors hover:underline">Limpiar Selección</button>
+                    )}
+                </div>
+
+                {!clienteSel ? (
+                    <div className="flex flex-col md:flex-row gap-4 w-full">
+                        <div className="flex-[2] relative z-50">
+                            <div className={`relative transition-all ${showSuggestions && filteredSuggestions.length > 0 && searchTerm ? 'ring-1 ring-blue-500 rounded-xl' : ''}`}>
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                                <Input 
+                                    placeholder="Buscar Empresa por Nombre o RUT..." 
+                                    value={searchTerm} 
+                                    onChange={(e) => {setSearchTerm(e.target.value); setShowSuggestions(true);}}
+                                    onFocus={() => setShowSuggestions(true)}
+                                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                                    className={`pl-11 h-14 w-full bg-black/40 border border-white/10 text-sm focus:border-blue-500 transition-all uppercase ${showSuggestions && filteredSuggestions.length > 0 && searchTerm ? 'border-transparent rounded-t-xl rounded-b-none focus-visible:ring-0' : 'rounded-xl'}`} 
+                                    disabled={!!prefillData?.doc || isSubmitting} 
+                                />
+                                {isLoadingDatos && <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 animate-spin text-gray-500" size={16} />}
+                            </div>
+                            
+                            {showSuggestions && searchTerm && filteredSuggestions.length > 0 && (
+                                <div className="absolute top-[100%] left-0 w-full bg-[#0c0c0e] border border-blue-500 border-t-0 rounded-b-xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-1">
+                                    {filteredSuggestions.map((c, i) => (
+                                        <button key={i} onMouseDown={() => selectCliente(c)} className="w-full px-5 py-4 text-left border-t border-white/5 hover:bg-white/5 flex justify-between items-center group transition-colors">
+                                            <div className="overflow-hidden pr-2">
+                                                <p className="font-bold text-sm text-gray-200 group-hover:text-blue-400 truncate">{formatTextoVisual(c.nombre)}</p>
+                                                <p className="text-[10px] font-mono text-gray-500 tracking-widest">{c.rut}</p>
+                                            </div>
+                                            <ChevronRight size={18} className="text-gray-700 flex-shrink-0" />
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                      ))}
-                    </div>
-                  )}
-              </div>
-              {item.rutFacturar && (
-                  <div className="grid grid-cols-2 gap-4 p-4 bg-black/30 rounded-xl border border-white/5 mt-4">
-                    <div>
-                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">RUT Seleccionado</p>
-                      <p className={`text-sm font-mono font-bold ${theme.textClass}`}>{item.rutFacturar}</p>
-                    </div>
-                    <div>
-                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Documentos en Bóveda</p>
-                      <p className="text-sm font-black text-white">{facturasDelCliente.length} Facturas Previas</p>
-                    </div>
-                  </div>
-              )}
-            </div>
 
-            <div className={`bg-${theme.color}-900/10 border border-${theme.color}-500/20 rounded-2xl p-5 relative overflow-visible transition-colors duration-500`}>
-              <div className={`absolute top-0 left-0 w-1 h-full bg-${theme.color}-500 transition-colors duration-500`} />
-              <h4 className={`text-[10px] font-black ${theme.textClass} uppercase tracking-widest mb-4 flex items-center gap-2 transition-colors duration-500`}><FileText size={14} /> 2. Factura a Referenciar</h4>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Selecciona la Factura del Historial</Label>
-                  <select value={facturaSeleccionadaId} onChange={handleSelectFactura} disabled={facturasDelCliente.length === 0} className="w-full h-12 bg-black/40 border border-white/10 rounded-xl px-3 text-sm text-white focus:outline-none focus:border-white/30 cursor-pointer font-bold">
-                    <option value="">-- {facturasDelCliente.length > 0 ? "Selecciona una Factura de la lista" : "No hay facturas para este cliente"} --</option>
-                    {facturasDelCliente.map(fac => (
-                        <option key={fac.id} value={fac.id}>
-                            {fac.tipo_dte === 33 ? 'Factura Afecta (33)' : 'Factura Exenta (34)'} - Folio #{fac.folio} - ${Number(fac.monto_total || fac.monto_neto).toLocaleString('es-CL')} ({new Date(fac.fecha_emision).toLocaleDateString('es-CL')})
-                        </option>
-                    ))}
-                  </select>
+                        <div className="flex-[1] relative z-40 min-w-[150px]">
+                            <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                            <Input 
+                                placeholder="N° Folio..." 
+                                value={searchFolio}
+                                onChange={(e) => setSearchFolio(e.target.value.replace(/[^0-9]/g, ''))}
+                                className="pl-11 h-14 w-full bg-black/40 border border-white/10 rounded-xl text-sm focus:border-blue-500 transition-all font-mono"
+                                disabled={!!prefillData?.doc || isSubmitting} 
+                            />
+                        </div>
+                    </div>
+                ) : (
+                    <div className="p-4 w-full bg-white/5 border border-white/10 rounded-xl flex items-center gap-4 shadow-inner animate-in zoom-in-95 duration-200">
+                        <div className={`p-3 rounded-lg bg-white/5 ${theme.textClass}`}><User size={20}/></div>
+                        <div className="overflow-hidden flex-1">
+                            <p className="text-base font-black text-white truncate">{formatTextoVisual(clienteSel.nombre)}</p>
+                            <p className="text-xs font-mono text-gray-500 tracking-widest">{clienteSel.rut}</p>
+                        </div>
+                    </div>
+                )}
+            </section>
+
+            <section className="space-y-3 animate-in fade-in duration-300 w-full">
+                <Label className="text-[10px] font-black text-blue-400 uppercase tracking-widest ml-1">
+                    2. {searchFolio ? "Resultados de Búsqueda" : clienteSel ? "Seleccionar Documento a Afectar" : "Últimos Documentos Emitidos"}
+                </Label>
+                
+                <div className="border border-white/10 rounded-xl overflow-hidden bg-black/40 shadow-sm w-full">
+                    <div className="max-h-[250px] overflow-y-auto custom-scrollbar">
+                        <table className="w-full text-left table-auto">
+                            <thead className="sticky top-0 bg-[#0c0c0e] border-b border-white/10 z-10">
+                                <tr>
+                                    <th className="px-4 py-3 text-[10px] font-black uppercase text-gray-400 tracking-widest w-[40%]">Documento</th>
+                                    <th className="px-4 py-3 text-[10px] font-black uppercase text-gray-400 tracking-widest w-[40%]">Cliente</th>
+                                    <th className="px-4 py-3 text-[10px] font-black uppercase text-gray-400 tracking-widest text-right w-[20%]">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {datosTabla.length === 0 ? (
+                                    <tr><td colSpan={3} className="p-8 text-center text-xs font-bold text-gray-600 uppercase tracking-widest">No se encontraron documentos</td></tr>
+                                ) : (
+                                    datosTabla.map(doc => (
+                                        <tr 
+                                            key={doc.id} 
+                                            onClick={() => handleSelectDocumentFromTable(doc)} 
+                                            className={`cursor-pointer transition-colors ${documentoOriginal?.id === doc.id ? 'bg-white/5' : 'hover:bg-white/5'}`}
+                                        >
+                                            <td className="p-4 align-top">
+                                                <div className="flex gap-4 items-start">
+                                                    <div className="pt-0.5 flex-shrink-0">
+                                                        {documentoOriginal?.id === doc.id ? <CheckCircle2 size={18} className={`${theme.textClass}`}/> : <div className="w-4 h-4 rounded-full border border-white/20"/>}
+                                                    </div>
+                                                    <div className="overflow-hidden">
+                                                        <span className={`text-xs font-black ${documentoOriginal?.id === doc.id ? theme.textClass : 'text-gray-300'} uppercase tracking-wider`}>#{doc.folio}</span>
+                                                        <p className="text-[11px] font-black uppercase text-white mt-1 truncate">{NOMBRES_DTE[doc.tipo_dte] || `DTE ${doc.tipo_dte}`}</p>
+                                                        <p className="text-[10px] font-mono text-gray-500 mt-0.5">{new Date(doc.fecha_emision).toLocaleDateString('es-CL')}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="p-4 align-top">
+                                                <div className="pt-1">
+                                                    <p className="text-xs font-bold text-gray-200 truncate max-w-[150px] md:max-w-[200px]">{formatTextoVisual(doc.razon_social)}</p>
+                                                    <p className="text-[10px] font-mono text-gray-500 tracking-widest mt-1">{formatRutEstricto(doc.rut_cliente)}</p>
+                                                </div>
+                                            </td>
+                                            <td className="p-4 text-right align-top">
+                                                <div className="pt-1">
+                                                    <span className="font-black text-white text-sm tracking-tight">${Number(doc.monto_total || doc.monto_neto).toLocaleString('es-CL')}</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Acción (Código SII)</Label>
-                    <select value={item.codigoRef} onChange={(e) => setItem({...item, codigoRef: e.target.value})} className="w-full h-10 bg-black/40 border border-white/10 rounded-xl px-3 text-xs text-white focus:outline-none focus:border-white/30 cursor-pointer">
-                      {isCredito ? (
-                        <>
-                          <option value="1">1 - Anula Documento Completo</option>
-                          <option value="2">2 - Corrige Textos / Dirección</option>
-                          <option value="3">3 - Corrige Montos (Descuento)</option>
-                        </>
-                      ) : (
-                        <>
-                          <option value="1">1 - Anula Nota de Crédito</option>
-                          <option value="2">2 - Corrige Textos / Dirección</option>
-                          <option value="3">3 - Corrige Montos (Aumento)</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Razón Corta (Glosa)</Label>
-                    <Input value={item.motivoTexto} onChange={(e) => setItem({...item, motivoTexto: e.target.value})} className="h-10 bg-black/40 border-white/10 rounded-xl text-xs uppercase" placeholder="Ej: MOTIVO SII..." />
-                  </div>
-                </div>
-              </div>
-            </div>
+            </section>
 
-            <div className="bg-black/30 border border-white/5 rounded-2xl p-5 flex items-center justify-between">
-               <div>
-                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Monto a Afectar</h4>
-                  <p className="text-[9px] text-gray-500 uppercase mt-1">Si es anulación total, déjalo igual al original.</p>
-               </div>
-               <div className="relative w-48">
-                  <span className={`absolute left-4 top-1/2 -translate-y-1/2 font-black ${theme.textClass} transition-colors duration-500`}>$</span>
-                  <Input type="number" value={item.monto} onChange={(e) => setItem({...item, monto: e.target.value})} className={`pl-8 h-12 bg-black/50 border-white/10 rounded-xl font-mono text-xl font-black ${theme.textClass} text-right transition-colors duration-500`} placeholder="0" />
-               </div>
-            </div>
+            {documentoOriginal && (
+                <section className="space-y-6 animate-in slide-in-from-bottom-4 duration-500 pt-6 border-t border-white/5 w-full">
+                    
+                    <div className="grid grid-cols-2 gap-4 w-full">
+                        <Button 
+                            type="button" variant="outline" 
+                            onClick={() => handleTipoNotaChange("61")} 
+                            disabled={documentoOriginal.tipo_dte === 61 || isSubmitting}
+                            className={`h-16 w-full border rounded-xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center px-4 gap-2 transition-all ${tipoNota === '61' ? 'border-purple-500 bg-purple-500/10 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.1)]' : 'border-white/10 text-gray-500 hover:bg-white/5'} ${documentoOriginal.tipo_dte === 61 ? 'opacity-30 cursor-not-allowed disabled:bg-black/50 disabled:border-white/5' : ''}`}
+                        >
+                            <FileText size={18} className="hidden sm:block"/> Nota de Crédito
+                        </Button>
+                        
+                        <Button 
+                            type="button" variant="outline" 
+                            onClick={() => handleTipoNotaChange("56")} 
+                            disabled={documentoOriginal.tipo_dte !== 61 || isSubmitting}
+                            className={`h-16 w-full border rounded-xl font-black uppercase text-[11px] tracking-widest flex items-center justify-center px-4 gap-2 transition-all ${tipoNota === '56' ? 'border-amber-500 bg-amber-500/10 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.1)]' : 'border-white/10 text-gray-500 hover:bg-white/5'} ${documentoOriginal.tipo_dte !== 61 ? 'opacity-30 cursor-not-allowed disabled:bg-black/50 disabled:border-white/5' : ''}`}
+                        >
+                            <FileText size={18} className="hidden sm:block"/> Nota de Débito
+                        </Button>
+                    </div>
 
-            <div className="flex gap-3 pt-2">
-              <Button type="button" variant="ghost" onClick={() => setIsOpen(false)} className="flex-1 uppercase font-black text-[10px] tracking-widest h-12 rounded-xl text-gray-400 hover:text-white transition-all">Cancelar</Button>
-              <Button type="submit" disabled={isSubmitting || !item.folioRef} className={`flex-[2] ${theme.bgClass} text-white font-black uppercase text-[10px] tracking-[0.2em] h-12 rounded-xl shadow-lg ${theme.shadowClass} transition-all duration-500 disabled:opacity-50`}>
-                Emitir {theme.title}
-              </Button>
-            </div>
-          </form>
+                    <div className="pt-4 flex flex-row gap-3 w-full border-t border-white/5">
+                        <Button variant="ghost" onClick={() => setIsOpen(false)} disabled={isSubmitting} className="flex-1 uppercase font-black text-[11px] tracking-widest h-14 rounded-xl text-gray-500 hover:text-white hover:bg-white/5 transition-all border border-transparent hover:border-white/10">Cancelar</Button>
+                        <Button onClick={handleEmitir} disabled={isSubmitting || !documentoOriginal} className={`flex-[2] text-white font-black uppercase text-[11px] tracking-widest h-14 rounded-xl shadow-lg transition-all duration-300 ${isCredito ? 'bg-purple-600 hover:bg-purple-500 shadow-purple-500/20' : 'bg-amber-600 hover:bg-amber-500 shadow-amber-500/20'} disabled:opacity-50`}>
+                            {isSubmitting ? <><Loader2 className="animate-spin mr-2" size={16} /> Enviando...</> : "Emitir Documento Electrónico"}
+                        </Button>
+                    </div>
+                </section>
+            )}
         </div>
       </DialogContent>
     </Dialog>

@@ -15,7 +15,8 @@ import { emitirExentaPuppeteer } from '../components/facturacion/scripts/exenta_
 import { emitirLoteExentaPuppeteer, estadoRobotExenta } from '../components/facturacion/scripts/exenta_masiva.mjs';
 
 // Robot para Notas (DTE 61 y 56)
-import { emitirNotaCDPuppeteer } from '../components/facturacion/scripts/nota_credito_manual.mjs';
+// ✅ CORRECCIÓN
+import { emitirNotaCDPuppeteer } from '../components/facturacion/scripts/nota_credito_debito.mjs';
 
 // ==========================================
 // 🚀 CONTROLADORES DTE 33 (FACTURA ELECTRÓNICA)
