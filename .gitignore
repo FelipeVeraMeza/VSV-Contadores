@@ -3,4 +3,3 @@ dist
 AgregarDatosExcel/output/*
 perfil_temporal_robot
 .env
-src\sii_core\sii_historial_DTE\documentos emitidos\folios_documentos_emitidos.json
