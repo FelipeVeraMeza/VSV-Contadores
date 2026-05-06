@@ -102,10 +102,17 @@ async function ejecutarScrapperEmitidos() {
     console.log("🚀 INICIANDO SCRAPPER DE EMITIDOS (SOLO TABLA)");
     console.log("==================================================");
     
-    // Puppeteer usará su navegador integrado por defecto, evitando errores de Edge zombi.
+    // Detectamos si estamos en la nube (production) o en tu PC
+    const isProduction = process.env.NODE_ENV === 'production';
+
     const browser = await puppeteer.launch({ 
-        headless: false, 
-        defaultViewport: null
+        headless: isProduction ? true : false, // Invisible en la nube, visible en tu PC
+        defaultViewport: null,
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox', 
+            '--disable-dev-shm-usage'
+        ] // 👈 ESTO ES OBLIGATORIO PARA QUE FUNCIONE EN RAILWAY / LINUX
     });
     
     const context = await browser.createBrowserContext();

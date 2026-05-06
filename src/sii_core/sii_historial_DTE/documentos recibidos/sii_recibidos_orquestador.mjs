@@ -134,9 +134,17 @@ async function ejecutarRobotAutomatico() {
     console.log("🚀 INICIANDO ROBOT DE COMPRAS (SOLO TABLA)");
     console.log("==================================================");
     
+    // Detectamos si estamos en la nube (production) o en tu PC
+    const isProduction = process.env.NODE_ENV === 'production';
+
     const browser = await puppeteer.launch({ 
-        headless: false, // Invisible para máxima velocidad
-        defaultViewport: null
+        headless: isProduction ? true : false, // Invisible en la nube, visible en tu PC
+        defaultViewport: null,
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox', 
+            '--disable-dev-shm-usage'
+        ] // 👈 ESTO ES OBLIGATORIO PARA QUE FUNCIONE EN RAILWAY / LINUX
     });
     
     const context = await browser.createBrowserContext();
