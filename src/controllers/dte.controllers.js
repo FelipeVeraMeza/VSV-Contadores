@@ -15,7 +15,6 @@ import { emitirExentaPuppeteer } from '../components/facturacion/scripts/exenta_
 import { emitirLoteExentaPuppeteer, estadoRobotExenta } from '../components/facturacion/scripts/exenta_masiva.mjs';
 
 // Robot para Notas (DTE 61 y 56)
-// ✅ CORRECCIÓN
 import { emitirNotaCDPuppeteer } from '../components/facturacion/scripts/nota_credito_debito.mjs';
 
 // ==========================================
@@ -106,21 +105,42 @@ export const emitirExentaMasivaController = async (req, res) => {
     }
 };
 
-// ==========================================
-// 🔄 CONTROLADORES DTE 61 / 56 (NOTAS C/D)
-// ==========================================
+// =========================================================================
+// 🔄 CONTROLADORES DTE 61 / 56 (NOTAS C/D) - VERSIÓN ROBUSTA
+// =========================================================================
 export const emitirNotaController = async (req, res) => {
     try {
-        const datosFactura = req.body; 
-        console.log(`🤖 Iniciando Robot para NOTA DE C/D (${datosFactura.tipo_documento})...`);
-        
-        // Llamada al script de Puppeteer de Notas
-        const result = await emitirNotaCDPuppeteer(datosFactura);
-        
-        return res.status(200).json(result);
-    } catch(error) {
-        console.error("❌ Error en emitirNotaController:", error);
-        return res.status(500).json({ ok: false, error: error.message });
+        const datos = req.body;
+
+        console.log(`\n==================================================`);
+        console.log(`📥 RECIBIDA PETICIÓN PARA EMITIR DTE ${datos.tipo_documento}`);
+        console.log(`==================================================`);
+        console.log(`Empresa Destino: ${datos.razonSocial}`);
+        console.log(`Referencia: Folio ${datos?.referencia?.folio} (Código ${datos?.referencia?.codigo})`);
+
+        // Validación de seguridad
+        if (!datos.rutReceptor || !datos.referencia || !datos.tipo_documento) {
+            return res.status(400).json({ 
+                ok: false, 
+                error: "Faltan datos críticos para iniciar el robot de Notas." 
+            });
+        }
+
+        // Llamamos al robot de Puppeteer
+        const resultado = await emitirNotaCDPuppeteer(datos);
+
+        if (resultado && resultado.ok) {
+            return res.status(200).json(resultado);
+        } else {
+            throw new Error("Falla desconocida dentro del robot.");
+        }
+
+    } catch (error) {
+        console.error("❌ Error en emitirNotaController:", error.message);
+        return res.status(500).json({ 
+            ok: false, 
+            error: error.message || "Error interno al intentar comunicarse con el SII." 
+        });
     }
 };
 

@@ -144,7 +144,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
 
   // 🔥 ESTADOS PARA LA PAGINACIÓN
   const [currentPage, setCurrentPage] = useState(1);
-  const ROWS_PER_PAGE = 6; 
+  const ROWS_PER_PAGE = 6; // ⬅️ LÍMITE DE 6 FILAS CONFIGURADO
   
   // 🌟 ESTADOS DEL RASTREADOR DE PROGRESO
   const [progresoRobot, setProgresoRobot] = useState({ activo: false, actual: 0, total: 0, rutActual: "", exitos: 0, errores: 0 });
@@ -472,10 +472,6 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     }
   };
 
-  // ======================================================================
-  // 🔥 FUNCIONES DE EMISIÓN CON EL CIERRE DE MODAL HABILITADO
-  // ======================================================================
-
   const handleBulkSubmit = async () => {
     const facturasAProcesar = bulkRows.filter(r => r.rut && r.estado === 'pendiente').map(row => {
       const rutLimpio = cleanRut(row.rut);
@@ -533,8 +529,6 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     }
 
     setIsSubmitting(true);
-    toast({ title: "🚀 Iniciando Robot", description: "Conectando con el SII para emitir factura..." });
-
     try {
       const rutLimpio = cleanRut(item.rutFacturar);
       const [rutFull, dv] = rutLimpio.includes('-') ? rutLimpio.split('-') : [rutLimpio, ''];
@@ -568,31 +562,53 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
       
       setFolioGenerado(data.folio);
       setIsFinished(true);
-      setIsOpen(false); // Cierra automáticamente al terminar con éxito
-      
-      toast({ 
-        title: "✅ Factura Emitida", 
-        description: `Folio #${data.folio || data.numeroDocumento} generado correctamente.`,
-        className: "bg-emerald-600 text-white" 
-      });
-
     } catch (err) {
       toast({ variant: "destructive", title: "Fallo de Emisión", description: err.message });
     } finally {
-      setIsSubmitting(false); // Libera el estado de carga del botón
+      setIsSubmitting(false);
     }
   };
 
-  // ======================================================================
-  // RENDERIZADO
-  // ======================================================================
   return (
-    // ELIMINAMOS LA CONDICIÓN QUE BLOQUEABA EL CIERRE DEL MODAL
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={(val) => { if (!isSubmitting && !isBulkSubmitting) setIsOpen(val); }}>
       <DialogContent className={`w-full bg-[#0a0a0a] border-white/10 text-white overflow-hidden p-0 shadow-2xl flex flex-col transition-all duration-500 max-h-[95vh] ${
           activeTab === TABS.MASIVA ? 'max-w-[95vw] lg:max-w-[1250px]' : 'sm:max-w-[800px]'
       }`}>
         
+        {(isSubmitting || isFinished) && activeTab === TABS.UNICA && (
+          <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-md">
+            {!isFinished ? (
+              <div className="flex flex-col items-center gap-6 text-center px-4">
+                <div className="relative">
+                  <Loader2 className="h-20 w-20 animate-spin text-blue-500" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <Building2 size={24} className="text-white animate-pulse" />
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black uppercase italic tracking-widest text-white mb-2">
+                    Emitiendo al SII...
+                  </h3>
+                  <p className="text-red-400 font-bold uppercase tracking-widest text-xs animate-pulse bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20">
+                    ⚠️ SISTEMA BLOQUEADO MIENTRAS SE EMITE. NO CIERRE LA VENTANA.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-6 text-center p-8">
+                <CheckCircle2 className="h-24 w-24 text-emerald-500" />
+                <div>
+                  <h3 className="text-3xl font-black uppercase italic tracking-tighter mb-1">¡Proceso Finalizado!</h3>
+                  <p className="font-mono text-xl text-emerald-400 font-bold">Folio N° {folioGenerado}</p>
+                </div>
+                <Button onClick={() => setIsOpen(false)} className="bg-blue-600 hover:bg-blue-700 w-full mt-4 rounded-xl font-black uppercase tracking-widest h-14">
+                  Volver al CRM
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="py-6 px-8 flex flex-col h-full overflow-hidden">
           
           <div className="flex-shrink-0">
@@ -987,17 +1003,16 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
               )}
           </div>
 
-          {/* BOTONERA FINAL */}
           <div className="flex gap-4 pt-4 mt-2 border-t border-white/5 flex-shrink-0 relative z-20">
             <Button type="button" onClick={() => setIsOpen(false)} className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 uppercase font-black text-[11px] tracking-widest h-10 rounded-xl transition-all">Cerrar</Button>
             
             {activeTab === TABS.UNICA ? (
               <Button onClick={handleSubmitUnica} disabled={!empresaEfectiva || isSubmitting} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
-                {isSubmitting ? <><Loader2 size={14} className="mr-2 animate-spin"/> Iniciando Robot...</> : 'Emitir Factura Individual'}
+                {isSubmitting ? 'Procesando...' : 'Emitir Factura Individual'}
               </Button>
             ) : (
               <Button onClick={handleBulkSubmit} disabled={isBulkSubmitting || bulkRows.filter(r => r.estado === 'pendiente').length === 0} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
-                {isBulkSubmitting ? <><Loader2 size={14} className="mr-2 animate-spin"/> Procesando Lote...</> : `Facturar Lote (${bulkRows.filter(r => r.estado === 'pendiente').length})`}
+                {isBulkSubmitting ? 'Procesando Lote...' : `Facturar Todo el Lote (${bulkRows.filter(r => r.estado === 'pendiente').length})`}
               </Button>
             )}
           </div>

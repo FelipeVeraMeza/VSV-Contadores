@@ -63,7 +63,7 @@ export async function emitirFacturaPuppeteer(datos) {
 
         // 2. LANZAR NAVEGADOR
         browser = await puppeteer.launch({ 
-            headless: true, // 👁️ Ponlo en 'false' si quieres ver el proceso en tu pantalla
+            headless: false, // 👁️ Ponlo en 'false' si quieres ver el proceso en tu pantalla
             defaultViewport: null, 
             args: [
                 '--no-sandbox', 
