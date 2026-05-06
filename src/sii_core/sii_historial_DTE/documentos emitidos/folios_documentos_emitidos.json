@@ -8258,5 +8258,43 @@
     "montoTotal": "142800",
     "estado": "Documento Emitido",
     "procesado": false
+  },
+  {
+    "rutReceptor": "78134009-K",
+    "razonSocial": "SERVICIOS PROFESIONALES DE ASESORÍA COMERCIAL ISIDORA TORRES E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "986",
+    "fecha": "2026-05-05",
+    "montoTotal": 95200,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78134009-K",
+        "receptorNombre": "SERVICIOS PROFESIONALES DE ASESORÍA COMERCIAL ISIDORA TORRES E.I.R.L.",
+        "montoNeto": 80000,
+        "montoIva": 15200
+      }
+    }
+  },
+  {
+    "rutReceptor": "78262268-4",
+    "razonSocial": "MIARTE SPA",
+    "documento": "Factura Electronica",
+    "folio": "985",
+    "fecha": "2026-05-05",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78262268-4",
+        "receptorNombre": "MIARTE SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
   }
 ]

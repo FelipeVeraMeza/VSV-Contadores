@@ -4,19 +4,19 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// 1. IMPORTACIONES EXTERNAS (Solo traemos el inicio/cierre de sesión)
+// IMPORTACIONES EXTERNAS
 import { iniciarSesion, cerrarSesion } from '../documentos recibidos/sii_operaciones.js';
 
-// 2. CONFIGURACIÓN DE RUTAS
+// CONFIGURACIÓN DE RUTAS
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rutaArchivoJSON_Emitidos = path.join(__dirname, 'folios_documentos_emitidos.json');
 
 // ============================================================================
-// 3. FUNCIÓN EXTRACTORA (El Motor)
+// 1. FUNCIÓN EXTRACTORA (Ventas)
 // ============================================================================
 async function extraerTablaFoliosEmitidos(page) {
-    console.log("📂 [2/2] Yendo a la tabla de documentos EMITIDOS...");
+    console.log("📂 [2/3] Yendo a la tabla de documentos EMITIDOS...");
     
     console.log("🏢 Seleccionando la empresa...");
     await page.goto('https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=2&TIPO=4', { waitUntil: 'networkidle2' });
@@ -24,7 +24,7 @@ async function extraerTablaFoliosEmitidos(page) {
     await Promise.all([
         page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {}),
         page.evaluate(() => {
-            const rutBuscado = '78306207'; 
+            const rutBuscado = '78306207'; // Tu RUT principal o sácalo del env
             const selects = document.querySelectorAll('select');
             for (const select of selects) {
                 for (let i = 0; i < select.options.length; i++) {
@@ -39,25 +39,33 @@ async function extraerTablaFoliosEmitidos(page) {
         })
     ]);
 
+    // 🧠 CONFIGURACIÓN DEL LÍMITE DE TIEMPO
+    const hoy = new Date();
+    // Día 1 del mes anterior
+    const fechaLimite = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+    fechaLimite.setHours(0, 0, 0, 0);
+
     let facturasExtraidas = [];
     let paginaActual = 1;
     let hayMasDatos = true;
     let primerFolioAnterior = null; 
 
     while (hayMasDatos) {
-        console.log(`⏳ Consultando página ${paginaActual}...`);
+        console.log(`⏳ Consultando página ${paginaActual} de Ventas...`);
         const urlPaginada = `https://www1.sii.cl/cgi-bin/Portal001/mipeAdminDocsEmi.cgi?RUT_RECP=&FOLIO=&RZN_SOC=&FEC_DESDE=&FEC_HASTA=&TPO_DOC=&ESTADO=&ORDEN=&NUM_PAG=${paginaActual}`;
         await page.goto(urlPaginada, { waitUntil: 'networkidle2', timeout: 60000 });
 
         try {
             await page.waitForSelector('table tbody tr', { timeout: 15000 });
         } catch (e) {
+            console.log(`⚠️ No se encontró la tabla en la página ${paginaActual}. Terminando extracción.`);
             break; 
         }
 
         const datosPagina = await page.evaluate(() => {
             const lista = [];
             const filas = document.querySelectorAll('table tbody tr'); 
+            
             filas.forEach(fila => {
                 const celdas = fila.querySelectorAll('td');
                 if (celdas.length >= 8) { 
@@ -66,53 +74,109 @@ async function extraerTablaFoliosEmitidos(page) {
                     const documento = celdas[3]?.innerText.trim(); 
                     const folio = celdas[4]?.innerText.trim();
                     const fecha = celdas[5]?.innerText.trim();     
-                    const montoTotal = celdas[6]?.innerText.trim();
-                    const estado = celdas[7]?.innerText.trim();    
+                    const estado = celdas[7]?.innerText.trim(); 
+
+                    // En emitidos el monto suele estar en la columna 6
+                    let montoTxt = celdas[6]?.innerText || '0';
+                    const montoTotal = parseInt(montoTxt.replace(/[^0-9]/g, '')) || 0;
 
                     if (rutReceptor && folio && !isNaN(folio)) {
-                        lista.push({ rutReceptor, razonSocial, documento, folio, fecha, montoTotal, estado, procesado: false });
+                        let mNeto = Math.round(montoTotal / 1.19);
+                        let mIva = montoTotal - mNeto;
+                        
+                        if (documento.toUpperCase().includes('EXENTA') || documento.toUpperCase().includes('BOLETA')) {
+                            mNeto = montoTotal;
+                            mIva = 0;
+                        }
+
+                        lista.push({ 
+                            rutReceptor, 
+                            razonSocial, 
+                            documento, 
+                            folio, 
+                            fecha, 
+                            montoTotal, 
+                            estado, 
+                            procesado: true, // Ya calculado matemáticamente
+                            detalleCompleto: {
+                                cabecera: {
+                                    emisorRut: '78.306.207-0',
+                                    receptorRut: rutReceptor,
+                                    receptorNombre: razonSocial,
+                                    montoNeto: mNeto,
+                                    montoIva: mIva
+                                }
+                            }
+                        });
                     }
                 }
             });
             return lista;
         });
 
-        if (datosPagina.length === 0) {
+        // ✨ FILTRO INTELIGENTE DE FECHA (El freno de mano)
+        let encontroDocViejo = false;
+        const datosDelPeriodo = datosPagina.filter(doc => {
+            if (!doc.fecha) return true; 
+            
+            const partes = doc.fecha.split(/[-/]/);
+            let anio, mes, dia;
+            if (partes[0].length === 4) { 
+                anio = parseInt(partes[0], 10); mes = parseInt(partes[1], 10) - 1; dia = parseInt(partes[2], 10);
+            } else { 
+                dia = parseInt(partes[0], 10); mes = parseInt(partes[1], 10) - 1; anio = parseInt(partes[2], 10);
+            }
+            
+            const fechaDoc = new Date(anio, mes, dia);
+            
+            if (fechaDoc < fechaLimite) {
+                encontroDocViejo = true;
+                return false; 
+            }
+            return true;
+        });
+
+        if (encontroDocViejo) {
+            console.log(`⏱️ Límite de tiempo alcanzado (${fechaLimite.toLocaleDateString()}). Deteniendo escáner.`);
+            facturasExtraidas = facturasExtraidas.concat(datosDelPeriodo);
+            break; 
+        }
+
+        if (datosDelPeriodo.length === 0) {
             hayMasDatos = false; 
         } else {
-            const primerFolioActual = datosPagina[0].folio;
+            const primerFolioActual = datosDelPeriodo[0].folio;
             if (primerFolioAnterior === primerFolioActual) break; 
             primerFolioAnterior = primerFolioActual; 
 
-            facturasExtraidas = facturasExtraidas.concat(datosPagina);
+            facturasExtraidas = facturasExtraidas.concat(datosDelPeriodo);
             paginaActual++;
             await new Promise(r => setTimeout(r, 1000)); 
         }
     }
     
-    console.log(`\n✅ ¡Extracción de tabla completa! Total folios capturados: ${facturasExtraidas.length}`);
+    console.log(`\n✅ ¡Extracción de VENTAS completa! Total capturadas en el periodo: ${facturasExtraidas.length}`);
     return facturasExtraidas;
 }
 
 // ============================================================================
-// 4. ORQUESTADOR PRINCIPAL (El Cerebro)
+// 2. ORQUESTADOR PRINCIPAL
 // ============================================================================
-async function ejecutarScrapperEmitidos() {
+async function ejecutarRobotAutomatico() {
     console.log("==================================================");
-    console.log("🚀 INICIANDO SCRAPPER DE EMITIDOS (SOLO TABLA)");
+    console.log("🚀 INICIANDO ROBOT DE VENTAS (SOLO TABLA & PERIODO)");
     console.log("==================================================");
     
-    // Detectamos si estamos en la nube (production) o en tu PC
     const isProduction = process.env.NODE_ENV === 'production';
 
     const browser = await puppeteer.launch({ 
-        headless: isProduction ? true : false, // Invisible en la nube, visible en tu PC
+        headless: isProduction ? true : false, 
         defaultViewport: null,
         args: [
             '--no-sandbox', 
             '--disable-setuid-sandbox', 
             '--disable-dev-shm-usage'
-        ] // 👈 ESTO ES OBLIGATORIO PARA QUE FUNCIONE EN RAILWAY / LINUX
+        ]
     });
     
     const context = await browser.createBrowserContext();
@@ -126,8 +190,8 @@ async function ejecutarScrapperEmitidos() {
     try {
         await iniciarSesion(page);
 
-        // Llamamos a la función extractora que definimos arriba
         const facturasExtraidas = await extraerTablaFoliosEmitidos(page);
+        
         let datosExistentes = fs.existsSync(rutaArchivoJSON_Emitidos) ? JSON.parse(fs.readFileSync(rutaArchivoJSON_Emitidos, 'utf8')) : [];
         
         const facturasNuevas = facturasExtraidas.filter(nueva => 
@@ -139,20 +203,15 @@ async function ejecutarScrapperEmitidos() {
             fs.writeFileSync(rutaArchivoJSON_Emitidos, JSON.stringify(datosExistentes, null, 2));
             console.log(`💾 Se agregaron ${facturasNuevas.length} folios nuevos a la base de datos local.`);
         } else {
-            console.log(`📊 No hay folios nuevos detectados en el portal.`);
+            console.log(`📊 No hay folios de venta nuevos en el portal para el periodo analizado.`);
         }
+
+        await cerrarSesion(page);
 
     } catch (error) {
         console.error("\n❌ Error Crítico:", error.message);
     } finally {
         if (browser) {
-            console.log("\n🛑 Asegurando el cierre de sesión antes de salir...");
-            try {
-                if (!page.isClosed()) {
-                    await cerrarSesion(page); 
-                }
-            } catch(e) {}
-            
             await browser.close();
             console.log("🛑 Robot apagado correctamente.");
         }
@@ -160,6 +219,6 @@ async function ejecutarScrapperEmitidos() {
 }
 
 // ============================================================================
-// 5. EJECUCIÓN INICIAL
+// EJECUCIÓN INICIAL
 // ============================================================================
-ejecutarScrapperEmitidos();
+ejecutarRobotAutomatico();
