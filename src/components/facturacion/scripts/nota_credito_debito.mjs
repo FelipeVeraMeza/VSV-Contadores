@@ -1,271 +1,346 @@
 import puppeteer from 'puppeteer';
 import dotenv from 'dotenv';
 import pkg from 'pg'; 
-import crypto from 'crypto'; 
-import { encrypt } from '../../../utils/crypto.js'; // Ajusta la ruta si es necesario
 
 const { Client } = pkg;
 dotenv.config();
 
-const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+// =======================================================
+// HELPERS REUTILIZABLES
+// =======================================================
 
-const limpiarYTipar = async (page, selector, texto) => {
-    if (!texto) return; 
-    try {
-        const element = await page.$(selector);
-        if (element) {
-            await page.click(selector, { clickCount: 3 }); 
-            await page.keyboard.press('Backspace');        
-            await page.type(selector, texto, { delay: 50 }); 
-        }
-    } catch (e) {
-        console.log(`⚠️ No se pudo escribir en: ${selector}`);
+const delay = ms => new Promise(r => setTimeout(r, ms));
+
+async function clickByText(page, text) {
+    await page.evaluate((txt) => {
+        const el = [...document.querySelectorAll("a,button,input")]
+            .find(e =>
+                e.innerText?.includes(txt) ||
+                e.value?.includes(txt)
+            );
+
+        if (el) el.click();
+    }, text);
+}
+
+async function capturarFolio(page) {
+    for (let i = 0; i < 30; i++) {
+
+        const folio = await page.evaluate(() => {
+            const txt = document.body.innerText;
+
+            const match =
+                txt.match(/Folio\s*N?[°º]?\s*(\d+)/i) ||
+                txt.match(/FOLIO\s*(\d+)/i) ||
+                txt.match(/N°\s*(\d+)/i);
+
+            return match ? match[1] : null;
+        });
+
+        if (folio) return folio;
+
+        await new Promise(r => setTimeout(r, 1000));
     }
-};
 
-// =========================================================================
-// 🚀 ROBOT EMISOR UNIFICADO (NOTAS DE CRÉDITO Y DÉBITO)
-// =========================================================================
+    throw new Error("No se pudo capturar el folio en la pantalla final del SII.");
+}
+
+// =======================================================
+// 🚀 ROBOT PRINCIPAL
+// =======================================================
+
 export async function emitirNotaCDPuppeteer(datos) {
-    let browser, page, client;
 
-    // 1. INICIAMOS LA CONEXIÓN A LA BASE DE DATOS
-    client = new Client({
-        user: process.env.DBS_USER,
-        host: process.env.DBS_HOST,
-        database: process.env.DBS_DATABASE,
-        password: process.env.DBS_PASSWORD,
-        port: process.env.DBS_PORT,
-        ssl: { rejectUnauthorized: false }
-    });
+    let browser;
+    let page;
+    let client;
+    let montoRescatado = 0; // Guardaremos el monto original aquí
 
     try {
+        console.log("=========================================");
+        console.log(`🤖 Iniciando robot SII para Nota DTE ${datos.tipo_documento}...`);
+        console.log("=========================================");
+
+        // 1. INICIALIZAMOS BASE DE DATOS
+        client = new Client({
+            user: process.env.DBS_USER,
+            host: process.env.DBS_HOST,
+            database: process.env.DBS_DATABASE,
+            password: process.env.DBS_PASSWORD,
+            port: process.env.DBS_PORT,
+            ssl: { rejectUnauthorized: false }
+        });
         await client.connect();
-        
-        // ==============================================================
-        // 📊 PASO 0: VALIDACIÓN Y MUESTRA DE DATOS EN TERMINAL
-        // ==============================================================
-        let infoEmisor = { razon_social: "EMPRESA EXTERNA / NO SELECCIONADA" };
-        
-        if (datos.empresa_id && datos.empresa_id !== 'EXTERNO') {
-            const res = await client.query("SELECT razon_social FROM empresa WHERE id = $1", [datos.empresa_id]);
-            if (res.rows.length > 0) infoEmisor = res.rows[0];
-        }
+        console.log("🔌 Conexión al Búnker (Supabase) exitosa.");
 
-        console.log("\n" + "=" .repeat(60));
-        console.log("🚀 INICIANDO EMISIÓN DE NOTA DTE");
-        console.log("=" .repeat(60));
-        console.log(`🏢 EMISOR (Búnker): ${infoEmisor.razon_social.toUpperCase()}`);
-        console.log(`👤 RECEPTOR (Cliente): ${datos.rutReceptor}-${datos.dvReceptor} | ${datos.razonSocial}`);
-        console.log(`📄 TIPO DTE: ${datos.tipo_documento === 61 ? 'NOTA DE CRÉDITO (61)' : 'NOTA DE DÉBITO (56)'}`);
-        console.log(`🔗 REF FOLIO: ${datos.referencia.folio}`);
-        console.log(`💰 MONTO NETO: $${parseInt(datos.producto.precio).toLocaleString('es-CL')}`);
-        console.log("=" .repeat(60) + "\n");
-
-        browser = await puppeteer.launch({ 
-            headless: false, 
-            defaultViewport: null, 
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--start-maximized', '--disable-blink-features=AutomationControlled'] 
+        // 2. INICIALIZAMOS NAVEGADOR
+        browser = await puppeteer.launch({
+            headless: false, // Mantenemos visible para ver el proceso
+            defaultViewport: null,
+            args: [
+                "--start-maximized",
+                "--no-sandbox",
+                "--disable-setuid-sandbox"
+            ]
         });
 
         page = await browser.newPage();
-        page.setDefaultNavigationTimeout(60000);
+        page.setDefaultNavigationTimeout(90000);
 
-        // =======================================================================
-        // 1. LOGIN
-        // =======================================================================
-        console.log("🔑 [1/6] Iniciando sesión en SII...");
+        // =======================================================
+        // 1️⃣ LOGIN
+        // =======================================================
+        console.log("🔑 [1/6] Login en SII...");
         await page.goto('https://misiir.sii.cl/cgi_misii/siihome.cgi', { waitUntil: 'networkidle2' });
 
         const rutLimpio = `${process.env.DTE_RUT}${process.env.DTE_DV}`.replace(/[^0-9kK]/gi, '');
-        const rutElement = await page.waitForSelector('#rut, #rutcntr');
-        const idRealRut = await page.evaluate(el => el.id, rutElement);
-
-        await page.type(`#${idRealRut}`, rutLimpio, { delay: 50 });
-        await page.type('#clave', process.env.DTE_PASS, { delay: 50 });
+        await page.waitForSelector('#rutcntr, #rut');
+        await page.type('#rutcntr', rutLimpio);
+        await page.type('#clave', process.env.DTE_PASS);
         await Promise.all([page.click('#bt_ingresar'), page.waitForNavigation()]);
 
-        try {
-            const btnSesion = await page.$('input[value*="Cerrar sesión"]');
-            if (btnSesion) await Promise.all([btnSesion.click(), page.waitForNavigation()]);
-        } catch (e) {}
-
-        // =======================================================================
-        // 2. SELECCIÓN DE EMPRESA E HISTORIAL
-        // =======================================================================
-        console.log("📂 [2/6] Accediendo al Historial...");
+        // =======================================================
+        // 2️⃣ SELECCIÓN EMPRESA
+        // =======================================================
+        console.log("📂 [2/6] Accediendo al Historial de Documentos Emitidos...");
         await page.goto('https://www1.sii.cl/cgi-bin/Portal001/mipeSelEmpresa.cgi?DESDE_DONDE_URL=OPCION%3D2%26TIPO%3D4', { waitUntil: 'networkidle2' });
 
         await page.evaluate((rutEmisorOpcional) => {
             const select = document.querySelector('select');
             if (select) {
+                // Si pasamos el RUT de la empresa desde el frontend, lo busca. Si no, selecciona el índice 1 por defecto.
                 const opt = rutEmisorOpcional ? Array.from(select.options).find(o => o.text.includes(rutEmisorOpcional)) : null;
                 if (opt) {
                     select.value = opt.value;
-                    document.querySelector('input[name="btnContinuar"]')?.click();
+                    const btn = document.querySelector('input[type="submit"], button[type="submit"], input[name="btnContinuar"]');
+                    if (btn) btn.click();
                 } else if (select.options.length > 1) {
                     select.selectedIndex = 1; 
-                    document.querySelector('input[type="submit"]')?.click();
+                    const btn = document.querySelector('input[type="submit"], button[type="submit"]');
+                    if (btn) btn.click();
                 }
             }
-        }, datos.rutEmisor ? datos.rutEmisor.replace(/[^0-9]/g, '') : null); 
+        }, datos.rutEmisor ? datos.rutEmisor.replace(/[^0-9]/g, '') : null); // Evita hardcodear, usa el RUT dinámico si existe
         await page.waitForNavigation({ waitUntil: 'networkidle2' });
 
-        // =======================================================================
-        // 3. BUSCAR EL FOLIO REFERENCIADO
-        // =======================================================================
-        console.log(`🔍 [3/6] Buscando Folio Original: ${datos.referencia.folio}...`);
-        await page.waitForSelector('table tbody tr');
+        // =======================================================
+        // 3️⃣ FILTRAR FOLIO ORIGINAL
+        // =======================================================
+        console.log(`🔎 [3/6] Filtrando tabla por Folio Original: ${datos.referencia.folio}...`);
 
-        await page.evaluate((folioBuscar) => {
-            const inputFolio = document.querySelector('input[name="FOLIO"], input[name="folio"]');
-            if (inputFolio) {
-                inputFolio.value = folioBuscar;
-                const btnConsultar = Array.from(document.querySelectorAll('input, button')).find(b => b.value?.toLowerCase().includes('consultar'));
-                if (btnConsultar) btnConsultar.click();
-            }
+        await page.waitForSelector("table");
+
+        await page.evaluate((folio) => {
+            const input = document.querySelector('input[name="FOLIO"]') || document.querySelector('input[name="folio"]');
+            if (!input) return;
+
+            input.value = folio;
+
+            const btn = [...document.querySelectorAll("button,input")].find(b =>
+                b.value?.toLowerCase().includes("consultar") ||
+                b.innerText?.toLowerCase().includes("consultar")
+            );
+
+            if (btn) btn.click();
+
         }, String(datos.referencia.folio));
 
-        await delay(5000); 
+        await delay(3000); // Esperamos a que la tabla se recargue por AJAX
 
-        // =======================================================================
-        // 4. ENTRAR AL ENLACE DE OPCIONES
-        // =======================================================================
-        console.log(`🖱️ [4/6] Entrando al generador de Notas del SII...`);
-        
-        let encontroFolio = await page.evaluate((folioBuscar, tipoDteRequerido) => {
-            const filas = Array.from(document.querySelectorAll('table tbody tr'));
-            for (let fila of filas) {
-                const celdas = fila.querySelectorAll('td');
-                let matches = false;
-                for (let c of celdas) { if (c.innerText.trim() === String(folioBuscar)) { matches = true; break; } }
+        // =======================================================
+        // 4️⃣ BUSCAR EN TABLA Y RESCATAR MONTO
+        // =======================================================
+        console.log("📄 [4/6] Escaneando tabla y páginas...");
 
-                if (matches) {
-                    const textoBuscado = (tipoDteRequerido === 61) ? "Generar Nota de Crédito" : "Generar Nota de Débito";
-                    const link = Array.from(fila.querySelectorAll('a')).find(a => a.innerText.includes(textoBuscado));
-                    if (link) { link.click(); return true; }
+        let encontrado = false;
+        let paginas = 0;
+
+        while (!encontrado && paginas < 20) {
+
+            const rescateDOM = await page.evaluate((folio) => {
+                const filas = document.querySelectorAll("table tbody tr");
+                for (const f of filas) {
+                    const tds = f.querySelectorAll("td");
+                    if (tds.length < 7) continue;
+
+                    // Columna 4 es Folio, Columna 6 es Monto Total
+                    if (tds[4].innerText.trim() === folio) {
+                        const montoTxt = tds[6]?.innerText || '0';
+                        const montoNum = parseInt(montoTxt.replace(/[^0-9]/g, '')) || 0;
+                        
+                        const link = tds[0].querySelector("a");
+                        if (link) {
+                            link.click();
+                            return { match: true, monto: montoNum };
+                        }
+                    }
                 }
+                return { match: false, monto: 0 };
+            }, String(datos.referencia.folio));
+
+            encontrado = rescateDOM.match;
+            if (encontrado) {
+                montoRescatado = rescateDOM.monto; // Guardamos el monto original de la factura para SQL
+                break;
             }
-            return false;
-        }, String(datos.referencia.folio), parseInt(datos.tipo_documento));
 
-        if (!encontroFolio) throw new Error(`No se encontró el Folio ${datos.referencia.folio} en el SII.`);
-        await page.waitForNavigation({ waitUntil: 'networkidle2' });
+            // Paginación
+            const siguiente = await page.evaluate(() => {
+                const btn = [...document.querySelectorAll("a,button,input")]
+                    .find(b => b.innerText === ">" || b.value === ">");
 
-        // =======================================================================
-        // 5. SELECCIONAR ACCIÓN
-        // =======================================================================
-        console.log(`⚡ [5/6] Seleccionando Acción: ${datos.referencia.codigo}...`);
-        await page.evaluate((tipoDte, codRef) => {
-            const botones = Array.from(document.querySelectorAll('input[type="button"], button, a'));
-            let texto = (tipoDte === 61) ? (codRef === "1" ? "Anulación" : codRef === "2" ? "Corregir Texto" : "Corregir Montos") : "Nota de Débito";
-            const target = botones.find(b => (b.value || b.innerText || "").includes(texto));
-            if (target) target.click();
-        }, parseInt(datos.tipo_documento), String(datos.referencia.codigo));
-
-        await page.waitForNavigation({ waitUntil: 'networkidle2' });
-
-        // =======================================================================
-        // 6. VALIDAR, FIRMAR Y CAPTURAR FOLIO
-        // =======================================================================
-        console.log("✍️ [6/6] Validando y firmando...");
-        await delay(2000);
-
-        if (String(datos.referencia.codigo) !== "1") {
-            await limpiarYTipar(page, 'input[name="EFXP_GLOSA_REF_01"], input[name*="GLOSA"]', datos.referencia.razon);
-            if (String(datos.referencia.codigo) === "3") {
-                await limpiarYTipar(page, 'input[name="EFXP_PRC_01"]', String(datos.producto?.precio || 0));
-            }
-            await page.evaluate(() => { document.querySelector('button[name="Button_Update"]')?.click(); });
-            await delay(2500); 
-            await page.evaluate(() => {
-                const btnAceptar = Array.from(document.querySelectorAll('input, button')).find(b => (b.value || b.innerText || "").toLowerCase().includes('aceptar'));
-                if (btnAceptar) btnAceptar.click();
+                if (btn) { btn.click(); return true; }
+                return false;
             });
-            await delay(2000);
+
+            if (!siguiente) break;
+
+            await page.waitForNavigation({ waitUntil: "networkidle2" });
+            paginas++;
         }
 
-        await page.evaluate(() => { document.querySelector('input[name="btnSign"]')?.click(); });
-        await page.waitForSelector('#myPass', { visible: true });
-        await page.type('#myPass', process.env.SII_PFX_PASS, { delay: 50 }); 
-        await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle2' }), page.click('#btnFirma')]);
+        if (!encontrado) throw new Error(`No se encontró el folio ${datos.referencia.folio} en el historial del SII.`);
 
-        let nuevoFolio = null;
-        for (let j = 0; j < 30; j++) {
-            const text = await page.evaluate(() => document.body.innerText);
-            const match = text.match(/N[°º]\s*(\d+)/i) || text.match(/Folio\s*(\d+)/i);
-            if (match) { nuevoFolio = match[1]; break; }
-            await delay(1000); 
-        }
+        await page.waitForNavigation({ waitUntil: "networkidle2" });
+        console.log(`✅ Folio encontrado. Monto original detectado: $${montoRescatado}`);
 
-        if (!nuevoFolio) throw new Error("Documento emitido pero el SII no entregó el nuevo folio.");
-        console.log(`🎉 ¡ÉXITO! Nuevo Folio generado: ${nuevoFolio}`);
+        // =======================================================
+        // 5️⃣ SELECCIONAR OPERACIÓN (ANULAR, CORREGIR, ETC)
+        // =======================================================
+        console.log(`⚡ [5/6] Preparando DTE ${datos.tipo_documento} (Motivo: ${datos.referencia.codigo})...`);
 
-        // ==============================================================
-        // 7. 💾 GUARDAR EN BASE DE DATOS (HISTORIAL CRM)
-        // ==============================================================
-        console.log('💾 Registrando en el historial del Búnker...');
-        
-        const empresaIdFinal = datos.empresa_id;
-        const rutReceptorLimpio = `${datos.rutReceptor}-${datos.dvReceptor}`.toUpperCase();
-        const montoNeto = parseInt(datos.producto?.precio) || 0;
-        const tipoDteFinal = parseInt(datos.tipo_documento);
-        const fechaEmision = new Date().toISOString(); 
+        const accion = await page.evaluate((tipo, codigo) => {
+            let texto = "";
+            if (tipo === 61) {
+                if (codigo === "1") texto = "Nota de Crédito de Anulación";
+                if (codigo === "2") texto = "Nota de Crédito para Corregir Texto";
+                if (codigo === "3") texto = "Nota de Crédito para Corregir Montos";
+            }
+            if (tipo === 56) {
+                if (codigo === "3") texto = "Nota de Débito para Corregir Montos";
+                else texto = "Nota de Débito"; // genérico
+            }
 
-        if (empresaIdFinal && empresaIdFinal !== 'EXTERNO') {
+            const link = [...document.querySelectorAll("a")].find(l => l.innerText.includes(texto));
+            if (link) { link.click(); return true; }
+            return false;
+        }, Number(datos.tipo_documento), String(datos.referencia.codigo));
+
+        if (!accion) throw new Error("El SII no habilitó el botón para generar esta nota.");
+
+        await page.waitForNavigation({ waitUntil: "networkidle2" });
+
+        // =======================================================
+        // 6️⃣ FIRMA FINAL EXPRESS
+        // =======================================================
+        console.log("✍️ [6/6] Ejecutando firma express...");
+        await delay(2000); // Pausa visual
+
+        // 1. Clic botón firmar
+        await clickByText(page, "Firmar");
+
+        // 2. Ingresar Clave
+        await page.waitForSelector("#myPass, input[type=password]", { visible: true });
+        await page.type("#myPass, input[type=password]", process.env.SII_PFX_PASS, { delay: 40 });
+
+        // 3. Confirmar Firma
+        console.log("   🚀 Enviando documento...");
+        await Promise.all([
+            page.waitForNavigation({ waitUntil: "networkidle2", timeout: 60000 }).catch(() => {}),
+            clickByText(page, "Firmar")
+        ]);
+
+        // =======================================================
+        // 🎉 CAPTURAR FOLIO Y GUARDAR EN POSTGRES
+        // =======================================================
+        const folioGenerado = await capturarFolio(page);
+        console.log(`🎉 ¡MISIÓN CUMPLIDA! Folio Oficial Generado: ${folioGenerado}`);
+
+        // --- LÓGICA DE GUARDADO SQL INTELIGENTE ---
+        let empresaIdFinal = datos.empresa_id;
+
+        // 🧠 Si React no mandó el ID (o mandó "SIN_ID"), el robot lo busca por su cuenta
+        if (!empresaIdFinal || empresaIdFinal === 'EXTERNO' || empresaIdFinal === 'SIN_ID') {
+            console.log("🔍 ID de empresa no recibido desde React. Buscando en la base de datos...");
             try {
-                // Inserción exacta con ON CONFLICT (basado en tu lógica de facturación masiva)
+                // 1. Intentamos sacar el ID buscando la factura original que acabamos de afectar
+                const busquedaOriginal = await client.query(
+                    `SELECT empresa_id FROM documentos_emitidos WHERE folio = $1 LIMIT 1`, 
+                    [datos.referencia.folio]
+                );
+                
+                if (busquedaOriginal.rows.length > 0) {
+                    empresaIdFinal = busquedaOriginal.rows[0].empresa_id;
+                    console.log(`✅ Empresa ID recuperada de la factura original: ${empresaIdFinal}`);
+                } else {
+                    // 2. Si no la encuentra, buscamos a la empresa OLIVOS por defecto
+                    const busquedaOlivos = await client.query(`SELECT id FROM empresa WHERE razon_social ILIKE '%OLIVOS%' LIMIT 1`);
+                    if (busquedaOlivos.rows.length > 0) {
+                        empresaIdFinal = busquedaOlivos.rows[0].id;
+                        console.log(`✅ Empresa ID asignada por defecto (OLIVOS): ${empresaIdFinal}`);
+                    }
+                }
+            } catch (err) {
+                console.log("⚠️ No se pudo auto-recuperar el ID de la empresa:", err.message);
+            }
+        }
+
+        // --- AHORA SÍ GUARDAMOS ---
+        if (empresaIdFinal && empresaIdFinal !== 'EXTERNO' && empresaIdFinal !== 'SIN_ID') {
+            try {
+                const rutClienteLimpio = `${datos.rutReceptor}-${datos.dvReceptor}`;
+                const tipoFinal = Number(datos.tipo_documento);
+                const fechaHoy = new Date().toISOString();
+                
+                // Calculamos Neto si es DTE 61 (Nota Crédito), le sacamos el IVA al monto rescatado
+                const montoNetoFinal = Math.round(montoRescatado / 1.19); 
+
                 const queryInsert = `
                     INSERT INTO documentos_emitidos 
-                    (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, fecha_emision, url_pdf)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, fecha_emision)
+                    VALUES ($1, $2, $3, $4, $5, $6)
                     ON CONFLICT ON CONSTRAINT unique_empresa_tipo_folio DO NOTHING
                     RETURNING id;
                 `;
                 
-                const valores = [
+                const dbRes = await client.query(queryInsert, [
                     empresaIdFinal, 
-                    rutReceptorLimpio, 
-                    tipoDteFinal, 
-                    parseInt(nuevoFolio), 
-                    montoNeto, 
-                    fechaEmision, 
-                    null
-                ];
+                    rutClienteLimpio, 
+                    tipoFinal, 
+                    folioGenerado, 
+                    montoNetoFinal, 
+                    fechaHoy
+                ]);
 
-                const resDB = await client.query(queryInsert, valores);
-                
-                if (resDB.rowCount > 0) {
-                    console.log(`✅ NOTA GUARDADA: Folio ${nuevoFolio} registrado en la empresa ${infoEmisor.razon_social}`);
+                if (dbRes.rowCount > 0) {
+                    console.log(`💾 Guardado exitoso en base de datos (Supabase).`);
                 } else {
-                    console.log(`⚠️ La Nota ${nuevoFolio} ya existía en el historial.`);
+                    console.log(`⚠️ Documento ya existía en la base de datos.`);
                 }
             } catch (dbError) {
-                console.error('❌ Error fatal guardando en la BD:', dbError.message);
+                console.error('❌ Error de Inserción SQL:', dbError.message);
             }
         } else {
-            console.log("⚠️ Registro omitido: empresa_id es EXTERNO o nulo.");
+            console.log("ℹ️ No se guardó en BD porque no se logró encontrar el ID de la empresa.");
         }
 
-        // Enfocar pestaña final
-        try {
-            const paginasAbiertas = await browser.pages();
-            await paginasAbiertas[paginasAbiertas.length - 1].bringToFront();
-            await delay(3000); 
-        } catch (e) {}
+        return {
+            ok: true,
+            folio: folioGenerado,
+            tipo: Number(datos.tipo_documento),
+            fileName: `DTE_${datos.tipo_documento}_${folioGenerado}.pdf`
+        };
 
-        return { ok: true, folio: nuevoFolio, tipo: tipoDteFinal };
-
-    } catch (error) {
-        console.error(`❌ Error durante el proceso: ${error.message}`);
-        throw error;
+    } catch (err) {
+        console.error("❌ ERROR FATAL ROBOT:", err.message);
+        throw err;
     } finally {
+        // Cierre Seguro
         if (page && !page.isClosed()) {
-            console.log('🧹 Cerrando sesión segura en SII...');
-            try { await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { timeout: 3000 }); } catch (e) {}
+            try { await page.goto("https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout", { timeout: 3000 }); } catch (e) {}
         }
         if (browser) await browser.close();
         if (client) await client.end();
-        console.log('🏁 Proceso finalizado.');
+        console.log("🏁 Robot finalizado y desconectado.");
     }
 }

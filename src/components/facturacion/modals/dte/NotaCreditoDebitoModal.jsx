@@ -117,7 +117,7 @@ export default function NotaCreditoDebitoModal({ isOpen, setIsOpen, prefillData 
     
     const mapaClientes = new Map();
     allClientes.forEach(c => {
-        const r = formatRutEstricto(c.rut_encrypted || c.rut);
+        const r = formatRutEstricto(c.rut_encryptedpayload || c.rut);
         const n = c.razon_social || c.razonSocial || "";
         if (r && (superNormalize(n).includes(term) || superNormalize(r).includes(term))) {
             mapaClientes.set(r, { nombre: n, rut: r });
@@ -145,15 +145,28 @@ export default function NotaCreditoDebitoModal({ isOpen, setIsOpen, prefillData 
     setFacturasDelCliente(docs);
   };
 
+  // ✅ CORRECCIÓN 1: Filtro en tiempo real para la tabla
   const datosTabla = useMemo(() => {
+      // 1. Si busca por folio exacto
       if (searchFolio.trim() !== "") {
           return historialGlobal.filter(doc => String(doc.folio) === searchFolio.trim());
       }
+      // 2. Si ya seleccionó un cliente
       if (clienteSel) {
           return facturasDelCliente;
       }
+      // 3. Si está escribiendo un nombre/RUT pero aún no selecciona (FILTRO EN VIVO)
+      if (searchTerm.trim() !== "") {
+          const term = superNormalize(searchTerm);
+          return historialGlobal.filter(doc => {
+              const r = superNormalize(doc.rut_cliente);
+              const n = superNormalize(doc.razon_social);
+              return r.includes(term) || n.includes(term);
+          });
+      }
+      // 4. Por defecto muestra los últimos 4
       return historialGlobal.slice(0, 4);
-  }, [searchFolio, clienteSel, historialGlobal, facturasDelCliente]);
+  }, [searchFolio, clienteSel, historialGlobal, facturasDelCliente, searchTerm]);
 
   // ==========================================
   // 🛡️ SELECCIÓN Y REGLA ESTRICTA DE BLOQUEO
@@ -192,34 +205,35 @@ export default function NotaCreditoDebitoModal({ isOpen, setIsOpen, prefillData 
   // 🚀 EMISIÓN EN SEGUNDO PLANO (BACKGROUND)
   // ==========================================
   const handleEmitir = async () => {
+    // Solo validamos que se haya seleccionado un documento a afectar y exista un monto
     if (!documentoOriginal || !montoAjuste) {
-        return toast({ variant: "destructive", title: "Error", description: "Seleccione un documento válido." });
+        return toast({ variant: "destructive", title: "Error", description: "Seleccione un documento válido del historial." });
     }
 
     setIsSubmitting(true);
     
     try {
-      const [rutF, dv] = cleanRut(clienteSel.rut).split('-');
+      // 1. Preparamos el RUT
+      const [rutReceptor, dvReceptor] = clienteSel.rut.split('-');
+      
+      // 2. Armamos el Payload (¡OJO! Ya no mandamos empresa_id obligatorio)
       const payload = {
-        empresa_id: selectedCompany?.id || null, // <- Corrección vital agregada aquí
+        empresa_id: selectedCompany?.id || documentoOriginal?.empresa_id || "SIN_ID", // Lo mandamos solo por si en el futuro lo usas para logs
         tipo_documento: parseInt(tipoNota),
-        rutReceptor: rutF, dvReceptor: dv,
+        rutReceptor: rutReceptor, 
+        dvReceptor: dvReceptor,
         razonSocial: clienteSel.nombre,
         producto: { precio: String(montoAjuste).replace(/[^0-9]/g, '') },
         referencia: { folio: documentoOriginal.folio, codigo: codigoSii, razon: glosa }
       };
 
-      // 1. AVISAMOS AL USUARIO QUE EL ROBOT INICIÓ
       toast({
-        title: "🤖 Robot Iniciado en Segundo Plano",
-        description: `Procesando Nota de ${isCredito ? 'Crédito' : 'Débito'} en el SII. Puedes seguir utilizando el sistema.`,
-        duration: 8000,
+        title: "🤖 Robot Iniciado",
+        description: `Procesando Nota en el SII...`,
+        duration: 5000,
       });
 
-      // 2. CERRAMOS EL MODAL INMEDIATAMENTE PARA LIBERAR LA PANTALLA
-      setIsOpen(false);
-
-      // 3. ENVIAMOS LA PETICIÓN AL BACKEND
+      // 3. Enviamos al Backend
       const res = await fetch(`${API_BASE_URL}/dte/emitir-nota`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
@@ -227,13 +241,15 @@ export default function NotaCreditoDebitoModal({ isOpen, setIsOpen, prefillData 
       
       if (!data.ok) throw new Error(data.error || "Error de comunicación con el SII.");
       
-      // 4. AVISAMOS CUANDO TERMINÓ (Aparecerá sin importar donde esté el usuario)
+      // 4. Éxito
       toast({
         title: "✅ ¡Documento Emitido con Éxito!",
         description: `Folio Oficial N° ${data.folio} generado correctamente.`,
         duration: 10000,
-        className: "bg-emerald-600 border-none text-white", // Opcional: lo hace verde
+        className: "bg-emerald-600 border-none text-white",
       });
+      
+      setIsOpen(false);
 
     } catch (e) {
       toast({ variant: "destructive", title: "❌ Fallo de Emisión", description: e.message, duration: 15000 });
@@ -246,8 +262,6 @@ export default function NotaCreditoDebitoModal({ isOpen, setIsOpen, prefillData 
     <Dialog open={isOpen} onOpenChange={(val) => !isSubmitting && setIsOpen(val)}>
       <DialogContent className="sm:max-w-[850px] w-[95vw] bg-[#09090b] border-white/10 text-white p-0 shadow-2xl overflow-hidden rounded-2xl shadow-[0_0_80px_rgba(0,0,0,0.6)]">
         
-        {/* LA PANTALLA NEGRA DE CARGA FUE ELIMINADA PARA PERMITIR TRABAJO EN SEGUNDO PLANO */}
-
         <div className="p-6 md:p-8 pb-4 border-b border-white/5 bg-white/[0.02]">
             <DialogHeader>
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4">

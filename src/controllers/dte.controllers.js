@@ -113,20 +113,22 @@ export const emitirNotaController = async (req, res) => {
         const datos = req.body;
 
         console.log(`\n==================================================`);
-        console.log(`📥 RECIBIDA PETICIÓN PARA EMITIR DTE ${datos.tipo_documento}`);
+        console.log(`📥 PETICIÓN DIRECTA PARA EMITIR DTE ${datos.tipo_documento}`);
         console.log(`==================================================`);
-        console.log(`Empresa Destino: ${datos.razonSocial}`);
-        console.log(`Referencia: Folio ${datos?.referencia?.folio} (Código ${datos?.referencia?.codigo})`);
+        console.log(`👤 RUT Destino: ${datos.rutReceptor}-${datos.dvReceptor}`);
+        console.log(`🔗 Afectando al Folio: ${datos?.referencia?.folio}`);
 
-        // Validación de seguridad
-        if (!datos.rutReceptor || !datos.referencia || !datos.tipo_documento) {
+        // Validación Ultra Básica (Solo RUT y Folio)
+        if (!datos.rutReceptor || !datos.referencia?.folio) {
+            console.error("❌ Petición rechazada: Falta el RUT o el Folio.");
             return res.status(400).json({ 
                 ok: false, 
-                error: "Faltan datos críticos para iniciar el robot de Notas." 
+                error: "Faltan datos. Se requiere al menos RUT del cliente y Folio a afectar." 
             });
         }
 
-        // Llamamos al robot de Puppeteer
+        // Llamamos al robot de Puppeteer directamente
+        console.log(`🚀 Iniciando motor Puppeteer en modo directo...`);
         const resultado = await emitirNotaCDPuppeteer(datos);
 
         if (resultado && resultado.ok) {
@@ -137,10 +139,7 @@ export const emitirNotaController = async (req, res) => {
 
     } catch (error) {
         console.error("❌ Error en emitirNotaController:", error.message);
-        return res.status(500).json({ 
-            ok: false, 
-            error: error.message || "Error interno al intentar comunicarse con el SII." 
-        });
+        return res.status(500).json({ ok: false, error: error.message });
     }
 };
 
