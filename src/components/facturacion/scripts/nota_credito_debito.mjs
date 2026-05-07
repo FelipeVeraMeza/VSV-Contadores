@@ -73,19 +73,51 @@ export async function emitirNotaCDPuppeteer(datos) {
         await client.connect();
         console.log("🔌 Conexión al Búnker (Supabase) exitosa.");
 
-        // 2. INICIALIZAMOS NAVEGADOR
-        browser = await puppeteer.launch({
-            headless: false, // Mantenemos visible para ver el proceso
-            defaultViewport: null,
-            args: [
-                "--start-maximized",
-                "--no-sandbox",
-                "--disable-setuid-sandbox"
-            ]
-        });
+        // =======================================================================
+        // 2. LANZAR NAVEGADOR Y LOGIN CON RESILIENCIA (AUTO-REINTENTO)
+        // =======================================================================
+        let navegacionExitosa = false;
+        let intentosNavegacion = 0;
 
-        page = await browser.newPage();
-        page.setDefaultNavigationTimeout(90000);
+        while (!navegacionExitosa && intentosNavegacion < 3) {
+            intentosNavegacion++;
+            try {
+                console.log(`\n🌐 [Intento ${intentosNavegacion}/3] Levantando navegador...`);
+                
+                browser = await puppeteer.launch({
+                    headless: true, // Modo servidor
+                    defaultViewport: null,
+                    args: [
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox"
+                    ]
+                });
+
+                page = await browser.newPage();
+                page.setDefaultNavigationTimeout(60000);
+
+                console.log(`🔑 Entrando al portal del SII...`);
+                await page.goto('https://misiir.sii.cl/cgi_misii/siihome.cgi', { 
+                    waitUntil: 'networkidle2', 
+                    timeout: 45000 
+                });
+
+                navegacionExitosa = true; 
+                console.log("✅ Acceso al portal exitoso.");
+
+            } catch (error) {
+                console.log(`⚠️ Falló el intento ${intentosNavegacion}: ${error.message}`);
+                if (browser) {
+                    console.log("🧨 Cerrando instancia atascada...");
+                    await browser.close().catch(() => {});
+                }
+                if (intentosNavegacion < 3) {
+                    await delay(5000);
+                }
+            }
+        }
+
+        if (!navegacionExitosa) throw new Error('❌ El portal del SII está caído o lento. Abortado.');
 
         // =======================================================
         // 1️⃣ LOGIN

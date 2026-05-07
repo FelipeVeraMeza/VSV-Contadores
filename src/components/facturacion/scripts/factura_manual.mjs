@@ -9,24 +9,6 @@ dotenv.config();
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function navegarAEmision(page) {
-    let exito = false;
-    let intentos = 0;
-    while (!exito && intentos < 5) {
-        try {
-            await page.goto('https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=33&TIPO=4', { 
-                waitUntil: 'networkidle2', 
-                timeout: 30000 
-            });
-            exito = true; 
-        } catch (error) {
-            intentos++;
-            await delay(3000);
-        }
-    }
-    if (!exito) throw new Error('No se pudo acceder al portal del SII.');
-}
-
 const limpiarYTipar = async (page, selector, texto) => {
     if (!texto) return; 
     try {
@@ -60,26 +42,64 @@ export async function emitirFacturaPuppeteer(datos) {
     try {
         await client.connect();
         console.log("🔌 Búnker PostgreSQL conectado para facturación.");
-
-        // 2. LANZAR NAVEGADOR
-        browser = await puppeteer.launch({ 
-            headless: false, // 👁️ Ponlo en 'false' si quieres ver el proceso en tu pantalla
-            defaultViewport: null, 
-            args: [
-                '--no-sandbox', 
-                '--disable-setuid-sandbox', 
-                '--start-maximized', 
-                '--disable-blink-features=AutomationControlled'
-            ] 
-        });
-
-        page = await browser.newPage();
         console.log('>>> Iniciando Robot de Facturación Inteligente...');
 
         // =======================================================================
-        // 3. LOGIN EN EL SII
+        // 2. LANZAR NAVEGADOR Y LOGIN CON RESILIENCIA (AUTO-REINTENTO)
         // =======================================================================
-        await navegarAEmision(page);
+        let navegacionExitosa = false;
+        let intentosNavegacion = 0;
+
+        while (!navegacionExitosa && intentosNavegacion < 3) {
+            intentosNavegacion++;
+            try {
+                console.log(`\n🌐 Levantando navegador (Intento ${intentosNavegacion}/3)...`);
+                
+                browser = await puppeteer.launch({ 
+                    headless: false, // 👁️ Ponlo en 'false' si quieres ver el proceso en tu pantalla
+                    defaultViewport: null, 
+                    args: [
+                        '--no-sandbox', 
+                        '--disable-setuid-sandbox', 
+                        '--start-maximized', 
+                        '--disable-blink-features=AutomationControlled'
+                    ] 
+                });
+
+                page = await browser.newPage();
+                // Aumentamos un poco el timeout general para darle respiro
+                page.setDefaultNavigationTimeout(60000); 
+
+                // Intentamos llegar a la página
+                await page.goto('https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=33&TIPO=4', { 
+                    waitUntil: 'networkidle2', 
+                    timeout: 45000 
+                });
+
+                // Si pasamos el goto sin que lance error (timeout), marcamos éxito y rompemos el bucle
+                navegacionExitosa = true;
+                
+            } catch (error) {
+                console.log(`⚠️ Falló el intento ${intentosNavegacion} por lentitud del SII: ${error.message}`);
+                // Si falla, CERRAMOS el navegador actual para no dejar ventanas fantasma
+                if (browser) {
+                    await browser.close().catch(() => {});
+                }
+                if (intentosNavegacion < 3) {
+                    console.log("⏳ Esperando 5 segundos antes de reintentar con una ventana limpia...");
+                    await delay(5000);
+                }
+            }
+        }
+
+        // Si después de los 3 intentos no logró cargar, abortamos la misión
+        if (!navegacionExitosa) {
+            throw new Error('❌ El portal del SII está demasiado lento o caído. Se abortó la operación tras 3 intentos.');
+        }
+
+        // =======================================================================
+        // 3. LOGIN EN EL SII (Ya estamos en la página correcta)
+        // =======================================================================
         const inputRutExiste = await page.$('#rutcntr');
         if (inputRutExiste) {
             console.log(`🔑 Entrando al SII con RUT: ${process.env.DTE_RUT}`);
@@ -120,7 +140,9 @@ export async function emitirFacturaPuppeteer(datos) {
         // 4. INGRESAR RUT DEL CLIENTE Y LANZAR AJAX (Tus tiempos exactos)
         // =======================================================================
         console.log(`📝 Escribiendo RUT del cliente: ${datos.rutReceptor}-${datos.dvReceptor}`);
-        await navegarAEmision(page); 
+        
+        // Ya no necesitamos llamar a tu antigua función 'navegarAEmision' porque ya estamos en la página
+        // y pasamos la selección de empresa. Solo esperamos a que el input de receptor aparezca.
         
         await page.waitForSelector('input[name="EFXP_RUT_RECEP"], #EFXP_RUT_RECEP', { visible: true, timeout: 45000 });
         await delay(1000); 
@@ -155,12 +177,12 @@ export async function emitirFacturaPuppeteer(datos) {
         }
 
         // =======================================================================
-        // 6. EXTRACCIÓN DE LA RAZÓN SOCIAL DEL RECEPTOR (Velocidad Optimizada)
+        // 6. EXTRACCIÓN DE LA RAZÓN SOCIAL DEL RECEPTOR
         // =======================================================================
         console.log('⏳ Extrayendo la Razón Social del RECEPTOR...');
         
         let nombreEncontrado = null;
-        for (let i = 0; i < 6; i++) { // ⬅️ CAMBIADO A 6 INTENTOS
+        for (let i = 0; i < 6; i++) { 
             nombreEncontrado = await page.evaluate(() => {
                 const inputExacto = document.querySelector('#EFXP_NMB_RECEP') || document.querySelector('input[name="EFXP_NMB_RECEP"]');
                 if (inputExacto && inputExacto.value && inputExacto.value.trim().length > 2) return inputExacto.value.trim();
@@ -196,7 +218,7 @@ export async function emitirFacturaPuppeteer(datos) {
                 console.log(`✅ ¡Nombre capturado para la Base de Datos!: "${razonSocialCapturadaDelSII}"`);
                 break; 
             }
-            await delay(500); // ⬅️ CAMBIADO A 500MS
+            await delay(500); 
         }
 
         if (!nombreEncontrado) {
@@ -287,11 +309,9 @@ export async function emitirFacturaPuppeteer(datos) {
         let empresaIdFinal = datos.empresa_id;
         const rutOriginal = `${datos.rutReceptor}-${datos.dvReceptor}`;
 
-        // 1. SI LA EMPRESA ES NUEVA: CREARLA EN LA BD
         if (empresaIdFinal === 'EXTERNO') {
             console.log(`⚠️ Cliente externo detectado. Creando la empresa: "${razonSocialCapturadaDelSII}" en el CRM...`);
             try {
-                // TU LÓGICA EXACTA DE HASH Y ENCRIPTACIÓN
                 const rutHash = crypto.createHash('sha256').update(rutOriginal).digest('hex');
                 const rutEncrypted = encrypt(rutOriginal);
 
@@ -309,7 +329,6 @@ export async function emitirFacturaPuppeteer(datos) {
             }
         }
 
-        // 2. GUARDAR LA FACTURA EN EL HISTORIAL DE LA EMPRESA (NUEVA O EXISTENTE)
         if (empresaIdFinal) {
             const tipoDte = datos.tipo_documento ? parseInt(datos.tipo_documento) : 33; 
             const montoNeto = parseInt(datos.producto.precio);
@@ -346,9 +365,6 @@ export async function emitirFacturaPuppeteer(datos) {
         console.error(`❌ Error durante el proceso: ${error.message}`);
         throw error;
     } finally {
-        // ==============================================================
-        // 🔒 CIERRE DE SESIÓN GARANTIZADO
-        // ==============================================================
         if (page && !page.isClosed()) {
             console.log('🧹 Cerrando sesión del SII...');
             try { await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { timeout: 5000 }); } catch (e) {}
