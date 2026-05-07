@@ -122,9 +122,6 @@ export async function emitirNotaCDPuppeteer(datos) {
         // =======================================================
         // 1️⃣ LOGIN
         // =======================================================
-        console.log("🔑 [1/6] Login en SII...");
-        await page.goto('https://misiir.sii.cl/cgi_misii/siihome.cgi', { waitUntil: 'networkidle2' });
-
         const rutLimpio = `${process.env.DTE_RUT}${process.env.DTE_DV}`.replace(/[^0-9kK]/gi, '');
         await page.waitForSelector('#rutcntr, #rut');
         await page.type('#rutcntr', rutLimpio);
