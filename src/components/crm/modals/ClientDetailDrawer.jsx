@@ -1,15 +1,16 @@
+import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { X, Building2, User, Edit, DollarSign, Briefcase, FileSpreadsheet, Key, Send, Save, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Building2, User, Edit, DollarSign, Briefcase, FileSpreadsheet, Key, Send, Save, Clock, AlertTriangle, CheckCircle2, Landmark, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { EditableField, SecureField } from '../ui/CrmUI';
 import { createNotaApi } from '@/services/crmService';
 
-// IMPORTAMOS EL USEAUTH PARA SELECCIONAR A LA EMPRESA GLOBALMENTE
 import { useAuth } from '@/hooks/useAuth'; 
 
 const ClientDetailDrawer = ({ client, onClose, onUpdateClient }) => {
+    const navigate = useNavigate(); 
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState(client);
     const [newNote, setNewNote] = useState('');
@@ -73,15 +74,11 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient }) => {
         }
     };
 
-    // Formateador de dinero seguro
     const fmt = (val) => {
         const num = Number(val);
         return isNaN(num) ? '$0' : `$${num.toLocaleString('es-CL')}`;
     };
 
-    // ==========================================
-    // TRADUCTOR INTELIGENTE DE VARIABLES DE BD
-    // ==========================================
     const type = formData.tipo_cliente || formData.type || 'Empresa';
     const razonSocial = formData.razon_social || formData.razonSocial || 'Sin Razón Social';
     const rut = formData.rut_encrypted || formData.rut || 'Sin RUT';
@@ -121,54 +118,83 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient }) => {
             initial={{ opacity: 0, x: 50 }} 
             animate={{ opacity: 1, x: 0 }} 
             exit={{ opacity: 0, x: 50 }} 
-            // AQUÍ ESTABA EL ERROR: Se quitó el "absolute" para que respete el layout responsivo de flexbox
             className="w-full lg:w-2/5 bg-[#0f172a]/95 backdrop-blur-3xl border border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-2xl h-full"
         >
-            {/* CABECERA */}
-            <div className="p-5 border-b border-white/10 flex justify-between items-center bg-gradient-to-r from-blue-900/30 to-transparent shrink-0">
+            {/* CABECERA (Con Atajos Dinámicos) */}
+            <div className="p-5 border-b border-white/10 flex flex-col gap-4 bg-gradient-to-r from-blue-900/30 to-transparent shrink-0">
+                
+                {/* 1. Nombre y Plan */}
                 <div className="flex gap-4 items-center">
-                    <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400">
+                    <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                         {type === 'Empresa' ? <Building2 size={24} /> : <User size={24} />}
                     </div>
-                    <div>
-                        <h2 className="text-sm md:text-base font-black text-white uppercase tracking-tight leading-tight">
+                    <div className="min-w-0">
+                        <h2 className="text-sm md:text-base font-black text-white uppercase tracking-tight leading-tight truncate">
                             {razonSocial}
                         </h2>
-                        <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs text-gray-400 font-mono bg-black/30 px-2 py-0.5 rounded border border-white/5">
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <span className="text-xs text-gray-400 font-mono bg-black/30 px-2 py-0.5 rounded border border-white/5 truncate">
                                 {rut}
                             </span>
-                            <span className="text-[10px] font-black px-2 py-0.5 rounded border border-blue-500/30 text-blue-400 bg-blue-500/10 uppercase">
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded border border-blue-500/30 text-blue-400 bg-blue-500/10 uppercase shrink-0">
                                 Plan: {plan}
                             </span>
                         </div>
                     </div>
                 </div>
                 
-                <div className="flex gap-2 items-center">
-                    {/* ========================================= */}
-                    {/* NUEVO BOTÓN: SELECCIONAR EMPRESA          */}
-                    {/* ========================================= */}
+                {/* 2. Botones de Acción (Atajos y Controles) */}
+                <div className="flex flex-wrap gap-2 items-center justify-end">
+                    
+                    <AnimatePresence>
+                        {isSelected && (
+                            <>
+                                {/* NUEVO BOTÓN: Ir a Facturación */}
+                                <motion.button 
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.9 }}
+                                    onClick={() => navigate('/facturacion')}
+                                    className="hidden md:flex items-center gap-1.5 px-3 py-1.5 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-600 hover:text-white transition-all shadow-lg"
+                                >
+                                    <Receipt size={14} /> Facturador
+                                </motion.button>
+
+                                {/* Botón: Ir a Bancos */}
+                                <motion.button 
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.9 }}
+                                    onClick={() => navigate('/bancos')}
+                                    className="hidden md:flex items-center gap-1.5 px-3 py-1.5 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white transition-all shadow-lg"
+                                >
+                                    <Landmark size={14} /> Bancos
+                                </motion.button>
+                            </>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Botón: Seleccionar / Empresa Activa */}
                     <button 
                         onClick={handleSelectCompany}
-                        className={`flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] transition-all ${isSelected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20'}`}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] transition-all ${isSelected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20'}`}
                     >
                         {isSelected ? (
-                            <>
-                                <CheckCircle2 size={14} /> Seleccionada
-                            </>
+                            <><CheckCircle2 size={14} /> Seleccionada</>
                         ) : (
-                            'Seleccionar Empresa'
+                            'Activar Empresa'
                         )}
                     </button>
-                    {/* ========================================= */}
 
-                    <button onClick={() => setIsEditing(!isEditing)} className={`p-2 rounded-xl border transition-colors ${isEditing ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-transparent text-gray-400 hover:text-white'}`}>
-                        <Edit size={16} />
-                    </button>
-                    <button onClick={onClose} className="p-2 rounded-xl bg-white/5 text-gray-400 hover:text-red-400 transition-colors">
-                        <X size={16} />
-                    </button>
+                    {/* Controles de Ventana (Editar y Cerrar) */}
+                    <div className="flex gap-1 ml-auto">
+                        <button onClick={() => setIsEditing(!isEditing)} className={`p-1.5 md:p-2 rounded-xl border transition-colors ${isEditing ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-transparent text-gray-400 hover:text-white'}`}>
+                            <Edit size={16} />
+                        </button>
+                        <button onClick={onClose} className="p-1.5 md:p-2 rounded-xl bg-white/5 text-gray-400 hover:text-red-400 transition-colors">
+                            <X size={16} />
+                        </button>
+                    </div>
                 </div>
             </div>
 

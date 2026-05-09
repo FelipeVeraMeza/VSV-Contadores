@@ -1,103 +1,189 @@
-import { useState, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { ArrowDownCircle, ArrowUpCircle, Search, Filter, CheckCircle2, Clock } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+// CAMBIO AQUI: Usamos CheckCircle en lugar de CheckCircle2
+import { ArrowDownCircle, ArrowUpCircle, Search, CalendarDays, Building2, Hash, CheckCircle, Clock } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 const MovimientosBancarios = ({ movimientos = [] }) => {
     const [searchTerm, setSearchTerm] = useState('');
+    const [mesActivo, setMesActivo] = useState('');
 
-    const filteredMovimientos = useMemo(() => {
-        return movimientos.filter(mov => 
-            mov.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            mov.tipo?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [movimientos, searchTerm]);
+    // --- MAGIA AQUI: AGRUPAR LOS DATOS POR MES ---
+    const movimientosPorMes = useMemo(() => {
+        const agrupados = {};
+        
+        // Iteramos sobre el arreglo de movimientos que viene de la API
+        movimientos.forEach(mov => {
+            // Asegurarnos de que tenga fecha
+            if (!mov.fecha) return;
+
+            // Extraemos el Mes y el Año de la fecha (ej. "2026-02-27")
+            const fechaObj = new Date(mov.fecha);
+            
+            // Si la fecha no es válida, la saltamos
+            if (isNaN(fechaObj)) return;
+
+            const nombreMes = fechaObj.toLocaleString('es-ES', { month: 'long' });
+            const anio = fechaObj.getFullYear();
+            
+            // Creamos la llave para la pestaña (ej. "Febrero de 2026")
+            const llaveMes = `${nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1)} de ${anio}`;
+
+            if (!agrupados[llaveMes]) {
+                agrupados[llaveMes] = [];
+            }
+            agrupados[llaveMes].push(mov);
+        });
+
+        return agrupados;
+    }, [movimientos]);
+
+    // Extraemos las llaves (nombres de los meses) para hacer las pestañas
+    const mesesDisponibles = Object.keys(movimientosPorMes);
+
+    // Seleccionar el primer mes por defecto cuando cambian los datos
+    useEffect(() => {
+        if (mesesDisponibles.length > 0 && !mesesDisponibles.includes(mesActivo)) {
+            setMesActivo(mesesDisponibles[0]);
+        }
+    }, [mesesDisponibles, mesActivo]);
+
+    // Filtramos los movimientos del mes seleccionado
+    const dataFiltrada = useMemo(() => {
+        if (!mesActivo || !movimientosPorMes[mesActivo]) return [];
+        
+        return movimientosPorMes[mesActivo].filter(mov => {
+            const search = searchTerm.toLowerCase();
+            return (
+                mov.descripcion?.toLowerCase().includes(search) ||
+                mov.oficina?.toLowerCase().includes(search) ||
+                mov.documento?.toString().includes(search)
+            );
+        });
+    }, [movimientosPorMes, mesActivo, searchTerm]);
+
+    // Resumen financiero
+    const abonos = dataFiltrada.reduce((acc, curr) => curr.monto > 0 ? acc + curr.monto : acc, 0);
+    // Asumimos que los montos negativos son cargos
+    const cargos = dataFiltrada.reduce((acc, curr) => curr.monto < 0 ? acc + Math.abs(curr.monto) : acc, 0);
 
     return (
-        <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-2xl"
-        >
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 space-y-4 lg:space-y-0">
-                <div>
-                    <h3 className="text-xl font-bold text-white uppercase tracking-tighter italic">Bóveda de Movimientos</h3>
-                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Registros sincronizados con el búnker</p>
-                </div>
-                <div className="flex items-center space-x-4">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Buscar en el búnker..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="bg-white/5 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all w-64"
-                        />
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-[#0f172a]/80 backdrop-blur-2xl rounded-2xl border border-white/10 shadow-2xl flex flex-col h-full overflow-hidden">
+            
+            {/* CABECERA */}
+            <div className="p-4 border-b border-white/5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <h3 className="text-lg font-black text-white uppercase italic flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-blue-400" /> Bóveda de Movimientos
+                    </h3>
+                    <div className="relative w-full sm:w-64">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-500" />
+                        <Input value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Filtrar en este mes..." className="h-8 text-[11px] bg-black/40 border-white/10 text-white pl-8 rounded-lg w-full" />
                     </div>
-                    <Button variant="outline" size="sm" className="border-white/10 text-white hover:bg-white/10 text-[10px] font-black uppercase tracking-widest">
-                        <Filter className="h-3 w-3 mr-2" />
-                        Filtros
-                    </Button>
                 </div>
+
+                {/* SELECTOR DE MESES */}
+                {mesesDisponibles.length > 0 ? (
+                    <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+                        {mesesDisponibles.map(m => (
+                            <button key={m} onClick={() => setMesActivo(m)} className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase transition-all whitespace-nowrap ${mesActivo === m ? 'bg-blue-600 text-white' : 'bg-white/5 text-gray-500 hover:text-white'}`}>
+                                {m}
+                            </button>
+                        ))}
+                    </div>
+                ) : (
+                   <p className="text-xs text-gray-500 italic">No hay meses con datos.</p>
+                )}
             </div>
 
-            <div className="overflow-x-auto no-scrollbar">
-                <table className="w-full">
-                    <thead className="border-b border-white/10">
+            {/* TABLA CON SCROLL INTERNO */}
+            <div className="flex-1 overflow-auto custom-scrollbar">
+                <table className="w-full text-left border-separate border-spacing-0">
+                    <thead className="sticky top-0 bg-[#111827] z-10 shadow-sm">
                         <tr>
-                            <th className="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Fecha</th>
-                            <th className="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Descripción</th>
-                            <th className="px-4 py-4 text-left text-[10px] font-black text-gray-400 uppercase tracking-widest">Estado</th>
-                            <th className="px-4 py-4 text-right text-[10px] font-black text-gray-400 uppercase tracking-widest">Monto</th>
+                            <th className="px-6 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5 whitespace-nowrap"><div className="flex items-center gap-1"><CalendarDays className="h-3 w-3"/> Fecha</div></th>
+                            <th className="px-6 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5 whitespace-nowrap">Descripción / Sucursal</th>
+                            <th className="px-6 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5 whitespace-nowrap">Banco / Doc</th>
+                            <th className="px-6 py-3 text-center text-[9px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5 whitespace-nowrap">Estado</th>
+                            <th className="px-6 py-3 text-right text-[9px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5 whitespace-nowrap">Monto</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-white/5">
-                        {filteredMovimientos.map((mov, index) => {
-                            const isAbono = mov.tipo?.toUpperCase() === 'ABONO' || mov.monto > 0;
-                            const isConciliado = mov.estado === 'CONCILIADO';
+                    <tbody className="divide-y divide-white/[0.03]">
+                        {dataFiltrada.length > 0 ? (
+                            <AnimatePresence>
+                                {dataFiltrada.map((mov, index) => {
+                                    const isAbono = mov.monto > 0;
+                                    const isConciliado = mov.estado === 'CONCILIADO';
+                                    
+                                    return (
+                                        <motion.tr 
+                                            key={mov.id || index}
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            className="hover:bg-white/[0.02] group transition-colors"
+                                        >
+                                            {/* Fecha */}
+                                            <td className="px-6 py-3 text-xs font-medium text-gray-400 tabular-nums whitespace-nowrap">{mov.fecha}</td>
+                                            
+                                            {/* Descripción y Oficina */}
+                                            <td className="px-6 py-3 min-w-[200px]">
+                                                <div className="text-xs font-bold text-white uppercase group-hover:text-blue-400 transition-colors truncate">{mov.descripcion}</div>
+                                                <div className="text-[9px] text-gray-600 font-medium truncate uppercase">{mov.oficina}</div>
+                                            </td>
 
-                            return (
-                                <motion.tr 
-                                    key={mov.id || index}
-                                    initial={{ opacity: 0, x: -10 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ duration: 0.3, delay: index * 0.03 }}
-                                    className="group hover:bg-white/5 transition-colors"
-                                >
-                                    <td className="px-4 py-4 text-xs font-medium text-gray-400 tabular-nums">
-                                        {mov.fecha}
-                                    </td>
-                                    <td className="px-4 py-4">
-                                        <p className="text-sm font-bold text-white leading-none">{mov.descripcion}</p>
-                                        <p className="text-[10px] text-gray-500 uppercase font-black tracking-tighter mt-1">{mov.banco || 'Búnker Central'}</p>
-                                    </td>
-                                    <td className="px-4 py-4">
-                                        <div className={`inline-flex items-center px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter ${
-                                            isConciliado ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'
-                                        }`}>
-                                            {isConciliado ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <Clock className="h-3 w-3 mr-1" />}
-                                            {mov.estado || 'PENDIENTE'}
-                                        </div>
-                                    </td>
-                                    <td className={`px-4 py-4 text-sm text-right font-black tabular-nums ${isAbono ? 'text-green-400' : 'text-red-400'}`}>
-                                        <div className="flex items-center justify-end">
-                                            {isAbono ? <ArrowUpCircle className="h-3 w-3 mr-2" /> : <ArrowDownCircle className="h-3 w-3 mr-2" />}
-                                            {Math.abs(mov.monto).toLocaleString('es-CL', { style: 'currency', currency: 'CLP' })}
-                                        </div>
-                                    </td>
-                                </motion.tr>
-                            );
-                        })}
+                                            {/* Banco y Doc */}
+                                            <td className="px-6 py-3">
+                                                 <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                                                    {mov.banco}
+                                                </div>
+                                                <div className="text-[9px] text-gray-500 font-mono mt-0.5 whitespace-nowrap">
+                                                    Doc: {mov.documento && mov.documento !== "0" ? mov.documento : 'S/N'}
+                                                </div>
+                                            </td>
+
+                                            {/* Estado */}
+                                            <td className="px-6 py-3 text-center whitespace-nowrap">
+                                                <div className={`inline-flex items-center px-2 py-1 rounded-full text-[8px] font-black uppercase tracking-wider border ${
+                                                    isConciliado 
+                                                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                                                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                }`}>
+                                                    {/* CAMBIO AQUI: Usamos CheckCircle */}
+                                                    {isConciliado ? <CheckCircle className="h-3 w-3 mr-1" /> : <Clock className="h-3 w-3 mr-1" />}
+                                                    {mov.estado || 'PENDIENTE'}
+                                                </div>
+                                            </td>
+
+                                            {/* Monto */}
+                                            <td className={`px-6 py-3 text-right text-xs font-black tabular-nums whitespace-nowrap ${isAbono ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                 <div className="flex items-center justify-end gap-1">
+                                                    {isAbono ? <ArrowUpCircle className="h-3 w-3 opacity-70" /> : <ArrowDownCircle className="h-3 w-3 opacity-70" />}
+                                                    {isAbono ? '+' : '-'} {Math.abs(mov.monto).toLocaleString('es-CL', { style: 'currency', currency: 'CLP' })}
+                                                </div>
+                                            </td>
+                                        </motion.tr>
+                                    )
+                                })}
+                            </AnimatePresence>
+                        ) : (
+                             <tr>
+                                <td colSpan="5" className="px-6 py-12 text-center">
+                                    <p className="text-gray-500 text-sm">No se encontraron movimientos para esta búsqueda.</p>
+                                </td>
+                            </tr>
+                        )}
                     </tbody>
                 </table>
-                
-                {filteredMovimientos.length === 0 && (
-                    <div className="py-20 text-center">
-                        <p className="text-gray-500 text-xs font-black uppercase tracking-widest">No se detectan movimientos en esta bóveda</p>
-                    </div>
-                )}
+            </div>
+
+            {/* RESUMEN INFERIOR COMPACTO */}
+            <div className="p-3 bg-black/40 border-t border-white/5 flex items-center justify-between shrink-0">
+                <div className="flex gap-4 items-center">
+                    <span className="text-[9px] font-black text-gray-500 uppercase">Resumen {mesActivo}:</span>
+                    <div className="flex items-center gap-1.5"><ArrowUpCircle className="h-3 w-3 text-emerald-500" /><span className="text-xs font-bold text-emerald-400 tabular-nums">+{abonos.toLocaleString('es-CL')}</span></div>
+                    <div className="flex items-center gap-1.5"><ArrowDownCircle className="h-3 w-3 text-rose-500" /><span className="text-xs font-bold text-rose-400 tabular-nums">-{cargos.toLocaleString('es-CL')}</span></div>
+                </div>
+                <div className="text-[9px] font-black text-gray-500 uppercase italic hidden sm:block">Protección Bancaria VSV Nivel 4</div>
             </div>
         </motion.div>
     );

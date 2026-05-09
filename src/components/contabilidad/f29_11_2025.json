@@ -1,0 +1,16 @@
+{
+  "periodo": "11-2025",
+  "fechaGeneracion": "2026-05-08T21:06:43.857Z",
+  "tasaPpmAplicada": 0.01,
+  "detalle": {
+    "ventasAfectasNeto": 2781754,
+    "ivaDebitoFiscal": 528536,
+    "ivaCreditoFiscal": 0,
+    "ppm": 27818
+  },
+  "totales": {
+    "ivaAPagar": 528536,
+    "remanenteSiguienteMes": 0,
+    "totalF29APagar": 556354
+  }
+}
