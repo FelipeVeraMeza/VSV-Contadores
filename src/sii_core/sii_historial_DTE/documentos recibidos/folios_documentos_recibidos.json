@@ -559,5 +559,22 @@
         "montoIva": 120
       }
     }
+  },
+  {
+    "rutEmisor": "97006000-6",
+    "razonSocial": "BANCO DE CREDITO E INVERSIONES",
+    "documento": "Factura Electronica",
+    "folio": "30023094",
+    "fecha": "2026-05-07",
+    "montoTotal": 5982,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 5027,
+        "montoIva": 955
+      }
+    }
   }
 ]
