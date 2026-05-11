@@ -6,7 +6,7 @@ const pausa = (ms) => new Promise(res => setTimeout(res, ms));
 
 export async function iniciarNavegador() {
     return await puppeteer.launch({
-        headless: true, // 👻 MODO FANTASMA ACTIVADO PARA RAILWAY
+        headless: false, // 👻 MODO FANTASMA ACTIVADO PARA RAILWAY
         args: ['--start-maximized', '--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security'],
         defaultViewport: null
     });
@@ -151,15 +151,16 @@ export async function extraerMovimientosBCI(page) {
             .filter(opt => opt.value !== '-1'); 
     });
 
-    console.log(`[+] Se encontraron ${opcionesMeses.length} meses válidos para iterar.`);
+    // 🔥 FILTRAMOS PARA DEJAR ÚNICAMENTE EL MES ACTUAL (EL PRIMERO DE LA LISTA)
+    const mesActual = opcionesMeses.length > 0 ? [opcionesMeses[0]] : [];
+    console.log(`[+] Extrayendo únicamente el mes actual: ${mesActual.length > 0 ? mesActual[0].text : 'No encontrado'}`);
     
-    // AQUÍ CREAMOS UN OBJETO PARA AGRUPAR MES POR MES EN LUGAR DE UNA LISTA PLANA
     let movimientosPorMes = {};
 
-    for (const mes of opcionesMeses) {
+    // ITERAMOS SOLO SOBRE EL MES ACTUAL
+    for (const mes of mesActual) {
         console.log(`\n--- 📅 Consultando: ${mes.text} ---`);
         
-        // Inicializamos el arreglo para este mes específico
         movimientosPorMes[mes.text] = [];
         
         await marcoContenido.select(selectorDropdown, mes.value); 
@@ -198,7 +199,6 @@ export async function extraerMovimientosBCI(page) {
                 return data;
             });
 
-            // Agregamos los datos directamente al mes correspondiente
             movimientosPorMes[mes.text].push(...movimientosPagina);
             console.log(`    -> Extraídos ${movimientosPagina.length} movimientos.`);
             
@@ -224,7 +224,7 @@ export async function extraerMovimientosBCI(page) {
             }
         }
         
-        console.log('[-] Refrescando la vista para el próximo mes...');
+        console.log('[-] Refrescando la vista...');
         try {
             const btnMenu = await marcoContenido.$(selectorMenu);
             if (btnMenu) {

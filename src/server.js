@@ -34,6 +34,10 @@ import dteConsultaRoutes from "./routes/dteConsulta.routes.js";
 
 // --- Inicialización del Servidor ---
 const app = express();
+
+// 🟢 LA LÍNEA MÁGICA: Le dice a Express que confíe en el proxy de Railway/Render
+app.set('trust proxy', 1); 
+
 const PORT = process.env.PORT || 4000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -44,7 +48,6 @@ app.use(compression());
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(cors(corsOptions));
-
 // --- Ruta de Health Check ---
 app.get('/health', async (req, res) => {
   try {

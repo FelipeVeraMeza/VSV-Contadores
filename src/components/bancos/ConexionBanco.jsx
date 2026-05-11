@@ -1,13 +1,13 @@
 import { useState, memo } from 'react';
-import { motion } from 'framer-motion';
-import { Plus, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Plus, CheckCircle2, ShieldCheck, ChevronDown, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ConexionBancoModal from './modals/ConexionBancoModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getConnectedBanksApi } from '@/services/bancoService';
 import { toast } from '@/components/ui/use-toast';
-import { API_BASE_URL } from '../../../config'; // <-- Asegúrate de que esta ruta sea la correcta en tu proyecto
+import { API_BASE_URL } from '../../../config.js'; 
 
 const bancosDisponibles = [
     { id: 'santander', nombre: 'Santander', logo: 'https://logospng.org/download/santander/logo-santander-2048.png' },
@@ -23,7 +23,8 @@ const ConexionBanco = ({ empresaId }) => {
     const queryClient = useQueryClient();
     const [selectedBanco, setSelectedBanco] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isConnecting, setIsConnecting] = useState(false); // Nuevo estado de carga
+    const [isConnecting, setIsConnecting] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(false);
 
     const { data: conectadosResponse = [] } = useQuery({
         queryKey: ['bancos-conectados', empresaId || 'Global'],
@@ -38,34 +39,26 @@ const ConexionBanco = ({ empresaId }) => {
         setIsModalOpen(true);
     };
 
-    // 🚀 Aquí está la magia: Despertamos al robot y le pasamos todo
     const handleConnectSubmit = async (bancoId, rut, clave) => {
         setIsConnecting(true);
         try {
-            console.log(`[FRONTEND] Solicitando robot para ${bancoId}...`);
-            
             const response = await fetch(`${API_BASE_URL}/bancos/connect?empresaId=${empresaId || 'null'}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // Le pasamos al backend qué banco elegimos
                 body: JSON.stringify({ banco: bancoId, rut, clave }) 
             });
 
             const data = await response.json();
 
-            if (!response.ok) {
-                throw new Error(data.message || "Error al conectar con el banco");
-            }
+            if (!response.ok) throw new Error(data.message || "Error al conectar con el banco");
 
             toast({ title: "¡Conexión Exitosa!", description: data.message });
             setIsModalOpen(false);
 
-            // Refrescamos la tabla principal y los bancos conectados al instante
             queryClient.invalidateQueries(['movimientos-bancarios', empresaId || 'Global']);
             queryClient.invalidateQueries(['bancos-conectados', empresaId || 'Global']);
 
         } catch (error) {
-            console.error("Error al conectar:", error);
             toast({ variant: "destructive", title: "Fallo de Robot", description: error.message });
         } finally {
             setIsConnecting(false);
@@ -78,70 +71,100 @@ const ConexionBanco = ({ empresaId }) => {
                 isOpen={isModalOpen} 
                 setIsOpen={setIsModalOpen} 
                 banco={selectedBanco} 
-                onConnect={handleConnectSubmit} // <-- Pasamos la función real
-                empresaRUT={"12345678-9"} // Cambia esto si tienes el RUT real a mano
-                isConnecting={isConnecting} // <-- Bloquea el botón mientras extrae
+                onConnect={handleConnectSubmit} 
+                isConnecting={isConnecting} 
             />
 
-            <div className="mb-8">
-                <div className="flex items-center gap-2 mb-2">
-                    <ShieldCheck className="h-5 w-5 text-blue-400" />
-                    <h2 className="text-lg font-bold text-white tracking-tight">Sincronización Automática</h2>
-                </div>
-                <p className="text-sm text-zinc-400">
-                    Vincule las cuentas bancarias de la empresa para descargar la cartola automáticamente usando nuestro robot encriptado.
-                </p>
-            </div>
+            <div className="mb-6 bg-black/20 rounded-xl border border-white/5 shadow-lg flex flex-col">
+                
+                {/* BOTÓN DESPLEGABLE */}
+                <button 
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="w-full flex items-center justify-between px-6 py-4 bg-transparent hover:bg-white/5 transition-colors focus:outline-none rounded-xl"
+                >
+                    <div className="flex items-center gap-4">
+                        <div className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                            <ShieldCheck className="h-5 w-5" />
+                        </div>
+                        <div className="text-left flex flex-col">
+                            <h2 className="text-base font-semibold text-white tracking-wide">Sincronización Automática</h2>
+                            <p className="text-xs text-white/50 mt-0.5">Vincule cuentas bancarias para descargar cartolas automáticamente.</p>
+                        </div>
+                    </div>
+                    <ChevronDown className={`h-5 w-5 text-white/50 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                </button>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-                {bancosDisponibles.map((banco, index) => {
-                    const isConnected = bancosConectados.some(b => b.banco_id === banco.id || b === banco.id);
-
-                    return (
+                {/* CONTENIDO DESPLEGABLE */}
+                <AnimatePresence initial={false}>
+                    {isExpanded && (
                         <motion.div
-                            key={banco.id}
-                            initial={{ opacity: 0, y: 15 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: index * 0.05 }}
-                            className="group relative flex flex-col items-center justify-between p-5 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 hover:bg-white/[0.04] transition-all overflow-hidden"
+                            key="bancos-accordion"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.3, ease: "easeInOut" }}
+                            className="overflow-hidden" 
                         >
-                            <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                            <div className="p-6 border-t border-white/5 bg-black/10">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                                    {bancosDisponibles.map((banco, index) => {
+                                        const isConnected = bancosConectados.some(b => b.banco_id === banco.id || b === banco.id);
 
-                            <div className="h-14 w-14 mb-4 rounded-xl bg-white flex items-center justify-center p-2.5 shadow-lg shadow-black/20 ring-1 ring-black/5">
-                                <img
-                                    src={banco.logo}
-                                    alt={`Logo ${banco.nombre}`}
-                                    className="max-h-full max-w-full object-contain"
-                                    onError={(e) => {
-                                        e.target.onerror = null;
-                                        e.target.src = `https://ui-avatars.com/api/?name=${banco.nombre}&background=0D8ABC&color=fff&bold=true`;
-                                    }}
-                                />
-                            </div>
+                                        return (
+                                            <motion.div
+                                                key={banco.id}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ duration: 0.2, delay: index * 0.05 }}
+                                                // CLAVE AQUÍ: Se eliminó h-full, se añadió min-h-[160px] y justify-between
+                                                className="relative flex flex-col items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10 hover:border-blue-500/50 hover:bg-white/10 transition-all duration-300 group min-h-[160px]"
+                                            >
+                                                <div className="flex flex-col items-center w-full">
+                                                    {/* Contenedor del Logo */}
+                                                    <div className="h-12 w-12 mb-3 bg-white/90 rounded-lg flex items-center justify-center p-2 shadow-sm group-hover:scale-105 transition-transform duration-300 relative overflow-hidden">
+                                                        <Building2 className="absolute text-gray-300 h-6 w-6 z-0" />
+                                                        <img
+                                                            src={banco.logo}
+                                                            alt={banco.nombre}
+                                                            className="h-full w-full object-contain relative z-10"
+                                                            onError={(e) => {
+                                                                e.target.style.display = 'none'; 
+                                                            }}
+                                                        />
+                                                    </div>
 
-                            <span className="text-sm font-medium text-zinc-200 mb-4">{banco.nombre}</span>
+                                                    <span className="text-xs font-semibold text-white/80 mb-4 text-center line-clamp-2">
+                                                        {banco.nombre}
+                                                    </span>
+                                                </div>
 
-                            <div className="w-full flex justify-center mt-auto">
-                                {isConnected ? (
-                                    <div className="flex items-center justify-center gap-1.5 w-full py-1.5 px-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold tracking-tight shadow-sm">
-                                        <CheckCircle2 className="h-3.5 w-3.5" />
-                                        Conectado
-                                    </div>
-                                ) : (
-                                    <Button 
-                                        size="sm" 
-                                        variant="ghost" 
-                                        className="w-full h-8 bg-zinc-800/50 text-zinc-300 hover:text-white hover:bg-zinc-700 border border-white/5 text-xs font-medium transition-all" 
-                                        onClick={() => handleConnectClick(banco)}
-                                        disabled={isConnecting}
-                                    >
-                                        <Plus className="h-3.5 w-3.5 mr-1" /> Conectar
-                                    </Button>
-                                )}
+                                                {/* Contenedor Inferior Fijo */}
+                                                <div className="w-full">
+                                                    {isConnected ? (
+                                                        <div className="flex items-center justify-center gap-1 w-full py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                                                            <CheckCircle2 className="h-3.5 w-3.5" />
+                                                            Conectado
+                                                        </div>
+                                                    ) : (
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="sm"
+                                                            className="w-full h-8 bg-black/30 hover:bg-blue-600 hover:text-white text-white/80 text-[11px] font-semibold transition-all rounded-md" 
+                                                            onClick={() => handleConnectClick(banco)}
+                                                            disabled={isConnecting}
+                                                        >
+                                                            <Plus className="h-3 w-3 mr-1" /> Conectar
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </motion.div>
-                    );
-                })}
+                    )}
+                </AnimatePresence>
             </div>
         </>
     );
