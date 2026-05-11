@@ -2620,5 +2620,81 @@
         "montoIva": 11496
       }
     }
+  },
+  {
+    "rutReceptor": "77397024-6",
+    "razonSocial": "VICTOR VOLLAIRE VSV CONSULTORIA E.I.R.L.",
+    "documento": "Nota de Credito Electronica",
+    "folio": "103",
+    "fecha": "2026-05-07",
+    "montoTotal": 148,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77397024-6",
+        "receptorNombre": "VICTOR VOLLAIRE VSV CONSULTORIA E.I.R.L.",
+        "montoNeto": 124,
+        "montoIva": 24
+      }
+    }
+  },
+  {
+    "rutReceptor": "77397024-6",
+    "razonSocial": "VICTOR VOLLAIRE VSV CONSULTORIA E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "999",
+    "fecha": "2026-05-07",
+    "montoTotal": 148,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77397024-6",
+        "receptorNombre": "VICTOR VOLLAIRE VSV CONSULTORIA E.I.R.L.",
+        "montoNeto": 124,
+        "montoIva": 24
+      }
+    }
+  },
+  {
+    "rutReceptor": "77397024-6",
+    "razonSocial": "VICTOR VOLLAIRE VSV CONSULTORIA E.I.R.L.",
+    "documento": "Nota de Credito Electronica",
+    "folio": "102",
+    "fecha": "2026-05-07",
+    "montoTotal": 1468,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77397024-6",
+        "receptorNombre": "VICTOR VOLLAIRE VSV CONSULTORIA E.I.R.L.",
+        "montoNeto": 1234,
+        "montoIva": 234
+      }
+    }
+  },
+  {
+    "rutReceptor": "77397024-6",
+    "razonSocial": "VICTOR VOLLAIRE VSV CONSULTORIA E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "998",
+    "fecha": "2026-05-07",
+    "montoTotal": 1468,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77397024-6",
+        "receptorNombre": "VICTOR VOLLAIRE VSV CONSULTORIA E.I.R.L.",
+        "montoNeto": 1234,
+        "montoIva": 234
+      }
+    }
   }
 ]

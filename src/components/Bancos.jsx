@@ -7,6 +7,8 @@ import CargaCartolaModal from '@/components/bancos/modals/CargaCartolaModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getMovimientosBancariosApi } from '@/services/bancoService'; // Asegúrate de tener esta función
+import { toast } from '@/components/ui/use-toast';
+import { API_BASE_URL } from '../../config';
 
 const Bancos = () => {
   const { selectedCompany, user } = useAuth();
@@ -21,13 +23,16 @@ const Bancos = () => {
 
   // Consulta los movimientos basados en la empresa que está activa en el momento
   const { data: movimientos = [], isLoading } = useQuery({
-    queryKey: ['movimientos-bancarios', empresaActivaId],
+    // La llave ahora tiene un "Global" de respaldo para que React Query entienda el cambio
+    queryKey: ['movimientos-bancarios', empresaActivaId || 'Global'],
     queryFn: async () => {
+      // Pasamos el ID, si no hay, pasará null/undefined
       const res = await getMovimientosBancariosApi(user?.sessionId, empresaActivaId);
       if (!res.ok) throw new Error("Error al obtener movimientos");
       return res.json();
     },
-    enabled: !!empresaActivaId && !!user?.sessionId,
+    // 👇 ¡LA CORRECCIÓN ESTÁ AQUÍ! Solo pedimos que haya una sesión iniciada.
+    enabled: !!user?.sessionId, 
   });
 
   // (Simulación de mutación para el botón de carga)
@@ -36,9 +41,44 @@ const Bancos = () => {
     onSuccess: () => queryClient.invalidateQueries(['movimientos-bancarios', empresaActivaId])
   });
 
-  const handleCartolaCargada = () => {
-    setIsCartolaModalOpen(false);
-    mutation.mutate();
+  const handleCartolaCargada = async (movimientosLimpios) => {
+    try {
+        const idEmpresa = selectedCompany?.id || null; 
+
+        console.log("🚀 [FRONTEND] Enviando datos al servidor...");
+
+        // 👇 Usamos API_BASE_URL aquí, así se adapta automáticamente a local o producción
+        const response = await fetch(`${API_BASE_URL}/bancos/cartola?empresaId=${idEmpresa}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ movimientos: movimientosLimpios })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || "Error al guardar en el servidor");
+        }
+
+        // ✅ ¡EL PASO MÁGICO! 
+        // Esto le dice a la tabla: "Oye, los datos cambiaron, vuelve a pedirlos a la base de datos ahora mismo"
+        queryClient.invalidateQueries(['movimientos-bancarios', empresaActivaId]);
+
+        toast({ 
+            title: "¡Bóveda Actualizada!", 
+            description: `Se guardaron ${movimientosLimpios.length} movimientos y la tabla se ha refrescado.` 
+        });
+        
+    } catch (error) {
+        console.error("❌ Error al subir:", error);
+        toast({ 
+            variant: "destructive", 
+            title: "Error de Subida", 
+            description: error.message 
+        });
+    }
   };
 
   return (

@@ -1,22 +1,26 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
+// ❌ Ya no necesitamos dotenv aquí, porque el Orquestador le inyectará
+// las variables BANCO_RUT, BANCO_DV y BANCO_PASS directamente en la memoria.
 import { iniciarNavegador, loginBCI, extraerMovimientosBCI, cerrarSesionBCI } from './bci_scraper.mjs';
 
-// Obtenemos la ruta actual del script (src/cartola_bancaria)
+// Obtenemos la ruta actual del script
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Seguimos buscando el .env dos carpetas más atrás (en la raíz)
-const rootDir = path.resolve(__dirname, '../../');
-dotenv.config({ path: path.join(rootDir, '.env') }); 
-
 async function main() {
+    // 1️⃣ Leemos las credenciales que el Orquestador de Node.js inyectó temporalmente
     const rut = process.env.BANCO_RUT; 
     const dv = process.env.BANCO_DV;   
     const rutCompleto = `${rut}${dv}`; 
     const clave = process.env.BANCO_PASS; 
+
+    // Verificamos por seguridad
+    if (!rut || !clave) {
+        console.error("❌ ERROR: Faltan credenciales (BANCO_RUT o BANCO_PASS).");
+        process.exit(1); 
+    }
 
     let browser;
     let page; 
@@ -29,12 +33,12 @@ async function main() {
         browser = await iniciarNavegador();
         page = await browser.newPage(); 
         
+        // 2️⃣ Enviamos las credenciales dinámicas al robot
         await loginBCI(page, rutCompleto, clave);
 
-        // Obtenemos el objeto organizado mes por mes
+        // 3️⃣ Obtenemos el objeto organizado mes por mes
         const datosExtraidos = await extraerMovimientosBCI(page);
         
-        // Calculamos el total de movimientos extraídos para el resumen
         let totalMovimientos = 0;
         for (const mes in datosExtraidos) {
             totalMovimientos += datosExtraidos[mes].length;
@@ -45,20 +49,23 @@ async function main() {
         console.log("=======================================================");
 
         if (totalMovimientos > 0) {
-            // Guardamos la información exactamente en la carpeta actual del script (__dirname)
-            // Esto lo guardará en: C:\Users\felip\OneDrive\Documentos\VS\VSV-Contadores\src\cartola_bancaria
+            // 4️⃣ Guardamos el JSON en la misma carpeta para que el Orquestador lo lea
             const rutaArchivo = path.join(__dirname, 'cartolas_bci.json');
-            
             await fs.writeFile(rutaArchivo, JSON.stringify(datosExtraidos, null, 4), 'utf-8');
             
-            console.log(`\n💾 ¡ÉXITO! Archivo guardado correctamente en la carpeta solicitada.`);
-            console.log(`📂 Ruta exacta: ${rutaArchivo}`);
+            console.log(`\n💾 ¡ÉXITO! Archivo guardado correctamente para el Orquestador.`);
         } else {
             console.log("\n[!] No se guardó ningún archivo porque no se detectaron movimientos.");
+            // Creamos un archivo vacío para que el orquestador no falle al intentar leer
+            const rutaArchivo = path.join(__dirname, 'cartolas_bci.json');
+            await fs.writeFile(rutaArchivo, JSON.stringify({}), 'utf-8');
         }
         
     } catch (error) {
         console.error("\n❌ ERROR CRÍTICO EN EL PROCESO:", error.message);
+        // Si hay error creamos JSON vacío para que el orquestador sepa que falló
+        const rutaArchivo = path.join(__dirname, 'cartolas_bci.json');
+        await fs.writeFile(rutaArchivo, JSON.stringify({ error: error.message }), 'utf-8');
     } finally {
         if (page && !page.isClosed()) {
             await cerrarSesionBCI(page);
@@ -67,8 +74,8 @@ async function main() {
             console.log("🛑 Apagando el motor del navegador...");
             await browser.close();
         }
-        process.exit(0);
     }
 }
 
+// Ejecutamos la función
 main();
