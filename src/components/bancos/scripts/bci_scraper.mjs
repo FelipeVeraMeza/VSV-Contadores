@@ -6,9 +6,14 @@ const pausa = (ms) => new Promise(res => setTimeout(res, ms));
 
 export async function iniciarNavegador() {
     return await puppeteer.launch({
-        headless: false, 
-        args: ['--start-maximized', '--no-sandbox', '--disable-setuid-sandbox', '--disable-web-security'],
-        defaultViewport: null
+        headless: false, // 👁️ Ponlo en 'false' si quieres ver el proceso en tu pantalla
+                    defaultViewport: null, 
+                    args: [
+                        '--no-sandbox', 
+                        '--disable-setuid-sandbox', 
+                        '--start-maximized', 
+                        '--disable-blink-features=AutomationControlled'
+                    ] 
     });
 }
 
