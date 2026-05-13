@@ -44,6 +44,8 @@ const DocumentosDTE = () => {
   const [vistaGlobal, setVistaGlobal] = useState(false); 
 
   const [searchTerm, setSearchTerm] = useState(""); 
+  const [showSuggestions, setShowSuggestions] = useState(false); // NUEVO: Estado para mostrar/ocultar buscador
+
   const [filterTipo, setFilterTipo] = useState("TODOS");
   const [filterMes, setFilterMes] = useState("TODOS");
   const [filterAnio, setFilterAnio] = useState("TODOS");
@@ -159,6 +161,47 @@ const DocumentosDTE = () => {
     }
   };
 
+  // ======================================================================
+  // 🔍 LÓGICA DE BUSCADOR PROFESIONAL (Actualizado a Búsqueda por Inicio)
+  // ======================================================================
+  const entidadesUnicas = useMemo(() => {
+    const mapa = new Map();
+    documentos.forEach(doc => {
+      const nombre = tipoVista === 'VENTAS' ? doc.razon_social : doc.razon_social_proveedor;
+      const rut = tipoVista === 'VENTAS' ? doc.rut_cliente : doc.rut_proveedor;
+      
+      if (nombre && rut && !mapa.has(rut)) {
+        mapa.set(rut, { nombre, rut });
+      }
+    });
+    return Array.from(mapa.values());
+  }, [documentos, tipoVista]);
+
+  const sugerenciasBusqueda = useMemo(() => {
+    if (!searchTerm) return [];
+    
+    // Normalizamos lo que el usuario escribe (ej. "A", "ae", "7")
+    const termText = normalizeText(searchTerm);
+    const termRut = cleanRutForSearch(searchTerm);
+    
+    // Filtramos la lista
+    const coincidencias = entidadesUnicas.filter(ent => {
+        // Normalizamos el nombre y rut de la base de datos
+        const nombreNormalizado = normalizeText(ent.nombre);
+        const rutLimpio = cleanRutForSearch(ent.rut);
+
+        // CONDICIÓN CLAVE: El nombre o el rut deben EMPEZAR con lo que se escribió
+        const empiezaConNombre = nombreNormalizado.startsWith(termText);
+        const empiezaConRut = termRut !== "" && rutLimpio.startsWith(termRut);
+
+        return empiezaConNombre || empiezaConRut;
+    });
+
+    // Ordenamos alfabéticamente para que se vea más profesional y limitamos a 6
+    return coincidencias.sort((a, b) => a.nombre.localeCompare(b.nombre)).slice(0, 6);
+  }, [searchTerm, entidadesUnicas]);
+  // ======================================================================
+
   const documentosFiltrados = useMemo(() => {
     return documentos.filter(doc => {
       const fecha = new Date(doc.fecha_emision);
@@ -169,9 +212,10 @@ const DocumentosDTE = () => {
       const rutOriginal = tipoVista === 'VENTAS' ? doc.rut_cliente : doc.rut_proveedor;
       const rutDocClean = cleanRutForSearch(rutOriginal);
 
+      // CONDICIÓN CLAVE ACTUALIZADA: La tabla ahora también exige que el nombre o RUT EMPIECE con lo que escribes
       const matchSearch = termText === "" || 
-                          razonSocialDoc.includes(termText) || 
-                          rutDocClean.includes(termRut);
+                          razonSocialDoc.startsWith(termText) || 
+                          (termRut !== "" && rutDocClean.startsWith(termRut));
 
       const matchTipo = filterTipo === "TODOS" || doc.tipo_dte.toString() === filterTipo;
       const matchAnio = filterAnio === "TODOS" || fecha.getUTCFullYear().toString() === filterAnio;
@@ -238,16 +282,67 @@ const DocumentosDTE = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-[#0f172a]/60 p-4 rounded-2xl border border-white/5 backdrop-blur-md shadow-xl">
-        <div className="relative group">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-blue-500 transition-colors" size={14} />
+        
+        {/* ========================================================== */}
+        {/* BUSCADOR PROFESIONAL (DISEÑO ULTRA-MODERNO) */}
+        {/* ========================================================== */}
+        <div className="relative group z-50">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-blue-400 transition-colors" size={15} />
           <input 
             type="text"
             placeholder="Buscar por Nombre o RUT..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all placeholder:text-gray-600"
+            onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setShowSuggestions(true);
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 transition-all placeholder:text-gray-600 shadow-inner"
           />
+          
+          <AnimatePresence>
+            {showSuggestions && searchTerm && sugerenciasBusqueda.length > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: 5, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 5, scale: 0.98 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="absolute top-full left-0 right-0 mt-2 bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] z-50 overflow-hidden ring-1 ring-white/5"
+              >
+                <div className="px-4 py-2 border-b border-white/5 bg-black/20">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Sugerencias</span>
+                </div>
+                <div className="p-1.5">
+                  {sugerenciasBusqueda.map((ent) => (
+                    // === AQUÍ ESTÁ EL CAMBIO CLAVE PARA EL HOVER MÁS LLAMATIVO ===
+                    <div 
+                      key={ent.rut}
+                      onClick={() => {
+                        setSearchTerm(ent.nombre);
+                        setShowSuggestions(false);
+                      }}
+                      className="group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-200 hover:bg-blue-600/30 hover:border hover:border-blue-500/50 hover:shadow-[0_0_15px_-3px_rgba(59,130,246,0.3)] border border-transparent"
+                    >
+                      <div className="flex items-center gap-3 overflow-hidden">
+                        <div className="p-1.5 bg-black/40 border border-white/5 rounded-md group-hover:bg-blue-500/40 group-hover:border-blue-400/50 transition-colors shadow-sm">
+                          <Building2 size={14} className="text-gray-400 group-hover:text-blue-200 transition-colors" />
+                        </div>
+                        <span className="text-xs text-gray-300 group-hover:text-white font-bold tracking-tight truncate transition-colors drop-shadow-md">
+                          {formatDisplay(ent.nombre)}
+                        </span>
+                      </div>
+                      <span className="text-[9px] text-gray-500 font-mono flex-shrink-0 ml-2 bg-black/40 px-2 py-1 rounded-md border border-white/5 group-hover:text-blue-200 group-hover:border-blue-400/50 transition-colors group-hover:bg-blue-900/40">
+                        {formatDisplay(ent.rut)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
+
         <div className="relative">
             <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 appearance-none cursor-pointer">
                 <option value="TODOS">Todos los Tipos</option>

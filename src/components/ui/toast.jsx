@@ -10,7 +10,8 @@ const ToastViewport = React.forwardRef(({ className, ...props }, ref) => (
     <ToastPrimitives.Viewport
         ref={ref}
         className={cn(
-            'fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]',
+            // Cambiamos la posición a top-0 y la centramos con left-[50%] y -translate-x-[50%]
+            'fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:top-0 sm:left-[50%] sm:-translate-x-[50%] sm:flex-col md:max-w-[420px]',
             className,
         )}
         {...props}
@@ -61,7 +62,8 @@ const ToastClose = React.forwardRef(({ className, dismiss, ...props }, ref) => (
     <ToastPrimitives.Close
         ref={ref}
         className={cn(
-            'absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600',
+            // Quitamos opacity-0 para que la "X" sea visible siempre
+            'absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-100 transition-opacity hover:text-foreground focus:outline-none focus:ring-2 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600',
             className,
         )}
         toast-close=""
