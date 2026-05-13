@@ -2,14 +2,15 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FileText, BarChart3, GitMerge, TrendingUp, 
-  Plus, FileDown, BookCopy, Loader2 
+  Plus, DownloadCloud, BookCopy, Loader2, ArrowRightLeft
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useQueryClient } from '@tanstack/react-query';
 
-// Componentes hijos
+// Componentes hijos (Asegúrate de crear el nuevo RegistroComprasVentas)
+import RegistroComprasVentas from '@/components/contabilidad/RegistroComprasVentas';
 import ContabilidadStats from '@/components/contabilidad/ContabilidadStats';
 import AsientosContables from '@/components/contabilidad/AsientosContables';
 import Balances from '@/components/contabilidad/Balances';
@@ -19,56 +20,46 @@ import NuevoAsientoModal from '@/components/contabilidad/modals/NuevoAsientoModa
 import PlanDeCuentas from '@/components/contabilidad/PlanDeCuentas';
 
 const Contabilidad = () => {
-  // CORRECCIÓN: Faltaba extraer 'user' de useAuth
   const { selectedCompany, user } = useAuth();
   const isAdmin = user?.rol === 'Administrador';
   const empresaId = selectedCompany?.id;
   
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState('asientos');
+  const [activeTab, setActiveTab] = useState('rcv'); // Comenzamos en RCV por defecto
   const [isAsientoModalOpen, setIsAsientoModalOpen] = useState(false);
 
-  // GOD MODE: Si no hay empresa y NO es admin, bloquea.
+  // MODO BÓVEDA
   if (!empresaId && !isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center h-[70vh] text-center">
         <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
         <h2 className="text-xl font-bold text-white uppercase tracking-tighter italic">
-          Sincronizando Libro Mayor
+          Bóveda Global de Contabilidad
         </h2>
         <p className="text-gray-400 text-sm mt-2 font-bold uppercase tracking-widest">
-          Selecciona una entidad para acceder al búnker contable.
+          Selecciona una entidad en el CRM para acceder a sus registros contables.
         </p>
       </div>
     );
   }
 
+  // Nuevo orden de pestañas: El flujo natural de trabajo
   const tabs = useMemo(() => [
-    { id: 'asientos', name: 'Asientos Contables', icon: FileText, Component: AsientosContables },
+    { id: 'rcv', name: 'Compras y Ventas', icon: ArrowRightLeft, Component: RegistroComprasVentas },
+    { id: 'asientos', name: 'Libro Diario', icon: FileText, Component: AsientosContables },
     { id: 'planCuentas', name: 'Plan de Cuentas', icon: BookCopy, Component: PlanDeCuentas },
     { id: 'balances', name: 'Balances', icon: BarChart3, Component: Balances },
-    { id: 'conciliacion', name: 'Conciliación Bancaria', icon: GitMerge, Component: ConciliacionBancaria },
+    { id: 'conciliacion', name: 'Banco', icon: GitMerge, Component: ConciliacionBancaria },
     { id: 'reportes', name: 'Reportes', icon: TrendingUp, Component: ReportesContables }
   ], []);
 
   const handleAddAsiento = (asiento) => {
     queryClient.invalidateQueries(['asientos', empresaId]);
-    queryClient.invalidateQueries(['contabilidad-stats', empresaId]);
-    queryClient.invalidateQueries(['balances', empresaId]);
-
     toast({
-      title: "Asiento Contable Creado",
-      description: `El asiento ${asiento.descripcion || 'registrado'} ha sido mayorizado en el búnker.`,
+      title: "Asiento Creado",
+      description: `El asiento ha sido mayorizado correctamente.`,
     });
     setIsAsientoModalOpen(false);
-  };
-
-  const showNotImplementedToast = () => {
-    toast({
-      title: "🚧 Funcionalidad en desarrollo",
-      description: "¡Esta característica no está implementada aún!",
-      duration: 4000,
-    });
   };
 
   const ActiveModule = tabs.find(t => t.id === activeTab)?.Component;
@@ -84,36 +75,41 @@ const Contabilidad = () => {
 
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">
-            Módulo de Contabilidad
+          <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
+            Módulo Contable y Tributario
           </h1>
-          <p className="text-gray-300">Gestión completa de registros contables y reportes financieros</p>
+          <p className="text-gray-400 text-sm font-medium uppercase tracking-wider">
+            {selectedCompany?.razon_social || 'Bóveda Global'}
+          </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+        {/* Acciones Globales Rápidas */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <Button 
-            onClick={showNotImplementedToast}
+            onClick={() => setActiveTab('rcv')}
             variant="outline"
-            className="border-white/20 text-white hover:bg-white/10 h-11 px-4 w-full sm:w-auto flex items-center justify-center text-sm font-bold transition-all"
+            className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 h-11 px-4 text-xs font-bold uppercase tracking-widest transition-all"
           >
-            <FileDown className="h-4 w-4 mr-2 shrink-0" />
-            <span className="whitespace-nowrap">Generar desde DTE</span>
+            <DownloadCloud className="h-4 w-4 mr-2" />
+            Sincronizar SII
           </Button>
 
           <Button 
             onClick={() => setIsAsientoModalOpen(true)}
-            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white h-11 px-4 w-full sm:w-auto flex items-center justify-center text-sm font-bold transition-all shadow-lg shadow-blue-900/20"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white h-11 px-4 text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-emerald-900/20"
           >
-            <Plus className="h-4 w-4 mr-2 shrink-0" />
-            <span className="whitespace-nowrap">Nuevo Asiento</span>
+            <Plus className="h-4 w-4 mr-2" />
+            Asiento Manual
           </Button>
         </div>
       </div>
 
+      {/* Resumen Superior */}
       <ContabilidadStats empresaId={empresaId} />
 
-      <div className="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden">
-        <div className="flex border-b border-white/10 overflow-x-auto no-scrollbar">
+      {/* Navegación Principal */}
+      <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
+        <div className="flex border-b border-white/5 overflow-x-auto no-scrollbar">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -123,11 +119,11 @@ const Contabilidad = () => {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-shrink-0 flex items-center space-x-2 px-6 py-4 font-bold uppercase text-[10px] tracking-widest transition-all ${
                   isActive
-                    ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-white border-b-2 border-blue-500'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    ? 'bg-blue-500/10 text-blue-400 border-b-2 border-blue-500'
+                    : 'text-gray-500 hover:text-white hover:bg-white/5'
                 }`}
               >
-                <Icon className={`h-4 w-4 ${isActive ? 'text-blue-500' : 'text-gray-500'}`} />
+                <Icon className={`h-4 w-4 ${isActive ? 'text-blue-400' : 'text-gray-600'}`} />
                 <span>{tab.name}</span>
               </button>
             );
