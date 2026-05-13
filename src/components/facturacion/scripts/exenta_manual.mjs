@@ -66,7 +66,7 @@ export async function emitirExentaPuppeteer(datos) {
         console.log("🔌 Búnker PostgreSQL conectado para emisión Exenta Manual.");
 
         browser = await puppeteer.launch({ 
-            headless: false, // 👁️ Ponlo en 'false' si quieres ver el proceso en tu pantalla
+            headless: true, // 👁️ Ponlo en 'false' si quieres ver el proceso en tu pantalla
             defaultViewport: null, 
             args: [
                 '--no-sandbox', 

@@ -56,7 +56,7 @@ export async function emitirFacturaPuppeteer(datos) {
                 console.log(`\n🌐 Levantando navegador (Intento ${intentosNavegacion}/3)...`);
                 
                 browser = await puppeteer.launch({ 
-                    headless: false, // 👁️ Ponlo en 'false' si quieres ver el proceso en tu pantalla
+                    headless: true, // 👁️ Ponlo en 'false' si quieres ver el proceso en tu pantalla
                     defaultViewport: null, 
                     args: [
                         '--no-sandbox', 
