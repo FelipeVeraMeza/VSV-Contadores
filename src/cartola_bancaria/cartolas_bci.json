@@ -1,0 +1,2501 @@
+{
+    "Febrero de 2026": [
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "27-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 245168
+        },
+        {
+            "fecha": "27-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 148750,
+            "saldo": 233268
+        },
+        {
+            "fecha": "27-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 35000,
+            "abono": 0,
+            "saldo": 84518
+        },
+        {
+            "fecha": "26-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 119000,
+            "saldo": 119518
+        },
+        {
+            "fecha": "25-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 1192000,
+            "abono": 0,
+            "saldo": 518
+        },
+        {
+            "fecha": "25-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 83300,
+            "saldo": 1192518
+        },
+        {
+            "fecha": "25-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 143103,
+            "saldo": 1109218
+        },
+        {
+            "fecha": "25-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 119000,
+            "saldo": 966115
+        },
+        {
+            "fecha": "24-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 847115
+        },
+        {
+            "fecha": "23-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 226100,
+            "saldo": 811415
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "23-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35161,
+            "saldo": 585315
+        },
+        {
+            "fecha": "23-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 356000,
+            "saldo": 550154
+        },
+        {
+            "fecha": "23-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 194154
+        },
+        {
+            "fecha": "23-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 83300,
+            "saldo": 122154
+        },
+        {
+            "fecha": "23-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 1000,
+            "saldo": 38854
+        },
+        {
+            "fecha": "23-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 37500,
+            "saldo": 37854
+        },
+        {
+            "fecha": "20-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 387000,
+            "abono": 0,
+            "saldo": 354
+        },
+        {
+            "fecha": "20-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11448,
+            "saldo": 387354
+        },
+        {
+            "fecha": "20-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 30000,
+            "saldo": 375906
+        },
+        {
+            "fecha": "20-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 108000,
+            "saldo": 345906
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "20-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 30000,
+            "saldo": 237906
+        },
+        {
+            "fecha": "18-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 110075,
+            "saldo": 207906
+        },
+        {
+            "fecha": "18-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 97831
+        },
+        {
+            "fecha": "18-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 37500,
+            "saldo": 38331
+        },
+        {
+            "fecha": "18-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 120000,
+            "abono": 0,
+            "saldo": 831
+        },
+        {
+            "fecha": "18-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 119000,
+            "saldo": 120831
+        },
+        {
+            "fecha": "18-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 200000,
+            "abono": 0,
+            "saldo": 1831
+        },
+        {
+            "fecha": "18-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59000,
+            "saldo": 201831
+        },
+        {
+            "fecha": "18-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 142831
+        },
+        {
+            "fecha": "17-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 82999,
+            "saldo": 83331
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "17-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 354000,
+            "abono": 0,
+            "saldo": 332
+        },
+        {
+            "fecha": "17-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 47600,
+            "saldo": 354332
+        },
+        {
+            "fecha": "17-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 119000,
+            "saldo": 306732
+        },
+        {
+            "fecha": "17-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 83300,
+            "saldo": 187732
+        },
+        {
+            "fecha": "16-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 104422,
+            "saldo": 104432
+        },
+        {
+            "fecha": "16-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 72000,
+            "abono": 0,
+            "saldo": 10
+        },
+        {
+            "fecha": "16-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 71995,
+            "saldo": 72010
+        },
+        {
+            "fecha": "16-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 11500,
+            "abono": 0,
+            "saldo": 15
+        },
+        {
+            "fecha": "13-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11448,
+            "saldo": 11515
+        },
+        {
+            "fecha": "13-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 572000,
+            "abono": 0,
+            "saldo": 67
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "13-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 572067
+        },
+        {
+            "fecha": "12-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 536367
+        },
+        {
+            "fecha": "12-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 23000,
+            "abono": 0,
+            "saldo": 500667
+        },
+        {
+            "fecha": "12-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 523667
+        },
+        {
+            "fecha": "11-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 178500,
+            "saldo": 487967
+        },
+        {
+            "fecha": "11-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 71400,
+            "saldo": 309467
+        },
+        {
+            "fecha": "11-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 22896,
+            "saldo": 238067
+        },
+        {
+            "fecha": "11-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 215171
+        },
+        {
+            "fecha": "11-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 71400,
+            "saldo": 203271
+        },
+        {
+            "fecha": "11-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 131871
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "11-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 72371
+        },
+        {
+            "fecha": "11-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 464000,
+            "abono": 0,
+            "saldo": 371
+        },
+        {
+            "fecha": "11-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 119000,
+            "saldo": 464371
+        },
+        {
+            "fecha": "11-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 345371
+        },
+        {
+            "fecha": "10-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 3800,
+            "saldo": 333471
+        },
+        {
+            "fecha": "10-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 20000,
+            "saldo": 329671
+        },
+        {
+            "fecha": "10-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 309671
+        },
+        {
+            "fecha": "10-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 60000,
+            "saldo": 250171
+        },
+        {
+            "fecha": "10-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 10000,
+            "saldo": 190171
+        },
+        {
+            "fecha": "09-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 36077,
+            "saldo": 180171
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "09-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 144094
+        },
+        {
+            "fecha": "09-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 72094
+        },
+        {
+            "fecha": "09-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 36394
+        },
+        {
+            "fecha": "09-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 59000,
+            "abono": 0,
+            "saldo": 694
+        },
+        {
+            "fecha": "09-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 59694
+        },
+        {
+            "fecha": "09-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 47794
+        },
+        {
+            "fecha": "09-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 35894
+        },
+        {
+            "fecha": "09-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 522000,
+            "abono": 0,
+            "saldo": 194
+        },
+        {
+            "fecha": "09-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 155295,
+            "saldo": 522194
+        },
+        {
+            "fecha": "09-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 366899
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "06-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 171723,
+            "saldo": 331199
+        },
+        {
+            "fecha": "06-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 159476
+        },
+        {
+            "fecha": "06-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 147576
+        },
+        {
+            "fecha": "06-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 111876
+        },
+        {
+            "fecha": "06-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 39876
+        },
+        {
+            "fecha": "06-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 400000,
+            "abono": 0,
+            "saldo": 4176
+        },
+        {
+            "fecha": "06-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 404176
+        },
+        {
+            "fecha": "06-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 107100,
+            "saldo": 368476
+        },
+        {
+            "fecha": "06-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 261376
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 225676
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 71400,
+            "saldo": 189976
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 47600,
+            "saldo": 118576
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 70976
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 34345,
+            "saldo": 35276
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 83000,
+            "abono": 0,
+            "saldo": 931
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 83931
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 11931
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 244500,
+            "abono": 0,
+            "saldo": 31
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 100000,
+            "saldo": 244531
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11990,
+            "saldo": 144531
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 132541
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 73041
+        },
+        {
+            "fecha": "05-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 300000,
+            "abono": 0,
+            "saldo": 1041
+        },
+        {
+            "fecha": "04-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 70000,
+            "abono": 0,
+            "saldo": 301041
+        },
+        {
+            "fecha": "04-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 251862,
+            "saldo": 371041
+        },
+        {
+            "fecha": "04-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 119179
+        },
+        {
+            "fecha": "04-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 59679
+        },
+        {
+            "fecha": "03-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 294000,
+            "abono": 0,
+            "saldo": 179
+        },
+        {
+            "fecha": "03-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 34345,
+            "saldo": 294179
+        },
+        {
+            "fecha": "03-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 259834
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "03-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 247934
+        },
+        {
+            "fecha": "03-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 175934
+        },
+        {
+            "fecha": "03-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11990,
+            "saldo": 140234
+        },
+        {
+            "fecha": "02-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 91585,
+            "saldo": 128244
+        },
+        {
+            "fecha": "02-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 1000000,
+            "abono": 0,
+            "saldo": 36659
+        },
+        {
+            "fecha": "02-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 1036659
+        },
+        {
+            "fecha": "02-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 95200,
+            "saldo": 1000959
+        },
+        {
+            "fecha": "02-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 95200,
+            "saldo": 905759
+        },
+        {
+            "fecha": "02-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 95200,
+            "saldo": 810559
+        },
+        {
+            "fecha": "02-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 715359
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "02-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 95200,
+            "saldo": 655859
+        },
+        {
+            "fecha": "02-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 95200,
+            "saldo": 560659
+        },
+        {
+            "fecha": "02-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 119000,
+            "saldo": 465459
+        },
+        {
+            "fecha": "02-02-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 346459
+        }
+    ],
+    "Enero de 2026": [
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "30-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 286959
+        },
+        {
+            "fecha": "30-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 96204,
+            "saldo": 275059
+        },
+        {
+            "fecha": "30-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 83300,
+            "saldo": 178855
+        },
+        {
+            "fecha": "30-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 95200,
+            "saldo": 95555
+        },
+        {
+            "fecha": "30-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 95000,
+            "abono": 0,
+            "saldo": 355
+        },
+        {
+            "fecha": "30-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 95200,
+            "saldo": 95355
+        },
+        {
+            "fecha": "30-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 72000,
+            "abono": 0,
+            "saldo": 155
+        },
+        {
+            "fecha": "30-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 71400,
+            "saldo": 72155
+        },
+        {
+            "fecha": "29-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 47000,
+            "abono": 0,
+            "saldo": 755
+        },
+        {
+            "fecha": "29-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 47755
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "28-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11990,
+            "saldo": 12055
+        },
+        {
+            "fecha": "28-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 12200,
+            "abono": 0,
+            "saldo": 65
+        },
+        {
+            "fecha": "28-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 12265
+        },
+        {
+            "fecha": "28-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 83000,
+            "abono": 0,
+            "saldo": 365
+        },
+        {
+            "fecha": "28-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 83300,
+            "saldo": 83365
+        },
+        {
+            "fecha": "28-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 12600,
+            "abono": 0,
+            "saldo": 65
+        },
+        {
+            "fecha": "27-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 12665
+        },
+        {
+            "fecha": "27-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 255000,
+            "abono": 0,
+            "saldo": 765
+        },
+        {
+            "fecha": "26-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 85200,
+            "saldo": 255765
+        },
+        {
+            "fecha": "26-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 170565
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "26-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 142800,
+            "saldo": 158665
+        },
+        {
+            "fecha": "26-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11448,
+            "saldo": 15865
+        },
+        {
+            "fecha": "23-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 550000,
+            "abono": 0,
+            "saldo": 4417
+        },
+        {
+            "fecha": "23-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 267750,
+            "saldo": 554417
+        },
+        {
+            "fecha": "22-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 286667
+        },
+        {
+            "fecha": "22-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 75000,
+            "saldo": 250967
+        },
+        {
+            "fecha": "22-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 5136,
+            "saldo": 175967
+        },
+        {
+            "fecha": "21-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 119000,
+            "saldo": 170831
+        },
+        {
+            "fecha": "21-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 500000,
+            "abono": 0,
+            "saldo": 51831
+        },
+        {
+            "fecha": "21-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 22896,
+            "saldo": 551831
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "21-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 528935
+        },
+        {
+            "fecha": "21-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 14200,
+            "saldo": 517035
+        },
+        {
+            "fecha": "21-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 502835
+        },
+        {
+            "fecha": "20-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Cuenta BCI",
+            "documento": "0",
+            "cargo": 11900,
+            "abono": 0,
+            "saldo": 467135
+        },
+        {
+            "fecha": "20-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 91586,
+            "saldo": 479035
+        },
+        {
+            "fecha": "20-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 387449
+        },
+        {
+            "fecha": "20-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 375549
+        },
+        {
+            "fecha": "20-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 95200,
+            "saldo": 339849
+        },
+        {
+            "fecha": "20-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 244649
+        },
+        {
+            "fecha": "20-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 9500,
+            "saldo": 185149
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "19-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 175649
+        },
+        {
+            "fecha": "19-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 91586,
+            "saldo": 163749
+        },
+        {
+            "fecha": "19-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 71400,
+            "saldo": 72163
+        },
+        {
+            "fecha": "19-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 486000,
+            "abono": 0,
+            "saldo": 763
+        },
+        {
+            "fecha": "19-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59000,
+            "saldo": 486763
+        },
+        {
+            "fecha": "19-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 427763
+        },
+        {
+            "fecha": "16-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 155295,
+            "saldo": 355763
+        },
+        {
+            "fecha": "16-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 80000,
+            "abono": 0,
+            "saldo": 200468
+        },
+        {
+            "fecha": "16-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 280468
+        },
+        {
+            "fecha": "16-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 208468
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "16-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 196568
+        },
+        {
+            "fecha": "16-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 160868
+        },
+        {
+            "fecha": "16-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 50000,
+            "abono": 0,
+            "saldo": 101368
+        },
+        {
+            "fecha": "16-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 142800,
+            "saldo": 151368
+        },
+        {
+            "fecha": "15-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 140000,
+            "abono": 0,
+            "saldo": 8568
+        },
+        {
+            "fecha": "14-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 47600,
+            "saldo": 148568
+        },
+        {
+            "fecha": "14-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 100000,
+            "saldo": 100968
+        },
+        {
+            "fecha": "14-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 216000,
+            "abono": 0,
+            "saldo": 968
+        },
+        {
+            "fecha": "14-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 216968
+        },
+        {
+            "fecha": "13-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 37500,
+            "saldo": 181268
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "13-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 50000,
+            "saldo": 143768
+        },
+        {
+            "fecha": "13-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 50000,
+            "abono": 0,
+            "saldo": 93768
+        },
+        {
+            "fecha": "12-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 143768
+        },
+        {
+            "fecha": "12-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 60000,
+            "saldo": 84268
+        },
+        {
+            "fecha": "12-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 24268
+        },
+        {
+            "fecha": "12-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 12368
+        },
+        {
+            "fecha": "12-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 748000,
+            "abono": 0,
+            "saldo": 468
+        },
+        {
+            "fecha": "09-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 748468
+        },
+        {
+            "fecha": "09-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 114483,
+            "saldo": 676468
+        },
+        {
+            "fecha": "09-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 178500,
+            "saldo": 561985
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "09-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 50000,
+            "saldo": 383485
+        },
+        {
+            "fecha": "09-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 238000,
+            "saldo": 333485
+        },
+        {
+            "fecha": "08-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 95485
+        },
+        {
+            "fecha": "08-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 35985
+        },
+        {
+            "fecha": "08-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 54000,
+            "abono": 0,
+            "saldo": 285
+        },
+        {
+            "fecha": "07-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 500000,
+            "abono": 0,
+            "saldo": 54285
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 554285
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 518585
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 171724,
+            "saldo": 446585
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 274861
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 262961
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 227261
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 215361
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 179661
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11990,
+            "saldo": 143961
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 131971
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 72471
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 119000,
+            "abono": 0,
+            "saldo": 471
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 83300,
+            "saldo": 119471
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 36171
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 196000,
+            "abono": 0,
+            "saldo": 471
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 196471
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 160771
+        },
+        {
+            "fecha": "06-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 125071
+        },
+        {
+            "fecha": "05-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 360000,
+            "abono": 0,
+            "saldo": 65571
+        },
+        {
+            "fecha": "05-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 425571
+        },
+        {
+            "fecha": "05-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 389871
+        },
+        {
+            "fecha": "05-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 317871
+        },
+        {
+            "fecha": "05-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 114482,
+            "saldo": 258371
+        },
+        {
+            "fecha": "05-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 143889
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "05-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 83300,
+            "saldo": 108189
+        },
+        {
+            "fecha": "05-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11990,
+            "saldo": 24889
+        },
+        {
+            "fecha": "05-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 12899
+        },
+        {
+            "fecha": "05-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 225000,
+            "abono": 0,
+            "saldo": 999
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 225999
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 214099
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 202199
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 50000,
+            "abono": 0,
+            "saldo": 166499
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 300000,
+            "abono": 0,
+            "saldo": 216499
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 516499
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 47600,
+            "saldo": 444499
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 96000,
+            "saldo": 396899
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 130900,
+            "saldo": 300899
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 100000,
+            "abono": 0,
+            "saldo": 169999
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 35700,
+            "saldo": 269999
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 83300,
+            "saldo": 234299
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 72000,
+            "saldo": 150999
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 71995,
+            "saldo": 78999
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 350000,
+            "abono": 0,
+            "saldo": 7004
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 119000,
+            "saldo": 357004
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "02-01-2026",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 238004
+        }
+    ],
+    "Diciembre de 2025": [
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "30-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 59500,
+            "saldo": 178504
+        },
+        {
+            "fecha": "30-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 119000,
+            "saldo": 119004
+        },
+        {
+            "fecha": "29-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 160,
+            "abono": 0,
+            "saldo": 4
+        },
+        {
+            "fecha": "29-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 13000,
+            "abono": 0,
+            "saldo": 164
+        },
+        {
+            "fecha": "29-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 11900,
+            "saldo": 13164
+        },
+        {
+            "fecha": "26-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Por Transf De Fondos Autoservicio",
+            "documento": "0",
+            "cargo": 1040000,
+            "abono": 0,
+            "saldo": 1264
+        },
+        {
+            "fecha": "26-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 154700,
+            "saldo": 1041264
+        },
+        {
+            "fecha": "26-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 238000,
+            "saldo": 886564
+        },
+        {
+            "fecha": "26-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 119000,
+            "saldo": 648564
+        },
+        {
+            "fecha": "26-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 43000,
+            "saldo": 529564
+        },
+        {
+            "fecha": "Desde\n\t\t\t\nDD\tMM\tAAAA",
+            "oficina": "",
+            "movimiento": "",
+            "documento": "",
+            "cargo": 0,
+            "abono": 0,
+            "saldo": 0
+        },
+        {
+            "fecha": "26-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 100000,
+            "saldo": 486564
+        },
+        {
+            "fecha": "24-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 119000,
+            "saldo": 386564
+        },
+        {
+            "fecha": "24-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 20000,
+            "saldo": 267564
+        },
+        {
+            "fecha": "24-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Cargo Cuenta BCI",
+            "documento": "0",
+            "cargo": 74300,
+            "abono": 0,
+            "saldo": 247564
+        },
+        {
+            "fecha": "24-12-2025",
+            "oficina": "OFICINA CENTRAL",
+            "movimiento": "Abono Cuenta BCI",
+            "documento": "0",
+            "cargo": 0,
+            "abono": 110000,
+            "saldo": 321864
+        }
+    ]
+}

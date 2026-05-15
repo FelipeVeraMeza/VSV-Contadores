@@ -1,8 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Filter, Download, Upload, Plus, Edit, Trash2, Loader2, Shield } from 'lucide-react';
+import { Search, Upload, Plus, Edit, Trash2, Loader2, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { toast } from '@/components/ui/use-toast';
 import {
     Select,
     SelectContent,
@@ -20,6 +19,9 @@ const PlanDeCuentas = ({ empresaId }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedCuenta, setSelectedCuenta] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
+    
+    // ✅ AQUÍ ESTÁ EL ESTADO DEL SELECTOR (Arranca en LOCAL por defecto)
+    const [normativaActiva, setNormativaActiva] = useState("LOCAL");
 
     const { data, isLoading } = useQuery({
         queryKey: ['chart-of-accounts', empresaId],
@@ -35,13 +37,21 @@ const PlanDeCuentas = ({ empresaId }) => {
     const planOrdenado = useMemo(() => {
         const rawPlan = data?.plan || [];
         
-        const filtered = rawPlan.filter(cuenta => 
-            cuenta.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            cuenta.codigo.includes(searchTerm)
-        );
+        const filtered = rawPlan.filter(cuenta => {
+            // 1. Filtro por Normativa (Si en la BD viene vacío, asumimos LOCAL)
+            const cuentaNormativa = cuenta.normativa || "LOCAL";
+            const matchNormativa = cuentaNormativa === normativaActiva;
 
+            // 2. Filtro por Búsqueda (Texto o Código)
+            const matchSearch = cuenta.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                cuenta.codigo.includes(searchTerm);
+
+            return matchNormativa && matchSearch;
+        });
+
+        // Ordenamos numéricamente por el código (ej: 1.1 antes que 1.10)
         return [...filtered].sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }));
-    }, [data, searchTerm]);
+    }, [data, searchTerm, normativaActiva]); // <- Dependencias actualizadas
 
     const handleOpenModal = (cuenta = null) => {
         setSelectedCuenta(cuenta);
@@ -75,13 +85,15 @@ const PlanDeCuentas = ({ empresaId }) => {
                             className="bg-white/5 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
                         />
                     </div>
-                    <Select defaultValue="chile">
+                    
+                    {/* ✅ SELECTOR CONECTADO AL ESTADO REACTIVO */}
+                    <Select value={normativaActiva} onValueChange={setNormativaActiva}>
                         <SelectTrigger className="w-[180px] bg-white/5 border-white/10 text-[10px] font-bold uppercase tracking-widest h-9">
                             <SelectValue placeholder="Plantilla" />
                         </SelectTrigger>
                         <SelectContent className="bg-slate-900 border-white/10 text-white">
-                            <SelectItem value="chile">Estándar Chile</SelectItem>
-                            <SelectItem value="ifrs">IFRS Completo</SelectItem>
+                            <SelectItem value="LOCAL">Estándar Chile (PCGA)</SelectItem>
+                            <SelectItem value="IFRS">Estándar IFRS / NIIF</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -89,7 +101,7 @@ const PlanDeCuentas = ({ empresaId }) => {
                 <div className="flex items-center space-x-3">
                     <Button variant="outline" size="sm" className="border-white/10 text-white hover:bg-white/5 font-bold uppercase text-[10px] tracking-widest">
                         <Upload className="h-4 w-4 mr-2" />
-                        Importar
+                        Importar CSV
                     </Button>
                     <Button onClick={() => handleOpenModal()} className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold uppercase text-[10px] tracking-widest shadow-lg shadow-blue-900/20">
                         <Plus className="h-4 w-4 mr-2" />
@@ -113,7 +125,13 @@ const PlanDeCuentas = ({ empresaId }) => {
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             <AnimatePresence>
-                                {planOrdenado.map((cuenta, index) => {
+                                {planOrdenado.length === 0 ? (
+                                     <tr>
+                                         <td colSpan={6} className="py-12 text-center text-gray-500 font-bold uppercase tracking-widest text-xs">
+                                             No se encontraron cuentas para la normativa {normativaActiva}.
+                                         </td>
+                                     </tr>
+                                ) : planOrdenado.map((cuenta, index) => {
                                     const nivel = cuenta.codigo.split('.').length;
                                     const esGrupo = cuenta.tipo === 'Grupo';
                                     
@@ -169,6 +187,7 @@ const PlanDeCuentas = ({ empresaId }) => {
                 setIsOpen={setIsModalOpen}
                 onSave={(data)}
                 cuenta={selectedCuenta}
+                normativaActual={normativaActiva} // Para que al crear sepa a qué lista va
             />
         </div>
     );

@@ -1,0 +1,65 @@
+{
+  "periodo": "11-2025",
+  "fechaGeneracion": "2026-05-15T18:22:01.296Z",
+  "libroDiario": [
+    {
+      "glosa": "Centralización Ventas 11/2025",
+      "fecha": "28-11-2025",
+      "lineas": [
+        {
+          "cuenta": {
+            "codigo": "1104-01",
+            "nombre": "DEUDORES CLIENTES",
+            "naturaleza": "DEUDOR"
+          },
+          "debe": 3310290,
+          "haber": 0
+        },
+        {
+          "cuenta": {
+            "codigo": "5101-01",
+            "nombre": "VENTAS",
+            "naturaleza": "ACREEDOR"
+          },
+          "debe": 0,
+          "haber": 2781754
+        },
+        {
+          "cuenta": {
+            "codigo": "2108-02",
+            "nombre": "IVA DEBITO FISCAL",
+            "naturaleza": "ACREEDOR"
+          },
+          "debe": 0,
+          "haber": 528536
+        }
+      ]
+    }
+  ],
+  "libroMayor": [
+    {
+      "codigo": "1104-01",
+      "nombre": "DEUDORES CLIENTES",
+      "naturaleza": "DEUDOR",
+      "totalDebe": 3310290,
+      "totalHaber": 0,
+      "saldoFinal": 3310290
+    },
+    {
+      "codigo": "5101-01",
+      "nombre": "VENTAS",
+      "naturaleza": "ACREEDOR",
+      "totalDebe": 0,
+      "totalHaber": 2781754,
+      "saldoFinal": 2781754
+    },
+    {
+      "codigo": "2108-02",
+      "nombre": "IVA DEBITO FISCAL",
+      "naturaleza": "ACREEDOR",
+      "totalDebe": 0,
+      "totalHaber": 528536,
+      "saldoFinal": 528536
+    }
+  ]
+}

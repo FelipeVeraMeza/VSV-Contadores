@@ -18,10 +18,9 @@ const CUENTAS_FIJAS = {
 
 const formatCLP = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(val || 0);
 
-const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, anio, empresaId }) => {
+const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, anio, empresaId, onGuardarSuperficial }) => {
     const { user } = useAuth();
 
-    // Traemos el plan de cuentas de la base de datos para mostrar los nombres reales
     const { data: dataCuentas, isLoading } = useQuery({
         queryKey: ['chart-of-accounts', empresaId],
         queryFn: async () => {
@@ -38,7 +37,6 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, an
     const asientos = useMemo(() => {
         if (!isOpen) return [];
 
-        // 1. Cálculos de Ventas (Descontando DTE 61 - Notas de Crédito)
         let netoV = 0, ivaV = 0, totalV = 0;
         ventas.forEach(doc => {
             const neto = doc.monto_neto || 0;
@@ -51,7 +49,6 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, an
             }
         });
 
-        // 2. Cálculos de Compras (Descontando DTE 61)
         let netoC = 0, ivaC = 0, totalC = 0;
         compras.forEach(doc => {
             const neto = doc.monto_neto || 0;
@@ -66,7 +63,6 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, an
 
         const lineas = [];
 
-        // ASIENTO DE VENTAS
         if (totalV > 0 || netoV > 0) {
             lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN VENTAS ${mes}-${anio}` });
             lineas.push({ codigo: CUENTAS_FIJAS.CLIENTES, debe: totalV, haber: 0 });
@@ -74,7 +70,6 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, an
             lineas.push({ codigo: CUENTAS_FIJAS.IVA_DEBITO, debe: 0, haber: ivaV });
         }
 
-        // ASIENTO DE COMPRAS
         if (totalC > 0 || netoC > 0) {
             lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN COMPRAS ${mes}-${anio}` });
             lineas.push({ codigo: CUENTAS_FIJAS.GASTOS, debe: netoC, haber: 0 });
@@ -86,8 +81,10 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, an
     }, [ventas, compras, mes, anio, isOpen]);
 
     const handleGuardar = () => {
-        // Aquí conectaremos la API para inyectar a la tabla comprobantes
-        toast({ title: "ASIENTOS GENERADOS", description: "El Libro Diario ha sido actualizado exitosamente." });
+        // LE ENVIAMOS LOS DATOS A ContabilidadMain.jsx
+        if (onGuardarSuperficial) onGuardarSuperficial(asientos);
+        
+        toast({ title: "Borrador Generado", description: "El Libro Diario se generó exitosamente en modo borrador." });
         setIsOpen(false);
     };
 

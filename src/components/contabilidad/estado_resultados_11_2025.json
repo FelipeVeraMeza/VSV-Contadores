@@ -1,0 +1,26 @@
+{
+  "periodo": "11-2025",
+  "fechaGeneracion": "2026-05-15T18:22:26.365Z",
+  "cuentas": {
+    "ingresos": [
+      {
+        "codigo": "5101-01",
+        "nombre": "VENTAS",
+        "monto": 2781754
+      }
+    ],
+    "gastos": [
+      {
+        "codigo": "4201-08",
+        "nombre": "GASTOS GENERALES",
+        "monto": 0
+      }
+    ]
+  },
+  "totales": {
+    "totalIngresos": 2781754,
+    "totalGastos": 0,
+    "utilidadNeta": 2781754,
+    "margenOperacional": "100.00%"
+  }
+}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { DownloadCloud, ArrowDownRight, ArrowUpRight, Zap, RefreshCcw, FileCheck, Loader2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { DownloadCloud, ArrowDownRight, ArrowUpRight, RefreshCcw, FileCheck, Loader2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth.jsx';
@@ -7,7 +7,6 @@ import { obtenerHistorialBunker, obtenerComprasBunker } from '@/services/dteCons
 import GeneradorLibroDiarioModal from '@/components/contabilidad/modals/GeneradorLibroDiarioModal';
 import { BookCopy } from 'lucide-react';
 
-// Utilidad estricta para formatear textos: MAYÚSCULAS Y SIN ACENTOS
 const formatText = (str) => {
   if (!str) return '';
   return str.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
@@ -35,7 +34,8 @@ const MESES = [
 const ANIOS = ['2024', '2025', '2026', '2027'];
 const ITEMS_PER_PAGE = 10;
 
-const RegistroComprasVentas = ({ empresaId: propEmpresaId }) => {
+// RECIBIMOS LA PROP DEL PADRE
+const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial }) => {
   const { selectedCompany } = useAuth();
   const targetId = propEmpresaId || selectedCompany?.id || 'ALL';
 
@@ -46,7 +46,7 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId }) => {
   const [compras, setCompras] = useState([]);
   const [ventas, setVentas] = useState([]);
   
-  const [isModalDiarioOpen, setIsModalDiarioOpen] = useState(false); // NUEVO ESTADO
+  const [isModalDiarioOpen, setIsModalDiarioOpen] = useState(false);
 
   const currentDate = new Date();
   const currentMonth = (currentDate.getMonth() + 1).toString().padStart(2, '0');
@@ -54,18 +54,12 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId }) => {
 
   const [mesActivo, setMesActivo] = useState(currentMonth);
   const [anioActivo, setAnioActivo] = useState(currentYear);
-  
-  // Estado para la paginación
   const [currentPage, setCurrentPage] = useState(1);
 
-  // Reiniciar la página a 1 cuando cambien los filtros o la vista
   useEffect(() => {
     setCurrentPage(1);
   }, [activeView, mesActivo, anioActivo, targetId]);
 
-  // ==========================================
-  // CONEXIÓN A SUPABASE
-  // ==========================================
   const cargarDatos = useCallback(async () => {
     if (!targetId) return;
     
@@ -100,9 +94,6 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId }) => {
     cargarDatos();
   }, [cargarDatos]);
 
-  // ==========================================
-  // CÁLCULO DINÁMICO DE TOTALES Y PAGINACIÓN
-  // ==========================================
   const stats = useMemo(() => {
     const calcularTotales = (docs) => docs.reduce((acc, doc) => {
       const neto = doc.monto_neto || 0;
@@ -124,36 +115,20 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId }) => {
   }, [compras, ventas]);
 
   const documentosActivos = activeView === 'compras' ? compras : ventas;
-  
-  // Lógica de Paginación
   const totalPages = Math.ceil(documentosActivos.length / ITEMS_PER_PAGE) || 1;
-  const currentData = documentosActivos.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE, 
-    currentPage * ITEMS_PER_PAGE
-  );
+  const currentData = documentosActivos.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  // ==========================================
-  // FUNCIONES DE INTERFAZ
-  // ==========================================
   const handleSyncSII = () => {
     setIsSyncing(true);
     toast({ title: "SINCRONIZACION SUGERIDA", description: "UTILIZA EL BOTON DEL MODULO BOVEDA PARA EXTRAER EL SII." });
     setTimeout(() => setIsSyncing(false), 2000);
   };
 
-  const handleContabilizar = () => {
-    if (documentosActivos.length === 0) return;
-    toast({ title: "EN PROCESO...", description: "GENERANDO ASIENTOS CONTABLES AUTOMATICOS." });
-  };
-
   const formatCLP = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(val);
 
   return (
     <div className="space-y-6">
-      {/* Cabecera y Controles de Acción */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#0f172a]/60 p-4 rounded-xl border border-white/5 backdrop-blur-md shadow-xl">
-        
-        {/* SELECTOR DE PERIODO */}
         <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-1 py-1 shadow-inner focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/30 transition-all">
           <div className="flex items-center pl-3 pr-1">
             <CalendarDays className="h-4 w-4 text-blue-400" />
@@ -192,23 +167,19 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId }) => {
             EXTRAER DE SII
           </Button>
           <Button 
-            onClick={() => setIsModalDiarioOpen(true)} // <-- Cambiado
+            onClick={() => setIsModalDiarioOpen(true)}
             disabled={documentosActivos.length === 0}
             className={`font-black uppercase text-[10px] tracking-widest shadow-lg ${documentosActivos.length > 0 ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-900/40' : 'bg-black/40 border border-white/10 text-gray-500 cursor-not-allowed opacity-50'}`}
           >
-            <BookCopy className="h-4 w-4 mr-2" /> {/* <-- Icono cambiado */}
-            GENERAR LIBRO DIARIO {/* <-- Texto cambiado */}
+            <BookCopy className="h-4 w-4 mr-2" />
+            GENERAR LIBRO DIARIO
           </Button>
         </div>
       </div>
 
-      {/* Tarjetas de Resumen Compras/Ventas */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* COMPRAS */}
-        <div 
-          onClick={() => setActiveView('compras')}
-          className={`cursor-pointer p-5 rounded-xl border transition-all backdrop-blur-md ${activeView === 'compras' ? 'bg-[#0f172a]/80 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.15)]' : 'bg-black/20 border-white/5 hover:bg-black/40'}`}
-        >
+        <div onClick={() => setActiveView('compras')} className={`cursor-pointer p-5 rounded-xl border transition-all backdrop-blur-md ${activeView === 'compras' ? 'bg-[#0f172a]/80 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.15)]' : 'bg-black/20 border-white/5 hover:bg-black/40'}`}>
           <div className="flex justify-between items-start mb-4">
             <div className="flex items-center gap-2">
               <div className={`p-2 rounded-lg ${activeView === 'compras' ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-400'}`}>
@@ -226,10 +197,7 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId }) => {
         </div>
 
         {/* VENTAS */}
-        <div 
-          onClick={() => setActiveView('ventas')}
-          className={`cursor-pointer p-5 rounded-xl border transition-all backdrop-blur-md ${activeView === 'ventas' ? 'bg-[#0f172a]/80 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.15)]' : 'bg-black/20 border-white/5 hover:bg-black/40'}`}
-        >
+        <div onClick={() => setActiveView('ventas')} className={`cursor-pointer p-5 rounded-xl border transition-all backdrop-blur-md ${activeView === 'ventas' ? 'bg-[#0f172a]/80 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.15)]' : 'bg-black/20 border-white/5 hover:bg-black/40'}`}>
           <div className="flex justify-between items-start mb-4">
             <div className="flex items-center gap-2">
               <div className={`p-2 rounded-lg ${activeView === 'ventas' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-gray-400'}`}>
@@ -246,7 +214,7 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId }) => {
           </div>
         </div>
       </div>
-{/* Tabla de Registros */}
+
       <div className="bg-[#0f172a]/80 rounded-xl border border-white/5 overflow-hidden backdrop-blur-md shadow-2xl flex flex-col">
         {isLoadingDB ? (
           <div className="p-16 flex flex-col justify-center items-center">
@@ -319,34 +287,19 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId }) => {
               </table>
             </div>
             
-            {/* CONTROLES DE PAGINACIÓN */}
             <div className="flex items-center justify-between px-6 py-4 bg-black/20 border-t border-white/10 relative z-30">
               <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">
                 MOSTRANDO {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, documentosActivos.length)} DE {documentosActivos.length}
               </div>
               
               <div className="flex items-center gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="h-8 bg-black/40 border-white/10 text-gray-400 hover:text-white disabled:opacity-20 transition-all font-black text-xs uppercase"
-                >
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-8 bg-black/40 border-white/10 text-gray-400 hover:text-white disabled:opacity-20 transition-all font-black text-xs uppercase">
                   <ChevronLeft size={14} className="mr-1" /> ANT
                 </Button>
-                
                 <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">
                   PAG {currentPage} DE {totalPages}
                 </div>
-                
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="h-8 bg-black/40 border-white/10 text-gray-400 hover:text-white disabled:opacity-20 transition-all font-black text-xs uppercase"
-                >
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-8 bg-black/40 border-white/10 text-gray-400 hover:text-white disabled:opacity-20 transition-all font-black text-xs uppercase">
                   SIG <ChevronRight size={14} className="ml-1" />
                 </Button>
               </div>
@@ -355,7 +308,6 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId }) => {
         )}
       </div>
 
-      {/* AQUÍ VA EL MODAL INYECTADO */}
       <GeneradorLibroDiarioModal 
         isOpen={isModalDiarioOpen} 
         setIsOpen={setIsModalDiarioOpen}
@@ -364,6 +316,7 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId }) => {
         mes={MESES.find(m => m.value === mesActivo)?.label}
         anio={anioActivo}
         empresaId={targetId}
+        onGuardarSuperficial={onGuardarSuperficial} // SE COMUNICA CON EL PADRE
       />
     </div>
   );
