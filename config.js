@@ -1,4 +1,4 @@
-const IP_PUBLICA = 'vsv-contadores-production-b077.up.railway.app';
+const IP_PUBLICA = 'vsv-contadores-production.up.railway.app';
 
 //export const API_BASE_URL = 'http://localhost:4000/api';
 export const API_BASE_URL = `https://${IP_PUBLICA}/api`;
