@@ -31,6 +31,7 @@ import rrhhRoutes from './routes/rrhh.routes.js';
 import rentaRoutes from './routes/renta.routes.js';
 import bancoRoutes from './routes/bancos.routes.js';
 import dteConsultaRoutes from "./routes/dteConsulta.routes.js";
+import { ejecutarRobotSII } from './components/contabilidad/scripts/sincronizador_sii.mjs';
 
 // --- Inicialización del Servidor ---
 const app = express();
@@ -134,8 +135,26 @@ const ejecutarSincronizacion = async (tipo) => {
 // 🌐 RUTA API (Para cuando presionas el botón manual en React)
 // ============================================================================
 app.post('/api/sincronizar-sii', apiLimiter, async (req, res) => {
-    const { tipo } = req.body; 
+    const { tipo, rut, clave, mes, anio, empresaId } = req.body; 
     
+    // 1. MODO MANUAL: Si React nos envía RUT y Clave, ejecutamos el robot dinámico
+    if (rut && clave) {
+        console.log(`\n👨‍💻 [MODO MANUAL] Sincronizando ${tipo} para RUT: ${rut} - Periodo: ${mes}/${anio}`);
+        try {
+            const resultado = await ejecutarRobotSII({ rut, clave, mes, anio, tipo, empresaId });
+            
+            if (resultado.success) {
+                return res.json({ success: true, message: `Datos de ${tipo} extraídos correctamente del SII.` });
+            } else {
+                return res.status(500).json({ success: false, message: resultado.message });
+            }
+        } catch (error) {
+            console.error("❌ Error al ejecutar robot manual:", error);
+            return res.status(500).json({ success: false, message: "Error interno al iniciar Puppeteer." });
+        }
+    }
+
+    // 2. MODO GLOBAL (El que ya tenías): Se usa si no se envían credenciales específicas
     if (tipo !== 'VENTAS' && tipo !== 'COMPRAS') {
         return res.status(400).json({ success: false, message: "Tipo inválido." });
     }
@@ -145,7 +164,7 @@ app.post('/api/sincronizar-sii', apiLimiter, async (req, res) => {
     if (exito) {
         res.json({ success: true, message: `Historial de ${tipo.toLowerCase()} sincronizado correctamente.` });
     } else {
-        res.status(500).json({ success: false, message: "Falla en el robot al sincronizar." });
+        res.status(500).json({ success: false, message: "Falla en el robot global al sincronizar." });
     }
 });
 

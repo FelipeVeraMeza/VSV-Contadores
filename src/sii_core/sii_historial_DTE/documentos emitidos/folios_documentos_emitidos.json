@@ -2696,5 +2696,233 @@
         "montoIva": 234
       }
     }
+  },
+  {
+    "rutReceptor": "78054419-8",
+    "razonSocial": "LOS HERMANOS DE LA OFERTA SPA",
+    "documento": "Nota de Credito Electronica",
+    "folio": "107",
+    "fecha": "2026-05-19",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78054419-8",
+        "receptorNombre": "LOS HERMANOS DE LA OFERTA SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78209664-8",
+    "razonSocial": "COMERCIALIZADORA HUMERES URIBE LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1007",
+    "fecha": "2026-05-18",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78209664-8",
+        "receptorNombre": "COMERCIALIZADORA HUMERES URIBE LIMITADA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "65198387-8",
+    "razonSocial": "ASOCIACIÓN SEMBRANDO UN SUEÑO",
+    "documento": "Factura Electronica",
+    "folio": "1006",
+    "fecha": "2026-05-15",
+    "montoTotal": 83300,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "65198387-8",
+        "receptorNombre": "ASOCIACIÓN SEMBRANDO UN SUEÑO",
+        "montoNeto": 70000,
+        "montoIva": 13300
+      }
+    }
+  },
+  {
+    "rutReceptor": "65198387-8",
+    "razonSocial": "ASOCIACIÓN SEMBRANDO UN SUEÑO",
+    "documento": "Nota de Credito Electronica",
+    "folio": "106",
+    "fecha": "2026-05-15",
+    "montoTotal": 83300,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "65198387-8",
+        "receptorNombre": "ASOCIACIÓN SEMBRANDO UN SUEÑO",
+        "montoNeto": 70000,
+        "montoIva": 13300
+      }
+    }
+  },
+  {
+    "rutReceptor": "65198387-8",
+    "razonSocial": "ASOCIACIÓN SEMBRANDO UN SUEÑO",
+    "documento": "Factura Electronica",
+    "folio": "1005",
+    "fecha": "2026-05-15",
+    "montoTotal": 83300,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "65198387-8",
+        "receptorNombre": "ASOCIACIÓN SEMBRANDO UN SUEÑO",
+        "montoNeto": 70000,
+        "montoIva": 13300
+      }
+    }
+  },
+  {
+    "rutReceptor": "78113009-5",
+    "razonSocial": "INGDELTA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1004",
+    "fecha": "2026-05-13",
+    "montoTotal": 91471,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78113009-5",
+        "receptorNombre": "INGDELTA SPA",
+        "montoNeto": 76866,
+        "montoIva": 14605
+      }
+    }
+  },
+  {
+    "rutReceptor": "78113009-5",
+    "razonSocial": "INGDELTA SPA",
+    "documento": "Nota de Credito Electronica",
+    "folio": "105",
+    "fecha": "2026-05-13",
+    "montoTotal": 178500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78113009-5",
+        "receptorNombre": "INGDELTA SPA",
+        "montoNeto": 150000,
+        "montoIva": 28500
+      }
+    }
+  },
+  {
+    "rutReceptor": "77397024-6",
+    "razonSocial": "VICTOR VOLLAIRE VSV CONSULTORIA E.I.R.L.",
+    "documento": "Nota de Credito Electronica",
+    "folio": "104",
+    "fecha": "2026-05-13",
+    "montoTotal": 1190,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77397024-6",
+        "receptorNombre": "VICTOR VOLLAIRE VSV CONSULTORIA E.I.R.L.",
+        "montoNeto": 1000,
+        "montoIva": 190
+      }
+    }
+  },
+  {
+    "rutReceptor": "77397024-6",
+    "razonSocial": "VICTOR VOLLAIRE VSV CONSULTORIA E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "1003",
+    "fecha": "2026-05-13",
+    "montoTotal": 1190,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77397024-6",
+        "receptorNombre": "VICTOR VOLLAIRE VSV CONSULTORIA E.I.R.L.",
+        "montoNeto": 1000,
+        "montoIva": 190
+      }
+    }
+  },
+  {
+    "rutReceptor": "78272354-5",
+    "razonSocial": "VIVI POWER SPA",
+    "documento": "Factura Electronica",
+    "folio": "1002",
+    "fecha": "2026-05-12",
+    "montoTotal": 107100,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78272354-5",
+        "receptorNombre": "VIVI POWER SPA",
+        "montoNeto": 90000,
+        "montoIva": 17100
+      }
+    }
+  },
+  {
+    "rutReceptor": "78262268-4",
+    "razonSocial": "MIARTE SPA",
+    "documento": "Factura Electronica",
+    "folio": "1001",
+    "fecha": "2026-05-12",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78262268-4",
+        "receptorNombre": "MIARTE SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77911337-K",
+    "razonSocial": "SOCIEDAD COMERCIAL ERICES Y TRESKOW LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1000",
+    "fecha": "2026-05-12",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77911337-K",
+        "receptorNombre": "SOCIEDAD COMERCIAL ERICES Y TRESKOW LIMITADA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
   }
 ]

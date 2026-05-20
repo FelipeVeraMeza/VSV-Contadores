@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth.jsx';
 import { obtenerHistorialBunker, obtenerComprasBunker } from '@/services/dteConsultasService';
 import GeneradorLibroDiarioModal from '@/components/contabilidad/modals/GeneradorLibroDiarioModal';
 import { BookCopy } from 'lucide-react';
-
+import { API_BASE_URL } from '../../../config.js';
 const formatText = (str) => {
   if (!str) return '';
   return str.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
@@ -118,12 +118,54 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
   const totalPages = Math.ceil(documentosActivos.length / ITEMS_PER_PAGE) || 1;
   const currentData = documentosActivos.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  const handleSyncSII = () => {
+  const handleSyncSII = async () => {
     setIsSyncing(true);
-    toast({ title: "SINCRONIZACION SUGERIDA", description: "UTILIZA EL BOTON DEL MODULO BOVEDA PARA EXTRAER EL SII." });
-    setTimeout(() => setIsSyncing(false), 2000);
-  };
 
+    const rut = selectedCompany?.repRut;
+    const clave = selectedCompany?.claveSII;
+
+    if (!rut || !clave) {
+      toast({ variant: "destructive", title: "Credenciales Faltantes", description: "La empresa no tiene RUT o Clave del SII configurada en el CRM." });
+      setIsSyncing(false);
+      return;
+    }
+
+    toast({ title: "🤖 Iniciando Robot", description: `Conectando al SII para ${activeView} de ${mesActivo}/${anioActivo}` });
+
+    try {
+      // Llamada a tu backend
+      const response = await fetch(`${API_BASE_URL}/sincronizar-sii`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // 'Authorization': `Bearer ${user?.sessionId}` // Descomenta si usas tokens
+        },
+        body: JSON.stringify({
+          rut,
+          clave,
+          mes: mesActivo,
+          anio: anioActivo,
+          tipo: activeView, // 'compras' o 'ventas'
+          empresaId: targetId
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast({ title: "✅ Sincronización Exitosa", description: "Los datos han sido extraídos. Actualizando tabla..." });
+        cargarDatos(); // Refresca la tabla en pantalla
+      } else {
+        toast({ variant: "destructive", title: "❌ Error en el Robot", description: result.message || "Falla al extraer datos." });
+      }
+    } catch (error) {
+      console.error(error);
+      toast({ variant: "destructive", title: "Error de Conexión", description: "No se pudo contactar al servidor local." });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+  
   const formatCLP = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(val);
 
   return (
