@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense} from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth.jsx';
 import { SiiProvider } from '@/contexts/SiiContext.jsx';
 import DelayedLoader from './ui/DelayedLoader';
+import GlobalCompanySelector from '@/components/ui/GlobalCompanySelector'; // Importación del nuevo selector
 
 function MainPage() {
   const { user, logout, selectedCompany } = useAuth(); 
@@ -29,12 +30,11 @@ function MainPage() {
   }, []);
 
   // =========================================
-  // LÓGICA DE RUTEO POR ROLES (MURO DE SEGURIDAD)
+  // LÓGICA DE RUTEO POR ROLES
   // =========================================
   let modules = [];
 
   if (user?.rol === 'Cliente') {
-    // 🔒 VISTA RESTRINGIDA (Portal de Clientes)
     modules = [
       { id: 'dashboard', path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard, color: 'from-blue-500 to-cyan-500' },
       { id: 'contabilidad', path: '/contabilidad', name: 'Contabilidad', icon: Calculator, color: 'from-green-500 to-emerald-500' },
@@ -42,7 +42,6 @@ function MainPage() {
       { id: 'rrhh', path: '/rrhh', name: 'Recursos Humanos', icon: Users, color: 'from-purple-500 to-violet-500' }
     ];
   } else {
-    // 🔓 VISTA EQUIPO VSV (Todo el CRM)
     modules = [
       { id: 'dashboard', path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard, color: 'from-blue-500 to-cyan-500' },
       { id: 'CRM', path: '/CRM', name: 'CRM', icon: Package, color: 'from-pink-500 to-rose-500' },
@@ -97,6 +96,7 @@ function MainPage() {
         </AnimatePresence>
 
         <div className="flex-1 flex flex-col h-full overflow-hidden w-full">
+          {/* HEADER CON SELECTOR GLOBAL */}
           <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 w-full z-30 px-6 py-4 flex items-center justify-between">
             <div className="flex items-center space-x-4">
               <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden text-white">
@@ -104,30 +104,10 @@ function MainPage() {
               </Button>
             </div>
             
+            {/* AQUÍ EL SELECTOR GLOBAL QUE CAMBIA LA EMPRESA EN TODO EL SISTEMA */}
+            <GlobalCompanySelector />
+            
             <div className="flex items-center space-x-4">
-              
-              {/* ========================================= */}
-              {/* INDICADORES DE VISTA (ADMIN VS CLIENTE)   */}
-              {/* ========================================= */}
-              {selectedCompany && user?.rol !== 'Cliente' && (
-                  <div className="hidden md:flex flex-col items-end mr-2 pr-4 border-r border-white/10">
-                      <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Empresa Activa</span>
-                      <span className="text-xs text-emerald-400 font-bold truncate max-w-[200px] uppercase">
-                          {selectedCompany.razon_social || selectedCompany.razonSocial}
-                      </span>
-                  </div>
-              )}
-
-              {selectedCompany && user?.rol === 'Cliente' && (
-                  <div className="hidden md:flex flex-col items-end mr-2 pr-4 border-r border-white/10">
-                      <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Mi Portal</span>
-                      <span className="text-xs text-blue-400 font-bold truncate max-w-[200px] uppercase">
-                          {selectedCompany.razon_social || selectedCompany.razonSocial}
-                      </span>
-                  </div>
-              )}
-              {/* ========================================= */}
-
               <div className="hidden md:block text-right mr-2">
                 <p className="text-white text-sm font-bold italic uppercase">{user?.nombre}</p>
                 <p className="text-[9px] font-black uppercase text-amber-400 tracking-widest">{user?.rol}</p>

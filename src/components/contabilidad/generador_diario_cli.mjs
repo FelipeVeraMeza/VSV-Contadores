@@ -1,24 +1,25 @@
 import pkg from 'pg';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import readline from 'readline';
 
 const { Client } = pkg;
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
-
+// ==========================================
+// 1. CONEXIÓN DIRECTA A POSTGRESQL (Tus credenciales)
+// ==========================================
 const dbConfig = {
-    user: process.env.DBS_USER,
-    host: process.env.DBS_HOST,
-    database: process.env.DBS_DATABASE,
-    password: process.env.DBS_PASSWORD,
-    port: process.env.DBS_PORT,
+    user: 'postgres.bcfckukvgojnfmmwoqpf',
+    host: 'aws-1-sa-east-1.pooler.supabase.com',
+    database: 'postgres',
+    password: 'gW1oZXDoWRFYYimG',
+    port: 6543,
     ssl: { rejectUnauthorized: false }
 };
 
-// CONFIGURACION DE CUENTAS MAESTRAS
+const client = new Client(dbConfig);
+
+// ==========================================
+// 2. CONFIGURACION DE CUENTAS MAESTRAS
+// ==========================================
 const CUENTAS = {
     VENTAS_NETO: '5101-01',
     VENTAS_IVA: '2108-02',
@@ -32,16 +33,19 @@ const CUENTAS = {
 const formatText = (str) => str ? str.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase() : '';
 const formatCLP = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(val || 0);
 
-async function centralizarEmpresaGlobal() {
-    const client = new Client(dbConfig);
+// ==========================================
+// 3. MOTOR DE EXTRACCIÓN MASIVA TOTAL
+// ==========================================
+async function extraerTodoAbsoluto() {
     console.clear();
     console.log("======================================================");
-    console.log("🚀 CONSOLIDADO GLOBAL 2025 - TODAS LAS EMPRESAS");
+    console.log(`🚀 MÓDULO DE EXTRACCIÓN GLOBAL (TODAS LAS EMPRESAS)`);
     console.log("======================================================");
 
     try {
         await client.connect();
-        console.log("✅ CONEXION EXITOSA. CALCULANDO TOTALES DE LA BS...\n");
+        console.log("✅ Conexión a la Base de Datos establecida con éxito.\n");
+        console.log("⏳ Descargando y calculando toda la Bóveda de Supabase...\n");
 
         for (let mes = 1; mes <= 12; mes++) {
             const mesStr = mes.toString().padStart(2, '0');
@@ -91,8 +95,10 @@ async function centralizarEmpresaGlobal() {
             const ingresosBanco = bRes.rows[0].ingresos || 0;
             const egresosBanco = bRes.rows[0].egresos || 0;
 
+            // --- 4. RENDERIZAR ASIENTO SI HAY MOVIMIENTO ---
             if (netoVentas !== 0 || netoCompras !== 0 || ingresosBanco !== 0) {
-                console.log(`\n📅 PERIODO: ${mesStr}/2025`);
+                console.log(`\n📅 PERIODO CENTRALIZADO: ${mesStr}/2025`);
+                console.log(`------------------------------------------------------`);
                 
                 const filasAsiento = [];
                 
@@ -117,8 +123,9 @@ async function centralizarEmpresaGlobal() {
             }
         }
 
-    } catch (err) {
-        console.error("❌ ERROR:", err.message);
+    } catch (error) {
+        console.error("\n❌ Error FATAL al procesar los datos:");
+        console.error(error);
     } finally {
         await client.end();
         console.log("\n🏁 CONSOLIDADO GLOBAL 2025 FINALIZADO.");
@@ -126,4 +133,4 @@ async function centralizarEmpresaGlobal() {
     }
 }
 
-centralizarEmpresaGlobal();
+extraerTodoAbsoluto();
