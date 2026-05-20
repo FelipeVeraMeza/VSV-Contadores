@@ -9,6 +9,10 @@ import path from 'path';
 
 import { fileURLToPath } from 'url';
 
+import {
+    subirDocumentosSII
+} from './subir_documentos_sii_db.mjs';
+
 // ==========================================
 // RUTA ACTUAL
 // ==========================================
@@ -22,8 +26,11 @@ const __dirname =
 // EXPORT PRINCIPAL
 // ==========================================
 export async function ejecutarRobotSII({
+
     rut,
+
     clave,
+
     rutEmpresa
 }) {
 
@@ -33,8 +40,11 @@ export async function ejecutarRobotSII({
     // ABRIR NAVEGADOR
     // ==========================================
     const browser = await puppeteer.launch({
+
         headless: false,
+
         defaultViewport: null,
+
         args: ['--start-maximized']
     });
 
@@ -232,7 +242,9 @@ export async function ejecutarRobotSII({
                 `https://www1.sii.cl/cgi-bin/Portal001/mipeAdminDocsEmi.cgi?RUT_RECP=&FOLIO=&RZN_SOC=&FEC_DESDE=&FEC_HASTA=&TPO_DOC=&ESTADO=&ORDEN=&NUM_PAG=${paginaActual}`;
 
             await page.goto(urlTabla, {
+
                 waitUntil: 'networkidle2',
+
                 timeout: 60000
             });
 
@@ -305,13 +317,11 @@ export async function ejecutarRobotSII({
 
                             if (fechaTexto) {
 
-                                // Limpiar espacios
                                 const fechaLimpia =
                                     fechaTexto
                                         .replace(/\s+/g, '')
                                         .trim();
 
-                                // Buscar patrón fecha
                                 const match =
                                     fechaLimpia.match(
                                         /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/
@@ -348,9 +358,6 @@ export async function ejecutarRobotSII({
                                 !isNaN(folio)
                             ) {
 
-                                // ==========================================
-                                // IVA
-                                // ==========================================
                                 let monto_neto =
                                     Math.round(montoTotal / 1.19);
 
@@ -362,9 +369,6 @@ export async function ejecutarRobotSII({
                                 const docUpper =
                                     documento.toUpperCase();
 
-                                // ==========================================
-                                // TIPOS DTE
-                                // ==========================================
                                 if (
                                     docUpper.includes('EXENTA')
                                 ) {
@@ -528,9 +532,24 @@ export default documentos;
 
         console.log(`📂 ${rutaArchivo}`);
 
-        return {
-            success: true,
+        // ==========================================
+        // SUBIR A POSTGRESQL
+        // ==========================================
+        await subirDocumentosSII({
+
+            rutEmpresa,
+
             documentos,
+
+            rutaArchivo
+        });
+
+        return {
+
+            success: true,
+
+            documentos,
+
             archivo: rutaArchivo
         };
 

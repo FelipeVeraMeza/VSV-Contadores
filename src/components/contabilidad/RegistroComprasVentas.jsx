@@ -123,9 +123,14 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
 
     const rut = selectedCompany?.repRut;
     const clave = selectedCompany?.claveSII;
+    const rutEmpresa = selectedCompany?.rut; // <-- 1. AGREGAR RUT EMPRESA
 
-    if (!rut || !clave) {
-      toast({ variant: "destructive", title: "Credenciales Faltantes", description: "La empresa no tiene RUT o Clave del SII configurada en el CRM." });
+    if (!rut || !clave || !rutEmpresa) {
+      toast({ 
+        variant: "destructive", 
+        title: "Credenciales Faltantes", 
+        description: "Falta el RUT/Clave del representante o el RUT de la empresa." 
+      });
       setIsSyncing(false);
       return;
     }
@@ -133,19 +138,18 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
     toast({ title: "🤖 Iniciando Robot", description: `Conectando al SII para ${activeView} de ${mesActivo}/${anioActivo}` });
 
     try {
-      // Llamada a tu backend
       const response = await fetch(`${API_BASE_URL}/sincronizar-sii`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // 'Authorization': `Bearer ${user?.sessionId}` // Descomenta si usas tokens
         },
         body: JSON.stringify({
           rut,
           clave,
+          rutEmpresa, // <-- 2. ENVIARLO EN EL BODY
           mes: mesActivo,
           anio: anioActivo,
-          tipo: activeView, // 'compras' o 'ventas'
+          tipo: activeView,
           empresaId: targetId
         })
       });
@@ -153,14 +157,14 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
       const result = await response.json();
 
       if (result.success) {
-        toast({ title: "✅ Sincronización Exitosa", description: "Los datos han sido extraídos. Actualizando tabla..." });
-        cargarDatos(); // Refresca la tabla en pantalla
+        toast({ title: "✅ Sincronización Exitosa", description: `Se guardaron ${result.cantidad} documentos en la base de datos.` });
+        cargarDatos(); 
       } else {
         toast({ variant: "destructive", title: "❌ Error en el Robot", description: result.message || "Falla al extraer datos." });
       }
     } catch (error) {
       console.error(error);
-      toast({ variant: "destructive", title: "Error de Conexión", description: "No se pudo contactar al servidor local." });
+      toast({ variant: "destructive", title: "Error de Conexión", description: "No se pudo contactar al servidor." });
     } finally {
       setIsSyncing(false);
     }
