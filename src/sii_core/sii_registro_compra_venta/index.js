@@ -15,7 +15,7 @@ async function ejecutarRobotRCV() {
     
     // ⚡ 1. MODO INVISIBLE: 'new' hace que no se abra la pantalla visual, consumiendo menos recursos
     const browser = await puppeteer.launch({ 
-        headless: 'new', 
+        headless: false, 
         defaultViewport: null,
         args: [
             '--start-maximized',

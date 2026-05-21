@@ -2,8 +2,7 @@
 import cron from 'node-cron';
 import 'dotenv/config';
 import express from 'express';
-import puppeteer from "puppeteer";
-import { exec } from 'node:child_process'; // <-- Importación clave para correr los robots
+import { exec } from 'node:child_process'; 
 
 // Seguridad y middlewares
 import cors from 'cors';
@@ -31,12 +30,13 @@ import rrhhRoutes from './routes/rrhh.routes.js';
 import rentaRoutes from './routes/renta.routes.js';
 import bancoRoutes from './routes/bancos.routes.js';
 import dteConsultaRoutes from "./routes/dteConsulta.routes.js";
+
+// Importación del Robot Manual
 import { ejecutarRobotSII } from './components/contabilidad/scripts/sincronizador_sii.mjs';
+import { cargarJSONaBD } from './components/contabilidad/scripts/subir_documentos_db.mjs';
 
 // --- Inicialización del Servidor ---
 const app = express();
-
-// 🟢 LA LÍNEA MÁGICA: Le dice a Express que confíe en el proxy de Railway/Render
 app.set('trust proxy', 1); 
 
 const PORT = process.env.PORT || 4000;
@@ -49,6 +49,7 @@ app.use(compression());
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(cors(corsOptions));
+
 // --- Ruta de Health Check ---
 app.get('/health', async (req, res) => {
   try {
@@ -79,82 +80,100 @@ app.use('/api/dte', apiLimiter, dteRoutes);
 app.use("/api/dte-consulta", apiLimiter, dteConsultaRoutes);
 
 // ============================================================================
-// 🤖 MOTOR CENTRAL DE SINCRONIZACIÓN (Reutilizable)
+// 🤖 MOTOR CENTRAL DE SINCRONIZACIÓN (Bóveda Global)
 // ============================================================================
 const ejecutarSincronizacion = async (tipo) => {
     console.log("\n==================================================");
-    console.log(`🤖 [ROBOT] INICIANDO SINCRONIZACIÓN AUTOMÁTICA: ${tipo}`);
+    console.log(`🤖 [ROBOT GLOBAL] INICIANDO SINCRONIZACIÓN AUTOMÁTICA: ${tipo}`);
     console.log("==================================================");
 
     let orquestadorPath = '';
     let inyectorPath = '';
 
-    // ✨ TU MEJORA: Rutas relativas (Más limpio y portable)
+    // Mejora 1: Usamos path.join y process.cwd() para asegurar que la ruta absoluta 
+    // funcione sin importar desde dónde inicies el servidor (nodemon, node directo, pm2, etc.)
+    const basePath = process.cwd();
+
     if (tipo === 'VENTAS') {
-        orquestadorPath = 'src/sii_core/sii_historial_DTE/documentos emitidos/sii_emitidos_orquestador.mjs';
-        inyectorPath = 'src/components/facturacion/scripts/subir_facturas_emitidas.mjs';
+        orquestadorPath = path.join(basePath, 'src', 'sii_core', 'sii_historial_DTE', 'documentos emitidos', 'sii_emitidos_orquestador.mjs');
+        inyectorPath = path.join(basePath, 'src', 'components', 'facturacion', 'scripts', 'subir_facturas_emitidas.mjs');
     } else if (tipo === 'COMPRAS') {
-        orquestadorPath = 'src/sii_core/sii_historial_DTE/documentos recibidos/sii_recibidos_orquestador.mjs';
-        inyectorPath = 'src/components/facturacion/scripts/subir_facturas_recibidas.mjs';
+        orquestadorPath = path.join(basePath, 'src', 'sii_core', 'sii_historial_DTE', 'documentos recibidos', 'sii_recibidos_orquestador.mjs');
+        inyectorPath = path.join(basePath, 'src', 'components', 'facturacion', 'scripts', 'subir_facturas_recibidas.mjs');
     } else {
         console.error(`❌ Error: El tipo de sincronización "${tipo}" no existe.`);
-        return false; // Cortamos la ejecución si llega basura
+        return false; 
     }
 
     try {
-        // PASO 1: Ejecutar el Scrapper
+        // Ejecutar Scrapper
         console.log(`▶️  [1/2] Iniciando Scrapper de ${tipo}...`);
         await new Promise((resolve, reject) => {
             exec(`node "${orquestadorPath}"`, (error, stdout, stderr) => {
-                if (error) return reject(error);
-                console.log(stdout); // Imprime lo que dice el robot
+                if (error) {
+                    console.error(`❌ Error ejecutando Scrapper ${tipo}:`, stderr);
+                    return reject(error);
+                }
+                console.log(stdout); 
                 resolve(stdout);
             });
         });
 
-        // PASO 2: Ejecutar el Inyector a Supabase
+        // Ejecutar Inyector
         console.log(`▶️  [2/2] Iniciando Inyección a la Base de Datos (${tipo})...`);
         await new Promise((resolve, reject) => {
             exec(`node "${inyectorPath}"`, (error, stdout, stderr) => {
-                if (error) return reject(error);
-                console.log(stdout); // Imprime el resumen de facturas subidas
+                if (error) {
+                     console.error(`❌ Error ejecutando Inyector ${tipo}:`, stderr);
+                     return reject(error);
+                }
+                console.log(stdout); 
                 resolve(stdout);
             });
         });
 
-        console.log(`✅ PROCESO ${tipo} COMPLETO FINALIZADO.`);
+        console.log(`✅ PROCESO GLOBAL ${tipo} FINALIZADO.`);
         return true;
 
     } catch (error) {
-        console.error(`❌ Error crítico en ${tipo}:`, error.message);
+        console.error(`❌ Error crítico en sincronización global de ${tipo}:`, error.message);
         return false;
     }
 };
 
 // ============================================================================
-// 🌐 RUTA API (Para cuando presionas el botón manual en React)
+// 🌐 RUTA API (Sincronización Manual por Empresa)
 // ============================================================================
 app.post('/api/sincronizar-sii', apiLimiter, async (req, res) => {
     const { tipo, rut, clave, mes, anio, empresaId } = req.body; 
     
-    // 1. MODO MANUAL: Si React nos envía RUT y Clave, ejecutamos el robot dinámico
-    if (rut && clave) {
-        console.log(`\n👨‍💻 [MODO MANUAL] Sincronizando ${tipo} para RUT: ${rut} - Periodo: ${mes}/${anio}`);
+    // 1. MODO MANUAL: Extracción mes a mes para una empresa específica
+    if (rut && clave && empresaId) {
+        console.log(`\n👨‍💻 [MODO MANUAL] Sincronizando para RUT: ${rut}`);
         try {
-            const resultado = await ejecutarRobotSII({ rut, clave, mes, anio, tipo, empresaId });
+            const resultado = await ejecutarRobotSII({ rut, clave });
             
             if (resultado.success) {
-                return res.json({ success: true, message: `Datos de ${tipo} extraídos correctamente del SII.` });
+                console.log(`✅ Extracción completada. Subiendo a BD...`);
+                
+                // Inyectamos llamando a la función importada en lugar de usar exec
+                const cargaExitosa = await cargarJSONaBD(empresaId);
+                
+                if (cargaExitosa) {
+                    return res.json({ success: true, message: "Datos extraídos y guardados en tu base de datos con éxito." });
+                } else {
+                    return res.status(500).json({ success: false, message: "Los datos se extrajeron, pero falló la escritura en BD." });
+                }
             } else {
-                return res.status(500).json({ success: false, message: resultado.message });
+                return res.status(500).json({ success: false, message: "Fallo durante la ejecución del robot en el portal del SII." });
             }
         } catch (error) {
             console.error("❌ Error al ejecutar robot manual:", error);
-            return res.status(500).json({ success: false, message: "Error interno al iniciar Puppeteer." });
+            return res.status(500).json({ success: false, message: "Error interno del servidor al iniciar Puppeteer." });
         }
     }
 
-    // 2. MODO GLOBAL (El que ya tenías): Se usa si no se envían credenciales específicas
+    // 2. MODO GLOBAL (El que ya tenías)
     if (tipo !== 'VENTAS' && tipo !== 'COMPRAS') {
         return res.status(400).json({ success: false, message: "Tipo inválido." });
     }
@@ -172,41 +191,31 @@ app.post('/api/sincronizar-sii', apiLimiter, async (req, res) => {
 // ⏰ TAREAS PROGRAMADAS (PILOTO AUTOMÁTICO)
 // ============================================================================
 
-// TAREA 1: Sincronización Nocturna (Se ejecuta todos los días a las 02:00 AM)
+// Sincronización Nocturna (02:00 AM)
 cron.schedule('0 2 * * *', async () => {
     console.log('\n==================================================');
     console.log('⏰ [CRON] INICIANDO RUTINA NOCTURNA DEL SII');
     console.log('==================================================');
     
-    // Ejecuta Ventas y luego Compras de forma ordenada
     const ventasOk = await ejecutarSincronizacion('VENTAS');
     if (ventasOk) {
         await ejecutarSincronizacion('COMPRAS');
     }
-    
     console.log('🏁 [CRON] RUTINA NOCTURNA FINALIZADA.');
 });
 
-// ============================================================================
-// ⏰ TAREAS PROGRAMADAS (PILOTO AUTOMÁTICO)
-// ============================================================================
-
-// Sincronización Automática: Se ejecuta cada 4 horas en punto
-// (00:00, 04:00, 08:00, 12:00, 16:00, 20:00)
+// Sincronización cada 4 horas
 cron.schedule('0 */4 * * *', async () => {
     console.log('\n==================================================');
     console.log('⏰ [CRON] INICIANDO RUTINA DE SINCRONIZACIÓN (CADA 4 HORAS)');
     console.log('==================================================');
     
-    // Ejecuta Ventas y luego Compras de forma ordenada
     const ventasOk = await ejecutarSincronizacion('VENTAS');
     if (ventasOk) {
         await ejecutarSincronizacion('COMPRAS');
     }
-    
     console.log('🏁 [CRON] RUTINA DE 4 HORAS FINALIZADA.');
 });
-
 
 // --- Archivos Estáticos ---
 app.use('/static', express.static(path.join(process.cwd(), 'tmp')));

@@ -13,22 +13,22 @@ export const consultarHistorialBunkerController = async (req, res) => {
         let query = "";
         let values = [];
 
-        // Si piden "ALL", traemos TODAS las ventas de TODAS las empresas
+        // 🌐 BÓVEDA GLOBAL: Consulta la tabla general antigua
         if (empresa_id === 'ALL') {
             query = `
-                SELECT d.id, d.folio, d.tipo_dte, d.monto_neto, d.fecha_emision, d.url_pdf, d.rut_cliente, e.razon_social
+                SELECT d.id, d.folio, d.tipo_dte, d.monto_neto, d.fecha_emision, d.url_pdf, 
+                       d.rut_cliente, e.razon_social
                 FROM documentos_emitidos d
-                JOIN empresa e ON d.empresa_id = e.id
+                LEFT JOIN empresa e ON d.empresa_id = e.id
                 ORDER BY d.fecha_emision DESC;
             `;
         } else {
-            // Comportamiento normal: solo la empresa seleccionada
+            // 🏢 EMPRESA ESPECÍFICA: Consulta la tabla NUEVA que llena el robot
             query = `
-                SELECT d.id, d.folio, d.tipo_dte, d.monto_neto, d.fecha_emision, d.url_pdf, d.rut_cliente, e.razon_social
-                FROM documentos_emitidos d
-                JOIN empresa e ON d.empresa_id = e.id
-                WHERE d.empresa_id = $1
-                ORDER BY d.fecha_emision DESC;
+                SELECT *, razon_social_cliente AS razon_social
+                FROM documentos_emitidos_empresa
+                WHERE empresa_id = $1
+                ORDER BY fecha_emision DESC;
             `;
             values = [empresa_id];
         }
@@ -54,18 +54,18 @@ export const consultarComprasBunkerController = async (req, res) => {
         let query = "";
         let values = [];
 
-        // Si piden "ALL", traemos TODAS las compras de TODAS las empresas
+        // 🌐 BÓVEDA GLOBAL: Consulta la tabla general antigua
         if (empresa_id === 'ALL') {
             query = `
-                SELECT id, rut_proveedor, razon_social_proveedor, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision, url_pdf
+                SELECT id, rut_proveedor, razon_social_proveedor, tipo_dte, folio, 
+                       monto_neto, monto_iva, monto_total, fecha_emision, url_pdf
                 FROM documentos_recibidos
                 ORDER BY fecha_emision DESC;
             `;
         } else {
-            // Comportamiento normal
+            // 🏢 EMPRESA ESPECÍFICA: Consulta la tabla NUEVA que llena el robot
             query = `
-                SELECT id, rut_proveedor, razon_social_proveedor, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision, url_pdf
-                FROM documentos_recibidos
+                SELECT * FROM documentos_recibidos_empresa
                 WHERE empresa_id = $1
                 ORDER BY fecha_emision DESC;
             `;

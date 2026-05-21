@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { DownloadCloud, ArrowDownRight, ArrowUpRight, RefreshCcw, FileCheck, Loader2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { DownloadCloud, ArrowDownRight, ArrowUpRight, RefreshCcw, FileCheck, Loader2, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, BookCopy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth.jsx';
 import { obtenerHistorialBunker, obtenerComprasBunker } from '@/services/dteConsultasService';
 import GeneradorLibroDiarioModal from '@/components/contabilidad/modals/GeneradorLibroDiarioModal';
-import { BookCopy } from 'lucide-react';
 import { API_BASE_URL } from '../../../config.js';
+
 const formatText = (str) => {
   if (!str) return '';
   return str.toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
@@ -37,12 +37,19 @@ const ITEMS_PER_PAGE = 10;
 // RECIBIMOS LA PROP DEL PADRE
 const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial }) => {
   const { selectedCompany } = useAuth();
+  
+  // Garantizar que targetId sea 'ALL' o el ID de la empresa real
   const targetId = propEmpresaId || selectedCompany?.id || 'ALL';
 
   const [activeView, setActiveView] = useState('compras'); 
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLoadingDB, setIsLoadingDB] = useState(false);
   
+  // Guardamos TODA la data cruda que viene del backend
+  const [rawCompras, setRawCompras] = useState([]);
+  const [rawVentas, setRawVentas] = useState([]);
+  
+  // Guardamos la data filtrada por mes/año
   const [compras, setCompras] = useState([]);
   const [ventas, setVentas] = useState([]);
   
@@ -56,15 +63,16 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
   const [anioActivo, setAnioActivo] = useState(currentYear);
   const [currentPage, setCurrentPage] = useState(1);
 
+  // Volver a la página 1 si cambian los filtros
   useEffect(() => {
     setCurrentPage(1);
   }, [activeView, mesActivo, anioActivo, targetId]);
 
+  // Cargar datos DESDE EL BACKEND
   const cargarDatos = useCallback(async () => {
-    if (!targetId) return;
-    
     setIsLoadingDB(true);
     try {
+      // Le pasamos el targetId (que es 'ALL' o el UUID de la empresa)
       const [resVentas, resCompras] = await Promise.all([
         obtenerHistorialBunker(targetId),
         obtenerComprasBunker(targetId)
@@ -73,32 +81,40 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
       const dataVentas = resVentas.ok ? (resVentas.documentos || []) : [];
       const dataCompras = resCompras.ok ? (resCompras.documentos || []) : [];
 
-      const periodoStr = `${anioActivo}-${mesActivo}`;
-      const filtrarPorMes = (docs) => docs.filter(doc => {
-        if (!doc.fecha_emision) return false;
-        return doc.fecha_emision.startsWith(periodoStr);
-      });
-
-      setVentas(filtrarPorMes(dataVentas));
-      setCompras(filtrarPorMes(dataCompras));
-
+      setRawVentas(dataVentas);
+      setRawCompras(dataCompras);
+      
     } catch (error) {
       console.error("Error al cargar RCV:", error);
       toast({ variant: "destructive", title: "ERROR DE CONEXION", description: "FALLA AL SINCRONIZAR CON EL BUNKER." });
     } finally {
       setIsLoadingDB(false);
     }
-  }, [targetId, mesActivo, anioActivo]);
+  }, [targetId]);
 
+  // Disparar carga de datos cuando cambia targetId
   useEffect(() => {
     cargarDatos();
   }, [cargarDatos]);
 
+  // Aplicar FILTRO DE FECHA localmente a la data cruda
+  useEffect(() => {
+    const periodoStr = `${anioActivo}-${mesActivo}`;
+    
+    const filtrarPorMes = (docs) => docs.filter(doc => {
+      if (!doc.fecha_emision) return false;
+      return doc.fecha_emision.startsWith(periodoStr);
+    });
+
+    setVentas(filtrarPorMes(rawVentas));
+    setCompras(filtrarPorMes(rawCompras));
+  }, [rawVentas, rawCompras, mesActivo, anioActivo]);
+
   const stats = useMemo(() => {
     const calcularTotales = (docs) => docs.reduce((acc, doc) => {
-      const neto = doc.monto_neto || 0;
-      const iva = doc.monto_iva || Math.round(neto * 0.19); 
-      const total = doc.monto_total || (neto + iva);
+      const neto = Number(doc.monto_neto) || 0;
+      const iva = Number(doc.monto_iva) || Math.round(neto * 0.19); 
+      const total = Number(doc.monto_total) || (neto + iva);
       
       return {
         dtes: acc.dtes + 1,
@@ -121,21 +137,27 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
   const handleSyncSII = async () => {
     setIsSyncing(true);
 
-    const rut = selectedCompany?.repRut;
+    const rut = selectedCompany?.rut;
     const clave = selectedCompany?.claveSII;
-    const rutEmpresa = selectedCompany?.rut; // <-- 1. AGREGAR RUT EMPRESA
 
-    if (!rut || !clave || !rutEmpresa) {
+    if (!rut || !clave) {
       toast({ 
         variant: "destructive", 
         title: "Credenciales Faltantes", 
-        description: "Falta el RUT/Clave del representante o el RUT de la empresa." 
+        description: "Debes seleccionar una empresa con RUT y Clave del SII para sincronizar." 
       });
       setIsSyncing(false);
       return;
     }
+    
+    // Si targetId es ALL, evitamos sincronizar
+    if (targetId === 'ALL') {
+      toast({ variant: "destructive", title: "Operación no permitida", description: "Selecciona una empresa específica para sincronizar manualmente."});
+      setIsSyncing(false);
+      return;
+    }
 
-    toast({ title: "🤖 Iniciando Robot", description: `Conectando al SII para ${activeView} de ${mesActivo}/${anioActivo}` });
+    toast({ title: "🤖 Iniciando Robot", description: `Conectando al SII para extraer información...` });
 
     try {
       const response = await fetch(`${API_BASE_URL}/sincronizar-sii`, {
@@ -146,10 +168,9 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
         body: JSON.stringify({
           rut,
           clave,
-          rutEmpresa, // <-- 2. ENVIARLO EN EL BODY
           mes: mesActivo,
           anio: anioActivo,
-          tipo: activeView,
+          tipo: activeView, // Solo referencial, el robot saca ambos
           empresaId: targetId
         })
       });
@@ -157,7 +178,7 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
       const result = await response.json();
 
       if (result.success) {
-        toast({ title: "✅ Sincronización Exitosa", description: `Se guardaron ${result.cantidad} documentos en la base de datos.` });
+        toast({ title: "✅ Sincronización Exitosa", description: result.message });
         cargarDatos(); 
       } else {
         toast({ variant: "destructive", title: "❌ Error en el Robot", description: result.message || "Falla al extraer datos." });
@@ -206,8 +227,9 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
         <div className="flex items-center gap-3">
           <Button 
             onClick={handleSyncSII} 
-            disabled={isSyncing}
+            disabled={isSyncing || targetId === 'ALL'}
             className="bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[10px] tracking-widest"
+            title={targetId === 'ALL' ? 'Selecciona una empresa para sincronizar' : ''}
           >
             {isSyncing ? <RefreshCcw className="h-4 w-4 mr-2 animate-spin" /> : <DownloadCloud className="h-4 w-4 mr-2" />}
             EXTRAER DE SII
@@ -294,9 +316,9 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {currentData.map((doc) => {
-                    const neto = doc.monto_neto || 0;
-                    const iva = doc.monto_iva || Math.round(neto * 0.19);
-                    const total = doc.monto_total || (neto + iva);
+                    const neto = Number(doc.monto_neto) || 0;
+                    const iva = Number(doc.monto_iva) || Math.round(neto * 0.19);
+                    const total = Number(doc.monto_total) || (neto + iva);
                     
                     const rutRelacionado = activeView === 'compras' ? doc.rut_proveedor : doc.rut_cliente;
                     const razonSocialRaw = activeView === 'compras' ? doc.razon_social_proveedor : doc.razon_social;
@@ -362,7 +384,7 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
         mes={MESES.find(m => m.value === mesActivo)?.label}
         anio={anioActivo}
         empresaId={targetId}
-        onGuardarSuperficial={onGuardarSuperficial} // SE COMUNICA CON EL PADRE
+        onGuardarSuperficial={onGuardarSuperficial}
       />
     </div>
   );

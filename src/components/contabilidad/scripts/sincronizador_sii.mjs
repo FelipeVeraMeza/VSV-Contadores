@@ -1,609 +1,213 @@
-// Ruta:
-// src/components/contabilidad/scripts/sincronizador_sii.mjs
-
 import puppeteer from 'puppeteer';
-
 import fs from 'fs';
-
 import path from 'path';
 
-import { fileURLToPath } from 'url';
-
-import {
-    subirDocumentosSII
-} from './subir_documentos_sii_db.mjs';
-
 // ==========================================
-// RUTA ACTUAL
+// FUNCIÓN PRINCIPAL
 // ==========================================
-const __filename =
-    fileURLToPath(import.meta.url);
+export async function ejecutarRobotSII({ rut, clave }) {
+    console.log(`\n🚀 Iniciando Robot Masivo SII...`);
 
-const __dirname =
-    path.dirname(__filename);
-
-// ==========================================
-// EXPORT PRINCIPAL
-// ==========================================
-export async function ejecutarRobotSII({
-
-    rut,
-
-    clave,
-
-    rutEmpresa
-}) {
-
-    console.log('\n🚀 Iniciando robot SII...');
-
-    // ==========================================
-    // ABRIR NAVEGADOR
-    // ==========================================
     const browser = await puppeteer.launch({
-
         headless: false,
-
         defaultViewport: null,
-
         args: ['--start-maximized']
     });
 
-    let page;
+    const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(60000);
+
+    // Variable maestra para acumular todo
+    let masterData = [];
 
     try {
+        // 1. LOGIN
+        await page.goto('https://zeusr.sii.cl/AUT2000/InicioAutenticacion/IngresoRutClave.html?https://www4.sii.cl/consdcvinternetui/', { waitUntil: 'networkidle2' });
+        await page.type('#rut', rut.replace(/[^0-9kK]/gi, ''));
+        await page.type('#clave', clave);
+        await Promise.all([page.click('#bt_ingresar'), page.waitForNavigation({ waitUntil: 'networkidle2' })]);
+        
+        await page.goto('https://www4.sii.cl/consdcvinternetui/', { waitUntil: 'networkidle2' });
 
-        // ==========================================
-        // NUEVA PESTAÑA
-        // ==========================================
-        page = await browser.newPage();
+        // 2. CICLO: Mayo 2026 hasta Abril 2026
+        let anio = 2026;
+        let mes = 5;
 
-        page.setDefaultNavigationTimeout(60000);
+        while (anio > 2024 || (anio === 2025 && mes >= 1)) {
+            console.log(`\n📅 --- PROCESANDO PERIODO: ${mes}/${anio} ---`);
+            
+            await matarPopups(page);
+            await prepararYConsultarRCV(page, anio, mes);
+            await clickConsultar(page);
 
-        // ==========================================
-        // MANEJO ALERTAS
-        // ==========================================
-        page.on('dialog', async dialog => {
-
-            await dialog.accept().catch(() => {});
-        });
-
-        // ==========================================
-        // ENTRAR SII
-        // ==========================================
-        console.log('🌐 Entrando al portal SII...');
-
-        await page.goto(
-            'https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=2&TIPO=4',
-            {
-                waitUntil: 'networkidle2'
-            }
-        );
-
-        // ==========================================
-        // LIMPIAR RUT
-        // ==========================================
-        const rutLimpio =
-            rut.replace(/[^0-9kK]/gi, '');
-
-        console.log('🔑 Ingresando credenciales...');
-
-        // ==========================================
-        // INPUT RUT
-        // ==========================================
-        const inputRut =
-            await page.waitForSelector(
-                '#rutcntr, #rut'
-            );
-
-        const idRut =
-            await page.evaluate(
-                el => el.id,
-                inputRut
-            );
-
-        // ==========================================
-        // ESCRIBIR RUT
-        // ==========================================
-        await page.type(
-            `#${idRut}`,
-            rutLimpio,
-            { delay: 50 }
-        );
-
-        // ==========================================
-        // ESCRIBIR CLAVE
-        // ==========================================
-        await page.type(
-            '#clave',
-            clave,
-            { delay: 50 }
-        );
-
-        // ==========================================
-        // LOGIN
-        // ==========================================
-        console.log('🚀 Iniciando sesión...');
-
-        await Promise.all([
-
-            page.click('#bt_ingresar'),
-
-            page.waitForNavigation({
-                waitUntil: 'networkidle2'
-            })
-        ]);
-
-        console.log('✅ Sesión iniciada');
-
-        // ==========================================
-        // SELECCIONAR EMPRESA
-        // ==========================================
-        if (rutEmpresa) {
-
-            console.log(
-                `🏢 Buscando empresa: ${rutEmpresa}`
-            );
-
-            try {
-
-                const rutEmpresaLimpio =
-                    rutEmpresa
-                        .replace(/\./g, '')
-                        .trim()
-                        .toUpperCase();
-
-                await page.waitForSelector('a', {
-                    timeout: 10000
-                });
-
-                const links =
-                    await page.$$('a');
-
-                let empresaEncontrada = false;
-
-                for (const link of links) {
-
-                    const texto =
-                        await page.evaluate(
-                            el => el.innerText,
-                            link
-                        );
-
-                    if (!texto) continue;
-
-                    const textoLimpio =
-                        texto
-                            .replace(/\./g, '')
-                            .trim()
-                            .toUpperCase();
-
-                    if (
-                        textoLimpio.includes(
-                            rutEmpresaLimpio
-                        )
-                    ) {
-
-                        console.log(
-                            `✅ Empresa encontrada: ${texto}`
-                        );
-
-                        await Promise.all([
-
-                            link.click(),
-
-                            page.waitForNavigation({
-                                waitUntil: 'networkidle2'
-                            })
-                        ]);
-
-                        empresaEncontrada = true;
-
-                        break;
-                    }
-                }
-
-                if (!empresaEncontrada) {
-
-                    console.log(
-                        '⚠️ No se encontró empresa asociada'
-                    );
-                }
-
-            } catch (error) {
-
-                console.log(
-                    '⚠️ Error seleccionando empresa:',
-                    error.message
-                );
-            }
-        }
-
-        // ==========================================
-        // EXTRAER DOCUMENTOS
-        // ==========================================
-        console.log('📥 Extrayendo tabla de documentos...');
-
-        let documentos = [];
-
-        let paginaActual = 1;
-
-        let continuar = true;
-
-        let primerFolioAnterior = null;
-
-        while (continuar) {
-
-            console.log(`⏳ Página ${paginaActual}`);
-
-            // ==========================================
-            // URL TABLA
-            // ==========================================
-            const urlTabla =
-                `https://www1.sii.cl/cgi-bin/Portal001/mipeAdminDocsEmi.cgi?RUT_RECP=&FOLIO=&RZN_SOC=&FEC_DESDE=&FEC_HASTA=&TPO_DOC=&ESTADO=&ORDEN=&NUM_PAG=${paginaActual}`;
-
-            await page.goto(urlTabla, {
-
-                waitUntil: 'networkidle2',
-
-                timeout: 60000
-            });
-
-            try {
-
-                await page.waitForSelector(
-                    'table tbody tr',
-                    {
-                        timeout: 15000
-                    }
-                );
-
-            } catch (error) {
-
-                console.log('⚠️ No hay más tablas');
-
-                break;
+            // A. COMPRAS
+            await page.click('#tabCompra');
+            await new Promise(r => setTimeout(r, 2000));
+            if (!(await estaVacio(page))) {
+                console.log("🛒 Escaneando tabla de Resúmenes (COMPRAS)...");
+                await escanearTablaResumen(page, masterData, anio, mes, 'Compra');
             }
 
-            // ==========================================
-            // EXTRAER TABLA
-            // ==========================================
-            const datosPagina =
-                await page.evaluate(() => {
-
-                    const lista = [];
-
-                    const filas =
-                        document.querySelectorAll(
-                            'table tbody tr'
-                        );
-
-                    filas.forEach(fila => {
-
-                        const celdas =
-                            fila.querySelectorAll('td');
-
-                        if (celdas.length >= 8) {
-
-                            const rutCliente =
-                                celdas[1]?.innerText.trim();
-
-                            const razonSocial =
-                                celdas[2]?.innerText.trim();
-
-                            const documento =
-                                celdas[3]?.innerText.trim();
-
-                            const folio =
-                                celdas[4]?.innerText.trim();
-
-                            const fechaTexto =
-                                celdas[5]?.innerText.trim();
-
-                            const montoTexto =
-                                celdas[6]?.innerText || '0';
-
-                            const estado =
-                                celdas[7]?.innerText.trim();
-
-                            const montoTotal =
-                                parseInt(
-                                    montoTexto.replace(/[^0-9]/g, '')
-                                ) || 0;
-
-                            // ==========================================
-                            // FORMATEAR FECHA
-                            // ==========================================
-                            let fecha = null;
-
-                            if (fechaTexto) {
-
-                                const fechaLimpia =
-                                    fechaTexto
-                                        .replace(/\s+/g, '')
-                                        .trim();
-
-                                const match =
-                                    fechaLimpia.match(
-                                        /^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/
-                                    );
-
-                                if (match) {
-
-                                    const dia =
-                                        match[1]
-                                            .padStart(2, '0');
-
-                                    const mes =
-                                        match[2]
-                                            .padStart(2, '0');
-
-                                    const anio =
-                                        match[3];
-
-                                    fecha =
-                                        `${anio}-${mes}-${dia}`;
-
-                                } else {
-
-                                    fecha = fechaLimpia;
-                                }
-                            }
-
-                            // ==========================================
-                            // VALIDAR
-                            // ==========================================
-                            if (
-                                rutCliente &&
-                                folio &&
-                                !isNaN(folio)
-                            ) {
-
-                                let monto_neto =
-                                    Math.round(montoTotal / 1.19);
-
-                                let monto_iva =
-                                    montoTotal - monto_neto;
-
-                                let tipo_dte = 33;
-
-                                const docUpper =
-                                    documento.toUpperCase();
-
-                                if (
-                                    docUpper.includes('EXENTA')
-                                ) {
-
-                                    tipo_dte = 34;
-
-                                    monto_neto = montoTotal;
-
-                                    monto_iva = 0;
-
-                                } else if (
-                                    docUpper.includes('BOLETA')
-                                ) {
-
-                                    tipo_dte = 39;
-
-                                    monto_neto = montoTotal;
-
-                                    monto_iva = 0;
-
-                                } else if (
-                                    docUpper.includes('CREDITO')
-                                ) {
-
-                                    tipo_dte = 61;
-
-                                } else if (
-                                    docUpper.includes('DEBITO')
-                                ) {
-
-                                    tipo_dte = 56;
-                                }
-
-                                lista.push({
-
-                                    rut_cliente: rutCliente,
-
-                                    razon_social: razonSocial,
-
-                                    documento,
-
-                                    folio: parseInt(folio),
-
-                                    fecha,
-
-                                    estado,
-
-                                    monto_total: montoTotal,
-
-                                    monto_neto,
-
-                                    monto_iva,
-
-                                    tipo_dte
-                                });
-                            }
-                        }
-                    });
-
-                    return lista;
-                });
-
-            // ==========================================
-            // FIN DATOS
-            // ==========================================
-            if (datosPagina.length === 0) {
-
-                continuar = false;
-
-                break;
+            // B. VENTAS
+            await page.click('a[ui-sref="venta"]');
+            await new Promise(r => setTimeout(r, 2000));
+            if (!(await estaVacio(page))) {
+                console.log("📈 Escaneando tabla de Resúmenes (VENTAS)...");
+                await escanearTablaResumen(page, masterData, anio, mes, 'Venta');
             }
 
-            // ==========================================
-            // EVITAR LOOP
-            // ==========================================
-            const primerFolioActual =
-                datosPagina[0].folio;
-
-            if (
-                primerFolioAnterior === primerFolioActual
-            ) {
-
-                console.log('🛑 Fin detectado');
-
-                break;
-            }
-
-            primerFolioAnterior =
-                primerFolioActual;
-
-            documentos =
-                documentos.concat(datosPagina);
-
-            paginaActual++;
-
-            await new Promise(resolve =>
-                setTimeout(resolve, 1000)
-            );
-        }
-
-        // ==========================================
-        // RESULTADO
-        // ==========================================
-        console.log('\n================================');
-
-        console.log(
-            `✅ TOTAL EXTRAÍDO: ${documentos.length}`
-        );
-
-        console.log('================================');
-
-        console.log(documentos);
-
-        // ==========================================
-        // CREAR ARCHIVO .MJS
-        // ==========================================
-        console.log('\n💾 Generando archivo .mjs...');
-
-        const carpetaDestino =
-            path.join(__dirname, 'datos_sii');
-
-        if (!fs.existsSync(carpetaDestino)) {
-
-            fs.mkdirSync(
-                carpetaDestino,
-                { recursive: true }
-            );
-        }
-
-        const fechaArchivo =
-            new Date()
-                .toISOString()
-                .replace(/[:.]/g, '-');
-
-        const nombreArchivo =
-            `documentos_sii_${fechaArchivo}.mjs`;
-
-        const rutaArchivo =
-            path.join(
-                carpetaDestino,
-                nombreArchivo
-            );
-
-        const contenidoArchivo = `
-// ==========================================
-// ARCHIVO GENERADO AUTOMÁTICAMENTE
-// ==========================================
-
-export const documentos = ${JSON.stringify(documentos, null, 4)};
-
-export default documentos;
-`;
-
-        fs.writeFileSync(
-            rutaArchivo,
-            contenidoArchivo,
-            'utf8'
-        );
-
-        console.log('✅ Archivo .mjs generado');
-
-        console.log(`📂 ${rutaArchivo}`);
-
-        // ==========================================
-        // SUBIR A POSTGRESQL
-        // ==========================================
-        await subirDocumentosSII({
-
-            rutEmpresa,
-
-            documentos,
-
-            rutaArchivo
-        });
-
-        return {
-
-            success: true,
-
-            documentos,
-
-            archivo: rutaArchivo
-        };
-
-    } catch (error) {
-
-        console.error(
-            `❌ Error durante el proceso: ${error.message}`
-        );
-
-        throw error;
-
-    } finally {
-
-        // ==========================================
-        // CERRAR SESIÓN SII
-        // ==========================================
-        if (page && !page.isClosed()) {
-
-            console.log('🧹 Cerrando sesión del SII...');
-
-            try {
-
-                await page.goto(
-                    'https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout',
-                    {
-                        timeout: 5000,
-                        waitUntil: 'domcontentloaded'
-                    }
-                );
-
-                console.log('✅ Sesión SII cerrada');
-
-            } catch (e) {
-
-                console.log(
-                    '⚠️ No se pudo cerrar sesión correctamente'
-                );
-            }
-        }
-
-        // ==========================================
-        // CERRAR NAVEGADOR
-        // ==========================================
-        if (browser) {
-
-            console.log(
-                '🛑 Cerrando navegador Puppeteer...'
-            );
-
-            await browser.close();
-        }
-
-        console.log(
-            '🏁 Recursos liberados. ¡Misión Cumplida!'
-        );
+            mes--;
+        if (mes < 1) {
+            mes = 12;
+            anio--;
     }
+}
+
+        console.log("🏁 Proceso de escaneo terminado.");
+        return { success: true, count: masterData.length };
+
+    } catch (e) {
+        console.error("❌ Error crítico:", e.message);
+        return { success: false };
+    } finally {
+        // Guardar archivo único
+        const dir = path.join(process.cwd(), 'src', 'components', 'contabilidad', 'scripts', 'datos_sii');
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        
+        const rutaFinal = path.join(dir, 'reporte_completo_sii.json');
+        fs.writeFileSync(rutaFinal, JSON.stringify(masterData, null, 2));
+        console.log(`💾 Reporte único guardado en: ${rutaFinal}`);
+
+        await cerrarSesion(page);
+        await browser.close();
+    }
+}
+
+// ==========================================
+// LÓGICA DE NAVEGACIÓN Y EXTRACCIÓN
+// ==========================================
+
+async function escanearTablaResumen(page, masterData, anio, mes, tipo) {
+    const filas = await page.$$('table tbody tr');
+    for (let i = 0; i < filas.length; i++) {
+        const currentFilas = await page.$$('table tbody tr');
+        const link = await currentFilas[i].$('a');
+
+        if (link) {
+            const nombreDoc = await page.evaluate(el => el.innerText.trim(), link);
+            console.log(` 📄 Clic en: ${nombreDoc}`);
+            
+            await link.click();
+            await new Promise(r => setTimeout(r, 3000)); 
+
+            await escanearTablaDetalle(page, masterData, anio, mes, tipo, nombreDoc); 
+
+            await page.evaluate(() => {
+                const btnVolver = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Volver'));
+                if (btnVolver) btnVolver.click();
+            });
+            await new Promise(r => setTimeout(r, 2000));
+        }
+    }
+}
+
+async function escanearTablaDetalle(page, masterData, anio, mes, tipo, docNombre) {
+    console.log("🔍 Configurando tabla a 100 resultados...");
+    
+    await page.evaluate(() => {
+        const select = document.querySelector('select[name$="length"]');
+        if (select) { select.value = '100'; select.dispatchEvent(new Event('change', { bubbles: true })); }
+    });
+    await new Promise(r => setTimeout(r, 3000));
+
+    let continuar = true;
+    while (continuar) {
+        const datos = await page.evaluate((anio, mes, tipo, docNombre) => {
+            const filas = Array.from(document.querySelectorAll('table tbody tr'));
+            return filas.map(tr => {
+                const tds = tr.querySelectorAll('td');
+                if (tds.length < 13) return null;
+
+                // ==========================================
+                // 🧹 FILTRO ANTI-FANTASMAS EN ORIGEN
+                // Evitamos guardar filas ocultas o desfasadas.
+                // ==========================================
+                const montoExento = tds[6].innerText.trim();
+                const codigoI = tds[12].innerText.trim();
+                if (montoExento === "" && codigoI === "") return null;
+
+                return {
+                    Periodo: `${mes}/${anio}`,
+                    Categoria: tipo,
+                    Documento_Origen: docNombre,
+                    Tipo: tds[0].innerText.trim(),
+                    RUT_Proveedor: tds[1].innerText.trim(),
+                    Folio: tds[2].innerText.trim(),
+                    Fecha_Docto: tds[3].innerText.trim(),
+                    Fecha_Recepcion: tds[4].innerText.trim(),
+                    Fecha_Acuse: tds[5].innerText.trim(),
+                    Monto_Exento: montoExento,
+                    Monto_Neto: tds[7].innerText.trim(),
+                    IVA_Recuperable: tds[8].innerText.trim(),
+                    Monto_Total: tds[9].innerText.trim(),
+                    Otros_Impuestos: tds[10].innerText.trim(),
+                    IVA_No_Recuperable: tds[11].innerText.trim(),
+                    Codigo_I: codigoI
+                };
+            }).filter(i => i !== null);
+        }, anio, mes, tipo, docNombre);
+        
+        masterData.push(...datos);
+        console.log(`✅ Extraídos ${datos.length} documentos reales.`);
+
+        continuar = await page.evaluate(() => {
+            const btnSiguiente = Array.from(document.querySelectorAll('a')).find(a => a.innerText.includes('Siguiente'));
+            if (btnSiguiente && !btnSiguiente.closest('li')?.classList.contains('disabled')) {
+                btnSiguiente.click();
+                return true;
+            }
+            return false;
+        });
+        if (continuar) await new Promise(r => setTimeout(r, 3000));
+    }
+}
+
+// ==========================================
+// AYUDANTES
+// ==========================================
+
+async function prepararYConsultarRCV(page, anio, mes) {
+    await page.evaluate((a, m) => {
+        const selects = document.querySelectorAll('select');
+        if (selects[0]) { selects[0].selectedIndex = selects[0].options.length - 1; selects[0].dispatchEvent(new Event('change')); }
+        if (selects[1]) { selects[1].value = m.toString().padStart(2, '0'); selects[1].dispatchEvent(new Event('change')); }
+        if (selects[2]) { selects[2].value = a.toString(); selects[2].dispatchEvent(new Event('change')); }
+    }, anio, mes);
+    await new Promise(r => setTimeout(r, 1000));
+}
+
+async function clickConsultar(page) {
+    await page.evaluate(() => {
+        const btn = Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Consultar'));
+        if (btn) btn.click();
+    });
+    await new Promise(r => setTimeout(r, 3000));
+}
+
+async function estaVacio(page) {
+    return await page.evaluate(() => {
+        const alerta = document.querySelector('.alert-danger');
+        return alerta && alerta.innerText.includes('No hay información');
+    });
+}
+
+async function matarPopups(page) {
+    await page.evaluate(() => {
+        const btns = document.querySelectorAll('.close, .modal-header button');
+        btns.forEach(b => b.click());
+    });
+}
+
+async function cerrarSesion(page) {
+    try { await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { timeout: 3000 }); } catch(e) {}
 }
