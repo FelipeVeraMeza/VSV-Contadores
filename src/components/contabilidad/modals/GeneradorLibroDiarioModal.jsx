@@ -1,107 +1,220 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { BookCopy, Save, Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { BookCopy, Save, Loader2, Calculator } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { getChartOfAccountsApi } from '@/services/accountingService';
 import { toast } from '@/components/ui/use-toast';
 
-const CUENTAS_FIJAS = {
-    CLIENTES: '1104-01',
-    VENTAS: '5101-01',
-    IVA_DEBITO: '2108-02',
-    PROVEEDORES: '2116-01',
-    IVA_CREDITO: '1108-02',
-    GASTOS: '4201-08'
+const CUENTAS_LABELS = {
+    CLIENTES: 'Cuenta Clientes',
+    VENTAS: 'Cuenta Ventas',
+    IVA_DEBITO: 'IVA Débito',
+    PROVEEDORES: 'Cuenta Proveedores',
+    IVA_CREDITO: 'IVA Crédito',
+    GASTOS: 'Cuenta Gastos'
 };
 
 const formatCLP = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(val || 0);
 
 const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, anio, empresaId, onGuardarSuperficial }) => {
     const { user } = useAuth();
+    const [mapeo, setMapeo] = useState({
+        CLIENTES: '1104-01',
+        VENTAS: '5101-01',
+        IVA_DEBITO: '2108-02',
+        PROVEEDORES: '2116-01',
+        IVA_CREDITO: '1108-02',
+        GASTOS: '4201-08'
+    });
 
     const { data: dataCuentas, isLoading } = useQuery({
         queryKey: ['chart-of-accounts', empresaId],
         queryFn: async () => {
             const res = await getChartOfAccountsApi(user.sessionId, empresaId);
-            if (!res.ok) throw new Error("Error al obtener plan");
-            return res.json();
+            if (!res.ok) throw new Error("Error al obtener plan de cuentas");
+            const data = await res.json();
+            return data.plan || [];
         },
         enabled: isOpen && !!user?.sessionId,
     });
 
-    const plan = dataCuentas?.plan || [];
-    const getNombreCuenta = (codigo) => plan.find(c => c.codigo === codigo)?.nombre || `CUENTA ${codigo}`;
+    const plan = dataCuentas || [];
+    const getNombreCuenta = (codigo) => plan.find(c => c.codigo === codigo)?.descripcion || `CUENTA ${codigo}`;
 
-    const asientos = useMemo(() => {
-        if (!isOpen) return [];
+    const handleCuentaChange = (tipo, codigo) => {
+        setMapeo(prev => ({ ...prev, [tipo]: codigo }));
+    };
 
-        let netoV = 0, ivaV = 0, totalV = 0;
+    // 🔥 CÁLCULO DETALLADO PARA MOSTRAR AL USUARIO
+    const resumenMatematico = useMemo(() => {
+        let facturasVentas = { neto: 0, iva: 0, total: 0, cant: 0 };
+        let ncVentas = { neto: 0, iva: 0, total: 0, cant: 0 };
+
         ventas.forEach(doc => {
-            const neto = doc.monto_neto || 0;
-            const iva = doc.monto_iva || Math.round(neto * 0.19);
-            const total = doc.monto_total || (neto + iva);
+            const neto = Number(doc.monto_neto) || 0;
+            const iva = Number(doc.monto_iva) || 0;
+            const total = Number(doc.monto_total) || (neto + iva);
+            
             if (doc.tipo_dte === 61) {
-                netoV -= neto; ivaV -= iva; totalV -= total;
+                ncVentas.cant++; ncVentas.neto += neto; ncVentas.iva += iva; ncVentas.total += total;
             } else {
-                netoV += neto; ivaV += iva; totalV += total;
+                facturasVentas.cant++; facturasVentas.neto += neto; facturasVentas.iva += iva; facturasVentas.total += total;
             }
         });
 
-        let netoC = 0, ivaC = 0, totalC = 0;
+        let facturasCompras = { neto: 0, iva: 0, total: 0, cant: 0 };
+        let ncCompras = { neto: 0, iva: 0, total: 0, cant: 0 };
+
         compras.forEach(doc => {
-            const neto = doc.monto_neto || 0;
-            const iva = doc.monto_iva || Math.round(neto * 0.19);
-            const total = doc.monto_total || (neto + iva);
+            const neto = Number(doc.monto_neto) || 0;
+            const iva = Number(doc.monto_iva) || 0; 
+            const total = Number(doc.monto_total) || (neto + iva);
+            
             if (doc.tipo_dte === 61) {
-                netoC -= neto; ivaC -= iva; totalC -= total;
+                ncCompras.cant++; ncCompras.neto += neto; ncCompras.iva += iva; ncCompras.total += total;
             } else {
-                netoC += neto; ivaC += iva; totalC += total;
+                facturasCompras.cant++; facturasCompras.neto += neto; facturasCompras.iva += iva; facturasCompras.total += total;
             }
         });
 
-        const lineas = [];
+        return {
+            ventas: {
+                facturas: facturasVentas,
+                nc: ncVentas,
+                final: {
+                    neto: facturasVentas.neto - ncVentas.neto,
+                    iva: facturasVentas.iva - ncVentas.iva,
+                    total: facturasVentas.total - ncVentas.total
+                }
+            },
+            compras: {
+                facturas: facturasCompras,
+                nc: ncCompras,
+                final: {
+                    neto: facturasCompras.neto - ncCompras.neto,
+                    iva: facturasCompras.iva - ncCompras.iva,
+                    total: facturasCompras.total - ncCompras.total
+                }
+            }
+        };
+    }, [ventas, compras, isOpen]);
 
-        if (totalV > 0 || netoV > 0) {
+    // 🔥 GENERACIÓN DE LOS ASIENTOS CORREGIDA Y CUADRADA
+    const asientos = useMemo(() => {
+        if (!isOpen || !Object.values(mapeo).every(c => c)) return [];
+        const lineas = [];
+        const { ventas: resV, compras: resC } = resumenMatematico;
+
+        // --- LÓGICA DE VENTAS ---
+        const totalVentas = resV.final.total;
+        const netoVentas = resV.final.neto;
+        const ivaVentas = resV.final.iva;
+
+        if (Math.abs(totalVentas) > 0 || Math.abs(netoVentas) > 0) {
+            const esNegativo = totalVentas < 0;
             lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN VENTAS ${mes}-${anio}` });
-            lineas.push({ codigo: CUENTAS_FIJAS.CLIENTES, debe: totalV, haber: 0 });
-            lineas.push({ codigo: CUENTAS_FIJAS.VENTAS, debe: 0, haber: netoV });
-            lineas.push({ codigo: CUENTAS_FIJAS.IVA_DEBITO, debe: 0, haber: ivaV });
+            
+            lineas.push({ 
+                concepto: 'CLIENTES',
+                codigo: mapeo.CLIENTES, 
+                debe: !esNegativo ? Math.abs(totalVentas) : 0, 
+                haber: esNegativo ? Math.abs(totalVentas) : 0 
+            });
+            lineas.push({ 
+                concepto: 'VENTAS',
+                codigo: mapeo.VENTAS, 
+                debe: esNegativo ? Math.abs(netoVentas) : 0, 
+                haber: !esNegativo ? Math.abs(netoVentas) : 0 
+            });
+            lineas.push({ 
+                concepto: 'IVA_DEBITO',
+                codigo: mapeo.IVA_DEBITO, 
+                debe: esNegativo ? Math.abs(ivaVentas) : 0, 
+                haber: !esNegativo ? Math.abs(ivaVentas) : 0 
+            });
         }
 
-        if (totalC > 0 || netoC > 0) {
+        // --- LÓGICA DE COMPRAS ---
+        const totalCompras = resC.final.total;
+        const netoCompras = resC.final.neto;
+        const ivaCompras = resC.final.iva;
+
+        if (Math.abs(totalCompras) > 0 || Math.abs(netoCompras) > 0) {
+            const esNegativo = totalCompras < 0;
             lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN COMPRAS ${mes}-${anio}` });
-            lineas.push({ codigo: CUENTAS_FIJAS.GASTOS, debe: netoC, haber: 0 });
-            lineas.push({ codigo: CUENTAS_FIJAS.IVA_CREDITO, debe: ivaC, haber: 0 });
-            lineas.push({ codigo: CUENTAS_FIJAS.PROVEEDORES, debe: 0, haber: totalC });
+            
+            lineas.push({ 
+                concepto: 'GASTOS',
+                codigo: mapeo.GASTOS, 
+                debe: !esNegativo ? Math.abs(netoCompras) : 0, 
+                haber: esNegativo ? Math.abs(netoCompras) : 0 
+            });
+            lineas.push({ 
+                concepto: 'IVA_CREDITO',
+                codigo: mapeo.IVA_CREDITO, 
+                debe: !esNegativo ? Math.abs(ivaCompras) : 0, 
+                haber: esNegativo ? Math.abs(ivaCompras) : 0 
+            });
+            lineas.push({ 
+                concepto: 'PROVEEDORES',
+                codigo: mapeo.PROVEEDORES, 
+                debe: esNegativo ? Math.abs(totalCompras) : 0, 
+                haber: !esNegativo ? Math.abs(totalCompras) : 0 
+            });
         }
 
         return lineas;
-    }, [ventas, compras, mes, anio, isOpen]);
+    }, [resumenMatematico, mapeo, mes, anio, isOpen]);
 
     const handleGuardar = () => {
-        // LE ENVIAMOS LOS DATOS A ContabilidadMain.jsx
         if (onGuardarSuperficial) onGuardarSuperficial(asientos);
-        
         toast({ title: "Borrador Generado", description: "El Libro Diario se generó exitosamente en modo borrador." });
         setIsOpen(false);
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="sm:max-w-[700px] bg-[#0f172a] border-white/10 text-white shadow-2xl backdrop-blur-xl">
+            <DialogContent className="sm:max-w-[800px] bg-[#0f172a] border-white/10 text-white shadow-2xl backdrop-blur-xl">
                 <DialogHeader>
                     <DialogTitle className="flex items-center text-xl font-black tracking-tight text-blue-400 uppercase">
                         <BookCopy className="mr-3 h-6 w-6" />
                         Libro Diario Centralizado
                     </DialogTitle>
-                    <DialogDescription className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">
-                        PERIODO SELECCIONADO: {mes} / {anio}
-                    </DialogDescription>
                 </DialogHeader>
 
-                <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 mt-4">
+                <div className="max-h-[65vh] overflow-y-auto custom-scrollbar pr-2 mt-4 space-y-6">
+                    
+                    {/* PANEL DE SELECCIÓN DE CUENTAS */}
+                    {!isLoading && (
+                        <div className="bg-black/40 border border-white/5 rounded-xl p-5">
+                            <h4 className="text-xs font-black uppercase text-blue-300 mb-4 tracking-widest">Configuración de Cuentas</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                {Object.entries(CUENTAS_LABELS).map(([tipo, label]) => (
+                                    <div key={tipo} className="space-y-1">
+                                        <label className="text-[9px] font-bold uppercase text-gray-500">{label}</label>
+                                        <Select value={mapeo[tipo]} onValueChange={(val) => handleCuentaChange(tipo, val)}>
+                                            <SelectTrigger className="bg-slate-900 border-white/10 text-xs text-white h-8">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            {/* 🔥 AQUÍ ESTÁ EL DESPLAZAMIENTO */}
+                                            <SelectContent className="bg-slate-900 border-white/10 text-white max-h-[300px] overflow-y-auto">
+                                                {plan.map(cta => (
+                                                    <SelectItem key={cta.codigo} value={cta.codigo} className="text-xs">
+                                                        {cta.codigo} - {cta.descripcion}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* TABLA DE ASIENTOS */}
                     {isLoading ? (
                         <div className="flex flex-col items-center py-10">
                             <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
@@ -109,57 +222,42 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, an
                         </div>
                     ) : asientos.length === 0 ? (
                         <div className="text-center py-10 text-gray-500 font-bold uppercase text-xs tracking-widest">
-                            No hay movimientos para generar asientos en este periodo.
+                            No hay movimientos para generar asientos.
                         </div>
                     ) : (
-                        <table className="w-full text-sm">
-                            <thead className="bg-white/5 sticky top-0">
-                                <tr>
-                                    <th className="px-4 py-2 text-left text-[10px] font-black uppercase tracking-widest text-gray-400">Cuenta</th>
-                                    <th className="px-4 py-2 text-right text-[10px] font-black uppercase tracking-widest text-gray-400">Debe</th>
-                                    <th className="px-4 py-2 text-right text-[10px] font-black uppercase tracking-widest text-gray-400">Haber</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                                {asientos.map((linea, index) => {
-                                    if (linea.tipo === 'header') {
-                                        return (
-                                            <tr key={index} className="bg-white/[0.02]">
-                                                <td colSpan={3} className="px-4 py-3 text-xs font-black text-emerald-400 tracking-widest">
-                                                    {linea.glosa}
-                                                </td>
+                        <div className="bg-black/20 rounded-xl border border-white/10 overflow-hidden">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="bg-white/5">
+                                        <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-gray-400">Cuenta</th>
+                                        <th className="px-4 py-3 text-right text-[10px] font-black uppercase tracking-widest text-gray-400">Debe</th>
+                                        <th className="px-4 py-3 text-right text-[10px] font-black uppercase tracking-widest text-gray-400">Haber</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {asientos.map((linea, index) => {
+                                        if (linea.tipo === 'header') return (
+                                            <tr key={index} className="bg-blue-900/20">
+                                                <td colSpan={3} className="px-4 py-2 text-xs font-black text-blue-400">{linea.glosa}</td>
                                             </tr>
                                         );
-                                    }
-                                    return (
-                                        <tr key={index} className="hover:bg-white/[0.02]">
-                                            <td className="px-4 py-2">
-                                                <div className="flex flex-col">
-                                                    <span className={`text-xs font-bold ${linea.haber > 0 ? 'ml-6 text-gray-400' : 'text-gray-200'}`}>
-                                                        {getNombreCuenta(linea.codigo)}
-                                                    </span>
-                                                    <span className={`text-[9px] font-mono text-blue-400/70 ${linea.haber > 0 ? 'ml-6' : ''}`}>
-                                                        {linea.codigo}
-                                                    </span>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-2 text-right font-mono font-bold text-xs">{linea.debe > 0 ? formatCLP(linea.debe) : ''}</td>
-                                            <td className="px-4 py-2 text-right font-mono font-bold text-xs">{linea.haber > 0 ? formatCLP(linea.haber) : ''}</td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                        return (
+                                            <tr key={index} className="hover:bg-white/[0.02]">
+                                                <td className="px-4 py-2 text-xs">{getNombreCuenta(linea.codigo)}</td>
+                                                <td className="px-4 py-2 text-right font-mono text-xs text-emerald-400">{linea.debe > 0 ? formatCLP(linea.debe) : '-'}</td>
+                                                <td className="px-4 py-2 text-right font-mono text-xs text-orange-400">{linea.haber > 0 ? formatCLP(linea.haber) : '-'}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
                 </div>
 
-                <DialogFooter className="mt-6 border-t border-white/5 pt-4">
-                    <Button variant="ghost" onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white hover:bg-white/5 text-xs font-bold uppercase tracking-widest">
-                        Cancelar
-                    </Button>
-                    <Button onClick={handleGuardar} disabled={isLoading || asientos.length === 0} className="bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[10px] tracking-widest">
-                        <Save className="mr-2 h-4 w-4" /> Registrar en Libro Diario
-                    </Button>
+                <DialogFooter className="mt-4">
+                    <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancelar</Button>
+                    <Button onClick={handleGuardar} className="bg-blue-600">Registrar en Libro Diario</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

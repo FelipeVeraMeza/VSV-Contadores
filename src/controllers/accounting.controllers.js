@@ -26,19 +26,24 @@ export const getAccountingMetrics = async (req, res) => {
 export const getChartOfAccounts = async (req, res) => {
     const { empresaId } = req.query;
     try {
+        console.log(`🔍 Buscando plan de cuentas para empresa: ${empresaId}`);
+
+        const query = `SELECT id, codigo, descripcion, tipo_cuenta, grupo FROM plan_cuentas ORDER BY codigo ASC`;
+
+        const result = await pool.query(query);
+
+        console.log(`✅ Plan de cuentas obtenido: ${result.rows.length} registros`);
+
         res.json({
-            plan: [
-                { id: 1, codigo: "1", nombre: "ACTIVO", tipo: "Grupo", protegida: true, nivel: 1 },
-                { id: 2, codigo: "1.1", nombre: "ACTIVO CORRIENTE", tipo: "Subgrupo", protegida: true, nivel: 2 },
-                { id: 3, codigo: "1.1.01", nombre: "EFECTIVO Y EQUIVALENTES", tipo: "Cuenta", protegida: false, nivel: 3 },
-                { id: 4, codigo: "1.1.01.001", nombre: "CAJA GENERAL", tipo: "Subcuenta", protegida: false, nivel: 4, saldo: 1500000 },
-                { id: 5, codigo: "1.1.01.002", nombre: "BANCO ESTADO", tipo: "Subcuenta", protegida: false, nivel: 4, saldo: 12000000 },
-                { id: 6, codigo: "2", nombre: "PASIVO", tipo: "Grupo", protegida: true, nivel: 1 },
-                { id: 7, codigo: "2.1", nombre: "PASIVO CORRIENTE", tipo: "Subgrupo", protegida: true, nivel: 2 },
-            ]
+            plan: result.rows || [],
+            total: result.rows?.length || 0
         });
     } catch (error) {
-        res.status(500).json({ message: "Error al mapear plan de cuentas" });
+        console.error("❌ Error SQL:", error.message);
+        res.status(500).json({
+            message: "Error al obtener plan de cuentas",
+            error: error.message
+        });
     }
 };
 

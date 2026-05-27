@@ -274,24 +274,45 @@ export async function emitirLotePuppeteer(facturasFront) {
                     if (f.contactoReceptor) await limpiarYTipar(page, 'input[name="EFXP_CONTACTO"]', f.contactoReceptor);
 
                     let nombreEncontrado = null;
-                    for (let k = 0; k < 6; k++) {
+                    for (let k = 0; k < 8; k++) {
                         nombreEncontrado = await page.evaluate(() => {
-                            const inputExacto = document.querySelector('#EFXP_NMB_RECEP') || document.querySelector('input[name="EFXP_NMB_RECEP"]');
-                            if (inputExacto && inputExacto.value && inputExacto.value.trim().length > 2) return inputExacto.value.trim();
+                            // 🔥 CORRECCIÓN: El SII usa EFXP_RZN_SOC_RECEP para la Razón Social
+                            // (EFXP_NMB_RECEP no existe en el formulario actual del SII)
+                            const inputRazonSocial = 
+                                document.querySelector('#EFXP_RZN_SOC_RECEP') || 
+                                document.querySelector('input[name="EFXP_RZN_SOC_RECEP"]');
+                            
+                            if (inputRazonSocial && inputRazonSocial.value && inputRazonSocial.value.trim().length > 2) {
+                                return inputRazonSocial.value.trim();
+                            }
+                            
+                            // Fallback secundario: por si en algún caso usan el nombre antiguo
+                            const inputNombre = 
+                                document.querySelector('#EFXP_NMB_RECEP') || 
+                                document.querySelector('input[name="EFXP_NMB_RECEP"]');
+                            
+                            if (inputNombre && inputNombre.value && inputNombre.value.trim().length > 2) {
+                                return inputNombre.value.trim();
+                            }
+                            
                             return null;
                         });
+                        
                         if (nombreEncontrado) {
                             razonSocialCapturadaDelSII = nombreEncontrado;
                             break; 
                         }
                         await delay(500); 
                     }
-
+ 
                     if (!nombreEncontrado) {
                        razonSocialCapturadaDelSII = f.razonSocial || 'CLIENTE MASIVO SII';
+                       console.log(`⚠️ [ADVERTENCIA] No se pudo leer la Razón Social del SII. Usando fallback.`);
+                    } else {
+                       console.log(`🎯 [RAZÓN SOCIAL EXTRAÍDA DEL SII]: "${razonSocialCapturadaDelSII}"`);
                     }
                     
-                    console.log(`✅ [RAZÓN SOCIAL A GUARDAR]: "${razonSocialCapturadaDelSII}"`);
+                    console.log(`✅ [RAZÓN SOCIAL A GUARDAR EN BD]: "${razonSocialCapturadaDelSII}"`);
 
                     await page.type('input[name="EFXP_NMB_01"]', f.producto.nombre || 'Servicio', { delay: 150 });
                     await page.type('input[name="EFXP_QTY_01"]', '1', { delay: 150 });
