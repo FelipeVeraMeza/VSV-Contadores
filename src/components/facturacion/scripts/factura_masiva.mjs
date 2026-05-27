@@ -68,6 +68,73 @@ const limpiarYTipar = async (page, selector, texto) => {
 };
 
 // =========================================================================
+// 🔒 CIERRE DE SESIÓN ROBUSTO DEL SII
+// =========================================================================
+// Garantiza que la sesión del SII se cierre SIEMPRE antes de matar el navegador.
+// Si el logout HTTP falla, limpia cookies/storage y fuerza el cierre del proceso.
+// =========================================================================
+async function cerrarSesionSII(page, browser) {
+    console.log('🔒 [LOGOUT] Iniciando cierre de sesión seguro del SII...');
+    
+    // Intento 1: URL oficial de logout
+    try {
+        await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { 
+            waitUntil: 'domcontentloaded', 
+            timeout: 10000 
+        });
+        await delay(2000);
+        console.log('✅ [LOGOUT] Sesión cerrada vía URL oficial.');
+    } catch (e1) {
+        console.log(`⚠️ [LOGOUT] URL oficial falló: ${e1.message}. Probando alternativa...`);
+        
+        // Intento 2: URL alternativa de logout del SII
+        try {
+            await page.goto('https://zeusr.sii.cl/AUT2000/InicioAutenticacion/CerrarSesion.html', { 
+                waitUntil: 'domcontentloaded', 
+                timeout: 10000 
+            });
+            await delay(2000);
+            console.log('✅ [LOGOUT] Sesión cerrada vía URL alternativa.');
+        } catch (e2) {
+            console.log(`⚠️ [LOGOUT] URL alternativa también falló: ${e2.message}`);
+        }
+    }
+    
+    // Limpieza extra: borrar cookies y storage para que no quede sesión "fantasma"
+    try {
+        const client = await page.target().createCDPSession();
+        await client.send('Network.clearBrowserCookies');
+        await client.send('Network.clearBrowserCache');
+        await page.evaluate(() => {
+            try { localStorage.clear(); } catch(e) {}
+            try { sessionStorage.clear(); } catch(e) {}
+        }).catch(() => {});
+        console.log('🧹 [LOGOUT] Cookies, caché y storage limpiados.');
+    } catch (e) {
+        console.log(`⚠️ [LOGOUT] No se pudo limpiar cookies: ${e.message}`);
+    }
+    
+    // Cierre final del navegador (con timeout de seguridad)
+    try {
+        await Promise.race([
+            browser.close(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout cerrando browser')), 8000))
+        ]);
+        console.log('🔐 [LOGOUT] Navegador cerrado correctamente.');
+    } catch (e) {
+        console.log(`⚠️ [LOGOUT] Cierre forzado del navegador: ${e.message}`);
+        try {
+            // Última opción: matar el proceso del navegador a la fuerza
+            const proceso = browser.process();
+            if (proceso) proceso.kill('SIGKILL');
+            console.log('💀 [LOGOUT] Navegador terminado a la fuerza (SIGKILL).');
+        } catch (killErr) {
+            console.log(`❌ [LOGOUT] No se pudo matar el proceso: ${killErr.message}`);
+        }
+    }
+}
+
+// =========================================================================
 // 🚀 MOTOR DE FACTURACIÓN MASIVA
 // =========================================================================
 export async function emitirLotePuppeteer(facturasFront) {
@@ -147,8 +214,8 @@ export async function emitirLotePuppeteer(facturasFront) {
                 try {
                     // Si és un reintent, matamos el navegador i n'obrim un de nou completament fresc (Hard Reset)
                     if (intentoRealizado > 1) {
-                        console.log('🔄 [HARD RESET] Cerrando navegador y abriendo uno nuevo para desatascar...');
-                        try { await browser.close(); } catch(e) {}
+                        console.log('🔄 [HARD RESET] Cerrando sesión SII y navegador para desatascar...');
+                        await cerrarSesionSII(page, browser);
                         await delay(2000);
                         
                         browser = await puppeteer.launch({ 
@@ -456,10 +523,9 @@ export async function emitirLotePuppeteer(facturasFront) {
             }
         } 
 
-        // 🔥 AL TERMINAR EL LOTE DE 3, CERRAMOS EL NAVEGADOR
-        console.log(`\n🧹 [LOTE DE 3 FINALIZADO / O CANCELADO] Cerrando navegador para limpiar memoria del SII...`);
-        try { await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { timeout: 5000 }); } catch (err) {}
-        try { await browser.close(); } catch(e) {}
+        // 🔥 AL TERMINAR EL LOTE DE 3, CERRAMOS SESIÓN Y NAVEGADOR
+        console.log(`\n🧹 [LOTE DE 3 FINALIZADO / O CANCELADO] Cerrando sesión SII y navegador...`);
+        await cerrarSesionSII(page, browser);
 
         if (estadoRobot.cancelar) {
              console.log('🛑 [SISTEMA DETENIDO] El proceso fue abortado correctamente por el usuario.');
