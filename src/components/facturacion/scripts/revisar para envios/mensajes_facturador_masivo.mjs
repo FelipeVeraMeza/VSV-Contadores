@@ -14,9 +14,95 @@ const __dirname = path.dirname(__filename);
 // ⚙️ CONFIGURACIONES PRINCIPALES
 // =====================================================================
 
-// LÍMITE DE PARADA: El robot procesará de arriba hacia abajo y se detendrá
-// justo después de procesar y enviar el folio 876.
-const FOLIO_LIMITE_PARADA = "876"; 
+const FOLIOS_PERMITIDOS = [
+    "1115",
+    "1113",
+    "1112",
+    "1111",
+    "1110",
+    "1109",
+    "1108",
+    "1106",
+    "1105",
+    "1104",
+    "1102",
+    "1101",
+    "1100",
+    "1098",
+    "1097",
+    "1096",
+    "1095",
+    "1093",
+    "1092",
+    "1091",
+    "1090",
+    "1089",
+    "1088",
+    "1087",
+    "1086",
+    "1085",
+    "1084",
+    "1083",
+    "1082",
+    "1081",
+    "1080",
+    "1078",
+    "1076",
+    "1075",
+    "1073",
+    "1072",
+    "1071",
+    "1070",
+    "1069",
+    "1068",
+    "1066",
+    "1064",
+    "1063",
+    "1061",
+    "1060",
+    "1059",
+    "1057",
+    "1056",
+    "1054",
+    "1053",
+    "1052",
+    "1051",
+    "1050",
+    "1049",
+    "1048",
+    "1047",
+    "1046",
+    "1044",
+    "1042",
+    "1041",
+    "1040",
+    "1038",
+    "1037",
+    "1035",
+    "1033",
+    "1032",
+    "1030",
+    "1029",
+    "1028",
+    "1027",
+    "1026",
+    "1025",
+    "1024",
+    "1023",
+    "1022",
+    "1020",
+    "1019",
+    "1018",
+    "1017",
+    "1016",
+    "1015",
+    "1014",
+    "1013",
+    "1012",
+    "1011",
+    "1010",
+    "1009"
+];
 
 // =====================================================================
 // 📁 CONFIGURACIÓN DE CARPETAS UNIVERSAL
@@ -47,7 +133,6 @@ async function extraerDatosDelPDF(rutaPDF) {
         const lineas = data.text.split('\n').map(l => l.trim()).filter(l => l !== '');
         const textoLimpio = data.text.replace(/\n/g, ' ');
 
-        // 1. EXTRAER CORREO
         let correo = "No_encontrado@falta_correo.cl";
         const lineaContacto = lineas.find(l => l.toUpperCase().includes('CONTACTO:'));
         if (lineaContacto) {
@@ -55,12 +140,10 @@ async function extraerDatosDelPDF(rutaPDF) {
             if (emailMatch) correo = emailMatch[0];
         }
 
-        // 2. EXTRAER MONTOS
         const netoMatch = textoLimpio.match(/MONTO NETO\s*\$\s*([\d.]+)/i);
         const ivaMatch = textoLimpio.match(/I\.V\.A\.\s*19%\s*\$\s*([\d.]+)/i);
         const totalMatch = textoLimpio.match(/TOTAL\s*\$\s*([\d.]+)/i);
 
-        // 3. EXTRAER DESCRIPCIÓN (OMITIENDO MESES)
         let descripcionList = [];
         let enTabla = false;
         
@@ -68,33 +151,27 @@ async function extraerDatosDelPDF(rutaPDF) {
             let L = lineas[i].replace(/[|-]/g, '').trim();
             let upperL = L.toUpperCase();
             
-            // Iniciamos la captura justo al encontrar la cabecera de valores de la tabla
             if (!enTabla && (upperL === 'VALOR' || upperL === 'VALOR $' || upperL.endsWith('VALOR'))) {
                 enTabla = true;
                 continue;
             }
             
             if (enTabla) {
-                // Cortamos la captura al llegar a los totales
                 if (upperL.includes('FORMA DE PAGO') || upperL.includes('MONTO NETO') || upperL.includes('TIMBRE ELECTR')) {
                     break;
                 }
                 
-                // Ignorar líneas vacías, separadores o líneas de puros números/porcentajes
                 if (L === '' || L === '_') continue;
                 if (/^[\$%\d.,\s]+$/.test(L)) continue; 
                 
-                // 🔥 IGNORAR LA LÍNEA DEL MES
                 if (upperL.includes('SERVICIOS CORRESPONDIENTES')) {
                     continue;
                 }
                 
-                // Si es texto real, lo guardamos
                 descripcionList.push(L);
             }
         }
         
-        // Unimos todo el texto encontrado
         let descripcion = descripcionList.join(' ').trim();
         if (!descripcion) descripcion = "Servicio Contable";
 
@@ -106,7 +183,13 @@ async function extraerDatosDelPDF(rutaPDF) {
             descripcion: descripcion
         };
     } catch (e) {
-        return { correo: "Error_al_leer@pdf.cl", neto: "0", iva: "0", total: "0", descripcion: "Servicio Contable" };
+        return {
+            correo: "Error_al_leer@pdf.cl",
+            neto: "0",
+            iva: "0",
+            total: "0",
+            descripcion: "Servicio Contable"
+        };
     }
 }
 
@@ -126,7 +209,7 @@ async function enviarCorreo(datosFactura, datosExtraidos, rutaPDF) {
 
 Junto con saludar, informamos que ya hemos emitido la factura N°${datosFactura.folio} correspondiente a: Servicios de Contabilidad (${datosExtraidos.descripcion}), la cual se encuentra disponible para pago.
 
-📅 Fecha de vencimiento: 5 de mayo
+📅 Fecha de vencimiento: 5 de junio
 
 VALOR: $${datosExtraidos.neto} + IVA ($${datosExtraidos.iva}) = $${datosExtraidos.total}
 
@@ -149,7 +232,7 @@ Simple Pyme`;
 
         const mailOptions = {
             from: `"Simple Pyme" <matias.olivos@vsvconsultores.com>`,
-            to: datosExtraidos.correo, // 🔥 ENVÍO REAL AL CORREO DEL CLIENTE 🔥
+            to: datosExtraidos.correo,
             subject: asunto,
             html: `<div style="font-family: Arial, sans-serif; color: #333; line-height: 1.5;">
                     ${textoCorreo.replace(/\n/g, '<br>')}
@@ -183,7 +266,6 @@ Simple Pyme`;
 async function ejecutarProcesoMasivo() {
     console.log("==================================================");
     console.log("🚀 ROBOT MASIVO: MODO PRODUCCIÓN REAL");
-    console.log(`🎯 Límite configurado para detenerse en el Folio: ${FOLIO_LIMITE_PARADA}`);
     console.log("==================================================");
 
     const browser = await puppeteer.launch({
@@ -205,11 +287,20 @@ async function ejecutarProcesoMasivo() {
 
         await page.type(`#${idRealRut}`, rutLimpio, { delay: 50 });
         await page.type('#clave', process.env.DTE_PASS, { delay: 50 });
-        await Promise.all([page.click('#bt_ingresar'), page.waitForNavigation()]);
+
+        await Promise.all([
+            page.click('#bt_ingresar'),
+            page.waitForNavigation()
+        ]);
 
         try {
             const btnSesion = await page.$('input[value*="Cerrar sesión"]');
-            if (btnSesion) await Promise.all([btnSesion.click(), page.waitForNavigation()]);
+            if (btnSesion) {
+                await Promise.all([
+                    btnSesion.click(),
+                    page.waitForNavigation()
+                ]);
+            }
         } catch (e) {}
 
         console.log("📂 [2/4] Accediendo al portal de selección...");
@@ -217,15 +308,22 @@ async function ejecutarProcesoMasivo() {
 
         await page.evaluate(() => {
             const select = document.querySelector('select');
+
             if (select) {
                 const opt = Array.from(select.options).find(o => o.text.includes('78306207'));
+
                 if (opt) {
                     select.value = opt.value;
-                    const btn = document.querySelector('input[type="submit"], button[type="submit"], input[name="btnContinuar"]');
+
+                    const btn = document.querySelector(
+                        'input[type="submit"], button[type="submit"], input[name="btnContinuar"]'
+                    );
+
                     if (btn) btn.click();
                 }
             }
         });
+
         await page.waitForNavigation();
 
         console.log("⏳ [3/4] Extrayendo TODOS los documentos de la tabla...");
@@ -233,59 +331,83 @@ async function ejecutarProcesoMasivo() {
 
         const listaDocumentos = await page.evaluate(() => {
             const filas = Array.from(document.querySelectorAll('table tbody tr'));
+
             return filas.map(fila => {
                 const celdas = fila.querySelectorAll('td');
+
                 const hrefOriginal = celdas?.[0]?.querySelector('a')?.href;
                 const razonSocial = celdas?.[2]?.innerText.trim();
                 const folio = celdas?.[4]?.innerText.trim();
 
                 let codigo = null;
+
                 if (hrefOriginal) {
                     const urlParams = new URLSearchParams(hrefOriginal.split('?')[1]);
                     codigo = urlParams.get('CODIGO');
                 }
+
                 return { codigo, folio, razonSocial };
+
             }).filter(doc => doc.codigo !== null);
         });
 
-        console.log(`📌 Se encontraron ${listaDocumentos.length} documentos listos para iterar.\n`);
+        // 🔥 FILTRAR SOLO LOS FOLIOS PERMITIDOS
+        const documentosFiltrados = listaDocumentos.filter(doc =>
+            FOLIOS_PERMITIDOS.includes(doc.folio)
+        );
 
-        for (let i = 0; i < listaDocumentos.length; i++) {
-            const docInfo = listaDocumentos[i];
-            console.log(`\n⚙️ PROCESANDO [${i + 1}/${listaDocumentos.length}] - Folio: ${docInfo.folio} - ${docInfo.razonSocial}`);
+        console.log(`📌 Se encontraron ${documentosFiltrados.length} documentos permitidos.\n`);
 
-            const urlDescargaDirecta = `https://www1.sii.cl/cgi-bin/Portal001/mipeDisplayPDF.cgi?DHDR_CODIGO=${docInfo.codigo}`;
+        for (let i = 0; i < documentosFiltrados.length; i++) {
+
+            const docInfo = documentosFiltrados[i];
+
+            console.log(`\n⚙️ PROCESANDO [${i + 1}/${documentosFiltrados.length}] - Folio: ${docInfo.folio} - ${docInfo.razonSocial}`);
+
+            const urlDescargaDirecta =
+                `https://www1.sii.cl/cgi-bin/Portal001/mipeDisplayPDF.cgi?DHDR_CODIGO=${docInfo.codigo}`;
+
             const cookies = await page.cookies();
             const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
-            const response = await fetch(urlDescargaDirecta, { headers: { 'Cookie': cookieString } });
+            const response = await fetch(urlDescargaDirecta, {
+                headers: {
+                    'Cookie': cookieString
+                }
+            });
+
             const buffer = Buffer.from(await response.arrayBuffer());
 
-            const rutaTemporal = path.join(carpetaDescargasTemporal, `${docInfo.folio}.pdf`);
+            const rutaTemporal = path.join(
+                carpetaDescargasTemporal,
+                `${docInfo.folio}.pdf`
+            );
+
             fs.writeFileSync(rutaTemporal, buffer);
 
-            const rutaPC = path.join(carpetaDescargasPC, `Factura_${docInfo.folio}.pdf`);
+            const rutaPC = path.join(
+                carpetaDescargasPC,
+                `Factura_${docInfo.folio}.pdf`
+            );
+
             fs.copyFileSync(rutaTemporal, rutaPC);
+
             console.log(`   💾 Copia guardada en PC: ${rutaPC}`);
 
             const datosExtraidos = await extraerDatosDelPDF(rutaTemporal);
-            const correoEnviado = await enviarCorreo(docInfo, datosExtraidos, rutaTemporal);
+
+            const correoEnviado = await enviarCorreo(
+                docInfo,
+                datosExtraidos,
+                rutaTemporal
+            );
 
             if (correoEnviado && fs.existsSync(rutaTemporal)) {
                 fs.unlinkSync(rutaTemporal);
                 console.log(`   🗑️ PDF temporal limpiado del código.`);
             }
 
-            // 🔥 CORTE AL ALCANZAR EL FOLIO DE LÍMITE 🔥
-            if (docInfo.folio === FOLIO_LIMITE_PARADA) {
-                console.log("\n==================================================");
-                console.log(`🛑 ¡ALTO AHÍ! Se procesó la factura de límite (Folio ${FOLIO_LIMITE_PARADA}).`);
-                console.log("🛑 El proceso masivo ha finalizado exitosamente.");
-                console.log("==================================================");
-                break;
-            }
-
-            if (i < listaDocumentos.length - 1) {
+            if (i < documentosFiltrados.length - 1) {
                 console.log("   ⏱️ Esperando 2 segundos antes de la siguiente factura...");
                 await new Promise(r => setTimeout(r, 2000));
             }
@@ -293,16 +415,32 @@ async function ejecutarProcesoMasivo() {
 
     } catch (error) {
         console.error("❌ Error crítico:", error.message);
+
     } finally {
+
         console.log("\n🚪 Cerrando sesión...");
+
         try {
             await page.evaluate(() => {
-                const btn = Array.from(document.querySelectorAll('a, button')).find(el => el.innerText?.toLowerCase().includes('cerrar sesi'));
-                if (btn) btn.click(); else window.location.href = 'https://misiir.sii.cl/cgi_misii/siihome.cgi?fin';
+                const btn = Array.from(
+                    document.querySelectorAll('a, button')
+                ).find(el =>
+                    el.innerText?.toLowerCase().includes('cerrar sesi')
+                );
+
+                if (btn) {
+                    btn.click();
+                } else {
+                    window.location.href = 'https://misiir.sii.cl/cgi_misii/siihome.cgi?fin';
+                }
             });
+
             await new Promise(r => setTimeout(r, 2000));
+
         } catch (e) {}
+
         await browser.close();
+
         console.log("🛑 Robot apagado.");
     }
 }
