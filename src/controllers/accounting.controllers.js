@@ -25,25 +25,27 @@ export const getAccountingMetrics = async (req, res) => {
 
 export const getChartOfAccounts = async (req, res) => {
     const { empresaId } = req.query;
+    if (!empresaId || empresaId === 'undefined') {
+        return res.json({ plan: [] });
+    }
     try {
-        console.log(`🔍 Buscando plan de cuentas para empresa: ${empresaId}`);
+        const query = empresaId === 'ALL'
+            ? `SELECT id, codigo, descripcion, tipo_cuenta, normativa, clasificacion_contable, es_editable
+               FROM plan_cuentas
+               WHERE empresa_id IS NULL
+               ORDER BY codigo ASC`
+            : `SELECT id, codigo, descripcion, tipo_cuenta, normativa, clasificacion_contable, es_editable
+               FROM plan_cuentas
+               WHERE empresa_id = $1 OR empresa_id IS NULL
+               ORDER BY empresa_id NULLS LAST, codigo ASC`;
 
-        const query = `SELECT id, codigo, descripcion, tipo_cuenta, grupo FROM plan_cuentas ORDER BY codigo ASC`;
-
-        const result = await pool.query(query);
-
-        console.log(`✅ Plan de cuentas obtenido: ${result.rows.length} registros`);
-
-        res.json({
-            plan: result.rows || [],
-            total: result.rows?.length || 0
-        });
+        const { rows } = empresaId === 'ALL'
+            ? await pool.query(query)
+            : await pool.query(query, [empresaId]);
+        res.json({ plan: rows });
     } catch (error) {
-        console.error("❌ Error SQL:", error.message);
-        res.status(500).json({
-            message: "Error al obtener plan de cuentas",
-            error: error.message
-        });
+        console.error("❌ Error al obtener plan de cuentas:", error.message);
+        res.status(500).json({ message: "Error al obtener plan de cuentas" });
     }
 };
 

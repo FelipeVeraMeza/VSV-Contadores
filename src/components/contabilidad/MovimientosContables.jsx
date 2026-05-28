@@ -2,13 +2,18 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowUpRight, ArrowDownRight, Eye, Plus, Loader2, FileCheck,
-  CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Award
+  CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Award,
+  DownloadCloud, RefreshCcw, BookCopy
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { obtenerHistorialBunker, obtenerComprasBunker } from '@/services/dteConsultasService';
 import NuevoMovimientoModal from '@/components/contabilidad/modals/NuevoMovimientoModal';
 import AsientoDocumentoModal from '@/components/contabilidad/modals/AsientoDocumentoModal';
+import GeneradorLibroDiarioModal from '@/components/contabilidad/modals/GeneradorLibroDiarioModal';
+import SyncSIIModal from '@/components/contabilidad/modals/SyncSIIModal';
+import { API_BASE_URL } from '../../../config.js';
 
 const TIPO_DTE_MAP = {
   33: 'FAC. ELECTRÓNICA', 34: 'FAC. EXENTA', 61: 'NOTA DE CRÉDITO',
@@ -53,15 +58,21 @@ const COLOR_MAP = {
   },
 };
 
-const MovimientosContables = ({ empresaId }) => {
+const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
+  const { selectedCompany } = useAuth();
+  const targetId = empresaId || selectedCompany?.id || 'ALL';
+
   const [activeTab, setActiveTab] = useState('ventas');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [rawVentas, setRawVentas] = useState([]);
   const [rawCompras, setRawCompras] = useState([]);
   const [honorarios] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isNuevoModalOpen, setIsNuevoModalOpen] = useState(false);
   const [isAsientoModalOpen, setIsAsientoModalOpen] = useState(false);
+  const [isModalDiarioOpen, setIsModalDiarioOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [selectedDocumento, setSelectedDocumento] = useState(null);
 
   const now = new Date();
@@ -71,7 +82,6 @@ const MovimientosContables = ({ empresaId }) => {
   const cargarDatos = useCallback(async () => {
     setIsLoading(true);
     try {
-      const targetId = empresaId || 'ALL';
       const [resV, resC] = await Promise.all([
         obtenerHistorialBunker(targetId),
         obtenerComprasBunker(targetId),
@@ -83,7 +93,7 @@ const MovimientosContables = ({ empresaId }) => {
     } finally {
       setIsLoading(false);
     }
-  }, [empresaId]);
+  }, [targetId]);
 
   useEffect(() => { cargarDatos(); }, [cargarDatos]);
   useEffect(() => { setCurrentPage(1); }, [activeTab, mes, anio]);
@@ -103,12 +113,69 @@ const MovimientosContables = ({ empresaId }) => {
     return { count: acc.count + 1, total: acc.total + total, neto: acc.neto + neto, iva: acc.iva + iva };
   }, { count: 0, total: 0, neto: 0, iva: 0 }), [docActivos]);
 
+  // ============================================================
+  // EXTRAER DE SII — abre modal de rango y conecta con sincronizador_sii.mjs
+  // ============================================================
+  const abrirSyncModal = () => {
+    const rut = selectedCompany?.rut;
+    const clave = selectedCompany?.claveSII;
+
+    if (!rut || !clave) {
+      toast({
+        variant: 'destructive',
+        title: 'Credenciales Faltantes',
+        description: 'La empresa seleccionada no tiene RUT o Clave SII configurada.',
+      });
+      return;
+    }
+    if (targetId === 'ALL') {
+      toast({
+        variant: 'destructive',
+        title: 'Selecciona una empresa',
+        description: 'Debes seleccionar una empresa específica para sincronizar.',
+      });
+      return;
+    }
+    setIsSyncModalOpen(true);
+  };
+
+  const handleSyncSII = async ({ mesDesde, anioDesde, mesHasta, anioHasta }) => {
+    const rut = selectedCompany?.rut;
+    const clave = selectedCompany?.claveSII;
+
+    setIsSyncing(true);
+    toast({ title: '🤖 Robot SII Iniciado', description: `Extrayendo ${mesDesde}/${anioDesde} → ${mesHasta}/${anioHasta}...` });
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/sincronizar-sii`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rut, clave, mesDesde, anioDesde, mesHasta, anioHasta, empresaId: targetId }),
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        toast({ title: '✅ Extracción Exitosa', description: result.message || 'Datos extraídos y guardados correctamente.' });
+        setIsSyncModalOpen(false);
+        cargarDatos();
+      } else {
+        toast({ variant: 'destructive', title: '❌ Error en el Robot', description: result.message || 'Falla al extraer datos del SII.' });
+      }
+    } catch {
+      toast({ variant: 'destructive', title: 'Error de Conexión', description: 'No se pudo contactar al servidor.' });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleVerAsiento = (doc) => {
     setSelectedDocumento({ ...doc, tipoMovimiento: activeTab });
     setIsAsientoModalOpen(true);
   };
 
   const colors = COLOR_MAP[activeTab];
+  const mesLabel = MESES.find(m => m.value === mes)?.label || '';
+  const hayDatosParaDiario = rawVentas.length > 0 || rawCompras.length > 0;
 
   const TABS = [
     { id: 'ventas', label: 'Ventas', icon: ArrowUpRight, count: ventas.length },
@@ -120,6 +187,7 @@ const MovimientosContables = ({ empresaId }) => {
     <div className="space-y-5">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* SELECTOR DE PERÍODO */}
         <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-1 py-1">
           <div className="flex items-center pl-3 pr-1">
             <CalendarDays className="h-4 w-4 text-blue-400" />
@@ -138,11 +206,45 @@ const MovimientosContables = ({ empresaId }) => {
           </div>
         </div>
 
-        <Button onClick={() => setIsNuevoModalOpen(true)}
-          className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black uppercase text-[10px] tracking-widest">
-          <Plus className="h-4 w-4 mr-2" />
-          Nueva {activeTab === 'ventas' ? 'Venta' : activeTab === 'compras' ? 'Compra' : 'Honorario'}
-        </Button>
+        {/* ACCIONES */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* EXTRAER DE SII */}
+          <Button
+            onClick={abrirSyncModal}
+            disabled={isSyncing || targetId === 'ALL'}
+            title={targetId === 'ALL' ? 'Selecciona una empresa para sincronizar' : 'Extraer datos del portal SII'}
+            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-black uppercase text-[10px] tracking-widest transition-all"
+          >
+            {isSyncing
+              ? <RefreshCcw className="h-4 w-4 mr-2 animate-spin" />
+              : <DownloadCloud className="h-4 w-4 mr-2" />
+            }
+            {isSyncing ? 'EXTRAYENDO...' : 'EXTRAER DE SII'}
+          </Button>
+
+          {/* NUEVO MOVIMIENTO */}
+          <Button
+            onClick={() => setIsNuevoModalOpen(true)}
+            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black uppercase text-[10px] tracking-widest"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Nueva {activeTab === 'ventas' ? 'Venta' : activeTab === 'compras' ? 'Compra' : 'Honorario'}
+          </Button>
+
+          {/* LIBRO */}
+          <Button
+            onClick={() => setIsModalDiarioOpen(true)}
+            disabled={!hayDatosParaDiario}
+            className={`font-black uppercase text-[10px] tracking-widest transition-all ${
+              hayDatosParaDiario
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-900/30'
+                : 'bg-black/40 border border-white/10 text-gray-500 cursor-not-allowed opacity-50'
+            }`}
+          >
+            <BookCopy className="h-4 w-4 mr-2" />
+            LIBRO
+          </Button>
+        </div>
       </div>
 
       {/* SUB-TABS */}
@@ -183,21 +285,29 @@ const MovimientosContables = ({ empresaId }) => {
         {isLoading ? (
           <div className="p-16 flex flex-col items-center justify-center">
             <Loader2 className="h-10 w-10 text-blue-500 animate-spin mb-4" />
-            <span className="text-blue-400 font-black text-xs uppercase tracking-widest animate-pulse">Cargando movimientos...</span>
+            <span className="text-blue-400 font-black text-xs uppercase tracking-widest animate-pulse">Consultando Bunker...</span>
           </div>
         ) : docActivos.length === 0 ? (
           <div className="p-16 text-center flex flex-col items-center justify-center">
             <div className="bg-white/5 p-5 rounded-full mb-4 border border-white/10">
               <FileCheck className="h-8 w-8 text-gray-500" />
             </div>
-            <h4 className="text-white font-black tracking-wide uppercase text-sm">Sin movimientos</h4>
+            <h4 className="text-white font-black tracking-wide uppercase text-sm">Sin Registros</h4>
             <p className="text-gray-500 text-[10px] mt-2 uppercase tracking-widest font-black">
-              No hay {activeTab} registradas para este período.
+              No hay {activeTab} en la base de datos para este período.
             </p>
+            <Button
+              onClick={abrirSyncModal}
+              disabled={isSyncing || targetId === 'ALL'}
+              className="mt-4 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[10px] tracking-widest disabled:opacity-50"
+            >
+              {isSyncing ? <RefreshCcw className="h-3.5 w-3.5 mr-2 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5 mr-2" />}
+              {isSyncing ? 'Extrayendo...' : 'Extraer del SII'}
+            </Button>
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto custom-scrollbar">
               <table className="w-full text-left text-sm text-gray-300 min-w-[900px]">
                 <thead className="bg-white/5 border-b border-white/10 text-[10px] uppercase tracking-widest font-black text-gray-400">
                   <tr>
@@ -266,17 +376,23 @@ const MovimientosContables = ({ empresaId }) => {
               </table>
             </div>
 
-            <div className="flex items-center justify-between px-5 py-4 bg-black/20 border-t border-white/10">
+            <div className="flex items-center justify-between px-5 py-4 bg-black/20 border-t border-white/10 relative z-30">
               <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">
-                {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, docActivos.length)} de {docActivos.length}
+                Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1}–{Math.min(currentPage * ITEMS_PER_PAGE, docActivos.length)} de {docActivos.length}
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                <Button variant="outline" size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
                   className="h-8 bg-black/40 border-white/10 text-gray-400 hover:text-white disabled:opacity-20 font-black text-xs uppercase">
                   <ChevronLeft size={14} className="mr-1" /> ANT
                 </Button>
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">{currentPage} / {totalPages}</span>
-                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">
+                  Pág {currentPage} de {totalPages}
+                </span>
+                <Button variant="outline" size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
                   className="h-8 bg-black/40 border-white/10 text-gray-400 hover:text-white disabled:opacity-20 font-black text-xs uppercase">
                   SIG <ChevronRight size={14} className="ml-1" />
                 </Button>
@@ -286,18 +402,36 @@ const MovimientosContables = ({ empresaId }) => {
         )}
       </div>
 
+      {/* MODALES */}
+      <SyncSIIModal
+        isOpen={isSyncModalOpen}
+        setIsOpen={setIsSyncModalOpen}
+        onSync={handleSyncSII}
+        isSyncing={isSyncing}
+        empresaNombre={selectedCompany?.razon_social || selectedCompany?.razonSocial}
+      />
       <NuevoMovimientoModal
         isOpen={isNuevoModalOpen}
         setIsOpen={setIsNuevoModalOpen}
         tipo={activeTab}
-        empresaId={empresaId}
+        empresaId={targetId}
         onGuardado={cargarDatos}
       />
       <AsientoDocumentoModal
         isOpen={isAsientoModalOpen}
         setIsOpen={setIsAsientoModalOpen}
         documento={selectedDocumento}
-        empresaId={empresaId}
+        empresaId={targetId}
+      />
+      <GeneradorLibroDiarioModal
+        isOpen={isModalDiarioOpen}
+        setIsOpen={setIsModalDiarioOpen}
+        rawCompras={rawCompras}
+        rawVentas={rawVentas}
+        mes={mes}
+        anio={anio}
+        empresaId={targetId}
+        onGuardarSuperficial={onGenerarBorrador}
       />
     </div>
   );

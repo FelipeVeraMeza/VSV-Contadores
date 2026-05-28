@@ -5,8 +5,15 @@ import path from 'path';
 // ==========================================
 // FUNCIÓN PRINCIPAL
 // ==========================================
-export async function ejecutarRobotSII({ rut, clave }) {
-    console.log(`\n🚀 Iniciando Robot Masivo SII...`);
+export async function ejecutarRobotSII({ rut, clave, mesDesde, anioDesde, mesHasta, anioHasta }) {
+    // Defaults: si no se pasa rango, usa el mes actual
+    const now = new Date();
+    const _mesHasta = parseInt(mesHasta) || (now.getMonth() + 1);
+    const _anioHasta = parseInt(anioHasta) || now.getFullYear();
+    const _mesDesde = parseInt(mesDesde) || _mesHasta;
+    const _anioDesde = parseInt(anioDesde) || _anioHasta;
+
+    console.log(`\n🚀 Iniciando Robot SII | Rango: ${_mesDesde}/${_anioDesde} → ${_mesHasta}/${_anioHasta}`);
 
     const browser = await puppeteer.launch({
         headless: false,
@@ -29,11 +36,11 @@ export async function ejecutarRobotSII({ rut, clave }) {
         
         await page.goto('https://www4.sii.cl/consdcvinternetui/', { waitUntil: 'networkidle2' });
 
-        // 2. CICLO: Mayo 2026 hasta Abril 2026
-        let anio = 2026;
-        let mes = 5;
+        // 2. CICLO: desde mesHasta/anioHasta hacia atrás hasta mesDesde/anioDesde
+        let anio = _anioHasta;
+        let mes = _mesHasta;
 
-        while (anio > 2024 || (anio === 2025 && mes >= 1)) {
+        while (anio > _anioDesde || (anio === _anioDesde && mes >= _mesDesde)) {
             console.log(`\n📅 --- PROCESANDO PERIODO: ${mes}/${anio} ---`);
             
             await matarPopups(page);

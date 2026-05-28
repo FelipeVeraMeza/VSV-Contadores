@@ -25,6 +25,14 @@ const Contabilidad = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('movimientos');
   const [isAsientoModalOpen, setIsAsientoModalOpen] = useState(false);
+  const [asientosBorrador, setAsientosBorrador] = useState([]);
+  const [borradorPeriodo, setBorradorPeriodo] = useState('');
+
+  const handleGenerarBorrador = ({ asientos, periodoLabel }) => {
+    setAsientosBorrador(asientos);
+    setBorradorPeriodo(periodoLabel);
+    setActiveTab('libro_diario');
+  };
 
   if (!empresaId && !isAdmin) {
     return (
@@ -129,7 +137,15 @@ const Contabilidad = () => {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
-              {ActiveModule && <ActiveModule empresaId={empresaId} />}
+              {activeTab === 'movimientos' && (
+                <MovimientosContables empresaId={empresaId} onGenerarBorrador={handleGenerarBorrador} />
+              )}
+              {activeTab === 'libro_diario' && (
+                <AsientosContables empresaId={empresaId} asientosBorrador={asientosBorrador} periodoLabel={borradorPeriodo} />
+              )}
+              {activeTab !== 'movimientos' && activeTab !== 'libro_diario' && ActiveModule && (
+                <ActiveModule empresaId={empresaId} />
+              )}
             </motion.div>
           </AnimatePresence>
         </div>

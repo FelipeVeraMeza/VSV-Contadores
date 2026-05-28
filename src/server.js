@@ -145,13 +145,13 @@ const ejecutarSincronizacion = async (tipo) => {
 // 🌐 RUTA API (Sincronización Manual por Empresa)
 // ============================================================================
 app.post('/api/sincronizar-sii', apiLimiter, async (req, res) => {
-    const { tipo, rut, clave, mes, anio, empresaId } = req.body; 
+    const { tipo, rut, clave, mes, anio, mesDesde, anioDesde, mesHasta, anioHasta, empresaId } = req.body;
     
-    // 1. MODO MANUAL: Extracción mes a mes para una empresa específica
+    // 1. MODO MANUAL: Extracción por rango de fechas para una empresa específica
     if (rut && clave && empresaId) {
-        console.log(`\n👨‍💻 [MODO MANUAL] Sincronizando para RUT: ${rut}`);
+        console.log(`\n👨‍💻 [MODO MANUAL] Sincronizando para RUT: ${rut} | Rango: ${mesDesde}/${anioDesde} → ${mesHasta}/${anioHasta}`);
         try {
-            const resultado = await ejecutarRobotSII({ rut, clave });
+            const resultado = await ejecutarRobotSII({ rut, clave, mesDesde, anioDesde, mesHasta, anioHasta });
             
             if (resultado.success) {
                 console.log(`✅ Extracción completada. Subiendo a BD...`);

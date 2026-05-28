@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BookCopy, Save, Loader2, Calculator } from 'lucide-react';
+import { BookCopy, Loader2, CalendarDays } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { getChartOfAccountsApi } from '@/services/accountingService';
@@ -17,10 +17,19 @@ const CUENTAS_LABELS = {
     GASTOS: 'Cuenta Gastos'
 };
 
+const TIPOS_PERIODO = [
+    { value: 'mensual', label: 'Mensual' },
+    { value: 'trimestral', label: 'Trimestral' },
+    { value: 'anual', label: 'Anual' },
+    { value: 'diario', label: 'Diario' },
+];
+
 const formatCLP = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(val || 0);
 
-const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, anio, empresaId, onGuardarSuperficial }) => {
+const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, rawVentas = [], rawCompras = [], mes, anio, empresaId, onGuardarSuperficial }) => {
     const { user } = useAuth();
+    const [tipoPeriodo, setTipoPeriodo] = useState('mensual');
+    const [diaSeleccionado, setDiaSeleccionado] = useState('01');
     const [mapeo, setMapeo] = useState({
         CLIENTES: '1104-01',
         VENTAS: '5101-01',
@@ -38,140 +47,115 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, an
             const data = await res.json();
             return data.plan || [];
         },
-        enabled: isOpen && !!user?.sessionId,
+        enabled: isOpen && !!user?.sessionId && !!empresaId,
     });
 
     const plan = dataCuentas || [];
     const getNombreCuenta = (codigo) => plan.find(c => c.codigo === codigo)?.descripcion || `CUENTA ${codigo}`;
 
-    const handleCuentaChange = (tipo, codigo) => {
-        setMapeo(prev => ({ ...prev, [tipo]: codigo }));
-    };
+    const diasEnMes = useMemo(() => new Date(parseInt(anio), parseInt(mes), 0).getDate(), [mes, anio]);
+    const dias = useMemo(() => Array.from({ length: diasEnMes }, (_, i) => (i + 1).toString().padStart(2, '0')), [diasEnMes]);
 
-    // 🔥 CÁLCULO DETALLADO PARA MOSTRAR AL USUARIO
+    const { ventasFiltradas, comprasFiltradas, periodoLabel } = useMemo(() => {
+        const mesNum = parseInt(mes);
+        const trimestre = Math.ceil(mesNum / 3);
+        const mesInicioTrim = ((trimestre - 1) * 3 + 1).toString().padStart(2, '0');
+        const mesFinTrim = (trimestre * 3).toString().padStart(2, '0');
+
+        let filtro;
+        let label;
+
+        switch (tipoPeriodo) {
+            case 'diario':
+                filtro = (d) => d.fecha_emision?.startsWith(`${anio}-${mes}-${diaSeleccionado}`);
+                label = `${diaSeleccionado}/${mes}/${anio}`;
+                break;
+            case 'trimestral':
+                filtro = (d) => {
+                    if (!d.fecha_emision) return false;
+                    const dMes = d.fecha_emision.substring(5, 7);
+                    const dAnio = d.fecha_emision.substring(0, 4);
+                    return dAnio === anio && dMes >= mesInicioTrim && dMes <= mesFinTrim;
+                };
+                label = `T${trimestre} ${anio}`;
+                break;
+            case 'anual':
+                filtro = (d) => d.fecha_emision?.startsWith(anio);
+                label = `AÑO ${anio}`;
+                break;
+            default:
+                filtro = (d) => d.fecha_emision?.startsWith(`${anio}-${mes}`);
+                label = `${mes}/${anio}`;
+        }
+
+        return {
+            ventasFiltradas: rawVentas.filter(filtro),
+            comprasFiltradas: rawCompras.filter(filtro),
+            periodoLabel: label
+        };
+    }, [tipoPeriodo, mes, anio, diaSeleccionado, rawVentas, rawCompras]);
+
     const resumenMatematico = useMemo(() => {
-        let facturasVentas = { neto: 0, iva: 0, total: 0, cant: 0 };
-        let ncVentas = { neto: 0, iva: 0, total: 0, cant: 0 };
+        let fV = { neto: 0, iva: 0, total: 0 };
+        let ncV = { neto: 0, iva: 0, total: 0 };
 
-        ventas.forEach(doc => {
+        ventasFiltradas.forEach(doc => {
             const neto = Number(doc.monto_neto) || 0;
             const iva = Number(doc.monto_iva) || 0;
             const total = Number(doc.monto_total) || (neto + iva);
-            
-            if (doc.tipo_dte === 61) {
-                ncVentas.cant++; ncVentas.neto += neto; ncVentas.iva += iva; ncVentas.total += total;
-            } else {
-                facturasVentas.cant++; facturasVentas.neto += neto; facturasVentas.iva += iva; facturasVentas.total += total;
-            }
+            if (doc.tipo_dte === 61) { ncV.neto += neto; ncV.iva += iva; ncV.total += total; }
+            else { fV.neto += neto; fV.iva += iva; fV.total += total; }
         });
 
-        let facturasCompras = { neto: 0, iva: 0, total: 0, cant: 0 };
-        let ncCompras = { neto: 0, iva: 0, total: 0, cant: 0 };
+        let fC = { neto: 0, iva: 0, total: 0 };
+        let ncC = { neto: 0, iva: 0, total: 0 };
 
-        compras.forEach(doc => {
+        comprasFiltradas.forEach(doc => {
             const neto = Number(doc.monto_neto) || 0;
-            const iva = Number(doc.monto_iva) || 0; 
+            const iva = Number(doc.monto_iva) || 0;
             const total = Number(doc.monto_total) || (neto + iva);
-            
-            if (doc.tipo_dte === 61) {
-                ncCompras.cant++; ncCompras.neto += neto; ncCompras.iva += iva; ncCompras.total += total;
-            } else {
-                facturasCompras.cant++; facturasCompras.neto += neto; facturasCompras.iva += iva; facturasCompras.total += total;
-            }
+            if (doc.tipo_dte === 61) { ncC.neto += neto; ncC.iva += iva; ncC.total += total; }
+            else { fC.neto += neto; fC.iva += iva; fC.total += total; }
         });
 
         return {
-            ventas: {
-                facturas: facturasVentas,
-                nc: ncVentas,
-                final: {
-                    neto: facturasVentas.neto - ncVentas.neto,
-                    iva: facturasVentas.iva - ncVentas.iva,
-                    total: facturasVentas.total - ncVentas.total
-                }
-            },
-            compras: {
-                facturas: facturasCompras,
-                nc: ncCompras,
-                final: {
-                    neto: facturasCompras.neto - ncCompras.neto,
-                    iva: facturasCompras.iva - ncCompras.iva,
-                    total: facturasCompras.total - ncCompras.total
-                }
-            }
+            ventas: { final: { neto: fV.neto - ncV.neto, iva: fV.iva - ncV.iva, total: fV.total - ncV.total } },
+            compras: { final: { neto: fC.neto - ncC.neto, iva: fC.iva - ncC.iva, total: fC.total - ncC.total } }
         };
-    }, [ventas, compras, isOpen]);
+    }, [ventasFiltradas, comprasFiltradas]);
 
-    // 🔥 GENERACIÓN DE LOS ASIENTOS CORREGIDA Y CUADRADA
     const asientos = useMemo(() => {
         if (!isOpen || !Object.values(mapeo).every(c => c)) return [];
         const lineas = [];
         const { ventas: resV, compras: resC } = resumenMatematico;
 
-        // --- LÓGICA DE VENTAS ---
-        const totalVentas = resV.final.total;
-        const netoVentas = resV.final.neto;
-        const ivaVentas = resV.final.iva;
-
-        if (Math.abs(totalVentas) > 0 || Math.abs(netoVentas) > 0) {
-            const esNegativo = totalVentas < 0;
-            lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN VENTAS ${mes}-${anio}` });
-            
-            lineas.push({ 
-                concepto: 'CLIENTES',
-                codigo: mapeo.CLIENTES, 
-                debe: !esNegativo ? Math.abs(totalVentas) : 0, 
-                haber: esNegativo ? Math.abs(totalVentas) : 0 
-            });
-            lineas.push({ 
-                concepto: 'VENTAS',
-                codigo: mapeo.VENTAS, 
-                debe: esNegativo ? Math.abs(netoVentas) : 0, 
-                haber: !esNegativo ? Math.abs(netoVentas) : 0 
-            });
-            lineas.push({ 
-                concepto: 'IVA_DEBITO',
-                codigo: mapeo.IVA_DEBITO, 
-                debe: esNegativo ? Math.abs(ivaVentas) : 0, 
-                haber: !esNegativo ? Math.abs(ivaVentas) : 0 
-            });
+        const { neto: netoV, iva: ivaV, total: totalV } = resV.final;
+        if (Math.abs(totalV) > 0 || Math.abs(netoV) > 0) {
+            const neg = totalV < 0;
+            lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN VENTAS ${periodoLabel}` });
+            lineas.push({ codigo: mapeo.CLIENTES, descripcion: getNombreCuenta(mapeo.CLIENTES), debe: !neg ? Math.abs(totalV) : 0, haber: neg ? Math.abs(totalV) : 0 });
+            lineas.push({ codigo: mapeo.VENTAS, descripcion: getNombreCuenta(mapeo.VENTAS), debe: neg ? Math.abs(netoV) : 0, haber: !neg ? Math.abs(netoV) : 0 });
+            lineas.push({ codigo: mapeo.IVA_DEBITO, descripcion: getNombreCuenta(mapeo.IVA_DEBITO), debe: neg ? Math.abs(ivaV) : 0, haber: !neg ? Math.abs(ivaV) : 0 });
         }
 
-        // --- LÓGICA DE COMPRAS ---
-        const totalCompras = resC.final.total;
-        const netoCompras = resC.final.neto;
-        const ivaCompras = resC.final.iva;
-
-        if (Math.abs(totalCompras) > 0 || Math.abs(netoCompras) > 0) {
-            const esNegativo = totalCompras < 0;
-            lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN COMPRAS ${mes}-${anio}` });
-            
-            lineas.push({ 
-                concepto: 'GASTOS',
-                codigo: mapeo.GASTOS, 
-                debe: !esNegativo ? Math.abs(netoCompras) : 0, 
-                haber: esNegativo ? Math.abs(netoCompras) : 0 
-            });
-            lineas.push({ 
-                concepto: 'IVA_CREDITO',
-                codigo: mapeo.IVA_CREDITO, 
-                debe: !esNegativo ? Math.abs(ivaCompras) : 0, 
-                haber: esNegativo ? Math.abs(ivaCompras) : 0 
-            });
-            lineas.push({ 
-                concepto: 'PROVEEDORES',
-                codigo: mapeo.PROVEEDORES, 
-                debe: esNegativo ? Math.abs(totalCompras) : 0, 
-                haber: !esNegativo ? Math.abs(totalCompras) : 0 
-            });
+        const { neto: netoC, iva: ivaC, total: totalC } = resC.final;
+        if (Math.abs(totalC) > 0 || Math.abs(netoC) > 0) {
+            const neg = totalC < 0;
+            lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN COMPRAS ${periodoLabel}` });
+            lineas.push({ codigo: mapeo.GASTOS, descripcion: getNombreCuenta(mapeo.GASTOS), debe: !neg ? Math.abs(netoC) : 0, haber: neg ? Math.abs(netoC) : 0 });
+            lineas.push({ codigo: mapeo.IVA_CREDITO, descripcion: getNombreCuenta(mapeo.IVA_CREDITO), debe: !neg ? Math.abs(ivaC) : 0, haber: neg ? Math.abs(ivaC) : 0 });
+            lineas.push({ codigo: mapeo.PROVEEDORES, descripcion: getNombreCuenta(mapeo.PROVEEDORES), debe: neg ? Math.abs(totalC) : 0, haber: !neg ? Math.abs(totalC) : 0 });
         }
 
         return lineas;
-    }, [resumenMatematico, mapeo, mes, anio, isOpen]);
+    }, [resumenMatematico, mapeo, periodoLabel, isOpen]);
 
-    const handleGuardar = () => {
-        if (onGuardarSuperficial) onGuardarSuperficial(asientos);
-        toast({ title: "Borrador Generado", description: "El Libro Diario se generó exitosamente en modo borrador." });
+    const handleGenerar = () => {
+        onGuardarSuperficial?.({ asientos, periodoLabel });
+        toast({
+            title: "✅ Borrador Generado",
+            description: `Libro ${TIPOS_PERIODO.find(t => t.value === tipoPeriodo)?.label} — ${periodoLabel} enviado al tab Libro Diario.`
+        });
         setIsOpen(false);
     };
 
@@ -186,8 +170,49 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, an
                 </DialogHeader>
 
                 <div className="max-h-[65vh] overflow-y-auto custom-scrollbar pr-2 mt-4 space-y-6">
-                    
-                    {/* PANEL DE SELECCIÓN DE CUENTAS */}
+
+                    {/* TIPO DE PERÍODO */}
+                    <div className="bg-black/40 border border-white/5 rounded-xl p-5">
+                        <h4 className="text-xs font-black uppercase text-blue-300 mb-4 tracking-widest flex items-center gap-2">
+                            <CalendarDays className="h-3.5 w-3.5" /> Tipo de Período
+                        </h4>
+                        <div className="grid grid-cols-4 gap-2">
+                            {TIPOS_PERIODO.map(tipo => (
+                                <button
+                                    key={tipo.value}
+                                    onClick={() => setTipoPeriodo(tipo.value)}
+                                    className={`py-2.5 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                                        tipoPeriodo === tipo.value
+                                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
+                                            : 'bg-slate-800/50 text-gray-500 hover:text-white hover:bg-slate-700/50 border border-white/5'
+                                    }`}
+                                >
+                                    {tipo.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {tipoPeriodo === 'diario' && (
+                            <div className="mt-4">
+                                <label className="text-[9px] font-bold uppercase text-gray-500 mb-1.5 block">Día</label>
+                                <select
+                                    value={diaSeleccionado}
+                                    onChange={(e) => setDiaSeleccionado(e.target.value)}
+                                    className="w-32 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                >
+                                    {dias.map(d => <option key={d} value={d} className="bg-slate-900">{d}</option>)}
+                                </select>
+                            </div>
+                        )}
+
+                        <div className="mt-3 flex items-center gap-4 text-[10px] font-black uppercase tracking-widest">
+                            <span className="text-blue-400">Período: {periodoLabel}</span>
+                            <span className="text-emerald-400">{ventasFiltradas.length} ventas</span>
+                            <span className="text-red-400">{comprasFiltradas.length} compras</span>
+                        </div>
+                    </div>
+
+                    {/* CONFIGURACIÓN DE CUENTAS */}
                     {!isLoading && (
                         <div className="bg-black/40 border border-white/5 rounded-xl p-5">
                             <h4 className="text-xs font-black uppercase text-blue-300 mb-4 tracking-widest">Configuración de Cuentas</h4>
@@ -195,11 +220,10 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, an
                                 {Object.entries(CUENTAS_LABELS).map(([tipo, label]) => (
                                     <div key={tipo} className="space-y-1">
                                         <label className="text-[9px] font-bold uppercase text-gray-500">{label}</label>
-                                        <Select value={mapeo[tipo]} onValueChange={(val) => handleCuentaChange(tipo, val)}>
+                                        <Select value={mapeo[tipo]} onValueChange={(val) => setMapeo(prev => ({ ...prev, [tipo]: val }))}>
                                             <SelectTrigger className="bg-slate-900 border-white/10 text-xs text-white h-8">
                                                 <SelectValue />
                                             </SelectTrigger>
-                                            {/* 🔥 AQUÍ ESTÁ EL DESPLAZAMIENTO */}
                                             <SelectContent className="bg-slate-900 border-white/10 text-white max-h-[300px] overflow-y-auto">
                                                 {plan.map(cta => (
                                                     <SelectItem key={cta.codigo} value={cta.codigo} className="text-xs">
@@ -222,7 +246,7 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, an
                         </div>
                     ) : asientos.length === 0 ? (
                         <div className="text-center py-10 text-gray-500 font-bold uppercase text-xs tracking-widest">
-                            No hay movimientos para generar asientos.
+                            Sin movimientos para el período seleccionado.
                         </div>
                     ) : (
                         <div className="bg-black/20 rounded-xl border border-white/10 overflow-hidden">
@@ -256,8 +280,17 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, compras, ventas, mes, an
                 </div>
 
                 <DialogFooter className="mt-4">
-                    <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancelar</Button>
-                    <Button onClick={handleGuardar} className="bg-blue-600">Registrar en Libro Diario</Button>
+                    <Button variant="ghost" onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white">
+                        Cancelar
+                    </Button>
+                    <Button
+                        onClick={handleGenerar}
+                        disabled={asientos.length === 0}
+                        className="bg-blue-600 hover:bg-blue-500 font-black uppercase text-xs tracking-widest disabled:opacity-40"
+                    >
+                        <BookCopy className="h-4 w-4 mr-2" />
+                        Generar Borrador
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
