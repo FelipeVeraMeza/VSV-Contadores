@@ -505,6 +505,23 @@ export async function emitirLotePuppeteer(facturasFront) {
                         if(!estadoRobot.cancelar) {
                              console.log(`🚫 Se agotaron los 3 reintentos. Saltando a la siguiente factura.`);
                              fs.appendFileSync(RUTA_LOG, `FALLO: ${f.rutReceptor} - ${f.producto.nombre || ''}\n`);
+                             
+                             // 🔥 SOLUCIÓN: Si falla definitivamente y NO es la última factura del lote actual,
+                             // hacemos un Hard Reset inmediato para que la siguiente empiece limpia.
+                             if (j < loteActual.length - 1) {
+                                 console.log('🔄 [RESETEO POST-FALLO] Cerrando sesión y preparando navegador limpio para la siguiente factura del lote...');
+                                 await cerrarSesionSII(page, browser);
+                                 await delay(2000);
+                                 
+                                 browser = await puppeteer.launch({ 
+                                     headless: true, 
+                                     defaultViewport: null, 
+                                     args: ['--no-sandbox', '--disable-setuid-sandbox', '--start-maximized', '--disable-blink-features=AutomationControlled'] 
+                                 });
+                                 page = (await browser.pages())[0];
+                                 await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                                 page.on('dialog', async d => await d.accept());
+                             }
                         }
                         resultados.push({ rut: f.rutReceptor, estado: 'error', error: e.message });
                         estadoRobot.errores++; 

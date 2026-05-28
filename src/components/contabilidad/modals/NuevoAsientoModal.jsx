@@ -5,7 +5,14 @@ import { toast } from '@/components/ui/use-toast';
 import { API_BASE_URL } from '../../../../config.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
+const TIPOS_COMPROBANTE = [
+  { value: 'ingreso', label: 'Ingreso', color: 'text-emerald-400' },
+  { value: 'egreso', label: 'Egreso', color: 'text-red-400' },
+  { value: 'traspaso', label: 'Traspaso', color: 'text-blue-400' },
+];
+
 const NuevoAsientoModal = ({ isOpen, setIsOpen, empresaId, onGuardadoExitoso }) => {
+  const [tipoComprobante, setTipoComprobante] = useState('ingreso');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
   const [glosa, setGlosa] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -54,6 +61,7 @@ const NuevoAsientoModal = ({ isOpen, setIsOpen, empresaId, onGuardadoExitoso }) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           empresa_id: empresaId,
+          tipo_comprobante: tipoComprobante,
           fecha,
           glosa,
           lineas: lineas.map(l => ({
@@ -91,25 +99,40 @@ const NuevoAsientoModal = ({ isOpen, setIsOpen, empresaId, onGuardadoExitoso }) 
       <DialogContent className="sm:max-w-[700px] bg-[#0f172a] border-white/10 text-white shadow-2xl backdrop-blur-xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-black tracking-tight text-emerald-400 uppercase">
-            Nuevo Asiento Manual
+            Nuevo Comprobante — {tipoComprobante.charAt(0).toUpperCase() + tipoComprobante.slice(1)}
           </DialogTitle>
           <DialogDescription className="text-gray-400 text-xs">
-            Ingresa ajustes contables, remuneraciones o depreciaciones.
+            Ingresa ajustes contables, remuneraciones o traspasos. Partida doble obligatoria.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 mt-4">
           <div className="grid grid-cols-4 gap-4">
             <div className="col-span-1">
+              <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1 block">Tipo</label>
+              <div className="flex flex-col gap-1">
+                {TIPOS_COMPROBANTE.map(t => (
+                  <button key={t.value} type="button" onClick={() => setTipoComprobante(t.value)}
+                    className={`px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest text-left transition-all border ${
+                      tipoComprobante === t.value
+                        ? `${t.color} bg-white/10 border-white/20`
+                        : 'text-gray-500 bg-transparent border-transparent hover:border-white/10'
+                    }`}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="col-span-1">
               <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1 block">Fecha</label>
-              <input 
-                type="date" 
-                value={fecha} 
+              <input
+                type="date"
+                value={fecha}
                 onChange={(e) => setFecha(e.target.value)}
                 className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
               />
             </div>
-            <div className="col-span-3">
+            <div className="col-span-2">
               <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1 block">Glosa (Descripción)</label>
               <input 
                 type="text" 
