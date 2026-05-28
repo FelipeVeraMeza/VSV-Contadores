@@ -506,13 +506,20 @@ export async function emitirLotePuppeteer(facturasFront) {
                              console.log(`🚫 Se agotaron los 3 reintentos. Saltando a la siguiente factura.`);
                              fs.appendFileSync(RUTA_LOG, `FALLO: ${f.rutReceptor} - ${f.producto.nombre || ''}\n`);
                              
-                             // 🔥 SOLUCIÓN: Si falla definitivamente y NO es la última factura del lote actual,
-                             // hacemos un Hard Reset inmediato para que la siguiente empiece limpia.
+                             // 🔥 APLICANDO TU LÓGICA DE CIERRE DE SESIÓN ENTRE FACTURAS
                              if (j < loteActual.length - 1) {
-                                 console.log('🔄 [RESETEO POST-FALLO] Cerrando sesión y preparando navegador limpio para la siguiente factura del lote...');
-                                 await cerrarSesionSII(page, browser);
+                                 console.log('🔄 [RESETEO POST-FALLO] Cerrando sesión y preparando navegador limpio para la siguiente factura...');
+                                 
+                                 if (page && !page.isClosed()) {
+                                     try { await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { timeout: 5000 }); } catch (errLogout) {}
+                                 }
+                                 if (browser) {
+                                     await browser.close();
+                                 }
+                                 
                                  await delay(2000);
                                  
+                                 // Levantamos un navegador nuevo para que la siguiente empresa empiece desde cero
                                  browser = await puppeteer.launch({ 
                                      headless: true, 
                                      defaultViewport: null, 
