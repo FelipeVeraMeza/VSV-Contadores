@@ -1,9 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FileText, CheckCircle, AlertCircle, Plus, Trash2, Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { API_BASE_URL } from '../../../../config.js';
+import { useAuth } from '@/hooks/useAuth';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getChartOfAccountsApi } from '@/services/accountingService';
+import { fetchWithAuth } from '@/services/apiClient';
 
 const TIPO_DTE_MAP = {
   33: 'Factura Electrónica', 34: 'Factura Exenta', 61: 'Nota de Crédito',
@@ -12,51 +16,91 @@ const TIPO_DTE_MAP = {
 
 const formatCLP = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(val || 0);
 const formatText = (str) => str ? str.toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase() : '';
+const formatRut = (rut) => {
+  if (!rut) return '';
+  const clean = String(rut).replace(/[.\-]/g, '');
+  if (clean.length < 2) return rut;
+  return `${clean.slice(0, -1)}-${clean.slice(-1).toUpperCase()}`;
+};
 
-const generarAsiento = (doc, tipoMovimiento) => {
+const CUENTAS_DEFAULT = {
+  ventas: [
+    { cuenta: '1104-01', nombre: 'DEUDORES CLIENTES' },
+    { cuenta: '5101-01', nombre: 'VENTAS' },
+    { cuenta: '2108-02', nombre: 'IVA DEBITO FISCAL' },
+  ],
+  compras: [
+    { cuenta: '4201-08', nombre: 'GASTOS GENERALES' },
+    { cuenta: '1108-02', nombre: 'IVA CREDITO FISCAL' },
+    { cuenta: '2116-01', nombre: 'FACTURAS POR PAGAR' },
+  ],
+  honorarios: [
+    { cuenta: '4201-02', nombre: 'HONORARIOS PROFESIONALES' },
+    { cuenta: '2105-04', nombre: 'HONORARIOS POR PAGAR' },
+  ],
+};
+
+const generarLineas = (doc, tipo) => {
   const neto = Number(doc.monto_neto) || 0;
   const iva = Number(doc.monto_iva) || Math.round(neto * 0.19);
-  const total = Number(doc.monto_total) || (neto + iva);
+  const total = neto + iva; // Siempre calculado para garantizar cuadre
+  const base = CUENTAS_DEFAULT[tipo] || CUENTAS_DEFAULT.ventas;
 
-  if (tipoMovimiento === 'ventas') {
-    return [
-      { cuenta: '1.1.02', nombre: 'Clientes por Cobrar', debe: total, haber: 0 },
-      { cuenta: '4.1.01', nombre: 'Ventas Netas', debe: 0, haber: neto },
-      { cuenta: '2.1.04', nombre: 'IVA Débito Fiscal', debe: 0, haber: iva },
-    ];
-  }
-  if (tipoMovimiento === 'compras') {
-    return [
-      { cuenta: '5.1.01', nombre: 'Costo de Ventas / Gasto', debe: neto, haber: 0 },
-      { cuenta: '1.1.05', nombre: 'IVA Crédito Fiscal', debe: iva, haber: 0 },
-      { cuenta: '2.1.01', nombre: 'Proveedores por Pagar', debe: 0, haber: total },
-    ];
-  }
+  if (tipo === 'ventas') return [
+    { ...base[0], debe: total, haber: 0 },
+    { ...base[1], debe: 0, haber: neto },
+    { ...base[2], debe: 0, haber: iva },
+  ];
+  if (tipo === 'compras') return [
+    { ...base[0], debe: neto, haber: 0 },
+    { ...base[1], debe: iva, haber: 0 },
+    { ...base[2], debe: 0, haber: total },
+  ];
   return [
-    { cuenta: '5.2.10', nombre: 'Honorarios', debe: total, haber: 0 },
-    { cuenta: '2.1.02', nombre: 'Honorarios por Pagar', debe: 0, haber: total },
+    { ...base[0], debe: total, haber: 0 },
+    { ...base[1], debe: 0, haber: total },
   ];
 };
 
 const COLOR_MAP = {
-  ventas: { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/30' },
-  compras: { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/30' },
-  honorarios: { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/30' },
+  ventas:    { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/30' },
+  compras:   { bg: 'bg-red-500/10',     text: 'text-red-400',     border: 'border-red-500/30' },
+  honorarios:{ bg: 'bg-amber-500/10',   text: 'text-amber-400',   border: 'border-amber-500/30' },
 };
 
-const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId }) => {
-  if (!documento) return null;
+const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuardado }) => {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [lineas, setLineas] = useState([]);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const tipo = documento.tipoMovimiento || 'ventas';
+  const tipo = documento?.tipoMovimiento || 'ventas';
   const isCompra = tipo === 'compras';
   const colors = COLOR_MAP[tipo] || COLOR_MAP.ventas;
   const tipoLabel = tipo === 'ventas' ? 'Venta' : tipo === 'compras' ? 'Compra' : 'Honorario';
 
+  const { data: planData } = useQuery({
+    queryKey: ['chart-of-accounts', empresaId],
+    queryFn: async () => {
+      const res = await getChartOfAccountsApi(user.sessionId, empresaId);
+      if (!res.ok) throw new Error();
+      return (await res.json()).plan || [];
+    },
+    enabled: isOpen && !!user?.sessionId && !!empresaId,
+  });
+  const plan = planData || [];
+
+  useEffect(() => {
+    if (documento && isOpen) setLineas(generarLineas(documento, tipo));
+  }, [documento, isOpen, tipo]);
+
+  if (!documento) return null;
+
   const neto = Number(documento.monto_neto) || 0;
   const iva = Number(documento.monto_iva) || Math.round(neto * 0.19);
-  const total = Number(documento.monto_total) || (neto + iva);
+  const total = neto + iva;
 
-  const rut = isCompra ? documento.rut_proveedor : documento.rut_cliente;
+  const rut = formatRut(isCompra ? documento.rut_proveedor : documento.rut_cliente);
   const razon = formatText(isCompra ? documento.razon_social_proveedor : documento.razon_social);
   const fecha = documento.fecha_emision
     ? new Date(documento.fecha_emision).toLocaleDateString('es-CL', { timeZone: 'UTC' })
@@ -64,34 +108,60 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId }) => {
   const periodo = documento.fecha_emision ? documento.fecha_emision.substring(0, 7) : 'N/A';
   const tipoDocLabel = TIPO_DTE_MAP[documento.tipo_dte] || `TIPO ${documento.tipo_dte}`;
 
-  const lineas = generarAsiento(documento, tipo);
-  const totalDebe = lineas.reduce((s, l) => s + l.debe, 0);
-  const totalHaber = lineas.reduce((s, l) => s + l.haber, 0);
-  const cuadrado = totalDebe === totalHaber;
+  const totalDebe = lineas.reduce((s, l) => s + (Number(l.debe) || 0), 0);
+  const totalHaber = lineas.reduce((s, l) => s + (Number(l.haber) || 0), 0);
+  const cuadrado = Math.abs(totalDebe - totalHaber) < 1;
 
-  const handleContabilizar = async () => {
+  const updateCuenta = (idx, codigo) => {
+    const cta = plan.find(c => c.codigo === codigo);
+    setLineas(prev => prev.map((l, i) => i !== idx ? l : { ...l, cuenta: codigo, nombre: cta?.descripcion || codigo }));
+  };
+  const updateMonto = (idx, field, value) => {
+    setLineas(prev => prev.map((l, i) => i !== idx ? l : { ...l, [field]: Number(value) || 0 }));
+  };
+  const agregarLinea = () => setLineas(prev => [...prev, { cuenta: '', nombre: '', debe: 0, haber: 0 }]);
+  const eliminarLinea = (idx) => setLineas(prev => prev.filter((_, i) => i !== idx));
+
+  const handleGuardar = async () => {
+    if (!cuadrado) {
+      toast({ variant: 'destructive', title: 'Asiento Descuadrado', description: `Diferencia: ${formatCLP(Math.abs(totalDebe - totalHaber))}` });
+      return;
+    }
+    if (!empresaId || empresaId === 'ALL') {
+      toast({ variant: 'destructive', title: 'Sin empresa', description: 'Selecciona una empresa específica para guardar.' });
+      return;
+    }
+    setIsSaving(true);
     try {
-      await fetch(`${API_BASE_URL}/contabilidad/contabilizar-dte`, {
+      const res = await fetchWithAuth('/accounting/comprobantes', user.sessionId, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          empresa_id: empresaId,
-          documento_id: documento.id,
-          tipo_movimiento: tipo,
-          lineas,
-        }),
+        body: {
+          empresaId,
+          tipo,
+          fecha: documento.fecha_emision,
+          glosa: `${tipoLabel} Folio #${documento.folio} — ${razon || rut}`,
+          folio: documento.folio,
+          rutAsociado: rut,
+          lineas: lineas.map(l => ({ cuenta: l.cuenta, debe: l.debe, haber: l.haber })),
+        },
       });
-      toast({ title: '✅ Asiento Contabilizado', description: `${tipoLabel} folio #${documento.folio} registrada en el Libro Diario.` });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Error al guardar');
+      const accion = data.accion === 'actualizado' ? 'Asiento Actualizado' : 'Asiento Guardado';
+      toast({ title: `✅ ${accion}`, description: `N° ${data.numero} — ${tipoLabel} folio #${documento.folio}` });
+      queryClient.invalidateQueries(['comprobantes', empresaId]);
+      onGuardado?.();
       setIsOpen(false);
-    } catch {
-      toast({ title: '✅ Contabilizado (simulación)', description: 'Asiento registrado en el Libro Diario.' });
-      setIsOpen(false);
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Error', description: err.message });
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-[720px] bg-[#0f172a] border-white/10 text-white shadow-2xl">
+      <DialogContent className="sm:max-w-[760px] bg-[#0f172a] border-white/10 text-white shadow-2xl">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-lg ${colors.bg}`}>
@@ -134,12 +204,11 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId }) => {
               </p>
               <p className="text-xs font-mono text-gray-300 mt-0.5">{rut}</p>
             </div>
-            <div className="col-span-2">
+            <div className="col-span-2 md:col-span-3">
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Razón Social</p>
               <p className="text-xs font-bold text-white mt-0.5 truncate">{razon || 'SIN RAZÓN SOCIAL'}</p>
             </div>
           </div>
-
           <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-white/5">
             <div>
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Neto</p>
@@ -156,51 +225,87 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId }) => {
           </div>
         </div>
 
-        {/* ASIENTO CONTABLE */}
+        {/* ASIENTO CONTABLE EDITABLE */}
         <div className="bg-black/20 rounded-xl border border-white/5 overflow-hidden">
           <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
-            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Asiento Contable — Partida Doble</p>
-            {cuadrado ? (
-              <div className="flex items-center gap-1.5 text-emerald-400 text-[10px] font-black uppercase">
-                <CheckCircle className="h-3 w-3" /> Cuadrado
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-red-400 text-[10px] font-black uppercase">
-                <AlertCircle className="h-3 w-3" /> Descuadrado
-              </div>
-            )}
+            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Asiento Contable — Editable</p>
+            <div className="flex items-center gap-3">
+              {cuadrado ? (
+                <div className="flex items-center gap-1.5 text-emerald-400 text-[10px] font-black uppercase">
+                  <CheckCircle className="h-3 w-3" /> Cuadrado
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-red-400 text-[10px] font-black uppercase">
+                  <AlertCircle className="h-3 w-3" /> Descuadre: {formatCLP(Math.abs(totalDebe - totalHaber))}
+                </div>
+              )}
+              <button onClick={agregarLinea}
+                className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300 transition-colors">
+                <Plus className="h-3 w-3" /> Línea
+              </button>
+            </div>
           </div>
-          <table className="w-full text-sm">
-            <thead className="text-[10px] uppercase tracking-widest font-black text-gray-500 bg-white/[0.02]">
-              <tr>
-                <th className="px-4 py-3 text-left">Nº Cuenta</th>
-                <th className="px-4 py-3 text-left">Nombre / Plan de Cuentas</th>
-                <th className="px-4 py-3 text-right">Debe</th>
-                <th className="px-4 py-3 text-right">Haber</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-              {lineas.map((linea, idx) => (
-                <tr key={idx} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-blue-400 font-bold">{linea.cuenta}</td>
-                  <td className="px-4 py-3 text-xs text-gray-300 font-medium">{linea.nombre}</td>
-                  <td className="px-4 py-3 text-right font-mono text-xs font-bold text-emerald-400">
-                    {linea.debe > 0 ? formatCLP(linea.debe) : ''}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-xs font-bold text-purple-400">
-                    {linea.haber > 0 ? formatCLP(linea.haber) : ''}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[560px]">
+              <thead className="text-[10px] uppercase tracking-widest font-black text-gray-500 bg-white/[0.02]">
+                <tr>
+                  <th className="px-3 py-2.5 text-left w-[46%]">Cuenta</th>
+                  <th className="px-3 py-2.5 text-right w-[22%]">Debe</th>
+                  <th className="px-3 py-2.5 text-right w-[22%]">Haber</th>
+                  <th className="px-3 py-2.5 w-[10%]"></th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot className="bg-white/5 text-[10px] font-black uppercase tracking-widest">
-              <tr>
-                <td colSpan={2} className="px-4 py-3 text-gray-400">Totales</td>
-                <td className="px-4 py-3 text-right font-mono text-emerald-400">{formatCLP(totalDebe)}</td>
-                <td className="px-4 py-3 text-right font-mono text-purple-400">{formatCLP(totalHaber)}</td>
-              </tr>
-            </tfoot>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {lineas.map((linea, idx) => (
+                  <tr key={idx} className="hover:bg-white/[0.02]">
+                    <td className="px-3 py-2">
+                      <Select value={linea.cuenta} onValueChange={(val) => updateCuenta(idx, val)}>
+                        <SelectTrigger className="bg-slate-900 border-white/10 text-xs text-white h-8 w-full">
+                          <SelectValue placeholder="Seleccionar..." />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-white/10 text-white max-h-[220px] overflow-y-auto z-50">
+                          {plan.map(cta => (
+                            <SelectItem key={cta.codigo} value={cta.codigo} className="text-xs">
+                              {cta.codigo} — {cta.descripcion}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {linea.nombre && <p className="text-[9px] text-gray-500 mt-0.5 px-1">{linea.nombre}</p>}
+                    </td>
+                    <td className="px-3 py-2">
+                      <input type="number" min="0" value={linea.debe || ''}
+                        onChange={(e) => updateMonto(idx, 'debe', e.target.value)}
+                        className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1.5 text-xs text-emerald-400 font-mono text-right focus:outline-none focus:border-emerald-500"
+                        placeholder="0" />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input type="number" min="0" value={linea.haber || ''}
+                        onChange={(e) => updateMonto(idx, 'haber', e.target.value)}
+                        className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1.5 text-xs text-orange-400 font-mono text-right focus:outline-none focus:border-orange-500"
+                        placeholder="0" />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {lineas.length > 2 && (
+                        <button onClick={() => eliminarLinea(idx)}
+                          className="text-red-400 hover:text-red-300 opacity-50 hover:opacity-100 transition-all">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="bg-white/5 text-[10px] font-black uppercase tracking-widest">
+                <tr>
+                  <td className="px-3 py-3 text-gray-400">Totales</td>
+                  <td className="px-3 py-3 text-right font-mono text-emerald-400">{formatCLP(totalDebe)}</td>
+                  <td className="px-3 py-3 text-right font-mono text-orange-400">{formatCLP(totalHaber)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
 
         <div className="flex justify-end gap-2 mt-1">
@@ -208,9 +313,9 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId }) => {
             className="text-gray-400 hover:text-white font-bold uppercase text-xs tracking-widest">
             Cerrar
           </Button>
-          <Button onClick={handleContabilizar}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black uppercase text-xs tracking-widest">
-            Contabilizar
+          <Button onClick={handleGuardar} disabled={!cuadrado || lineas.length < 2 || isSaving}
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black uppercase text-xs tracking-widest disabled:opacity-40">
+            {isSaving ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />Guardando...</> : 'Guardar'}
           </Button>
         </div>
       </DialogContent>

@@ -1,77 +1,129 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { useAuth } from '@/hooks/useAuth';
+import { fetchWithAuth } from '@/services/apiClient';
 
-const NuevaCuentaModal = ({ isOpen, setIsOpen, onSave, cuenta }) => {
-    const [codigo, setCodigo] = useState('');
-    const [nombre, setNombre] = useState('');
-    const [tipo, setTipo] = useState('Cuenta');
+const TIPOS_CUENTA = [
+    { value: 'GRUPO',     label: 'Grupo' },
+    { value: 'SUBGRUPO',  label: 'Subgrupo' },
+    { value: 'MAYOR',     label: 'Mayor' },
+    { value: 'SUBCUENTA', label: 'Subcuenta' },
+];
+
+const NuevaCuentaModal = ({ isOpen, setIsOpen, onGuardado, cuenta, empresaId }) => {
+    const { user } = useAuth();
+    const [codigo,      setCodigo]      = useState('');
+    const [descripcion, setDescripcion] = useState('');
+    const [tipo_cuenta, setTipoCuenta]  = useState('SUBCUENTA');
+    const [isSaving, setIsSaving]       = useState(false);
+    const isEditing = !!cuenta;
 
     useEffect(() => {
-        if (cuenta) {
-            setCodigo(cuenta.codigo);
-            setNombre(cuenta.nombre);
-            setTipo(cuenta.tipo);
-        } else {
-            setCodigo('');
-            setNombre('');
-            setTipo('Cuenta');
+        if (isOpen) {
+            setCodigo(     cuenta?.codigo      || '');
+            setDescripcion(cuenta?.descripcion || '');
+            setTipoCuenta( cuenta?.tipo_cuenta || 'SUBCUENTA');
         }
     }, [cuenta, isOpen]);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!codigo || !nombre || !tipo) {
-            toast({ variant: "destructive", title: "Error", description: "Todos los campos son obligatorios." });
+        if (!descripcion.trim() || (!isEditing && !codigo.trim())) {
+            toast({ variant: 'destructive', title: 'Error', description: 'Código y descripción son obligatorios.' });
             return;
         }
-        onSave({ codigo, nombre, tipo, editable: true });
+        setIsSaving(true);
+        try {
+            let res;
+            if (isEditing) {
+                res = await fetchWithAuth(`/accounting/plan-cuentas/${cuenta.id}`, user.sessionId, {
+                    method: 'PUT',
+                    body: { descripcion: descripcion.trim(), tipo_cuenta },
+                });
+            } else {
+                res = await fetchWithAuth('/accounting/plan-cuentas', user.sessionId, {
+                    method: 'POST',
+                    body: { empresaId: empresaId || null, codigo: codigo.trim(), descripcion: descripcion.trim(), tipo_cuenta },
+                });
+            }
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || 'Error al guardar');
+            toast({ title: isEditing ? '✅ Cuenta Actualizada' : '✅ Cuenta Creada', description: data.cuenta?.descripcion });
+            onGuardado?.();
+            setIsOpen(false);
+        } catch (err) {
+            toast({ variant: 'destructive', title: 'Error', description: err.message });
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="sm:max-w-[500px] bg-black/50 backdrop-blur-xl border-white/20 text-white">
+            <DialogContent className="sm:max-w-[460px] bg-[#0f172a] border-white/10 text-white shadow-2xl">
                 <DialogHeader>
-                    <DialogTitle className="text-2xl">{cuenta ? 'Editar Cuenta Contable' : 'Nueva Cuenta Contable'}</DialogTitle>
-                    <DialogDescription>Define los detalles de la cuenta contable.</DialogDescription>
+                    <DialogTitle className="text-lg font-black uppercase tracking-tight text-blue-400">
+                        {isEditing ? 'Editar Cuenta' : 'Nueva Cuenta Contable'}
+                    </DialogTitle>
+                    <DialogDescription className="text-gray-400 text-xs">
+                        {isEditing ? `Modificando: ${cuenta.codigo}` : 'Agrega una cuenta al plan contable'}
+                    </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleSubmit} className="grid gap-6 py-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="codigo">Código de Cuenta</Label>
-                        <Input id="codigo" value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Ej: 1.1.01.002" disabled={!!cuenta} />
-                        {cuenta && <p className="text-xs text-gray-400">El código no se puede editar.</p>}
+
+                <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+                    {/* Código — solo en creación */}
+                    {!isEditing && (
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Código de Cuenta</label>
+                            <input
+                                value={codigo}
+                                onChange={e => setCodigo(e.target.value)}
+                                placeholder="Ej: 1104-02"
+                                className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
+                            />
+                        </div>
+                    )}
+
+                    {/* Descripción */}
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Descripción</label>
+                        <input
+                            value={descripcion}
+                            onChange={e => setDescripcion(e.target.value)}
+                            placeholder="Ej: BANCO SANTANDER"
+                            className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                        />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="nombre">Nombre de la Cuenta</Label>
-                        <Input id="nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej: Banco Estado" />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="tipo">Tipo de Cuenta</Label>
-                        <Select onValueChange={setTipo} value={tipo}>
-                            <SelectTrigger id="tipo" className="w-full">
-                                <SelectValue placeholder="Seleccionar tipo..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Subgrupo">Subgrupo</SelectItem>
-                                <SelectItem value="Cuenta">Cuenta</SelectItem>
-                                <SelectItem value="Subcuenta">Subcuenta</SelectItem>
-                            </SelectContent>
-                        </Select>
+
+                    {/* Tipo de cuenta */}
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Tipo de Cuenta</label>
+                        <div className="grid grid-cols-4 gap-2">
+                            {TIPOS_CUENTA.map(t => (
+                                <button key={t.value} type="button" onClick={() => setTipoCuenta(t.value)}
+                                    className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                                        tipo_cuenta === t.value
+                                            ? 'bg-blue-600 text-white'
+                                            : 'bg-slate-800/50 text-gray-500 hover:text-white border border-white/5'
+                                    }`}>
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </form>
-                <DialogFooter>
-                    <Button type="button" variant="outline" className="border-white/20 text-white hover:bg-white/10" onClick={() => setIsOpen(false)}>Cancelar</Button>
-                    <Button type="submit" onClick={handleSubmit} className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white">Guardar Cuenta</Button>
+
+                <DialogFooter className="mt-2">
+                    <Button variant="ghost" onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white">
+                        Cancelar
+                    </Button>
+                    <Button onClick={handleSubmit} disabled={isSaving}
+                        className="bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-xs tracking-widest disabled:opacity-40">
+                        {isSaving ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />Guardando...</> : isEditing ? 'Actualizar' : 'Crear Cuenta'}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

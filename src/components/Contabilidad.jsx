@@ -49,12 +49,12 @@ const Contabilidad = () => {
   }
 
   const tabs = useMemo(() => [
-    { id: 'movimientos', name: 'Movimientos', icon: ArrowRightLeft, Component: MovimientosContables },
-    { id: 'libro_diario', name: 'Libro Diario', icon: FileText, Component: AsientosContables },
-    { id: 'planCuentas', name: 'Plan de Cuentas', icon: BookCopy, Component: PlanDeCuentas },
-    { id: 'balances', name: 'Balances', icon: BarChart3, Component: Balances },
-    { id: 'conciliacion', name: 'Banco', icon: GitMerge, Component: ConciliacionBancaria },
-    { id: 'reportes', name: 'Reportes', icon: TrendingUp, Component: ReportesContables },
+    { id: 'movimientos',  name: 'Movimientos',    icon: ArrowRightLeft, Component: MovimientosContables },
+    { id: 'libro_diario', name: 'Libro Diario',   icon: FileText,       Component: AsientosContables },
+    { id: 'conciliacion', name: 'Banco',           icon: GitMerge,       Component: ConciliacionBancaria },
+    { id: 'balances',     name: 'Balances',        icon: BarChart3,      Component: Balances },
+    { id: 'planCuentas',  name: 'Plan de Cuentas', icon: BookCopy,       Component: PlanDeCuentas },
+    { id: 'reportes',     name: 'Reportes',        icon: TrendingUp,     Component: ReportesContables },
   ], []);
 
   const handleAddAsiento = () => {

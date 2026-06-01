@@ -25,27 +25,186 @@ export const getAccountingMetrics = async (req, res) => {
 
 export const getChartOfAccounts = async (req, res) => {
     const { empresaId } = req.query;
-    if (!empresaId || empresaId === 'undefined') {
-        return res.json({ plan: [] });
-    }
     try {
-        const query = empresaId === 'ALL'
-            ? `SELECT id, codigo, descripcion, tipo_cuenta, normativa, clasificacion_contable, es_editable
-               FROM plan_cuentas
-               WHERE empresa_id IS NULL
-               ORDER BY codigo ASC`
-            : `SELECT id, codigo, descripcion, tipo_cuenta, normativa, clasificacion_contable, es_editable
+        const usarEmpresa = empresaId && empresaId !== 'undefined' && empresaId !== 'ALL';
+        const query = usarEmpresa
+            ? `SELECT id, codigo, descripcion, tipo_cuenta, grupo, normativa, clasificacion_contable, es_editable
                FROM plan_cuentas
                WHERE empresa_id = $1 OR empresa_id IS NULL
-               ORDER BY empresa_id NULLS LAST, codigo ASC`;
+               ORDER BY empresa_id NULLS LAST, codigo ASC`
+            : `SELECT id, codigo, descripcion, tipo_cuenta, grupo, normativa, clasificacion_contable, es_editable
+               FROM plan_cuentas
+               ORDER BY codigo ASC`;
 
-        const { rows } = empresaId === 'ALL'
-            ? await pool.query(query)
-            : await pool.query(query, [empresaId]);
+        const { rows } = usarEmpresa
+            ? await pool.query(query, [empresaId])
+            : await pool.query(query);
         res.json({ plan: rows });
     } catch (error) {
         console.error("❌ Error al obtener plan de cuentas:", error.message);
         res.status(500).json({ message: "Error al obtener plan de cuentas" });
+    }
+};
+
+export const crearCuenta = async (req, res) => {
+    const { empresaId, codigo, descripcion, tipo_cuenta, normativa = 'LOCAL', grupo } = req.body;
+    if (!codigo || !descripcion || !tipo_cuenta) {
+        return res.status(400).json({ message: "codigo, descripcion y tipo_cuenta son requeridos" });
+    }
+    try {
+        const { rows: [exists] } = await pool.query(
+            `SELECT id FROM plan_cuentas WHERE codigo = $1 AND (empresa_id = $2 OR empresa_id IS NULL)`,
+            [codigo, empresaId || null]
+        );
+        if (exists) return res.status(409).json({ message: `El código ${codigo} ya existe en el plan de cuentas.` });
+
+        const { rows: [nueva] } = await pool.query(
+            `INSERT INTO plan_cuentas (id, empresa_id, codigo, descripcion, tipo_cuenta, normativa, grupo, es_editable)
+             VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, true) RETURNING *`,
+            [empresaId || null, codigo, descripcion.toUpperCase(), tipo_cuenta, normativa, grupo || null]
+        );
+        res.status(201).json({ cuenta: nueva });
+    } catch (error) {
+        console.error("❌ Error creando cuenta:", error.message);
+        res.status(500).json({ message: "Error al crear la cuenta" });
+    }
+};
+
+export const editarCuenta = async (req, res) => {
+    const { id } = req.params;
+    const { descripcion, tipo_cuenta, normativa, grupo } = req.body;
+    if (!descripcion) return res.status(400).json({ message: "descripcion es requerida" });
+    try {
+        const { rows: [cuenta] } = await pool.query(
+            `UPDATE plan_cuentas SET descripcion=$1, tipo_cuenta=COALESCE($2, tipo_cuenta), normativa=COALESCE($3, normativa), grupo=COALESCE($4, grupo)
+             WHERE id=$5 AND es_editable=true RETURNING *`,
+            [descripcion.toUpperCase(), tipo_cuenta, normativa, grupo, id]
+        );
+        if (!cuenta) return res.status(404).json({ message: "Cuenta no encontrada o no editable" });
+        res.json({ cuenta });
+    } catch (error) {
+        console.error("❌ Error editando cuenta:", error.message);
+        res.status(500).json({ message: "Error al editar la cuenta" });
+    }
+};
+
+export const eliminarCuenta = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const { rowCount } = await pool.query(
+            `DELETE FROM plan_cuentas WHERE id=$1 AND es_editable=true`,
+            [id]
+        );
+        if (rowCount === 0) return res.status(404).json({ message: "Cuenta no encontrada o protegida" });
+        res.json({ success: true });
+    } catch (error) {
+        console.error("❌ Error eliminando cuenta:", error.message);
+        res.status(500).json({ message: "Error al eliminar la cuenta" });
+    }
+};
+
+export const guardarComprobante = async (req, res) => {
+    const { empresaId, tipo, fecha, glosa, lineas, folio, rutAsociado } = req.body;
+    if (!empresaId || empresaId === 'ALL' || !lineas?.length) {
+        return res.status(400).json({ message: empresaId === 'ALL'
+            ? "Selecciona una empresa específica para guardar el comprobante."
+            : "empresaId y lineas son requeridos" });
+    }
+    const totalDebe  = lineas.reduce((s, l) => s + (Number(l.debe)  || 0), 0);
+    const totalHaber = lineas.reduce((s, l) => s + (Number(l.haber) || 0), 0);
+    if (Math.abs(totalDebe - totalHaber) > 1) {
+        return res.status(400).json({ message: `Asiento descuadrado: Debe ${totalDebe} ≠ Haber ${totalHaber}` });
+    }
+    const TIPO_MAP = { ventas: 'INGRESO', honorarios: 'INGRESO', compras: 'EGRESO' };
+    const tipoDb   = TIPO_MAP[tipo?.toLowerCase()] || 'INGRESO';
+    const gloseFinal = glosa || (folio ? `Folio #${folio}` : `Comprobante ${tipo}`);
+    const fechaFinal = fecha ? new Date(fecha) : new Date();
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // ── UPSERT: buscar comprobante existente por folio + empresa ──────────
+        const { rows: [existing] } = folio
+            ? await client.query(
+                `SELECT id, numero_comprobante FROM comprobantes
+                 WHERE empresa_id = $1 AND glosa LIKE $2 LIMIT 1`,
+                [empresaId, `%Folio #${folio}%`]
+              )
+            : { rows: [] };
+
+        let compId, numero, accion;
+
+        if (existing) {
+            // Actualizar: eliminar líneas viejas y reemplazar
+            await client.query(`DELETE FROM comprobantes_detalle WHERE comprobante_id = $1`, [existing.id]);
+            await client.query(
+                `UPDATE comprobantes SET fecha=$1, glosa=$2, tipo=$3 WHERE id=$4`,
+                [fechaFinal, gloseFinal, tipoDb, existing.id]
+            );
+            compId = existing.id;
+            numero = existing.numero_comprobante;
+            accion = 'actualizado';
+        } else {
+            // Crear nuevo con número correlativo
+            const { rows: [{ max_num }] } = await client.query(
+                `SELECT COALESCE(MAX(numero_comprobante), 0) AS max_num FROM comprobantes WHERE empresa_id = $1`,
+                [empresaId]
+            );
+            const { rows: [comp] } = await client.query(
+                `INSERT INTO comprobantes (id, empresa_id, numero_comprobante, fecha, tipo, glosa, estado)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'Borrador') RETURNING id`,
+                [empresaId, max_num + 1, fechaFinal, tipoDb, gloseFinal]
+            );
+            compId = comp.id;
+            numero = max_num + 1;
+            accion = 'creado';
+        }
+
+        // Insertar líneas nuevas
+        for (const linea of lineas) {
+            await client.query(
+                `INSERT INTO comprobantes_detalle (id, comprobante_id, cuenta_codigo, rut_asociado, debe, haber)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)`,
+                [compId, linea.cuenta, rutAsociado || null, Number(linea.debe) || 0, Number(linea.haber) || 0]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, comprobanteId: compId, numero, accion });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("❌ Error guardando comprobante:", err.message);
+        res.status(500).json({ message: "Error al guardar el comprobante" });
+    } finally {
+        client.release();
+    }
+};
+
+export const getComprobantes = async (req, res) => {
+    const { empresaId } = req.query;
+    if (!empresaId || empresaId === 'undefined' || empresaId === 'ALL') {
+        return res.json({ comprobantes: [] });
+    }
+    try {
+        const { rows } = await pool.query(
+            `SELECT c.id, c.numero_comprobante, c.fecha, c.tipo, c.glosa, c.estado, c.created_at,
+                    json_agg(json_build_object(
+                        'id', cd.id, 'cuenta_codigo', cd.cuenta_codigo,
+                        'descripcion', COALESCE(pc.descripcion, cd.cuenta_codigo),
+                        'rut_asociado', cd.rut_asociado, 'debe', cd.debe, 'haber', cd.haber
+                    ) ORDER BY cd.debe DESC) AS lineas
+             FROM comprobantes c
+             JOIN comprobantes_detalle cd ON cd.comprobante_id = c.id
+             LEFT JOIN plan_cuentas pc ON pc.codigo = cd.cuenta_codigo
+             WHERE c.empresa_id = $1
+             GROUP BY c.id ORDER BY c.created_at DESC`,
+            [empresaId]
+        );
+        res.json({ comprobantes: rows });
+    } catch (error) {
+        console.error("❌ Error obteniendo comprobantes:", error.message);
+        res.status(500).json({ message: "Error al obtener comprobantes" });
     }
 };
 

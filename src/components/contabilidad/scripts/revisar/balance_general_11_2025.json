@@ -1,0 +1,53 @@
+{
+  "periodo": "11-2025",
+  "fechaGeneracion": "2026-06-01T09:32:12.645Z",
+  "detalles": [
+    {
+      "codigo": "1104-01",
+      "cuenta": "DEUDORES CLIENTES",
+      "debe": 3310290,
+      "haber": 0,
+      "saldoDeudor": 3310290,
+      "saldoAcreedor": 0,
+      "activo": 3310290,
+      "pasivo": 0,
+      "perdida": 0,
+      "ganancia": 0
+    },
+    {
+      "codigo": "5101-01",
+      "cuenta": "VENTAS",
+      "debe": 0,
+      "haber": 2781754,
+      "saldoDeudor": 0,
+      "saldoAcreedor": 2781754,
+      "activo": 0,
+      "pasivo": 0,
+      "perdida": 0,
+      "ganancia": 2781754
+    },
+    {
+      "codigo": "2108-02",
+      "cuenta": "IVA DEBITO FISCAL",
+      "debe": 0,
+      "haber": 528536,
+      "saldoDeudor": 0,
+      "saldoAcreedor": 528536,
+      "activo": 0,
+      "pasivo": 528536,
+      "perdida": 0,
+      "ganancia": 0
+    }
+  ],
+  "totales": {
+    "debe": 3310290,
+    "haber": 3310290,
+    "saldoDeudor": 3310290,
+    "saldoAcreedor": 3310290,
+    "activo": 3310290,
+    "pasivo": 528536,
+    "perdida": 0,
+    "ganancia": 2781754
+  },
+  "cuadrado": true
+}

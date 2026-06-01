@@ -1,33 +1,35 @@
 import { Router } from 'express';
 import multer from 'multer';
-
-// Controllers
-import { 
-    getAccountingMetrics, 
-    getChartOfAccounts, 
-    getJournalEntries, 
+import {
+    getAccountingMetrics,
+    getChartOfAccounts,
+    getJournalEntries,
     runBankReconciliationIA,
-    uploadAccountingExcel
+    uploadAccountingExcel,
+    guardarComprobante,
+    getComprobantes,
+    crearCuenta,
+    editarCuenta,
+    eliminarCuenta
 } from '../controllers/accounting.controllers.js';
-
-// Middlewares
 import { requireSession } from "../middleware/auth.js";
 
 const router = Router();
-
-// Configuración de Multer para subida en memoria
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.use(requireSession);
 
-router.get('/metrics', getAccountingMetrics); 
+router.get('/metrics',           getAccountingMetrics);
 router.get('/chart-of-accounts', getChartOfAccounts);
-router.get('/journal-entries', getJournalEntries);
+router.get('/journal-entries',   getJournalEntries);
+router.post('/reconcile-ia',     runBankReconciliationIA);
+router.post('/importar-excel',   upload.single('archivo'), uploadAccountingExcel);
+router.post('/comprobantes',     guardarComprobante);
+router.get('/comprobantes',      getComprobantes);
 
-// Ruta para la IA lista para ser activada
-router.post('/reconcile-ia', runBankReconciliationIA);
-
-// Nueva ruta para importar Excel
-router.post('/importar-excel', upload.single('archivo'), uploadAccountingExcel);
+// Plan de Cuentas CRUD
+router.post('/plan-cuentas',       crearCuenta);
+router.put('/plan-cuentas/:id',    editarCuenta);
+router.delete('/plan-cuentas/:id', eliminarCuenta);
 
 export default router;
