@@ -124,12 +124,12 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
   const { data: dataComp } = useQuery({
     queryKey: ['comprobantes', targetId],
     queryFn: async () => {
-      if (!targetId || targetId === 'ALL') return { comprobantes: [] };
-      const res = await fetchWithAuth(`/accounting/comprobantes?empresaId=${targetId}`, user.sessionId);
+      const param = (!targetId || targetId === 'ALL') ? 'null' : targetId;
+      const res = await fetchWithAuth(`/accounting/comprobantes?empresaId=${param}`, user.sessionId);
       if (!res.ok) return { comprobantes: [] };
       return res.json();
     },
-    enabled: !!user?.sessionId && !!targetId && targetId !== 'ALL',
+    enabled: !!user?.sessionId,
   });
 
   // Mapa folio → líneas del comprobante guardado
@@ -279,19 +279,16 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
       toast({ variant:'destructive', title:'Descuadre', description:`Debe ${formatCLP(totalDebe)} ≠ Haber ${formatCLP(totalHaber)}` });
       return;
     }
-    if (!targetId || targetId === 'ALL') {
-      toast({ variant:'destructive', title:'Sin empresa', description:'Selecciona una empresa específica.' });
-      return;
-    }
     setSavingRows(prev => new Set(prev).add(rowId));
     try {
       const isCompra = activeTab === 'compras';
       const rut = isCompra ? doc.rut_proveedor : doc.rut_cliente;
       const razon = formatText(isCompra ? doc.razon_social_proveedor : doc.razon_social);
+      const empresaIdPayload = (!targetId || targetId === 'ALL') ? null : targetId;
       const res = await fetchWithAuth('/accounting/comprobantes', user.sessionId, {
         method: 'POST',
         body: {
-          empresaId: targetId, tipo: activeTab,
+          empresaId: empresaIdPayload, tipo: activeTab,
           fecha: doc.fecha_emision,
           glosa: `${activeTab === 'ventas' ? 'Venta' : 'Compra'} Folio #${doc.folio} — ${razon || rut}`,
           folio: doc.folio, rutAsociado: rut,

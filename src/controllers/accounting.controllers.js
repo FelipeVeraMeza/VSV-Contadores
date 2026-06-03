@@ -105,10 +105,9 @@ export const eliminarCuenta = async (req, res) => {
 
 export const guardarComprobante = async (req, res) => {
     const { empresaId, tipo, fecha, glosa, lineas, folio, rutAsociado } = req.body;
-    if (!empresaId || empresaId === 'ALL' || !lineas?.length) {
-        return res.status(400).json({ message: empresaId === 'ALL'
-            ? "Selecciona una empresa específica para guardar el comprobante."
-            : "empresaId y lineas son requeridos" });
+    const empId = (empresaId === 'ALL' || empresaId === 'undefined') ? null : (empresaId || null);
+    if (!lineas?.length) {
+        return res.status(400).json({ message: "lineas son requeridas" });
     }
     const totalDebe  = lineas.reduce((s, l) => s + (Number(l.debe)  || 0), 0);
     const totalHaber = lineas.reduce((s, l) => s + (Number(l.haber) || 0), 0);
@@ -125,18 +124,18 @@ export const guardarComprobante = async (req, res) => {
         await client.query('BEGIN');
 
         // ── UPSERT: buscar comprobante existente por folio + empresa ──────────
+        const empCond = empId === null ? 'empresa_id IS NULL' : 'empresa_id = $1';
         const { rows: [existing] } = folio
             ? await client.query(
                 `SELECT id, numero_comprobante FROM comprobantes
-                 WHERE empresa_id = $1 AND glosa LIKE $2 LIMIT 1`,
-                [empresaId, `%Folio #${folio}%`]
+                 WHERE ${empCond} AND glosa LIKE $${empId === null ? 1 : 2} LIMIT 1`,
+                empId === null ? [`%Folio #${folio}%`] : [empId, `%Folio #${folio}%`]
               )
             : { rows: [] };
 
         let compId, numero, accion;
 
         if (existing) {
-            // Actualizar: eliminar líneas viejas y reemplazar
             await client.query(`DELETE FROM comprobantes_detalle WHERE comprobante_id = $1`, [existing.id]);
             await client.query(
                 `UPDATE comprobantes SET fecha=$1, glosa=$2, tipo=$3 WHERE id=$4`,
@@ -146,15 +145,14 @@ export const guardarComprobante = async (req, res) => {
             numero = existing.numero_comprobante;
             accion = 'actualizado';
         } else {
-            // Crear nuevo con número correlativo
             const { rows: [{ max_num }] } = await client.query(
-                `SELECT COALESCE(MAX(numero_comprobante), 0) AS max_num FROM comprobantes WHERE empresa_id = $1`,
-                [empresaId]
+                `SELECT COALESCE(MAX(numero_comprobante), 0) AS max_num FROM comprobantes WHERE ${empCond}`,
+                empId === null ? [] : [empId]
             );
             const { rows: [comp] } = await client.query(
                 `INSERT INTO comprobantes (id, empresa_id, numero_comprobante, fecha, tipo, glosa, estado)
                  VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'Borrador') RETURNING id`,
-                [empresaId, max_num + 1, fechaFinal, tipoDb, gloseFinal]
+                [empId, max_num + 1, fechaFinal, tipoDb, gloseFinal]
             );
             compId = comp.id;
             numero = max_num + 1;
@@ -183,9 +181,9 @@ export const guardarComprobante = async (req, res) => {
 
 export const getComprobantes = async (req, res) => {
     const { empresaId } = req.query;
-    if (!empresaId || empresaId === 'undefined' || empresaId === 'ALL') {
-        return res.json({ comprobantes: [] });
-    }
+    const empId = (!empresaId || empresaId === 'undefined' || empresaId === 'ALL' || empresaId === 'null')
+        ? null : empresaId;
+    const empCond = empId === null ? 'c.empresa_id IS NULL' : 'c.empresa_id = $1';
     try {
         const { rows } = await pool.query(
             `SELECT c.id, c.numero_comprobante, c.fecha, c.tipo, c.glosa, c.estado, c.created_at,
@@ -197,9 +195,9 @@ export const getComprobantes = async (req, res) => {
              FROM comprobantes c
              JOIN comprobantes_detalle cd ON cd.comprobante_id = c.id
              LEFT JOIN plan_cuentas pc ON pc.codigo = cd.cuenta_codigo
-             WHERE c.empresa_id = $1
+             WHERE ${empCond}
              GROUP BY c.id ORDER BY c.created_at DESC`,
-            [empresaId]
+            empId === null ? [] : [empId]
         );
         res.json({ comprobantes: rows });
     } catch (error) {
