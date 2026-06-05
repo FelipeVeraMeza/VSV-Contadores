@@ -25,12 +25,13 @@ const Contabilidad = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('movimientos');
   const [isAsientoModalOpen, setIsAsientoModalOpen] = useState(false);
-  const [asientosBorrador, setAsientosBorrador] = useState([]);
-  const [borradorPeriodo, setBorradorPeriodo] = useState('');
 
-  const handleGenerarBorrador = ({ asientos, periodoLabel }) => {
-    setAsientosBorrador(asientos);
-    setBorradorPeriodo(periodoLabel);
+  // Período compartido entre Movimientos y Libro Diario
+  const now = new Date();
+  const [periodoMes,  setPeriodoMes]  = useState((now.getMonth()+1).toString().padStart(2,'0'));
+  const [periodoAnio, setPeriodoAnio] = useState(now.getFullYear().toString());
+
+  const handleGenerarBorrador = () => {
     setActiveTab('libro_diario');
   };
 
@@ -138,10 +139,23 @@ const Contabilidad = () => {
               transition={{ duration: 0.2 }}
             >
               {activeTab === 'movimientos' && (
-                <MovimientosContables empresaId={empresaId} onGenerarBorrador={handleGenerarBorrador} />
+                <MovimientosContables
+                  empresaId={empresaId}
+                  onGenerarBorrador={handleGenerarBorrador}
+                  mes={periodoMes}
+                  anio={periodoAnio}
+                  setMes={setPeriodoMes}
+                  setAnio={setPeriodoAnio}
+                />
               )}
               {activeTab === 'libro_diario' && (
-                <AsientosContables empresaId={empresaId} asientosBorrador={asientosBorrador} periodoLabel={borradorPeriodo} />
+                <AsientosContables
+                  empresaId={empresaId}
+                  mes={periodoMes}
+                  anio={periodoAnio}
+                  setMes={setPeriodoMes}
+                  setAnio={setPeriodoAnio}
+                />
               )}
               {activeTab !== 'movimientos' && activeTab !== 'libro_diario' && ActiveModule && (
                 <ActiveModule empresaId={empresaId} />

@@ -251,8 +251,19 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Verificación de esquema (idempotente) al arrancar
+const ensureSchema = async () => {
+  try {
+    await pool.query(`ALTER TABLE documentos_emitidos ADD COLUMN IF NOT EXISTS razon_social_cliente TEXT`);
+    console.log('✅ Esquema verificado (documentos_emitidos.razon_social_cliente)');
+  } catch (e) {
+    console.error('⚠️ No se pudo verificar el esquema:', e.message);
+  }
+};
+
 const server = app.listen(PORT, () => {
   console.log(`✅ Servidor corriendo en el puerto ${PORT}`);
+  ensureSchema();
 });
 
 // --- Cierre Seguro ---

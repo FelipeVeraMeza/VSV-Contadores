@@ -1,8 +1,12 @@
-import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, Save, Loader2, AlertCircle } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Plus, Trash2, Save, Loader2, AlertCircle, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { useQuery } from '@tanstack/react-query';
+import { fetchWithAuth } from '@/services/apiClient';
 import { API_BASE_URL } from '../../../../config.js';
 
 const TIPOS_DOCUMENTO = [
@@ -17,122 +21,301 @@ const TIPOS_DOCUMENTO = [
 
 const TIPO_LABEL = { ventas: 'Venta', compras: 'Compra', honorarios: 'Honorario' };
 
-const emptyLinea = () => ({ id: Date.now() + Math.random(), numeroCuenta: '', nombreCuenta: '', debe: '', haber: '' });
+const DEFAULTS = {
+  compras: [
+    { cuenta: '4201-08', nombre: 'GASTOS GENERALES',   debe: '', haber: '' },
+    { cuenta: '1108-02', nombre: 'IVA CREDITO FISCAL', debe: '', haber: '' },
+    { cuenta: '2116-01', nombre: 'FACTURAS POR PAGAR', debe: '', haber: '' },
+  ],
+  ventas: [
+    { cuenta: '1104-01', nombre: 'DEUDORES CLIENTES',  debe: '', haber: '' },
+    { cuenta: '5101-01', nombre: 'VENTAS',             debe: '', haber: '' },
+    { cuenta: '2108-02', nombre: 'IVA DEBITO FISCAL',  debe: '', haber: '' },
+  ],
+  honorarios: [
+    { cuenta: '4201-02', nombre: 'HONORARIOS PROFESIONALES', debe: '', haber: '' },
+    { cuenta: '2105-04', nombre: 'HONORARIOS POR PAGAR',     debe: '', haber: '' },
+  ],
+};
+
+const makeLineas = (tipo) =>
+  (DEFAULTS[tipo] || DEFAULTS.compras).map((l, i) => ({ ...l, id: i + 1 }));
 
 const NuevoMovimientoModal = ({ isOpen, setIsOpen, tipo, empresaId, onGuardado }) => {
-  const [rut, setRut] = useState('');
-  const [nombre, setNombre] = useState('');
-  const [tipoDoc, setTipoDoc] = useState('33');
-  const [folio, setFolio] = useState('');
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const { user } = useAuth();
+  const [rut, setRut]           = useState('');
+  const [nombre, setNombre]     = useState('');
+  const [tipoDoc, setTipoDoc]   = useState('33');
+  const [folio, setFolio]       = useState('');
+  const [fecha, setFecha]       = useState(new Date().toISOString().split('T')[0]);
   const [descripcion, setDescripcion] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [lineas, setLineas] = useState([
-    { id: 1, numeroCuenta: '', nombreCuenta: '', debe: '', haber: '' },
-    { id: 2, numeroCuenta: '', nombreCuenta: '', debe: '', haber: '' },
-  ]);
+  const [lineas, setLineas]     = useState(() => makeLineas(tipo));
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [rutQuery, setRutQuery] = useState('');
+  const rutInputRef = useRef(null);
+  const suggestionsRef = useRef(null);
+
+  // Buscador CRM solo activo en vista global (sin empresa específica seleccionada),
+  // para cualquier tipo: compra, venta u honorario.
+  const crmHabilitado = !empresaId || empresaId === 'ALL';
+
+  // Reiniciar líneas si cambia el tipo
+  useEffect(() => { setLineas(makeLineas(tipo)); }, [tipo]);
+
+  // Cerrar sugerencias al hacer click fuera
+  useEffect(() => {
+    const handler = (e) => {
+      if (rutInputRef.current && !rutInputRef.current.contains(e.target) &&
+          suggestionsRef.current && !suggestionsRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Clientes CRM (solo en vista global, para ventas)
+  const { data: crmData } = useQuery({
+    queryKey: ['crm-clientes'],
+    queryFn: async () => {
+      const res = await fetchWithAuth('/clientes/crm', user.sessionId);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.clients || data.clientes || (Array.isArray(data) ? data : []);
+    },
+    enabled: isOpen && crmHabilitado && !!user?.sessionId,
+    staleTime: 300000,
+  });
+
+  const sugerenciasCRM = useMemo(() => {
+    if (!Array.isArray(crmData) || !rutQuery.trim()) return [];
+    const q = rutQuery.toLowerCase().replace(/[.\-]/g, '');
+    return crmData.filter(c => {
+      const rutClean = (c.rut || '').toLowerCase().replace(/[.\-]/g, '');
+      const nombre  = (c.razonSocial || c.razon_social || '').toLowerCase();
+      return rutClean.includes(q) || nombre.includes(q);
+    }).slice(0, 8);
+  }, [crmData, rutQuery]);
+
+  const seleccionarCRM = (cliente) => {
+    setRut(cliente.rut || '');
+    setNombre(cliente.razonSocial || cliente.razon_social || '');
+    setRutQuery(cliente.rut || '');
+    setShowSuggestions(false);
+  };
+
+  // Plan de cuentas para el selector
+  const { data: planData } = useQuery({
+    queryKey: ['plan-cuentas-global'],
+    queryFn: async () => {
+      const res = await fetchWithAuth('/accounting/chart-of-accounts', user.sessionId);
+      if (!res.ok) return { plan: [] };
+      return res.json();
+    },
+    enabled: isOpen && !!user?.sessionId,
+    staleTime: 60000,
+  });
+  const plan = useMemo(() => (planData?.plan || []).filter(c => c.codigo?.includes('-')), [planData]);
+  const getNombre = (codigo) => plan.find(c => c.codigo === codigo)?.descripcion || '';
+
+  // ── Cálculo automático de IVA (19%) ───────────────────────────
+  // Clasifica cada línea para repartir neto / IVA / total automáticamente.
+  const esLineaIva = (l) =>
+    /IVA/i.test(l.nombre || '') || ['1108-02', '2108-02'].includes(l.cuenta);
+  const esLineaContrapartida = (l) => {
+    const n = (l.nombre || '').toUpperCase();
+    if (tipo === 'compras') return /POR PAGAR|PROVEEDOR/.test(n) || l.cuenta === '2116-01';
+    if (tipo === 'ventas')  return /DEUDOR|CLIENTE/.test(n)     || l.cuenta === '1104-01';
+    return false;
+  };
+  const esLineaNeto = (l) => !!l.cuenta && !esLineaIva(l) && !esLineaContrapartida(l);
+
+  // Lado contable de cada concepto según el tipo de movimiento
+  const ladoNeto  = tipo === 'compras' ? 'debe'  : 'haber'; // gasto/venta + IVA
+  const ladoTotal = tipo === 'compras' ? 'haber' : 'debe';  // por pagar / deudores
+  const setLado = (l, lado, monto) => ({ ...l, [lado]: monto, [lado === 'debe' ? 'haber' : 'debe']: '' });
+
+  // Lado correcto donde debe ir el monto de una cuenta (null = ambos libres).
+  // Bloquea el lado equivocado para que el asiento no se descuadre.
+  const ladoDeLinea = (l) => {
+    if (tipo !== 'ventas' && tipo !== 'compras') return null; // honorarios: libre
+    if (!l.cuenta) return null;                               // sin cuenta aún
+    return esLineaContrapartida(l) ? ladoTotal : ladoNeto;
+  };
+
+  // A partir del NETO (suma de cuentas de gasto/venta) rellena IVA y total.
+  const distribuirDesdeNeto = (arr) => {
+    const neto = arr.filter(esLineaNeto)
+      .reduce((s, l) => s + (Number(l.debe) || 0) + (Number(l.haber) || 0), 0);
+    if (neto <= 0) return arr;
+    const iva = Math.round(neto * 0.19);
+    return arr.map(l =>
+      esLineaIva(l)           ? setLado(l, ladoNeto,  iva) :
+      esLineaContrapartida(l) ? setLado(l, ladoTotal, neto + iva) : l
+    );
+  };
+
+  // A partir del TOTAL (cuenta deudores/por pagar) desglosa neto e IVA hacia atrás.
+  const distribuirDesdeTotal = (arr, total) => {
+    if (total <= 0) return arr;
+    const neto = Math.round(total / 1.19);
+    const iva  = total - neto;
+    let netoSet = false;
+    return arr.map(l => {
+      if (esLineaIva(l)) return setLado(l, ladoNeto, iva);
+      if (esLineaNeto(l) && !netoSet) { netoSet = true; return setLado(l, ladoNeto, neto); }
+      return l;
+    });
+  };
 
   const totales = useMemo(() => {
-    const debe = lineas.reduce((s, l) => s + (Number(l.debe) || 0), 0);
+    const debe  = lineas.reduce((s, l) => s + (Number(l.debe)  || 0), 0);
     const haber = lineas.reduce((s, l) => s + (Number(l.haber) || 0), 0);
     return { debe, haber, diferencia: debe - haber };
   }, [lineas]);
 
   const estaCuadrado = totales.diferencia === 0 && totales.debe > 0;
-  const esValido = estaCuadrado && rut.trim() && folio.trim() && descripcion.trim();
+  const esValido     = estaCuadrado && rut.trim() && folio.trim();
 
-  const agregarLinea = () => setLineas(prev => [...prev, emptyLinea()]);
+  const agregarLinea = () =>
+    setLineas(prev => [...prev, { id: Date.now(), cuenta: '', nombre: '', debe: '', haber: '' }]);
 
   const eliminarLinea = (id) => {
     if (lineas.length <= 2) return;
     setLineas(prev => prev.filter(l => l.id !== id));
   };
 
-  const actualizarLinea = (id, campo, valor) => {
-    setLineas(prev => prev.map(l => l.id === id ? { ...l, [campo]: valor } : l));
+  const actualizarCuenta = (id, codigo) => {
+    const nombre = getNombre(codigo);
+    setLineas(prev => prev.map(l => l.id === id ? { ...l, cuenta: codigo, nombre } : l));
   };
+
+  const actualizarMonto = (id, campo, valor) =>
+    setLineas(prev => {
+      const next = prev.map(l => l.id === id ? { ...l, [campo]: valor } : l);
+      if (tipo !== 'ventas' && tipo !== 'compras') return next;
+      const editada = next.find(l => l.id === id);
+      // Neto (gasto/venta) → calcula IVA y total. Total (deudores/por pagar) → desglosa.
+      // IVA editado directamente → se respeta el valor manual.
+      if (esLineaNeto(editada))          return distribuirDesdeNeto(next);
+      if (esLineaContrapartida(editada)) return distribuirDesdeTotal(next, Number(editada[ladoTotal]) || 0);
+      return next;
+    });
 
   const resetForm = () => {
     setRut(''); setNombre(''); setTipoDoc('33'); setFolio('');
     setFecha(new Date().toISOString().split('T')[0]); setDescripcion('');
-    setLineas([
-      { id: 1, numeroCuenta: '', nombreCuenta: '', debe: '', haber: '' },
-      { id: 2, numeroCuenta: '', nombreCuenta: '', debe: '', haber: '' },
-    ]);
+    setLineas(makeLineas(tipo));
+    setRutQuery(''); setShowSuggestions(false);
   };
 
   const handleGuardar = async () => {
     if (!esValido) return;
     setIsSaving(true);
     try {
-      await fetch(`${API_BASE_URL}/contabilidad/movimiento`, {
+      const res = await fetch(`${API_BASE_URL}/dte-consulta/movimiento`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           empresa_id: empresaId, tipo_movimiento: tipo,
           rut, nombre, tipo_documento: tipoDoc, folio, fecha, descripcion,
           lineas: lineas.map(l => ({
-            numero_cuenta: l.numeroCuenta, nombre_cuenta: l.nombreCuenta,
+            numero_cuenta: l.cuenta, nombre_cuenta: l.nombre,
             debe: Number(l.debe) || 0, haber: Number(l.haber) || 0,
           })),
         }),
       });
-      toast({ title: `✅ ${TIPO_LABEL[tipo]} registrada`, description: 'El movimiento y su asiento han sido guardados.' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar');
+      toast({ title: `✅ ${TIPO_LABEL[tipo]} registrada`, description: 'Aparece en la lista de movimientos.' });
       resetForm();
       setIsOpen(false);
       if (onGuardado) onGuardado();
-    } catch {
-      toast({ title: '✅ Guardado (simulación)', description: 'Movimiento registrado correctamente.' });
-      resetForm();
-      setIsOpen(false);
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Error', description: err.message });
     } finally {
       setIsSaving(false);
     }
   };
 
   const tLabel = TIPO_LABEL[tipo] || 'Movimiento';
-  const isCompra = tipo === 'compras';
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) resetForm(); setIsOpen(open); }}>
-      <DialogContent className="sm:max-w-[800px] bg-[#0f172a] border-white/10 text-white shadow-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[820px] bg-[#0f172a] border-white/10 text-white shadow-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-black tracking-tight text-blue-400 uppercase">
             Nueva {tLabel}
           </DialogTitle>
           <DialogDescription className="text-gray-400 text-xs">
-            Registra el documento y su asiento contable correspondiente.
+            Registra el documento y su asiento contable.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 mt-2">
           {/* DATOS DEL DOCUMENTO */}
-          <div className="bg-black/20 rounded-xl border border-white/5 p-4">
-            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-4">Datos del Documento</p>
+          <div className="bg-black/20 rounded-xl border border-white/5 p-4 space-y-4">
+            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Datos del Documento</p>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="relative" ref={rutInputRef}>
                 <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">
-                  RUT {isCompra ? 'Proveedor' : 'Cliente'}
+                  RUT {tipo === 'compras' ? 'Proveedor' : 'Cliente'}
                 </label>
-                <input type="text" placeholder="Ej: 76.123.456-7" value={rut}
-                  onChange={(e) => setRut(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" />
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Ej: 76.123.456-7"
+                    value={crmHabilitado ? rutQuery : rut}
+                    onChange={e => {
+                      if (crmHabilitado) {
+                        setRutQuery(e.target.value);
+                        setRut(e.target.value);
+                        setNombre('');
+                        setShowSuggestions(true);
+                      } else {
+                        setRut(e.target.value);
+                      }
+                    }}
+                    onFocus={() => crmHabilitado && rutQuery && setShowSuggestions(true)}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors pr-8"
+                  />
+                  {crmHabilitado && (
+                    <Search size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                  )}
+                </div>
+                {/* Dropdown sugerencias CRM */}
+                {crmHabilitado && showSuggestions && sugerenciasCRM.length > 0 && (
+                  <div ref={suggestionsRef} className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-900 border border-white/10 rounded-lg shadow-2xl overflow-hidden max-h-52 overflow-y-auto">
+                    {sugerenciasCRM.map(c => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onMouseDown={() => seleccionarCRM(c)}
+                        className="w-full text-left px-3 py-2 hover:bg-blue-500/20 transition-colors border-b border-white/5 last:border-0"
+                      >
+                        <p className="text-xs font-mono text-blue-400">{c.rut}</p>
+                        <p className="text-xs text-gray-300 truncate">{c.razonSocial || c.razon_social}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">
-                  {isCompra ? 'Nombre del Proveedor' : 'Nombre del Cliente'}
+                  {tipo === 'compras' ? 'Nombre del Proveedor' : 'Nombre del Cliente'}
                 </label>
                 <input type="text" placeholder="Razón social" value={nombre}
-                  onChange={(e) => setNombre(e.target.value)}
+                  onChange={e => setNombre(e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" />
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">Tipo Documento</label>
-                <select value={tipoDoc} onChange={(e) => setTipoDoc(e.target.value)}
+                <select value={tipoDoc} onChange={e => setTipoDoc(e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 appearance-none transition-colors">
                   {TIPOS_DOCUMENTO.map(t => (
                     <option key={t.value} value={t.value} className="bg-slate-900">{t.label}</option>
@@ -142,20 +325,20 @@ const NuevoMovimientoModal = ({ isOpen, setIsOpen, tipo, empresaId, onGuardado }
               <div>
                 <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">Folio</label>
                 <input type="text" placeholder="Nº de folio" value={folio}
-                  onChange={(e) => setFolio(e.target.value)}
+                  onChange={e => setFolio(e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" />
               </div>
               <div>
                 <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">Fecha</label>
-                <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)}
+                <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
                   className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" />
               </div>
             </div>
 
             <div>
-              <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">Descripción / Glosa</label>
-              <input type="text" placeholder="Ej: Compra materiales oficina fac. 001234"
-                value={descripcion} onChange={(e) => setDescripcion(e.target.value)}
+              <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">Glosa / Descripción</label>
+              <input type="text" placeholder="Ej: Compra materiales oficina" value={descripcion}
+                onChange={e => setDescripcion(e.target.value)}
                 className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" />
             </div>
           </div>
@@ -164,73 +347,94 @@ const NuevoMovimientoModal = ({ isOpen, setIsOpen, tipo, empresaId, onGuardado }
           <div className="bg-black/20 rounded-xl border border-white/5 p-4">
             <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-4">Asiento Contable — Partida Doble</p>
 
-            <div className="grid grid-cols-12 gap-2 mb-2 px-1 text-[10px] text-gray-500 font-black uppercase tracking-widest">
-              <div className="col-span-2">Nº Cuenta</div>
-              <div className="col-span-4">Nombre / Plan de Cuentas</div>
-              <div className="col-span-2 text-right">Debe</div>
-              <div className="col-span-2 text-right">Haber</div>
-              <div className="col-span-2 text-center">Acción</div>
+            {/* Header */}
+            <div className="grid grid-cols-[1fr_120px_120px_36px] gap-2 mb-2 px-1">
+              <span className="text-[10px] text-gray-600 font-black uppercase tracking-widest">Cuenta</span>
+              <span className="text-[10px] text-gray-600 font-black uppercase tracking-widest text-right">Debe</span>
+              <span className="text-[10px] text-gray-600 font-black uppercase tracking-widest text-right">Haber</span>
+              <span />
             </div>
 
-            {lineas.map((linea) => (
-              <div key={linea.id} className="grid grid-cols-12 gap-2 mb-2 items-center">
-                <div className="col-span-2">
-                  <input type="text" placeholder="1.1.01" value={linea.numeroCuenta}
-                    onChange={(e) => actualizarLinea(linea.id, 'numeroCuenta', e.target.value)}
-                    className="w-full bg-slate-800/60 border border-white/10 rounded px-2 py-1.5 text-xs font-mono text-blue-400 focus:outline-none focus:border-blue-500 transition-colors" />
-                </div>
-                <div className="col-span-4">
-                  <input type="text" placeholder="Nombre de la cuenta..." value={linea.nombreCuenta}
-                    onChange={(e) => actualizarLinea(linea.id, 'nombreCuenta', e.target.value)}
-                    className="w-full bg-slate-800/60 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors" />
-                </div>
-                <div className="col-span-2">
-                  <input type="number" placeholder="0" value={linea.debe}
-                    onChange={(e) => actualizarLinea(linea.id, 'debe', e.target.value)}
-                    disabled={Number(linea.haber) > 0}
-                    className="w-full bg-slate-800/60 border border-white/10 rounded px-2 py-1.5 text-xs text-right text-emerald-400 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-30 transition-colors" />
-                </div>
-                <div className="col-span-2">
-                  <input type="number" placeholder="0" value={linea.haber}
-                    onChange={(e) => actualizarLinea(linea.id, 'haber', e.target.value)}
-                    disabled={Number(linea.debe) > 0}
-                    className="w-full bg-slate-800/60 border border-white/10 rounded px-2 py-1.5 text-xs text-right text-purple-400 font-mono focus:outline-none focus:border-blue-500 disabled:opacity-30 transition-colors" />
-                </div>
-                <div className="col-span-2 flex justify-center">
-                  <button onClick={() => eliminarLinea(linea.id)} disabled={lineas.length <= 2}
-                    className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors disabled:opacity-20">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+            {lineas.map((linea) => {
+              const lado = ladoDeLinea(linea);
+              const debeOff  = lado === 'haber';
+              const haberOff = lado === 'debe';
+              return (
+              <div key={linea.id} className="grid grid-cols-[1fr_120px_120px_36px] gap-2 mb-2 items-center">
+                {/* Selector de cuenta */}
+                <Select value={linea.cuenta} onValueChange={val => actualizarCuenta(linea.id, val)}>
+                  <SelectTrigger className="bg-slate-900/80 border-white/10 text-xs text-white h-9 w-full">
+                    <SelectValue placeholder="Seleccionar cuenta...">
+                      {linea.cuenta
+                        ? <span className="font-mono">{linea.cuenta} — {linea.nombre || getNombre(linea.cuenta)}</span>
+                        : <span className="text-gray-500">Seleccionar cuenta...</span>}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-900 border-white/10 text-white max-h-[260px] overflow-y-auto z-50">
+                    {plan.map(c => (
+                      <SelectItem key={c.codigo} value={c.codigo} className="text-xs">
+                        <span className="font-mono text-blue-400">{c.codigo}</span>
+                        <span className="ml-2 text-gray-300">{c.descripcion}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Debe */}
+                <input type="number" min="0" placeholder={debeOff ? '—' : '0'} value={linea.debe}
+                  disabled={debeOff}
+                  onChange={e => actualizarMonto(linea.id, 'debe', e.target.value)}
+                  className="w-full bg-slate-900/80 border border-white/10 rounded px-3 py-2 text-xs text-right text-emerald-400 font-mono focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" />
+
+                {/* Haber */}
+                <input type="number" min="0" placeholder={haberOff ? '—' : '0'} value={linea.haber}
+                  disabled={haberOff}
+                  onChange={e => actualizarMonto(linea.id, 'haber', e.target.value)}
+                  className="w-full bg-slate-900/80 border border-white/10 rounded px-3 py-2 text-xs text-right text-orange-400 font-mono focus:outline-none focus:border-orange-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" />
+
+                {/* Eliminar */}
+                <button onClick={() => eliminarLinea(linea.id)} disabled={lineas.length <= 2}
+                  className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors disabled:opacity-20 flex items-center justify-center">
+                  <Trash2 size={13} />
+                </button>
               </div>
-            ))}
+              );
+            })}
 
             <Button onClick={agregarLinea} variant="outline" size="sm"
               className="mt-3 bg-transparent border-dashed border-white/20 text-blue-400 hover:text-blue-300 hover:border-blue-400 w-full text-xs font-bold hover:bg-transparent">
-              <Plus size={14} className="mr-1" /> AÑADIR LÍNEA
+              <Plus size={13} className="mr-1" /> AÑADIR LÍNEA
             </Button>
           </div>
         </div>
 
-        <DialogFooter className="mt-4 flex-col sm:flex-row justify-between items-center bg-black/40 p-4 rounded-xl border border-white/5">
-          <div className="flex gap-6 w-full sm:w-auto mb-4 sm:mb-0">
+        {/* FOOTER */}
+        <DialogFooter className="mt-4 flex-col sm:flex-row justify-between items-center bg-black/40 p-4 rounded-xl border border-white/5 gap-4">
+          <div className="flex gap-6 w-full sm:w-auto">
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Total Debe</p>
+              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Debe</p>
               <p className="text-lg font-mono font-bold text-emerald-400">${totales.debe.toLocaleString('es-CL')}</p>
             </div>
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Total Haber</p>
-              <p className="text-lg font-mono font-bold text-purple-400">${totales.haber.toLocaleString('es-CL')}</p>
+              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Haber</p>
+              <p className="text-lg font-mono font-bold text-orange-400">${totales.haber.toLocaleString('es-CL')}</p>
             </div>
-            {!estaCuadrado && totales.debe > 0 && (
-              <div className="flex items-center text-red-400 bg-red-400/10 px-3 py-1.5 rounded-lg border border-red-400/20">
-                <AlertCircle size={14} className="mr-2" />
-                <span className="text-xs font-bold">DESCUADRE: ${Math.abs(totales.diferencia).toLocaleString('es-CL')}</span>
+            {totales.debe > 0 && !estaCuadrado && (
+              <div className="flex items-center gap-2 text-red-400 bg-red-400/10 px-3 py-1.5 rounded-lg border border-red-400/20">
+                <AlertCircle size={13} />
+                <span className="text-xs font-bold">DESCUADRE ${Math.abs(totales.diferencia).toLocaleString('es-CL')}</span>
+              </div>
+            )}
+            {estaCuadrado && (
+              <div className="flex items-center gap-2 text-emerald-400 bg-emerald-400/10 px-3 py-1.5 rounded-lg border border-emerald-400/20">
+                <span className="text-xs font-bold">✓ CUADRADO</span>
               </div>
             )}
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => { resetForm(); setIsOpen(false); }} className="text-gray-400 hover:text-white">Cancelar</Button>
+            <Button variant="ghost" onClick={() => { resetForm(); setIsOpen(false); }} className="text-gray-400 hover:text-white">
+              Cancelar
+            </Button>
             <Button onClick={handleGuardar} disabled={!esValido || isSaving}
               className={`font-black uppercase text-xs tracking-widest ${esValido ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-800 text-gray-500'}`}>
               {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}

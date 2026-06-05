@@ -4634,5 +4634,214 @@
         "montoIva": 13300
       }
     }
+  },
+  {
+    "rutReceptor": "78064752-3",
+    "razonSocial": "P Y P INGENIEROS SPA",
+    "documento": "Nota de Credito Electronica",
+    "folio": "111",
+    "fecha": "2026-06-03",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78064752-3",
+        "receptorNombre": "P Y P INGENIEROS SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78064752-3",
+    "razonSocial": "P Y P INGENIEROS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1124",
+    "fecha": "2026-06-03",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78064752-3",
+        "receptorNombre": "P Y P INGENIEROS SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78229656-6",
+    "razonSocial": "ANITA MARÍA VEAS VILLAGRA ASESORÍAS E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "1123",
+    "fecha": "2026-06-02",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78229656-6",
+        "receptorNombre": "ANITA MARÍA VEAS VILLAGRA ASESORÍAS E.I.R.L.",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78123097-9",
+    "razonSocial": "GATICA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1122",
+    "fecha": "2026-06-02",
+    "montoTotal": 47600,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78123097-9",
+        "receptorNombre": "GATICA SPA",
+        "montoNeto": 40000,
+        "montoIva": 7600
+      }
+    }
+  },
+  {
+    "rutReceptor": "78113009-5",
+    "razonSocial": "INGDELTA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1121",
+    "fecha": "2026-06-02",
+    "montoTotal": 178500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78113009-5",
+        "receptorNombre": "INGDELTA SPA",
+        "montoNeto": 150000,
+        "montoIva": 28500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78113009-5",
+    "razonSocial": "INGDELTA SPA",
+    "documento": "Nota de Credito Electronica",
+    "folio": "110",
+    "fecha": "2026-06-01",
+    "montoTotal": 178500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78113009-5",
+        "receptorNombre": "INGDELTA SPA",
+        "montoNeto": 150000,
+        "montoIva": 28500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78113009-5",
+    "razonSocial": "INGDELTA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1119",
+    "fecha": "2026-06-01",
+    "montoTotal": 178500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78113009-5",
+        "receptorNombre": "INGDELTA SPA",
+        "montoNeto": 150000,
+        "montoIva": 28500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78209664-8",
+    "razonSocial": "COMERCIALIZADORA HUMERES URIBE LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1118",
+    "fecha": "2026-05-29",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78209664-8",
+        "receptorNombre": "COMERCIALIZADORA HUMERES URIBE LIMITADA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77911337-K",
+    "razonSocial": "SOCIEDAD COMERCIAL ERICES Y TRESKOW LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1117",
+    "fecha": "2026-05-29",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77911337-K",
+        "receptorNombre": "SOCIEDAD COMERCIAL ERICES Y TRESKOW LIMITADA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "77871935-5",
+    "razonSocial": "MCB CONSULTORES SPA",
+    "documento": "Factura Electronica",
+    "folio": "1116",
+    "fecha": "2026-05-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77871935-5",
+        "receptorNombre": "MCB CONSULTORES SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "77871935-5",
+    "razonSocial": "MCB CONSULTORES SPA",
+    "documento": "Nota de Credito Electronica",
+    "folio": "109",
+    "fecha": "2026-05-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77871935-5",
+        "receptorNombre": "MCB CONSULTORES SPA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
   }
 ]

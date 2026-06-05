@@ -51,15 +51,26 @@ const COLOR_MAP = {
 
 // Genera el asiento por defecto para un documento
 const calcLineasDefault = (doc, tipo) => {
-  const neto = Number(doc.monto_neto) || 0;
-  const iva  = Number(doc.monto_iva)  || Math.round(neto * 0.19);
+  const neto  = Number(doc.monto_neto) || 0;
+  const iva   = Number(doc.monto_iva)  || Math.round(neto * 0.19);
   const total = neto + iva;
-  if (tipo === 'ventas')    return [{ cuenta: '1104-01', debe: total, haber: 0 }, { cuenta: '5101-01', debe: 0, haber: neto }, { cuenta: '2108-02', debe: 0, haber: iva }];
-  if (tipo === 'compras')   return [{ cuenta: '4201-08', debe: neto,  haber: 0 }, { cuenta: '1108-02', debe: iva, haber: 0 },  { cuenta: '2116-01', debe: 0, haber: total }];
+  const esNC  = doc.tipo_dte === 61;
+  const esND  = doc.tipo_dte === 56;
+
+  if (tipo === 'ventas') {
+    // NC emitida: reversa de la venta
+    if (esNC) return [{ cuenta: '1104-01', debe: 0, haber: total }, { cuenta: '5101-01', debe: neto, haber: 0 }, { cuenta: '2108-02', debe: iva, haber: 0 }];
+    return [{ cuenta: '1104-01', debe: total, haber: 0 }, { cuenta: '5101-01', debe: 0, haber: neto }, { cuenta: '2108-02', debe: 0, haber: iva }];
+  }
+  if (tipo === 'compras') {
+    // NC recibida: reversa de la compra
+    if (esNC) return [{ cuenta: '4201-08', debe: 0, haber: neto }, { cuenta: '1108-02', debe: 0, haber: iva }, { cuenta: '2116-01', debe: total, haber: 0 }];
+    return [{ cuenta: '4201-08', debe: neto, haber: 0 }, { cuenta: '1108-02', debe: iva, haber: 0 }, { cuenta: '2116-01', debe: 0, haber: total }];
+  }
   return [{ cuenta: '4201-02', debe: total, haber: 0 }, { cuenta: '2105-04', debe: 0, haber: total }];
 };
 
-const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
+const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio: anioProp, setMes: setMesProp, setAnio: setAnioProp }) => {
   const { user, selectedCompany } = useAuth();
   const queryClient = useQueryClient();
   const targetId = empresaId || selectedCompany?.id || 'ALL';
@@ -76,15 +87,20 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
   const [isSyncModalOpen, setIsSyncModalOpen]     = useState(false);
   const [selectedDocumento, setSelectedDocumento] = useState(null);
   const [expandedRows, setExpandedRows]           = useState(new Set());
-  const [rowEdits, setRowEdits]                   = useState({});   // docId → lineas[]
+  const [rowEdits, setRowEdits]                   = useState({});
   const [savingRows, setSavingRows]               = useState(new Set());
   const [isLibroModalOpen, setIsLibroModalOpen]   = useState(false);
   const [tipoPeriodoLibro, setTipoPeriodoLibro]   = useState('mensual');
   const [diaLibro, setDiaLibro]                   = useState('01');
 
+  // Usar período del padre si viene como prop, sino estado interno
   const now = new Date();
-  const [mes, setMes]   = useState((now.getMonth() + 1).toString().padStart(2, '0'));
-  const [anio, setAnio] = useState(now.getFullYear().toString());
+  const [mesInterno,  setMesInterno]  = useState((now.getMonth() + 1).toString().padStart(2, '0'));
+  const [anioInterno, setAnioInterno] = useState(now.getFullYear().toString());
+  const mes  = mesProp  ?? mesInterno;
+  const anio = anioProp ?? anioInterno;
+  const setMes  = setMesProp  ?? setMesInterno;
+  const setAnio = setAnioProp ?? setAnioInterno;
 
   // ── Cargar movimientos ────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
@@ -198,13 +214,22 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
     return { libroVentas: rawVentas.filter(filtro), libroCompras: rawCompras.filter(filtro), libroPeriodo: label };
   }, [tipoPeriodoLibro, mes, anio, diaLibro, rawVentas, rawCompras]);
 
+  // Solo incluir docs con asiento guardado (en BD o editado en sesión)
+  const esGuardado = (doc) => folioMap[String(doc.folio)] || (doc.id && rowEdits[doc.id]);
+
+  const libroVentasGuardadas  = useMemo(() => libroVentas.filter(esGuardado),  [libroVentas,  folioMap, rowEdits]);
+  const libroComprasGuardadas = useMemo(() => libroCompras.filter(esGuardado), [libroCompras, folioMap, rowEdits]);
+  const libroVentasPendientes  = libroVentas.length  - libroVentasGuardadas.length;
+  const libroComprasPendientes = libroCompras.length - libroComprasGuardadas.length;
+  const libroPendientesTotal   = libroVentasPendientes + libroComprasPendientes;
+
   const libroAsientos = useMemo(() => {
     const getLineasDoc = (doc, tipo) => {
       const rowId = doc.id;
       if (rowId && rowEdits[rowId]) return rowEdits[rowId];
       const comp = folioMap[String(doc.folio)];
       if (comp) return comp.lineas.map(l => ({ cuenta: l.cuentaCodigo || l.cuenta_codigo, debe: Number(l.debe)||0, haber: Number(l.haber)||0 }));
-      return calcLineasDefault(doc, tipo);
+      return [];
     };
     const acumular = (docs, tipo) => {
       const mapa = {};
@@ -216,19 +241,19 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
       }));
       return mapa;
     };
-    const mapaV = acumular(libroVentas, 'ventas');
-    const mapaC = acumular(libroCompras, 'compras');
+    const mapaV = acumular(libroVentasGuardadas,  'ventas');
+    const mapaC = acumular(libroComprasGuardadas, 'compras');
     const lineas = [];
-    if (libroVentas.length > 0) {
+    if (libroVentasGuardadas.length > 0) {
       lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN VENTAS ${libroPeriodo}` });
       Object.entries(mapaV).forEach(([codigo, { descripcion, debe, haber }]) => { if (debe > 0 || haber > 0) lineas.push({ codigo, descripcion, debe, haber }); });
     }
-    if (libroCompras.length > 0) {
+    if (libroComprasGuardadas.length > 0) {
       lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN COMPRAS ${libroPeriodo}` });
       Object.entries(mapaC).forEach(([codigo, { descripcion, debe, haber }]) => { if (debe > 0 || haber > 0) lineas.push({ codigo, descripcion, debe, haber }); });
     }
     return lineas;
-  }, [libroVentas, libroCompras, libroPeriodo, rowEdits, folioMap, plan]);
+  }, [libroVentasGuardadas, libroComprasGuardadas, libroPeriodo, rowEdits, folioMap, plan]);
 
   // ── Toggle fila expandida ─────────────────────────────────────
   const toggleRow = (rowId, doc) => {
@@ -288,9 +313,10 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
       const res = await fetchWithAuth('/accounting/comprobantes', user.sessionId, {
         method: 'POST',
         body: {
-          empresaId: empresaIdPayload, tipo: activeTab,
+          empresaId: empresaIdPayload,
+          tipo: doc.tipo_dte === 61 ? 'nota_credito' : doc.tipo_dte === 56 ? 'nota_debito' : activeTab,
           fecha: doc.fecha_emision,
-          glosa: `${activeTab === 'ventas' ? 'Venta' : 'Compra'} Folio #${doc.folio} — ${razon || rut}`,
+          glosa: `${doc.tipo_dte === 61 ? 'Nota Crédito' : doc.tipo_dte === 56 ? 'Nota Débito' : activeTab === 'ventas' ? 'Venta' : 'Compra'} Folio #${doc.folio} — ${razon || rut}`,
           folio: doc.folio, rutAsociado: rut,
           lineas: lineas.map(l => ({ cuenta: l.cuenta, debe: l.debe, haber: l.haber })),
         },
@@ -311,6 +337,30 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
   const handleVerAsiento = (doc) => {
     setSelectedDocumento({ ...doc, tipoMovimiento: activeTab });
     setIsAsientoModalOpen(true);
+  };
+
+  // ── Eliminar movimiento (documento + su asiento) ──────────────
+  const [deletingDocId, setDeletingDocId] = useState(null);
+  const handleEliminarMovimiento = async (doc) => {
+    if (!doc.id) {
+      toast({ variant: 'destructive', title: 'No se puede eliminar', description: 'El documento no tiene identificador.' });
+      return;
+    }
+    if (!confirm(`¿Eliminar el documento folio #${doc.folio}? Se borrará también su asiento contable.`)) return;
+    setDeletingDocId(doc.id);
+    try {
+      const params = new URLSearchParams({ tipo_movimiento: activeTab, empresa_id: String(targetId), folio: String(doc.folio) });
+      const res = await fetch(`${API_BASE_URL}/dte-consulta/movimiento/${doc.id}?${params}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al eliminar');
+      toast({ title: '🗑️ Movimiento eliminado', description: `Folio #${doc.folio} y su asiento.` });
+      cargarDatos();
+      queryClient.invalidateQueries(['comprobantes', targetId]);
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Error', description: err.message });
+    } finally {
+      setDeletingDocId(null);
+    }
   };
 
   const handleEnviarLibroDiario = () => {
@@ -468,6 +518,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
                     <th className="px-5 py-4">Folio</th>
                     <th className="px-5 py-4">RUT {activeTab === 'compras' ? 'Proveedor' : 'Cliente'}</th>
                     <th className="px-5 py-4">Razón Social</th>
+                    <th className="px-5 py-4 text-center">Estado</th>
                     <th className="px-5 py-4 text-right">Monto</th>
                     <th className="px-5 py-4 text-center">Asiento</th>
                   </tr>
@@ -501,7 +552,11 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
                           <td className="px-5 py-3.5 text-xs text-gray-400 font-bold whitespace-nowrap">{fecha}</td>
                           <td className="px-5 py-3.5 text-xs font-mono text-blue-400 font-bold">{per}</td>
                           <td className="px-5 py-3.5">
-                            <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${colors.row}`}>
+                            <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border whitespace-nowrap ${
+                              doc.tipo_dte === 61 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                              doc.tipo_dte === 56 ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                              colors.row
+                            }`}>
                               {TIPO_DTE_MAP[doc.tipo_dte] || `TIPO ${doc.tipo_dte}`}
                             </span>
                           </td>
@@ -510,28 +565,38 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
                           <td className="px-5 py-3.5 max-w-[160px]">
                             <span className="text-xs text-gray-200 font-bold truncate block">{razon || 'SIN RAZÓN SOCIAL'}</span>
                           </td>
+                          {/* ESTADO */}
+                          <td className="px-5 py-3.5 text-center">
+                            {comp ? (
+                              <span className="text-[8px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 whitespace-nowrap">
+                                ✓ Guardado
+                              </span>
+                            ) : (
+                              <span className="text-[8px] font-black uppercase text-amber-400 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 whitespace-nowrap">
+                                Pendiente
+                              </span>
+                            )}
+                          </td>
                           <td className={`px-5 py-3.5 text-right font-black font-mono tracking-tighter ${colors.total}`}>{formatCLP(total)}</td>
+                          {/* ASIENTO — solo botones */}
                           <td className="px-5 py-3.5">
                             <div className="flex items-center justify-center gap-1.5">
-                              {comp ? (
-                                <span className="text-[8px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                                  ✓ Guardado
-                                </span>
-                              ) : (
-                                <span className="text-[8px] font-black uppercase text-gray-500 bg-white/5 px-1.5 py-0.5 rounded border border-white/10">
-                                  Pendiente
-                                </span>
-                              )}
                               <button
                                 onClick={e => { e.stopPropagation(); handleVerAsiento(doc); }}
                                 className="p-1.5 text-blue-400 hover:bg-blue-500/20 rounded transition-colors"
-                                title="Ver y editar asiento"
-                              >
+                                title="Ver y editar asiento">
                                 <Eye className="h-3.5 w-3.5" />
                               </button>
                               <button onClick={e => { e.stopPropagation(); toggleRow(doc.id || idx, doc); }}
                                 className="p-1.5 text-gray-500 hover:text-white rounded transition-colors">
                                 {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                              </button>
+                              <button
+                                onClick={e => { e.stopPropagation(); handleEliminarMovimiento(doc); }}
+                                disabled={deletingDocId === doc.id}
+                                className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/20 rounded transition-colors disabled:opacity-40"
+                                title="Eliminar movimiento">
+                                {deletingDocId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                               </button>
                             </div>
                           </td>
@@ -548,33 +613,33 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
                             const isSavingRow = savingRows.has(rowId);
                             return (
                               <tr>
-                                <td colSpan={8} className="p-0 border-b border-white/5">
+                                <td colSpan={9} className="p-0 border-b border-white/5">
                                   <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }} transition={{ duration:0.2 }} className="overflow-hidden">
-                                    <div className="mx-5 my-3 bg-black/30 rounded-xl border border-white/5 overflow-hidden">
+                                    <div className="mx-5 my-3 bg-[#0a0f1e] rounded-xl border border-white/[0.07] overflow-hidden shadow-xl">
                                       {/* Header */}
-                                      <div className="px-4 py-2.5 border-b border-white/5 flex items-center justify-between flex-wrap gap-2">
+                                      <div className="px-5 py-3 border-b border-white/[0.06] flex items-center justify-between gap-2 bg-white/[0.02]">
                                         <div className="flex items-center gap-3">
-                                          <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
-                                            Plan de Cuentas — Folio #{folio}
-                                          </p>
+                                          <span className="text-[10px] font-black uppercase tracking-widest text-gray-300">
+                                            Asiento — Folio #{folio}
+                                          </span>
                                           {comp
-                                            ? <span className="flex items-center gap-1 text-[9px] font-black uppercase text-emerald-400"><CheckCircle className="h-2.5 w-2.5" /> Guardado</span>
-                                            : <span className="flex items-center gap-1 text-[9px] font-black uppercase text-amber-400"><AlertCircle className="h-2.5 w-2.5" /> Sin guardar</span>
+                                            ? <span className="flex items-center gap-1 text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20"><CheckCircle className="h-2.5 w-2.5" /> Guardado</span>
+                                            : <span className="flex items-center gap-1 text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20"><AlertCircle className="h-2.5 w-2.5" /> Sin guardar</span>
                                           }
                                           {cuadrado
                                             ? <span className="text-[9px] font-black uppercase text-emerald-400">✓ Cuadrado</span>
-                                            : editLineas.length > 0 && <span className="text-[9px] font-black uppercase text-red-400">Descuadre: {formatCLP(Math.abs(tDebe-tHaber))}</span>
+                                            : editLineas.length > 0 && <span className="text-[9px] font-black uppercase text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">⚠ Descuadre {formatCLP(Math.abs(tDebe-tHaber))}</span>
                                           }
                                         </div>
                                         <div className="flex items-center gap-2">
                                           <button onClick={e => { e.stopPropagation(); addLinea(rowId); }}
-                                            className="flex items-center gap-1 text-[9px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded hover:bg-blue-500/10">
+                                            className="flex items-center gap-1 text-[9px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors px-2.5 py-1.5 rounded-lg hover:bg-blue-500/10 border border-transparent hover:border-blue-500/20">
                                             <Plus className="h-3 w-3" /> Línea
                                           </button>
                                           <button
                                             onClick={e => { e.stopPropagation(); saveLineas(rowId, doc); }}
                                             disabled={!cuadrado || isSavingRow}
-                                            className="flex items-center gap-1 text-[9px] font-black uppercase px-2.5 py-1 rounded transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-500 text-white">
+                                            className="flex items-center gap-1.5 text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20">
                                             {isSavingRow ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                                             {isSavingRow ? 'Guardando...' : 'Guardar'}
                                           </button>
@@ -582,63 +647,61 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
                                       </div>
 
                                       {/* Tabla editable */}
-                                      <table className="w-full">
-                                        <thead>
-                                          <tr className="bg-white/[0.02]">
-                                            <th className="px-3 py-2 text-left text-[9px] font-black uppercase tracking-widest text-gray-500 w-[45%]">Cuenta</th>
-                                            <th className="px-3 py-2 text-right text-[9px] font-black uppercase tracking-widest text-gray-500 w-[22%]">Debe</th>
-                                            <th className="px-3 py-2 text-right text-[9px] font-black uppercase tracking-widest text-gray-500 w-[22%]">Haber</th>
-                                            <th className="w-[11%]"></th>
-                                          </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-white/5">
+                                      <div className="px-5 py-3">
+                                        {/* Header columnas */}
+                                        <div className="grid grid-cols-[1fr_130px_130px_32px] gap-3 mb-2 px-1">
+                                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-600">Cuenta</span>
+                                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-600 text-right">Debe</span>
+                                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-600 text-right">Haber</span>
+                                          <span/>
+                                        </div>
+
+                                        {/* Líneas */}
+                                        <div className="space-y-2">
                                           {editLineas.map((l, li) => (
-                                            <tr key={li} onClick={e => e.stopPropagation()}>
-                                              <td className="px-3 py-1.5">
+                                            <div key={li} className="grid grid-cols-[1fr_130px_130px_32px] gap-3 items-center" onClick={e => e.stopPropagation()}>
+                                              <div>
                                                 <Select value={l.cuenta} onValueChange={val => updateLinea(rowId, li, 'cuenta', val)}>
-                                                  <SelectTrigger className="bg-slate-900 border-white/10 text-[10px] text-white h-7 w-full">
-                                                    <SelectValue placeholder="Seleccionar..." />
+                                                  <SelectTrigger className="bg-slate-900/80 border-white/10 text-[10px] text-white h-8 w-full">
+                                                    <SelectValue placeholder="Seleccionar cuenta...">
+                                                      {l.cuenta ? <span className="font-mono">{l.cuenta} — {l.nombre || getNombre(l.cuenta)}</span> : <span className="text-gray-500">Seleccionar cuenta...</span>}
+                                                    </SelectValue>
                                                   </SelectTrigger>
                                                   <SelectContent className="bg-slate-900 border-white/10 text-white max-h-[200px] overflow-y-auto z-50">
                                                     {plan.map(c => (
                                                       <SelectItem key={c.codigo} value={c.codigo} className="text-[10px]">
-                                                        {c.codigo} — {c.descripcion}
+                                                        <span className="font-mono text-blue-400">{c.codigo}</span> — {c.descripcion}
                                                       </SelectItem>
                                                     ))}
                                                   </SelectContent>
                                                 </Select>
-                                                {l.nombre && <p className="text-[8px] text-gray-600 mt-0.5 px-1">{l.nombre}</p>}
-                                              </td>
-                                              <td className="px-3 py-1.5">
-                                                <input type="number" min="0" value={l.debe || ''} placeholder="0"
-                                                  onChange={e => updateLinea(rowId, li, 'debe', e.target.value)}
-                                                  className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-[10px] text-emerald-400 font-mono text-right focus:outline-none focus:border-emerald-500" />
-                                              </td>
-                                              <td className="px-3 py-1.5">
-                                                <input type="number" min="0" value={l.haber || ''} placeholder="0"
-                                                  onChange={e => updateLinea(rowId, li, 'haber', e.target.value)}
-                                                  className="w-full bg-slate-900 border border-white/10 rounded px-2 py-1 text-[10px] text-orange-400 font-mono text-right focus:outline-none focus:border-orange-500" />
-                                              </td>
-                                              <td className="px-3 py-1.5 text-center">
+                                              </div>
+                                              <input type="number" min="0" value={l.debe || ''} placeholder="0"
+                                                onChange={e => updateLinea(rowId, li, 'debe', e.target.value)}
+                                                className="w-full bg-slate-900/80 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] text-emerald-400 font-mono text-right focus:outline-none focus:border-emerald-500 h-8" />
+                                              <input type="number" min="0" value={l.haber || ''} placeholder="0"
+                                                onChange={e => updateLinea(rowId, li, 'haber', e.target.value)}
+                                                className="w-full bg-slate-900/80 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] text-orange-400 font-mono text-right focus:outline-none focus:border-orange-500 h-8" />
+                                              <div className="flex justify-center">
                                                 {editLineas.length > 2 && (
                                                   <button onClick={e => { e.stopPropagation(); removeLinea(rowId, li); }}
-                                                    className="text-red-400 hover:text-red-300 opacity-50 hover:opacity-100 transition-all">
+                                                    className="text-gray-700 hover:text-red-400 transition-colors">
                                                     <Trash2 className="h-3 w-3" />
                                                   </button>
                                                 )}
-                                              </td>
-                                            </tr>
+                                              </div>
+                                            </div>
                                           ))}
-                                        </tbody>
-                                        <tfoot className="bg-white/[0.02]">
-                                          <tr>
-                                            <td className="px-3 py-1.5 text-[9px] font-black uppercase text-gray-500">Totales</td>
-                                            <td className="px-3 py-1.5 text-right font-mono text-[10px] text-emerald-400 font-black">{tDebe > 0 ? formatCLP(tDebe) : '—'}</td>
-                                            <td className="px-3 py-1.5 text-right font-mono text-[10px] text-orange-400 font-black">{tHaber > 0 ? formatCLP(tHaber) : '—'}</td>
-                                            <td></td>
-                                          </tr>
-                                        </tfoot>
-                                      </table>
+                                        </div>
+
+                                        {/* Totales */}
+                                        <div className="grid grid-cols-[1fr_130px_130px_32px] gap-3 mt-3 pt-3 border-t border-white/[0.06]">
+                                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-500 px-1">Totales</span>
+                                          <span className="text-right font-mono text-[10px] font-black text-emerald-400">{tDebe > 0 ? formatCLP(tDebe) : '—'}</span>
+                                          <span className="text-right font-mono text-[10px] font-black text-orange-400">{tHaber > 0 ? formatCLP(tHaber) : '—'}</span>
+                                          <span/>
+                                        </div>
+                                      </div>
                                     </div>
                                   </motion.div>
                                 </td>
@@ -708,11 +771,29 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
                   </select>
                 </div>
               )}
-              <div className="mt-3 flex items-center gap-4 text-[10px] font-black uppercase tracking-widest">
+              <div className="mt-3 flex items-center gap-4 text-[10px] font-black uppercase tracking-widest flex-wrap">
                 <span className="text-purple-400">Período: {libroPeriodo}</span>
-                <span className="text-emerald-400">{libroVentas.length} ventas</span>
-                <span className="text-red-400">{libroCompras.length} compras</span>
+                <span className="text-emerald-400">{libroVentasGuardadas.length} ventas guardadas</span>
+                <span className="text-red-400">{libroComprasGuardadas.length} compras guardadas</span>
               </div>
+
+              {/* Advertencia pendientes */}
+              {libroPendientesTotal > 0 && (
+                <div className="mt-3 flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2.5">
+                  <AlertCircle className="h-3.5 w-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+                      {libroPendientesTotal} documento{libroPendientesTotal > 1 ? 's' : ''} pendiente{libroPendientesTotal > 1 ? 's' : ''} excluido{libroPendientesTotal > 1 ? 's' : ''}
+                    </p>
+                    <p className="text-[9px] text-amber-500/70 mt-0.5">
+                      {libroVentasPendientes > 0 && `${libroVentasPendientes} venta${libroVentasPendientes > 1 ? 's' : ''}`}
+                      {libroVentasPendientes > 0 && libroComprasPendientes > 0 && ' · '}
+                      {libroComprasPendientes > 0 && `${libroComprasPendientes} compra${libroComprasPendientes > 1 ? 's' : ''}`}
+                      {' '}sin asiento guardado no se incluyen en el cuadre.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Tabla de asientos */}
@@ -785,7 +866,8 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador }) => {
       {/* MODALES */}
       <SyncSIIModal isOpen={isSyncModalOpen} setIsOpen={setIsSyncModalOpen} onSync={handleSyncSII} isSyncing={isSyncing}
         empresaNombre={selectedCompany?.razon_social || selectedCompany?.razonSocial} />
-      <NuevoMovimientoModal isOpen={isNuevoModalOpen} setIsOpen={setIsNuevoModalOpen} tipo={activeTab} empresaId={targetId} onGuardado={cargarDatos} />
+      <NuevoMovimientoModal isOpen={isNuevoModalOpen} setIsOpen={setIsNuevoModalOpen} tipo={activeTab} empresaId={targetId}
+        onGuardado={() => { cargarDatos(); queryClient.invalidateQueries(['comprobantes', targetId]); }} />
       <AsientoDocumentoModal isOpen={isAsientoModalOpen} setIsOpen={setIsAsientoModalOpen} documento={selectedDocumento}
         empresaId={targetId}
         onGuardado={() => {

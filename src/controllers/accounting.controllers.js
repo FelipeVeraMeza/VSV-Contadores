@@ -103,6 +103,19 @@ export const eliminarCuenta = async (req, res) => {
     }
 };
 
+export const eliminarComprobante = async (req, res) => {
+    const { id } = req.params;
+    try {
+        await pool.query(`DELETE FROM comprobantes_detalle WHERE comprobante_id = $1`, [id]);
+        const { rowCount } = await pool.query(`DELETE FROM comprobantes WHERE id = $1`, [id]);
+        if (rowCount === 0) return res.status(404).json({ message: 'Comprobante no encontrado' });
+        res.json({ success: true });
+    } catch (error) {
+        console.error('❌ Error eliminando comprobante:', error.message);
+        res.status(500).json({ message: 'Error al eliminar el comprobante' });
+    }
+};
+
 export const guardarComprobante = async (req, res) => {
     const { empresaId, tipo, fecha, glosa, lineas, folio, rutAsociado } = req.body;
     const empId = (empresaId === 'ALL' || empresaId === 'undefined') ? null : (empresaId || null);
@@ -114,8 +127,13 @@ export const guardarComprobante = async (req, res) => {
     if (Math.abs(totalDebe - totalHaber) > 1) {
         return res.status(400).json({ message: `Asiento descuadrado: Debe ${totalDebe} ≠ Haber ${totalHaber}` });
     }
-    const TIPO_MAP = { ventas: 'INGRESO', honorarios: 'INGRESO', compras: 'EGRESO' };
-    const tipoDb   = TIPO_MAP[tipo?.toLowerCase()] || 'INGRESO';
+    const TIPO_MAP = {
+      ventas: 'INGRESO', honorarios: 'INGRESO', ingreso: 'INGRESO',
+      compras: 'EGRESO',  egreso: 'EGRESO',
+      nota_credito: 'TRASPASO', nota_debito: 'TRASPASO',
+      traspaso: 'TRASPASO'
+    };
+    const tipoDb = TIPO_MAP[tipo?.toLowerCase()] || 'INGRESO';
     const gloseFinal = glosa || (folio ? `Folio #${folio}` : `Comprobante ${tipo}`);
     const fechaFinal = fecha ? new Date(fecha) : new Date();
 

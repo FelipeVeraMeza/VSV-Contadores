@@ -8,6 +8,7 @@ import {
     uploadAccountingExcel,
     guardarComprobante,
     getComprobantes,
+    eliminarComprobante,
     crearCuenta,
     editarCuenta,
     eliminarCuenta
@@ -24,8 +25,9 @@ router.get('/chart-of-accounts', getChartOfAccounts);
 router.get('/journal-entries',   getJournalEntries);
 router.post('/reconcile-ia',     runBankReconciliationIA);
 router.post('/importar-excel',   upload.single('archivo'), uploadAccountingExcel);
-router.post('/comprobantes',     guardarComprobante);
-router.get('/comprobantes',      getComprobantes);
+router.post('/comprobantes',        guardarComprobante);
+router.get('/comprobantes',         getComprobantes);
+router.delete('/comprobantes/:id',  eliminarComprobante);
 
 // Plan de Cuentas CRUD
 router.post('/plan-cuentas',       crearCuenta);

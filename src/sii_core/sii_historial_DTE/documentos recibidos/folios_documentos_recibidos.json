@@ -576,5 +576,39 @@
         "montoIva": 955
       }
     }
+  },
+  {
+    "rutEmisor": "76830014-3",
+    "razonSocial": "FLOW S A",
+    "documento": "Factura Electronica",
+    "folio": "513846",
+    "fecha": "2026-05-31",
+    "montoTotal": 72218,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 60687,
+        "montoIva": 11531
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "84901",
+    "fecha": "2026-05-29",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
   }
 ]

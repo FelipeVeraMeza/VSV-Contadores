@@ -1,6 +1,235 @@
 import { pool } from '../database/db.js';
 
 // ========================================================
+// 0. CREAR MOVIMIENTO MANUAL
+// ========================================================
+export const crearMovimientoManual = async (req, res) => {
+    const { empresa_id, tipo_movimiento, rut, nombre, tipo_documento, folio, fecha, descripcion, lineas = [] } = req.body;
+
+    if (!folio || !lineas.length) {
+        return res.status(400).json({ ok: false, error: 'folio y lineas son requeridos' });
+    }
+
+    const tipoDteMap = { '33':33, '34':34, '61':61, '56':56, '39':39, 'HON':39, 'OTRO':99 };
+    const tipo_dte   = tipoDteMap[tipo_documento] ?? 33;
+    const exenta     = tipo_dte === 34 || tipo_dte === 39;
+
+    // Calcular montos desde las líneas
+    const totalDebe  = lineas.reduce((s, l) => s + (Number(l.debe) || 0), 0);
+    const totalHaber = lineas.reduce((s, l) => s + (Number(l.haber) || 0), 0);
+    const monto_total = Math.max(totalDebe, totalHaber);
+
+    // Detectar IVA buscando línea con cuenta IVA
+    const lineaIva = lineas.find(l =>
+        l.numero_cuenta?.includes('08-02') || l.nombre_cuenta?.toUpperCase().includes('IVA')
+    );
+    const monto_iva  = exenta ? 0 : (lineaIva ? (Number(lineaIva.debe) || Number(lineaIva.haber) || 0) : Math.round(monto_total * 19 / 119));
+    const monto_neto = monto_total - monto_iva;
+    const fecha_emision = fecha ? new Date(fecha) : new Date();
+    const empId = (!empresa_id || empresa_id === 'ALL' || empresa_id === 'null') ? null : empresa_id;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // ── 1. Guardar el DOCUMENTO en la tabla que corresponde ──────────────
+        //    Sin empresa (global) → documentos_emitidos / documentos_recibidos
+        //    Con empresa          → documentos_emitidos_empresa / documentos_recibidos_empresa
+        if (tipo_movimiento === 'ventas') {
+            if (empId === null) {
+                await client.query(
+                    `INSERT INTO documentos_emitidos
+                     (id, empresa_id, rut_cliente, razon_social_cliente, tipo_dte, folio, monto_neto, fecha_emision)
+                     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)`,
+                    [empId, rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, monto_neto, fecha_emision]
+                );
+            } else {
+                await client.query(
+                    `INSERT INTO documentos_emitidos_empresa
+                     (id, empresa_id, rut_cliente, razon_social_cliente, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision)
+                     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                    [empId, rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, monto_neto, monto_iva, monto_total, fecha_emision]
+                );
+            }
+        } else {
+            if (empId === null) {
+                await client.query(
+                    `INSERT INTO documentos_recibidos
+                     (id, empresa_id, rut_proveedor, razon_social_proveedor, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision)
+                     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                    [empId, rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, monto_neto, monto_iva, monto_total, fecha_emision]
+                );
+            } else {
+                await client.query(
+                    `INSERT INTO documentos_recibidos_empresa
+                     (id, empresa_id, rut_proveedor, razon_social_proveedor, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision)
+                     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                    [empId, rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, monto_neto, monto_iva, monto_total, fecha_emision]
+                );
+            }
+        }
+
+        // ── 2. Guardar el ASIENTO como comprobante (→ Libro Diario / reportes) ─
+        const TIPO_MAP = { ventas: 'INGRESO', honorarios: 'INGRESO', compras: 'EGRESO' };
+        const tipoDb = (tipo_dte === 61 || tipo_dte === 56) ? 'TRASPASO' : (TIPO_MAP[tipo_movimiento] || 'INGRESO');
+        const tipoLabel = tipo_movimiento === 'ventas' ? 'Venta' : tipo_movimiento === 'compras' ? 'Compra' : 'Honorario';
+        const razon = (nombre || '').toUpperCase();
+        const glosa = descripcion?.trim()
+            ? `${descripcion.trim()} — Folio #${folio}`
+            : `${tipoLabel} Folio #${folio}${razon || rut ? ` — ${razon || rut}` : ''}`;
+
+        const empCond = empId === null ? 'empresa_id IS NULL' : 'empresa_id = $1';
+        const { rows: [existing] } = await client.query(
+            `SELECT id FROM comprobantes WHERE ${empCond} AND glosa ~ $${empId === null ? 1 : 2} LIMIT 1`,
+            empId === null ? [`Folio #${folio}([^0-9]|$)`] : [empId, `Folio #${folio}([^0-9]|$)`]
+        );
+
+        let compId;
+        if (existing) {
+            await client.query(`DELETE FROM comprobantes_detalle WHERE comprobante_id = $1`, [existing.id]);
+            await client.query(`UPDATE comprobantes SET fecha=$1, glosa=$2, tipo=$3 WHERE id=$4`,
+                [fecha_emision, glosa, tipoDb, existing.id]);
+            compId = existing.id;
+        } else {
+            const { rows: [{ max_num }] } = await client.query(
+                `SELECT COALESCE(MAX(numero_comprobante), 0) AS max_num FROM comprobantes WHERE ${empCond}`,
+                empId === null ? [] : [empId]
+            );
+            const { rows: [comp] } = await client.query(
+                `INSERT INTO comprobantes (id, empresa_id, numero_comprobante, fecha, tipo, glosa, estado)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'Borrador') RETURNING id`,
+                [empId, max_num + 1, fecha_emision, tipoDb, glosa]
+            );
+            compId = comp.id;
+        }
+
+        for (const l of lineas) {
+            await client.query(
+                `INSERT INTO comprobantes_detalle (id, comprobante_id, cuenta_codigo, rut_asociado, debe, haber)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)`,
+                [compId, l.numero_cuenta, rut || null, Number(l.debe) || 0, Number(l.haber) || 0]
+            );
+        }
+
+        await client.query('COMMIT');
+        return res.json({ ok: true, message: 'Movimiento y asiento registrados correctamente.' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error creando movimiento:', error.message);
+        return res.status(500).json({ ok: false, error: 'Error al registrar el movimiento.' });
+    } finally {
+        client.release();
+    }
+};
+
+// ========================================================
+// 0b. ELIMINAR MOVIMIENTO MANUAL (documento + su asiento)
+// ========================================================
+export const eliminarMovimiento = async (req, res) => {
+    const { id } = req.params;
+    const { tipo_movimiento, empresa_id, folio } = req.query;
+    const empId = (!empresa_id || empresa_id === 'ALL' || empresa_id === 'null') ? null : empresa_id;
+
+    const tabla = tipo_movimiento === 'ventas'
+        ? (empId === null ? 'documentos_emitidos'  : 'documentos_emitidos_empresa')
+        : (empId === null ? 'documentos_recibidos' : 'documentos_recibidos_empresa');
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const { rowCount } = await client.query(`DELETE FROM ${tabla} WHERE id = $1`, [id]);
+
+        // Borrar también el comprobante asociado (por folio) y su detalle
+        if (folio) {
+            const empCond = empId === null ? 'empresa_id IS NULL' : 'empresa_id = $2';
+            const { rows } = await client.query(
+                `SELECT id FROM comprobantes WHERE glosa ~ $1 AND ${empCond}`,
+                empId === null ? [`Folio #${folio}([^0-9]|$)`] : [`Folio #${folio}([^0-9]|$)`, empId]
+            );
+            for (const r of rows) {
+                await client.query(`DELETE FROM comprobantes_detalle WHERE comprobante_id = $1`, [r.id]);
+                await client.query(`DELETE FROM comprobantes WHERE id = $1`, [r.id]);
+            }
+        }
+
+        await client.query('COMMIT');
+        if (rowCount === 0) return res.status(404).json({ ok: false, error: 'Documento no encontrado.' });
+        return res.json({ ok: true, message: 'Movimiento eliminado correctamente.' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error eliminando movimiento:', error.message);
+        return res.status(500).json({ ok: false, error: 'Error al eliminar el movimiento.' });
+    } finally {
+        client.release();
+    }
+};
+
+// ========================================================
+// 0c. EDITAR DATOS DEL DOCUMENTO (rut, razón, tipo, folio, fecha)
+// ========================================================
+export const editarMovimiento = async (req, res) => {
+    const { id } = req.params;
+    const { tipo_movimiento, empresa_id, rut, nombre, tipo_documento, folio, fecha } = req.body;
+    const empId = (!empresa_id || empresa_id === 'ALL' || empresa_id === 'null') ? null : empresa_id;
+
+    const tipoDteMap = { '33':33, '34':34, '61':61, '56':56, '39':39, 'HON':39, 'OTRO':99 };
+    const tipo_dte = tipoDteMap[tipo_documento] ?? (parseInt(tipo_documento) || 33);
+    const fecha_emision = fecha ? new Date(fecha) : null;
+
+    const esVenta = tipo_movimiento === 'ventas';
+    const tabla = esVenta
+        ? (empId === null ? 'documentos_emitidos'  : 'documentos_emitidos_empresa')
+        : (empId === null ? 'documentos_recibidos' : 'documentos_recibidos_empresa');
+    const colRut   = esVenta ? 'rut_cliente' : 'rut_proveedor';
+    const colRazon = esVenta ? 'razon_social_cliente' : 'razon_social_proveedor';
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Folio anterior para reubicar el comprobante asociado
+        const { rows: [old] } = await client.query(`SELECT folio FROM ${tabla} WHERE id = $1`, [id]);
+        if (!old) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ ok: false, error: 'Documento no encontrado.' });
+        }
+        const folioViejo = old.folio;
+
+        // UPDATE del documento (todas las tablas tienen columna de razón social)
+        await client.query(
+            `UPDATE ${tabla} SET ${colRut} = $1, ${colRazon} = $2, tipo_dte = $3, folio = $4, fecha_emision = $5 WHERE id = $6`,
+            [rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, fecha_emision, id]
+        );
+
+        // Actualizar el comprobante asociado (glosa con nuevo folio/razón y fecha)
+        const tipoLabel = esVenta ? 'Venta' : (tipo_movimiento === 'compras' ? 'Compra' : 'Honorario');
+        const sufijo = (nombre || '').toUpperCase() || rut || '';
+        const glosa = `${tipoLabel} Folio #${folio}${sufijo ? ` — ${sufijo}` : ''}`;
+        const empCond = empId === null ? 'empresa_id IS NULL' : 'empresa_id = $2';
+        const { rows: comps } = await client.query(
+            `SELECT id FROM comprobantes WHERE glosa ~ $1 AND ${empCond}`,
+            empId === null ? [`Folio #${folioViejo}([^0-9]|$)`] : [`Folio #${folioViejo}([^0-9]|$)`, empId]
+        );
+        for (const c of comps) {
+            await client.query(
+                `UPDATE comprobantes SET glosa = $1, fecha = COALESCE($2, fecha) WHERE id = $3`,
+                [glosa, fecha_emision, c.id]
+            );
+        }
+
+        await client.query('COMMIT');
+        return res.json({ ok: true, message: 'Documento actualizado correctamente.' });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error editando movimiento:', error.message);
+        return res.status(500).json({ ok: false, error: 'Error al actualizar el documento.' });
+    } finally {
+        client.release();
+    }
+};
+
+// ========================================================
 // 1. CONTROLADOR DE VENTAS (Historial)
 // ========================================================
 export const consultarHistorialBunkerController = async (req, res) => {
@@ -16,8 +245,8 @@ export const consultarHistorialBunkerController = async (req, res) => {
         // 🌐 BÓVEDA GLOBAL: Consulta la tabla general antigua
         if (empresa_id === 'ALL') {
             query = `
-                SELECT d.id, d.folio, d.tipo_dte, d.monto_neto, d.fecha_emision, d.url_pdf, 
-                       d.rut_cliente, e.razon_social
+                SELECT d.id, d.folio, d.tipo_dte, d.monto_neto, d.fecha_emision, d.url_pdf,
+                       d.rut_cliente, COALESCE(d.razon_social_cliente, e.razon_social) AS razon_social
                 FROM documentos_emitidos d
                 LEFT JOIN empresa e ON d.empresa_id = e.id
                 ORDER BY d.fecha_emision DESC;

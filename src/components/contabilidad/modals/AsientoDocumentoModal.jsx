@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, CheckCircle, AlertCircle, Plus, Trash2, Loader2 } from 'lucide-react';
+import { FileText, CheckCircle, AlertCircle, Plus, Trash2, Loader2, Pencil, Save, X } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getChartOfAccountsApi } from '@/services/accountingService';
 import { fetchWithAuth } from '@/services/apiClient';
+import { API_BASE_URL } from '../../../../config.js';
 
 const TIPO_DTE_MAP = {
   33: 'Factura Electrónica', 34: 'Factura Exenta', 61: 'Nota de Crédito',
@@ -74,6 +75,15 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
   const [lineas, setLineas] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Edición de los datos del documento
+  const [isEditingDatos, setIsEditingDatos] = useState(false);
+  const [isSavingDatos, setIsSavingDatos]   = useState(false);
+  const [dRut, setDRut]         = useState('');
+  const [dNombre, setDNombre]   = useState('');
+  const [dTipoDte, setDTipoDte] = useState(33);
+  const [dFolio, setDFolio]     = useState('');
+  const [dFecha, setDFecha]     = useState(''); // YYYY-MM-DD
+
   const tipo = documento?.tipoMovimiento || 'ventas';
   const isCompra = tipo === 'compras';
   const colors = COLOR_MAP[tipo] || COLOR_MAP.ventas;
@@ -91,8 +101,16 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
   const plan = planData || [];
 
   useEffect(() => {
-    if (documento && isOpen) setLineas(generarLineas(documento, tipo));
-  }, [documento, isOpen, tipo]);
+    if (documento && isOpen) {
+      setLineas(generarLineas(documento, tipo));
+      setDRut(isCompra ? (documento.rut_proveedor || '') : (documento.rut_cliente || ''));
+      setDNombre(isCompra ? (documento.razon_social_proveedor || '') : (documento.razon_social || ''));
+      setDTipoDte(documento.tipo_dte || 33);
+      setDFolio(String(documento.folio ?? ''));
+      setDFecha(documento.fecha_emision ? String(documento.fecha_emision).substring(0, 10) : '');
+      setIsEditingDatos(false);
+    }
+  }, [documento, isOpen, tipo, isCompra]);
 
   if (!documento) return null;
 
@@ -100,13 +118,13 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
   const iva = Number(documento.monto_iva) || Math.round(neto * 0.19);
   const total = neto + iva;
 
-  const rut = formatRut(isCompra ? documento.rut_proveedor : documento.rut_cliente);
-  const razon = formatText(isCompra ? documento.razon_social_proveedor : documento.razon_social);
-  const fecha = documento.fecha_emision
-    ? new Date(documento.fecha_emision).toLocaleDateString('es-CL', { timeZone: 'UTC' })
+  const rut = formatRut(dRut);
+  const razon = formatText(dNombre);
+  const fecha = dFecha
+    ? new Date(dFecha + 'T00:00:00').toLocaleDateString('es-CL', { timeZone: 'UTC' })
     : 'N/A';
-  const periodo = documento.fecha_emision ? documento.fecha_emision.substring(0, 7) : 'N/A';
-  const tipoDocLabel = TIPO_DTE_MAP[documento.tipo_dte] || `TIPO ${documento.tipo_dte}`;
+  const periodo = dFecha ? dFecha.substring(0, 7) : 'N/A';
+  const tipoDocLabel = TIPO_DTE_MAP[dTipoDte] || `TIPO ${dTipoDte}`;
 
   const totalDebe = lineas.reduce((s, l) => s + (Number(l.debe) || 0), 0);
   const totalHaber = lineas.reduce((s, l) => s + (Number(l.haber) || 0), 0);
@@ -122,13 +140,50 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
   const agregarLinea = () => setLineas(prev => [...prev, { cuenta: '', nombre: '', debe: 0, haber: 0 }]);
   const eliminarLinea = (idx) => setLineas(prev => prev.filter((_, i) => i !== idx));
 
+  const cancelarEdicion = () => {
+    setDRut(isCompra ? (documento.rut_proveedor || '') : (documento.rut_cliente || ''));
+    setDNombre(isCompra ? (documento.razon_social_proveedor || '') : (documento.razon_social || ''));
+    setDTipoDte(documento.tipo_dte || 33);
+    setDFolio(String(documento.folio ?? ''));
+    setDFecha(documento.fecha_emision ? String(documento.fecha_emision).substring(0, 10) : '');
+    setIsEditingDatos(false);
+  };
+
+  const handleGuardarDatos = async () => {
+    if (!documento.id) {
+      toast({ variant: 'destructive', title: 'No se puede editar', description: 'El documento no tiene identificador.' });
+      return;
+    }
+    if (!String(dFolio).trim()) {
+      toast({ variant: 'destructive', title: 'Folio requerido' });
+      return;
+    }
+    setIsSavingDatos(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/dte-consulta/movimiento/${documento.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo_movimiento: tipo, empresa_id: empresaId,
+          rut: dRut, nombre: dNombre, tipo_documento: dTipoDte, folio: dFolio, fecha: dFecha,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al actualizar');
+      toast({ title: '✅ Documento actualizado', description: `Folio #${dFolio}` });
+      setIsEditingDatos(false);
+      queryClient.invalidateQueries(['comprobantes', empresaId]);
+      onGuardado?.();
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Error', description: err.message });
+    } finally {
+      setIsSavingDatos(false);
+    }
+  };
+
   const handleGuardar = async () => {
     if (!cuadrado) {
       toast({ variant: 'destructive', title: 'Asiento Descuadrado', description: `Diferencia: ${formatCLP(Math.abs(totalDebe - totalHaber))}` });
-      return;
-    }
-    if (!empresaId || empresaId === 'ALL') {
-      toast({ variant: 'destructive', title: 'Sin empresa', description: 'Selecciona una empresa específica para guardar.' });
       return;
     }
     setIsSaving(true);
@@ -138,9 +193,9 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
         body: {
           empresaId,
           tipo,
-          fecha: documento.fecha_emision,
-          glosa: `${tipoLabel} Folio #${documento.folio} — ${razon || rut}`,
-          folio: documento.folio,
+          fecha: dFecha || documento.fecha_emision,
+          glosa: `${tipoLabel} Folio #${dFolio} — ${razon || rut}`,
+          folio: dFolio,
           rutAsociado: rut,
           lineas: lineas.map(l => ({ cuenta: l.cuenta, debe: l.debe, haber: l.haber })),
         },
@@ -180,11 +235,35 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
 
         {/* DATOS DEL DOCUMENTO */}
         <div className={`bg-black/20 rounded-xl border ${colors.border} p-4 mt-2`}>
-          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-3">Datos del Documento</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Datos del Documento</p>
+            {!isEditingDatos ? (
+              <button onClick={() => setIsEditingDatos(true)}
+                className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded hover:bg-blue-500/10">
+                <Pencil className="h-3 w-3" /> Editar
+              </button>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <button onClick={cancelarEdicion} disabled={isSavingDatos}
+                  className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/5 disabled:opacity-40">
+                  <X className="h-3 w-3" /> Cancelar
+                </button>
+                <button onClick={handleGuardarDatos} disabled={isSavingDatos}
+                  className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-400 hover:text-emerald-300 transition-colors px-2 py-1 rounded hover:bg-emerald-500/10 disabled:opacity-40">
+                  {isSavingDatos ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />} Guardar
+                </button>
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Fecha Emisión</p>
-              <p className="text-sm font-bold text-white mt-0.5">{fecha}</p>
+              {isEditingDatos ? (
+                <input type="date" value={dFecha} onChange={e => setDFecha(e.target.value)}
+                  className="w-full mt-1 bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500" />
+              ) : (
+                <p className="text-sm font-bold text-white mt-0.5">{fecha}</p>
+              )}
             </div>
             <div>
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Período</p>
@@ -192,21 +271,45 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
             </div>
             <div>
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Tipo Documento</p>
-              <p className="text-xs font-bold text-white mt-0.5">{tipoDocLabel}</p>
+              {isEditingDatos ? (
+                <select value={dTipoDte} onChange={e => setDTipoDte(Number(e.target.value))}
+                  className="w-full mt-1 bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
+                  {Object.entries(TIPO_DTE_MAP).map(([k, v]) => (
+                    <option key={k} value={k} className="bg-slate-900">{v}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs font-bold text-white mt-0.5">{tipoDocLabel}</p>
+              )}
             </div>
             <div>
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Folio</p>
-              <p className="text-sm font-black text-white italic mt-0.5">#{documento.folio}</p>
+              {isEditingDatos ? (
+                <input type="text" value={dFolio} onChange={e => setDFolio(e.target.value)}
+                  className="w-full mt-1 bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-blue-500" />
+              ) : (
+                <p className="text-sm font-black text-white italic mt-0.5">#{dFolio}</p>
+              )}
             </div>
             <div>
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">
                 RUT {isCompra ? 'Proveedor' : 'Cliente'}
               </p>
-              <p className="text-xs font-mono text-gray-300 mt-0.5">{rut}</p>
+              {isEditingDatos ? (
+                <input type="text" value={dRut} onChange={e => setDRut(e.target.value)} placeholder="76.123.456-7"
+                  className="w-full mt-1 bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs text-white font-mono focus:outline-none focus:border-blue-500" />
+              ) : (
+                <p className="text-xs font-mono text-gray-300 mt-0.5">{rut}</p>
+              )}
             </div>
             <div className="col-span-2 md:col-span-3">
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Razón Social</p>
-              <p className="text-xs font-bold text-white mt-0.5 truncate">{razon || 'SIN RAZÓN SOCIAL'}</p>
+              {isEditingDatos ? (
+                <input type="text" value={dNombre} onChange={e => setDNombre(e.target.value)} placeholder="Razón social"
+                  className="w-full mt-1 bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500" />
+              ) : (
+                <p className="text-xs font-bold text-white mt-0.5 truncate">{razon || 'SIN RAZÓN SOCIAL'}</p>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-white/5">
