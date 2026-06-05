@@ -170,12 +170,16 @@ export const eliminarMovimiento = async (req, res) => {
 // ========================================================
 export const editarMovimiento = async (req, res) => {
     const { id } = req.params;
-    const { tipo_movimiento, empresa_id, rut, nombre, tipo_documento, folio, fecha } = req.body;
+    const { tipo_movimiento, empresa_id, rut, nombre, tipo_documento, folio, fecha,
+            monto_neto, monto_iva, monto_total } = req.body;
     const empId = (!empresa_id || empresa_id === 'ALL' || empresa_id === 'null') ? null : empresa_id;
 
     const tipoDteMap = { '33':33, '34':34, '61':61, '56':56, '39':39, 'HON':39, 'OTRO':99 };
     const tipo_dte = tipoDteMap[tipo_documento] ?? (parseInt(tipo_documento) || 33);
     const fecha_emision = fecha ? new Date(fecha) : null;
+    const neto  = Number(monto_neto)  || 0;
+    const iva   = Number(monto_iva)   || 0;
+    const total = Number(monto_total) || (neto + iva);
 
     const esVenta = tipo_movimiento === 'ventas';
     const tabla = esVenta
@@ -196,10 +200,11 @@ export const editarMovimiento = async (req, res) => {
         }
         const folioViejo = old.folio;
 
-        // UPDATE del documento (todas las tablas tienen columna de razón social)
+        // UPDATE del documento (todas las tablas tienen razón social y montos)
         await client.query(
-            `UPDATE ${tabla} SET ${colRut} = $1, ${colRazon} = $2, tipo_dte = $3, folio = $4, fecha_emision = $5 WHERE id = $6`,
-            [rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, fecha_emision, id]
+            `UPDATE ${tabla} SET ${colRut} = $1, ${colRazon} = $2, tipo_dte = $3, folio = $4, fecha_emision = $5,
+                    monto_neto = $6, monto_iva = $7, monto_total = $8 WHERE id = $9`,
+            [rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, fecha_emision, neto, iva, total, id]
         );
 
         // Actualizar el comprobante asociado (glosa con nuevo folio/razón y fecha)
@@ -245,7 +250,7 @@ export const consultarHistorialBunkerController = async (req, res) => {
         // 🌐 BÓVEDA GLOBAL: Consulta la tabla general antigua
         if (empresa_id === 'ALL') {
             query = `
-                SELECT d.id, d.folio, d.tipo_dte, d.monto_neto, d.fecha_emision, d.url_pdf,
+                SELECT d.id, d.folio, d.tipo_dte, d.monto_neto, d.monto_iva, d.monto_total, d.fecha_emision, d.url_pdf,
                        d.rut_cliente, COALESCE(d.razon_social_cliente, e.razon_social) AS razon_social
                 FROM documentos_emitidos d
                 LEFT JOIN empresa e ON d.empresa_id = e.id

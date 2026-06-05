@@ -224,12 +224,13 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   const libroPendientesTotal   = libroVentasPendientes + libroComprasPendientes;
 
   const libroAsientos = useMemo(() => {
+    // Pendientes (sin asiento guardado) usan su asiento sugerido por defecto.
     const getLineasDoc = (doc, tipo) => {
       const rowId = doc.id;
       if (rowId && rowEdits[rowId]) return rowEdits[rowId];
       const comp = folioMap[String(doc.folio)];
       if (comp) return comp.lineas.map(l => ({ cuenta: l.cuentaCodigo || l.cuenta_codigo, debe: Number(l.debe)||0, haber: Number(l.haber)||0 }));
-      return [];
+      return calcLineasDefault(doc, tipo);
     };
     const acumular = (docs, tipo) => {
       const mapa = {};
@@ -241,19 +242,19 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
       }));
       return mapa;
     };
-    const mapaV = acumular(libroVentasGuardadas,  'ventas');
-    const mapaC = acumular(libroComprasGuardadas, 'compras');
+    const mapaV = acumular(libroVentas,  'ventas');
+    const mapaC = acumular(libroCompras, 'compras');
     const lineas = [];
-    if (libroVentasGuardadas.length > 0) {
+    if (libroVentas.length > 0) {
       lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN VENTAS ${libroPeriodo}` });
       Object.entries(mapaV).forEach(([codigo, { descripcion, debe, haber }]) => { if (debe > 0 || haber > 0) lineas.push({ codigo, descripcion, debe, haber }); });
     }
-    if (libroComprasGuardadas.length > 0) {
+    if (libroCompras.length > 0) {
       lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN COMPRAS ${libroPeriodo}` });
       Object.entries(mapaC).forEach(([codigo, { descripcion, debe, haber }]) => { if (debe > 0 || haber > 0) lineas.push({ codigo, descripcion, debe, haber }); });
     }
     return lineas;
-  }, [libroVentasGuardadas, libroComprasGuardadas, libroPeriodo, rowEdits, folioMap, plan]);
+  }, [libroVentas, libroCompras, libroPeriodo, rowEdits, folioMap, plan]);
 
   // ── Toggle fila expandida ─────────────────────────────────────
   const toggleRow = (rowId, doc) => {
@@ -783,13 +784,13 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                   <AlertCircle className="h-3.5 w-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">
-                      {libroPendientesTotal} documento{libroPendientesTotal > 1 ? 's' : ''} pendiente{libroPendientesTotal > 1 ? 's' : ''} excluido{libroPendientesTotal > 1 ? 's' : ''}
+                      {libroPendientesTotal} documento{libroPendientesTotal > 1 ? 's' : ''} pendiente{libroPendientesTotal > 1 ? 's' : ''} de guardar
                     </p>
                     <p className="text-[9px] text-amber-500/70 mt-0.5">
                       {libroVentasPendientes > 0 && `${libroVentasPendientes} venta${libroVentasPendientes > 1 ? 's' : ''}`}
                       {libroVentasPendientes > 0 && libroComprasPendientes > 0 && ' · '}
                       {libroComprasPendientes > 0 && `${libroComprasPendientes} compra${libroComprasPendientes > 1 ? 's' : ''}`}
-                      {' '}sin asiento guardado no se incluyen en el cuadre.
+                      {' '}se incluyen con su asiento sugerido (revisa/guarda para confirmarlos).
                     </p>
                   </div>
                 </div>

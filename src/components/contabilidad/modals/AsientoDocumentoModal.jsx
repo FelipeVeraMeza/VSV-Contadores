@@ -41,9 +41,9 @@ const CUENTAS_DEFAULT = {
   ],
 };
 
-const generarLineas = (doc, tipo) => {
-  const neto = Number(doc.monto_neto) || 0;
-  const iva = Number(doc.monto_iva) || Math.round(neto * 0.19);
+const generarLineas = (netoVal, tipo) => {
+  const neto = Number(netoVal) || 0;
+  const iva = Math.round(neto * 0.19);
   const total = neto + iva; // Siempre calculado para garantizar cuadre
   const base = CUENTAS_DEFAULT[tipo] || CUENTAS_DEFAULT.ventas;
 
@@ -83,6 +83,7 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
   const [dTipoDte, setDTipoDte] = useState(33);
   const [dFolio, setDFolio]     = useState('');
   const [dFecha, setDFecha]     = useState(''); // YYYY-MM-DD
+  const [dNeto, setDNeto]       = useState('');
 
   const tipo = documento?.tipoMovimiento || 'ventas';
   const isCompra = tipo === 'compras';
@@ -102,20 +103,21 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
 
   useEffect(() => {
     if (documento && isOpen) {
-      setLineas(generarLineas(documento, tipo));
+      setLineas(generarLineas(documento.monto_neto, tipo));
       setDRut(isCompra ? (documento.rut_proveedor || '') : (documento.rut_cliente || ''));
       setDNombre(isCompra ? (documento.razon_social_proveedor || '') : (documento.razon_social || ''));
       setDTipoDte(documento.tipo_dte || 33);
       setDFolio(String(documento.folio ?? ''));
       setDFecha(documento.fecha_emision ? String(documento.fecha_emision).substring(0, 10) : '');
+      setDNeto(String(documento.monto_neto ?? ''));
       setIsEditingDatos(false);
     }
   }, [documento, isOpen, tipo, isCompra]);
 
   if (!documento) return null;
 
-  const neto = Number(documento.monto_neto) || 0;
-  const iva = Number(documento.monto_iva) || Math.round(neto * 0.19);
+  const neto = Number(dNeto) || 0;
+  const iva = Math.round(neto * 0.19);
   const total = neto + iva;
 
   const rut = formatRut(dRut);
@@ -140,12 +142,20 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
   const agregarLinea = () => setLineas(prev => [...prev, { cuenta: '', nombre: '', debe: 0, haber: 0 }]);
   const eliminarLinea = (idx) => setLineas(prev => prev.filter((_, i) => i !== idx));
 
+  // Al cambiar el neto, recalcula IVA/total y regenera el asiento
+  const onChangeNeto = (val) => {
+    setDNeto(val);
+    setLineas(generarLineas(val, tipo));
+  };
+
   const cancelarEdicion = () => {
     setDRut(isCompra ? (documento.rut_proveedor || '') : (documento.rut_cliente || ''));
     setDNombre(isCompra ? (documento.razon_social_proveedor || '') : (documento.razon_social || ''));
     setDTipoDte(documento.tipo_dte || 33);
     setDFolio(String(documento.folio ?? ''));
     setDFecha(documento.fecha_emision ? String(documento.fecha_emision).substring(0, 10) : '');
+    setDNeto(String(documento.monto_neto ?? ''));
+    setLineas(generarLineas(documento.monto_neto, tipo));
     setIsEditingDatos(false);
   };
 
@@ -166,6 +176,7 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
         body: JSON.stringify({
           tipo_movimiento: tipo, empresa_id: empresaId,
           rut: dRut, nombre: dNombre, tipo_documento: dTipoDte, folio: dFolio, fecha: dFecha,
+          monto_neto: neto, monto_iva: iva, monto_total: total,
         }),
       });
       const data = await res.json();
@@ -315,11 +326,17 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
           <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-white/5">
             <div>
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Neto</p>
-              <p className="text-sm font-mono font-bold text-gray-300 mt-0.5">{formatCLP(neto)}</p>
+              {isEditingDatos ? (
+                <input type="number" min="0" value={dNeto} onChange={e => onChangeNeto(e.target.value)}
+                  className="w-full mt-1 bg-slate-900 border border-white/10 rounded px-2 py-1 text-sm text-white font-mono focus:outline-none focus:border-blue-500" />
+              ) : (
+                <p className="text-sm font-mono font-bold text-gray-300 mt-0.5">{formatCLP(neto)}</p>
+              )}
             </div>
             <div>
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">IVA 19%</p>
               <p className="text-sm font-mono font-bold text-gray-300 mt-0.5">{formatCLP(iva)}</p>
+              {isEditingDatos && <p className="text-[9px] text-gray-600 mt-0.5">Auto 19%</p>}
             </div>
             <div>
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Total</p>

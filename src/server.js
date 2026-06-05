@@ -255,7 +255,13 @@ app.use((err, req, res, next) => {
 const ensureSchema = async () => {
   try {
     await pool.query(`ALTER TABLE documentos_emitidos ADD COLUMN IF NOT EXISTS razon_social_cliente TEXT`);
-    console.log('✅ Esquema verificado (documentos_emitidos.razon_social_cliente)');
+    await pool.query(`ALTER TABLE documentos_emitidos ADD COLUMN IF NOT EXISTS monto_iva NUMERIC DEFAULT 0`);
+    await pool.query(`ALTER TABLE documentos_emitidos ADD COLUMN IF NOT EXISTS monto_total NUMERIC DEFAULT 0`);
+    // Folios grandes (> 2.147.483.647) requieren BIGINT
+    for (const t of ['documentos_emitidos', 'documentos_emitidos_empresa', 'documentos_recibidos', 'documentos_recibidos_empresa']) {
+      await pool.query(`ALTER TABLE ${t} ALTER COLUMN folio TYPE BIGINT`);
+    }
+    console.log('✅ Esquema verificado (documentos: razón social, montos, folio BIGINT)');
   } catch (e) {
     console.error('⚠️ No se pudo verificar el esquema:', e.message);
   }

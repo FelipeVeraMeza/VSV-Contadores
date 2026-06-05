@@ -15,6 +15,7 @@ import PlanDeCuentas from '@/components/contabilidad/PlanDeCuentas';
 import Balances from '@/components/contabilidad/Balances';
 import ConciliacionBancaria from '@/components/contabilidad/ConciliacionBancaria';
 import ReportesContables from '@/components/contabilidad/ReportesContables';
+import LibroDiarioSuperficial from '@/components/contabilidad/LibroDiarioSuperficial';
 import NuevoAsientoModal from '@/components/contabilidad/modals/NuevoAsientoModal';
 
 const Contabilidad = () => {
@@ -25,13 +26,15 @@ const Contabilidad = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('movimientos');
   const [isAsientoModalOpen, setIsAsientoModalOpen] = useState(false);
+  const [borradorLibro, setBorradorLibro] = useState(null);
 
   // Período compartido entre Movimientos y Libro Diario
   const now = new Date();
   const [periodoMes,  setPeriodoMes]  = useState((now.getMonth()+1).toString().padStart(2,'0'));
   const [periodoAnio, setPeriodoAnio] = useState(now.getFullYear().toString());
 
-  const handleGenerarBorrador = () => {
+  const handleGenerarBorrador = (data) => {
+    if (data?.asientos?.length) setBorradorLibro(data);
     setActiveTab('libro_diario');
   };
 
@@ -149,13 +152,18 @@ const Contabilidad = () => {
                 />
               )}
               {activeTab === 'libro_diario' && (
-                <AsientosContables
-                  empresaId={empresaId}
-                  mes={periodoMes}
-                  anio={periodoAnio}
-                  setMes={setPeriodoMes}
-                  setAnio={setPeriodoAnio}
-                />
+                <div className="space-y-6">
+                  {borradorLibro?.asientos?.length > 0 && (
+                    <LibroDiarioSuperficial asientos={borradorLibro.asientos} />
+                  )}
+                  <AsientosContables
+                    empresaId={empresaId}
+                    mes={periodoMes}
+                    anio={periodoAnio}
+                    setMes={setPeriodoMes}
+                    setAnio={setPeriodoAnio}
+                  />
+                </div>
               )}
               {activeTab !== 'movimientos' && activeTab !== 'libro_diario' && ActiveModule && (
                 <ActiveModule empresaId={empresaId} />
