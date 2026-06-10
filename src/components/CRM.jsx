@@ -6,8 +6,11 @@ import { toast } from '@/components/ui/use-toast';
 import { useBunkerData } from './crm/crmData'; 
 import { updateClienteApi } from '@/services/crmService';
 import CrmTableList from './crm/views/CrmTableList';
-import CrmAnalytics from './crm/modals/CrmAnalytics'; 
+import CrmAnalytics from './crm/modals/CrmAnalytics';
 import ClientDetailDrawer from './crm/modals/ClientDetailDrawer';
+import WhatsappPanel from './crm/views/WhatsappPanel';
+import EmailPanel from './crm/views/EmailPanel';
+import InteraccionesPanel from './crm/views/InteraccionesPanel';
 
 import { useAuth } from '@/hooks/useAuth';
 
@@ -24,7 +27,7 @@ const isEmptyField = (val) => {
 
 const CRM = () => {
   const [activeTab, setActiveTab] = useState('list');
-  const { clients: dbClients, cashFlow, services, compliance, risk, loading } = useBunkerData();
+  const { clients: dbClients, planes, serviciosDisponibles, cashFlow, services, compliance, risk, loading, refresh } = useBunkerData();
   const [clients, setClients] = useState([]);
   const { selectedCompany, setSelectedCompany } = useAuth();
   
@@ -88,7 +91,20 @@ const CRM = () => {
           const tel = c.whatsapp || c.telefono_corporativo || c.telefono;
           const esInactiva = isEmptyField(rep) && isEmptyField(rutRep) && isEmptyField(correo) && isEmptyField(tel);
           const matchActividad = vistaActivas ? !esInactiva : esInactiva;
-          const matchSearch = cleanStr(razonSocial).includes(cleanStr(searchTerm.toLowerCase())) || rut.includes(searchTerm.toLowerCase());
+
+          const term = searchTerm.trim().toLowerCase();
+          const termClean = cleanStr(term);
+          // Solo dígitos del término, para comparar teléfonos sin importar formato (+56, espacios, guiones)
+          const termDigits = term.replace(/\D/g, '');
+          const telDigits = String(tel || '').replace(/\D/g, '');
+
+          const matchSearch =
+              term === '' ||
+              cleanStr(razonSocial).includes(termClean) ||
+              rut.includes(term) ||
+              cleanStr(correo).includes(termClean) ||
+              cleanStr(rep).includes(termClean) ||
+              (termDigits !== '' && telDigits.includes(termDigits));
           const matchType = typeFilter === 'Todos' || tipo === typeFilter;
           let matchStatus = true;
           if (statusFilter === 'Críticos') {
@@ -174,13 +190,16 @@ const CRM = () => {
 
             <div className="flex bg-[#0f172a]/80 border border-white/10 rounded-xl p-1">
                 <button onClick={() => setActiveTab('list')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase ${activeTab === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Clientes</button>
+                <button onClick={() => setActiveTab('whatsapp')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase ${activeTab === 'whatsapp' ? 'bg-emerald-600 text-white' : 'text-gray-400'}`}>WhatsApp</button>
+                <button onClick={() => setActiveTab('correo')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase ${activeTab === 'correo' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Correo</button>
+                <button onClick={() => setActiveTab('interacciones')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase ${activeTab === 'interacciones' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Interacciones</button>
                 <button onClick={() => setActiveTab('analytics')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase ${activeTab === 'analytics' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Métricas</button>
             </div>
         </div>
       </div>
 
       {activeTab === 'list' && (
-        <div className="flex gap-6 relative items-start h-full">
+        <div className="flex gap-6 relative items-stretch flex-1 min-h-0">
             <CrmTableList 
                 filteredClients={filteredClients} 
                 stats={stats} 
@@ -198,18 +217,39 @@ const CRM = () => {
 
             <AnimatePresence>
                 {selectedClient && (
-                    <ClientDetailDrawer 
-                        client={selectedClient} 
-                        onClose={() => setSelectedClient(null)} 
-                        onUpdateClient={handleUpdateClient} 
+                    <ClientDetailDrawer
+                        client={selectedClient}
+                        onClose={() => setSelectedClient(null)}
+                        onUpdateClient={handleUpdateClient}
+                        planes={planes}
+                        serviciosDisponibles={serviciosDisponibles}
+                        onRefresh={refresh}
                     />
                 )}
             </AnimatePresence>
         </div>
       )}
 
+      {activeTab === 'whatsapp' && (
+        <div className="flex-1 min-h-0">
+          <WhatsappPanel />
+        </div>
+      )}
+
+      {activeTab === 'correo' && (
+        <div className="flex-1 min-h-0">
+          <EmailPanel />
+        </div>
+      )}
+
+      {activeTab === 'interacciones' && (
+        <div className="flex-1 min-h-0">
+          <InteraccionesPanel />
+        </div>
+      )}
+
       {activeTab === 'analytics' && (
-        <CrmAnalytics cashFlow={cashFlow} services={services} compliance={compliance} risk={risk} />
+        <CrmAnalytics clients={clients} cashFlow={cashFlow} />
       )}
     </div>
   );

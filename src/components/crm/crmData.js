@@ -41,6 +41,8 @@ export const useBunkerData = () => {
   const { user, selectedCompany } = useAuth();
   
   const [clients, setClients] = useState([]);
+  const [planes, setPlanes] = useState([]);
+  const [serviciosDisponibles, setServiciosDisponibles] = useState([]);
   const [cashFlow, setCashFlow] = useState([]);
   const [services, setServices] = useState([]);
   const [compliance, setCompliance] = useState([]);
@@ -71,6 +73,8 @@ export const useBunkerData = () => {
 
       // Seteamos los clientes reales que vengan de la base de datos
       setClients(payload?.clients || []);
+      setPlanes(payload?.planes || []);
+      setServiciosDisponibles(payload?.serviciosDisponibles || []);
       
       // MAGIA AQUÍ: Si el backend no envía datos para los gráficos (porque la DB está vacía), 
       // usamos los datos de respaldo para que la pantalla no se rompa ni quede en blanco.
@@ -96,5 +100,5 @@ export const useBunkerData = () => {
     loadAll(); 
   }, [user?.sessionId, selectedCompany?.id, selectedCompany?.empresaId]);
 
-  return { clients, cashFlow, services, compliance, risk, loading, refresh: loadAll };
+  return { clients, planes, serviciosDisponibles, cashFlow, services, compliance, risk, loading, refresh: loadAll };
 };

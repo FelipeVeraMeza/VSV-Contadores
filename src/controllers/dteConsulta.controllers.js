@@ -5,6 +5,7 @@ import { pool } from '../database/db.js';
 // ========================================================
 export const crearMovimientoManual = async (req, res) => {
     const { empresa_id, tipo_movimiento, rut, nombre, tipo_documento, folio, fecha, descripcion, lineas = [] } = req.body;
+    const usuario = req.user || {};
 
     if (!folio || !lineas.length) {
         return res.status(400).json({ ok: false, error: 'folio y lineas son requeridos' });
@@ -87,8 +88,10 @@ export const crearMovimientoManual = async (req, res) => {
         let compId;
         if (existing) {
             await client.query(`DELETE FROM comprobantes_detalle WHERE comprobante_id = $1`, [existing.id]);
-            await client.query(`UPDATE comprobantes SET fecha=$1, glosa=$2, tipo=$3 WHERE id=$4`,
-                [fecha_emision, glosa, tipoDb, existing.id]);
+            await client.query(
+                `UPDATE comprobantes SET fecha=$1, glosa=$2, tipo=$3, estado='Contabilizado',
+                        contabilizado_por=$4, contabilizado_por_id=$5, contabilizado_at=NOW() WHERE id=$6`,
+                [fecha_emision, glosa, tipoDb, usuario.nombre || null, usuario.usuarioId || null, existing.id]);
             compId = existing.id;
         } else {
             const { rows: [{ max_num }] } = await client.query(
@@ -96,9 +99,10 @@ export const crearMovimientoManual = async (req, res) => {
                 empId === null ? [] : [empId]
             );
             const { rows: [comp] } = await client.query(
-                `INSERT INTO comprobantes (id, empresa_id, numero_comprobante, fecha, tipo, glosa, estado)
-                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'Borrador') RETURNING id`,
-                [empId, max_num + 1, fecha_emision, tipoDb, glosa]
+                `INSERT INTO comprobantes (id, empresa_id, numero_comprobante, fecha, tipo, glosa, estado,
+                        contabilizado_por, contabilizado_por_id, contabilizado_at)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'Contabilizado', $6, $7, NOW()) RETURNING id`,
+                [empId, max_num + 1, fecha_emision, tipoDb, glosa, usuario.nombre || null, usuario.usuarioId || null]
             );
             compId = comp.id;
         }

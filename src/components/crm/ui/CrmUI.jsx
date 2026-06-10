@@ -15,6 +15,23 @@ export const StatCard = ({ icon: Icon, label, value, color, onClick, active }) =
   </motion.div>
 );
 
+export const FilterChip = ({ icon: Icon, label, value, color, onClick, active }) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
+      active
+        ? 'bg-white/10 border-blue-500/50 text-white shadow-lg shadow-blue-500/10'
+        : 'bg-white/[0.03] border-white/5 text-gray-400 hover:text-white hover:bg-white/5'
+    }`}
+  >
+    <Icon size={14} className={color} />
+    <span>{label}</span>
+    <span className={`px-1.5 py-0.5 rounded-md text-[10px] leading-none ${active ? 'bg-blue-500/30 text-white' : 'bg-black/30 text-gray-300'}`}>
+      {value}
+    </span>
+  </button>
+);
+
 export const EditableField = ({ label, name, value, isEditing, onChange, isMono = false }) => (
   <div className="flex flex-col gap-1.5 w-full">
     <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{label}</span>

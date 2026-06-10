@@ -170,14 +170,13 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
     }
     setIsSavingDatos(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/dte-consulta/movimiento/${documento.id}`, {
+      const res = await fetchWithAuth(`/dte-consulta/movimiento/${documento.id}`, user.sessionId, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           tipo_movimiento: tipo, empresa_id: empresaId,
           rut: dRut, nombre: dNombre, tipo_documento: dTipoDte, folio: dFolio, fecha: dFecha,
           monto_neto: neto, monto_iva: iva, monto_total: total,
-        }),
+        },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al actualizar');

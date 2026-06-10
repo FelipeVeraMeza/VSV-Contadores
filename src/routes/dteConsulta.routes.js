@@ -6,13 +6,14 @@ import {
     eliminarMovimiento,
     editarMovimiento,
 } from "../controllers/dteConsulta.controllers.js";
+import { requireSession } from "../middleware/auth.js";
 
 const dteConsultaRoutes = Router();
 
 dteConsultaRoutes.get('/historial', consultarHistorialBunkerController);
 dteConsultaRoutes.get('/compras', consultarComprasBunkerController);
-dteConsultaRoutes.post('/movimiento', crearMovimientoManual);
-dteConsultaRoutes.put('/movimiento/:id', editarMovimiento);
-dteConsultaRoutes.delete('/movimiento/:id', eliminarMovimiento);
+dteConsultaRoutes.post('/movimiento', requireSession, crearMovimientoManual);
+dteConsultaRoutes.put('/movimiento/:id', requireSession, editarMovimiento);
+dteConsultaRoutes.delete('/movimiento/:id', requireSession, eliminarMovimiento);
 
 export default dteConsultaRoutes;

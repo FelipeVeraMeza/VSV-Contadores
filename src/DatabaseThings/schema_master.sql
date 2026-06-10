@@ -94,6 +94,7 @@ CREATE TABLE empresa (
     impuesto_unico NUMERIC(15,2) DEFAULT 0,
     nota_urgente TEXT,
     whatsapp VARCHAR(50),
+    fecha_cambio_plan TIMESTAMP WITH TIME ZONE,
 
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -126,6 +127,10 @@ CREATE TABLE bitacora_gestion (
     empresa_id UUID NOT NULL REFERENCES empresa(id) ON DELETE CASCADE,
     usuario_id UUID REFERENCES usuario(id) ON DELETE SET NULL,
     texto TEXT NOT NULL,
+    -- tipo_mensaje: 'conversacion' | 'ticket' | 'cambio_plan' | 'servicio' | 'sistema'
+    tipo_mensaje VARCHAR(30) DEFAULT 'conversacion',
+    usuario_nombre VARCHAR(100),
+    leido BOOLEAN DEFAULT FALSE,   -- en tickets se interpreta como "resuelto"
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 ALTER TABLE public.bitacora_gestion ENABLE ROW LEVEL SECURITY;
@@ -170,13 +175,28 @@ CREATE TABLE empresa_servicio (
 
 CREATE TABLE empresa_servicio_historial (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    empresa_servicio_id uuid REFERENCES empresa_servicio(id) ON DELETE CASCADE, 
+    empresa_servicio_id uuid REFERENCES empresa_servicio(id) ON DELETE CASCADE,
     usuario_id uuid REFERENCES usuario(id) ON DELETE SET NULL,
     estado_anterior estado_servicio,
     estado_nuevo estado_servicio,
     motivo text,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Historial de cambios de plan de cada empresa (ficha del cliente).
+CREATE TABLE empresa_plan_historial (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    empresa_id uuid NOT NULL REFERENCES empresa(id) ON DELETE CASCADE,
+    plan_anterior_id uuid REFERENCES plan(id) ON DELETE SET NULL,
+    plan_nuevo_id uuid REFERENCES plan(id) ON DELETE SET NULL,
+    plan_anterior_nombre varchar(50),
+    plan_nuevo_nombre varchar(50),
+    usuario_id uuid REFERENCES usuario(id) ON DELETE SET NULL,
+    usuario_nombre varchar(100),
+    motivo text,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_plan_historial_empresa ON empresa_plan_historial (empresa_id, created_at DESC);
 
 -- ==========================================
 -- 4. TABLAS DEL MÓDULO DT

@@ -53,10 +53,47 @@ export const getClientesCRM = async (req, res) => {
                 id,
                 empresa_id,
                 texto,
+                tipo_mensaje,
+                usuario_nombre,
+                leido,
                 created_at
             FROM bitacora_gestion
             ORDER BY created_at DESC
         `);
+
+        // Catálogo de planes disponibles (para el selector en la ficha)
+        const planesResult = await pool.query(`
+            SELECT id, nombre, precio_base
+            FROM plan
+            ORDER BY precio_base ASC, nombre ASC
+        `);
+
+        // Catálogo de servicios disponibles (para sumar servicios contratados)
+        const serviciosDisponiblesResult = await pool.query(`
+            SELECT id, nombre, categoria, es_critico
+            FROM servicio
+            WHERE activo = TRUE
+            ORDER BY nombre ASC
+        `);
+
+        // Historial de cambios de plan por empresa.
+        // Si la migración aún no se corrió (tabla inexistente), degradamos a vacío
+        // en lugar de romper toda la carga del CRM.
+        let planHistorialResult = { rows: [] };
+        try {
+            planHistorialResult = await pool.query(`
+                SELECT empresa_id, plan_anterior_nombre, plan_nuevo_nombre,
+                       usuario_nombre, motivo, created_at
+                FROM empresa_plan_historial
+                ORDER BY created_at DESC
+            `);
+        } catch (err) {
+            if (err.code === '42P01') { // undefined_table
+                console.warn('⚠️ Tabla empresa_plan_historial no existe aún. Ejecuta la migración 2026-06-10_crm_ficha_planes_bitacora.sql');
+            } else {
+                throw err;
+            }
+        }
 
         const serviciosPorEmpresa = {};
         serviciosResult.rows.forEach(srv => {
@@ -79,8 +116,25 @@ export const getClientesCRM = async (req, res) => {
             }
             notasPorEmpresa[nota.empresa_id].push({
                 id: nota.id,
-                fecha: nota.created_at ? new Date(nota.created_at).toLocaleDateString('es-CL') : '',
-                texto: nota.texto
+                fecha: nota.created_at ? new Date(nota.created_at).toLocaleString('es-CL') : '',
+                texto: nota.texto,
+                tipo: nota.tipo_mensaje || 'conversacion',
+                autor: nota.usuario_nombre || 'Sistema',
+                resuelto: nota.leido === true
+            });
+        });
+
+        const planHistorialPorEmpresa = {};
+        planHistorialResult.rows.forEach(h => {
+            if (!planHistorialPorEmpresa[h.empresa_id]) {
+                planHistorialPorEmpresa[h.empresa_id] = [];
+            }
+            planHistorialPorEmpresa[h.empresa_id].push({
+                planAnterior: h.plan_anterior_nombre || '—',
+                planNuevo: h.plan_nuevo_nombre || '—',
+                autor: h.usuario_nombre || 'Sistema',
+                motivo: h.motivo || '',
+                fecha: h.created_at ? new Date(h.created_at).toLocaleString('es-CL') : ''
             });
         });
 
@@ -133,14 +187,33 @@ export const getClientesCRM = async (req, res) => {
             whatsapp: cliente.whatsapp || '',
             importante: cliente.nota_urgente || '',
 
+            planId: cliente.plan_id || null,
+            fechaCambioPlan: cliente.fecha_cambio_plan ? new Date(cliente.fecha_cambio_plan).toLocaleDateString('es-CL') : null,
+            planHistorial: planHistorialPorEmpresa[cliente.id] || [],
+
             notas: notasPorEmpresa[cliente.id] || [],
             servicios: serviciosPorEmpresa[cliente.id] || [],
             type: cliente.tipo_cliente || 'Empresa'
         }));
 
+        const planes = planesResult.rows.map(p => ({
+            id: p.id,
+            nombre: p.nombre,
+            precioBase: parseFloat(p.precio_base) || 0
+        }));
+
+        const serviciosDisponibles = serviciosDisponiblesResult.rows.map(s => ({
+            id: s.id,
+            nombre: s.nombre,
+            categoria: s.categoria,
+            esCritico: s.es_critico === true
+        }));
+
         return res.json({
             success: true,
             clients,
+            planes,
+            serviciosDisponibles,
             total: clients.length
         });
     } catch (error) {
@@ -273,17 +346,21 @@ export const updateClienteCRM = async (req, res) => {
     }
 };
 
+const TIPOS_BITACORA = ['conversacion', 'ticket', 'cambio_plan', 'servicio', 'sistema'];
+
 export const addNotaCRM = async (req, res) => {
     try {
         const { empresaId } = req.params;
-        const { texto } = req.body;
+        const { texto, tipo } = req.body;
         if (!texto || !texto.trim()) return res.status(400).json({ success: false, message: 'La nota no puede estar vacía.' });
 
+        const tipoMensaje = TIPOS_BITACORA.includes(tipo) ? tipo : 'conversacion';
+
         const result = await pool.query(
-            `INSERT INTO bitacora_gestion (empresa_id, usuario_id, texto)
-             VALUES ($1, $2, $3)
-             RETURNING id, empresa_id, texto, created_at`,
-            [empresaId, req.user?.usuarioId || null, texto.trim()]
+            `INSERT INTO bitacora_gestion (empresa_id, usuario_id, texto, tipo_mensaje, usuario_nombre, leido)
+             VALUES ($1, $2, $3, $4, $5, FALSE)
+             RETURNING id, empresa_id, texto, tipo_mensaje, usuario_nombre, leido, created_at`,
+            [empresaId, req.user?.usuarioId || null, texto.trim(), tipoMensaje, req.user?.nombre || null]
         );
         const nota = result.rows[0];
         return res.json({
@@ -292,7 +369,10 @@ export const addNotaCRM = async (req, res) => {
                 id: nota.id,
                 empresaId: nota.empresa_id,
                 texto: nota.texto,
-                fecha: nota.created_at ? new Date(nota.created_at).toLocaleDateString('es-CL') : ''
+                tipo: nota.tipo_mensaje || 'conversacion',
+                autor: nota.usuario_nombre || 'Sistema',
+                resuelto: nota.leido === true,
+                fecha: nota.created_at ? new Date(nota.created_at).toLocaleString('es-CL') : ''
             }
         });
     } catch (error) {
@@ -301,6 +381,170 @@ export const addNotaCRM = async (req, res) => {
             success: false,
             message: 'No se pudo guardar la gestión en la bitácora.'
         });
+    }
+};
+
+// Marca un ticket de la bitácora como resuelto / reabierto (columna leido)
+export const toggleTicketCRM = async (req, res) => {
+    try {
+        const { notaId } = req.params;
+        const { resuelto } = req.body;
+        const result = await pool.query(
+            `UPDATE bitacora_gestion SET leido = $1 WHERE id = $2 RETURNING id`,
+            [resuelto === true, notaId]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Ticket no encontrado.' });
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('❌ Error actualizando ticket CRM:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo actualizar el ticket.' });
+    }
+};
+
+// =========================================================
+// ADMINISTRACIÓN DE PLANES (cambio + historial + fecha)
+// =========================================================
+export const cambiarPlanCRM = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { empresaId } = req.params;
+        const { planId, motivo } = req.body;
+        if (!planId) return res.status(400).json({ success: false, message: 'Debe indicar el nuevo plan.' });
+
+        await client.query('BEGIN');
+
+        // Estado actual de la empresa (plan anterior)
+        const empResult = await client.query(
+            `SELECT e.plan_id, p.nombre AS plan_nombre
+             FROM empresa e LEFT JOIN plan p ON e.plan_id = p.id
+             WHERE e.id = $1`,
+            [empresaId]
+        );
+        if (empResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, message: 'Empresa no encontrada.' });
+        }
+        const planAnteriorId = empResult.rows[0].plan_id;
+        const planAnteriorNombre = empResult.rows[0].plan_nombre;
+
+        // Plan nuevo
+        const nuevoPlanResult = await client.query(`SELECT id, nombre FROM plan WHERE id = $1`, [planId]);
+        if (nuevoPlanResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ success: false, message: 'El plan indicado no existe.' });
+        }
+        const planNuevoNombre = nuevoPlanResult.rows[0].nombre;
+
+        if (planAnteriorId === planId) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ success: false, message: 'El cliente ya tiene ese plan.' });
+        }
+
+        // Aplica el cambio y registra la fecha
+        await client.query(
+            `UPDATE empresa SET plan_id = $1, fecha_cambio_plan = NOW(), updated_at = NOW() WHERE id = $2`,
+            [planId, empresaId]
+        );
+
+        // Registra en el historial
+        await client.query(
+            `INSERT INTO empresa_plan_historial
+                (empresa_id, plan_anterior_id, plan_nuevo_id, plan_anterior_nombre, plan_nuevo_nombre, usuario_id, usuario_nombre, motivo)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [empresaId, planAnteriorId, planId, planAnteriorNombre, planNuevoNombre,
+             req.user?.usuarioId || null, req.user?.nombre || null, motivo?.trim() || null]
+        );
+
+        // Deja rastro también en la bitácora del cliente
+        await client.query(
+            `INSERT INTO bitacora_gestion (empresa_id, usuario_id, texto, tipo_mensaje, usuario_nombre, leido)
+             VALUES ($1, $2, $3, 'cambio_plan', $4, TRUE)`,
+            [empresaId, req.user?.usuarioId || null,
+             `Cambio de plan: ${planAnteriorNombre || '—'} → ${planNuevoNombre}${motivo?.trim() ? ` (${motivo.trim()})` : ''}`,
+             req.user?.nombre || null]
+        );
+
+        await client.query('COMMIT');
+        return res.json({
+            success: true,
+            message: 'Plan actualizado correctamente.',
+            plan: planNuevoNombre,
+            planId
+        });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error cambiando plan CRM:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo cambiar el plan.' });
+    } finally {
+        client.release();
+    }
+};
+
+// =========================================================
+// SERVICIOS CONTRATADOS (agregar / quitar)
+// =========================================================
+export const addServicioCRM = async (req, res) => {
+    try {
+        const { empresaId } = req.params;
+        const { servicioId, precioPactado } = req.body;
+        if (!servicioId) return res.status(400).json({ success: false, message: 'Debe indicar el servicio.' });
+
+        // Evita duplicar un servicio ya activo
+        const dup = await pool.query(
+            `SELECT id FROM empresa_servicio WHERE empresa_id = $1 AND servicio_id = $2 AND estado <> 'Suspendido'`,
+            [empresaId, servicioId]
+        );
+        if (dup.rows.length > 0) {
+            return res.status(409).json({ success: false, message: 'El cliente ya tiene contratado ese servicio.' });
+        }
+
+        const parsedPrecio = (precioPactado === undefined || precioPactado === null || precioPactado === '')
+            ? null
+            : parseFloat(String(precioPactado).replace(/[^0-9.-]+/g, ''));
+
+        const result = await pool.query(
+            `INSERT INTO empresa_servicio (empresa_id, servicio_id, estado, precio_pactado, fecha_inicio)
+             VALUES ($1, $2, 'Activo', $3, NOW())
+             RETURNING id`,
+            [empresaId, servicioId, isNaN(parsedPrecio) ? null : parsedPrecio]
+        );
+
+        const srv = await pool.query(
+            `SELECT es.id, s.nombre, s.categoria, es.estado, es.precio_pactado
+             FROM empresa_servicio es JOIN servicio s ON es.servicio_id = s.id
+             WHERE es.id = $1`,
+            [result.rows[0].id]
+        );
+        const row = srv.rows[0];
+        return res.json({
+            success: true,
+            servicio: {
+                id: row.id,
+                nombre: row.nombre,
+                categoria: row.categoria,
+                estado: row.estado,
+                precioPactado: parseFloat(row.precio_pactado) || 0
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error agregando servicio CRM:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo agregar el servicio.' });
+    }
+};
+
+export const removeServicioCRM = async (req, res) => {
+    try {
+        const { empresaServicioId } = req.params;
+        // Suspende el servicio (el trigger registra fecha_termino). No se borra para conservar historial.
+        const result = await pool.query(
+            `UPDATE empresa_servicio SET estado = 'Suspendido', updated_at = NOW() WHERE id = $1 RETURNING id`,
+            [empresaServicioId]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Servicio no encontrado.' });
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('❌ Error quitando servicio CRM:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo quitar el servicio.' });
     }
 };
 

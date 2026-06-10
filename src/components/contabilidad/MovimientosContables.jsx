@@ -4,7 +4,7 @@ import {
   ArrowUpRight, ArrowDownRight, Eye, Plus, Loader2, FileCheck,
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Award,
   DownloadCloud, RefreshCcw, BookCopy, ChevronUp, Send,
-  CheckCircle, AlertCircle, Trash2, Save
+  CheckCircle, AlertCircle, Trash2, Save, Bot
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -148,13 +148,20 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     enabled: !!user?.sessionId,
   });
 
-  // Mapa folio → líneas del comprobante guardado
+  // Mapa folio → comprobante contabilizado (número, responsable, líneas)
   const folioMap = useMemo(() => {
     const map = {};
     (dataComp?.comprobantes || []).forEach(comp => {
       const match = comp.glosa?.match(/#(\d+)/);
       if (match) {
-        map[match[1]] = { guardado: true, estado: comp.estado, lineas: comp.lineas || [] };
+        map[match[1]] = {
+          guardado: true,
+          estado: comp.estado,
+          numero: comp.numeroComprobante ?? comp.numero_comprobante,
+          contabilizadoPor: comp.contabilizadoPor ?? comp.contabilizado_por,
+          contabilizadoAt: comp.contabilizadoAt ?? comp.contabilizado_at,
+          lineas: comp.lineas || [],
+        };
       }
     });
     return map;
@@ -351,7 +358,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     setDeletingDocId(doc.id);
     try {
       const params = new URLSearchParams({ tipo_movimiento: activeTab, empresa_id: String(targetId), folio: String(doc.folio) });
-      const res = await fetch(`${API_BASE_URL}/dte-consulta/movimiento/${doc.id}?${params}`, { method: 'DELETE' });
+      const res = await fetchWithAuth(`/dte-consulta/movimiento/${doc.id}?${params}`, user.sessionId, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al eliminar');
       toast({ title: '🗑️ Movimiento eliminado', description: `Folio #${doc.folio} y su asiento.` });
@@ -363,6 +370,70 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
       setDeletingDocId(null);
     }
   };
+
+  // ── Bot de contabilización (lote) ─────────────────────────────
+  const [isContabilizando, setIsContabilizando] = useState(false);
+  const [autoContabilizar, setAutoContabilizar] = useState(false);
+
+  const contabilizarLote = async (docs, tipoMov) => {
+    let ok = 0, fail = 0;
+    const empresaIdPayload = (!targetId || targetId === 'ALL') ? null : targetId;
+    for (const doc of docs) {
+      try {
+        const rut   = tipoMov === 'compras' ? doc.rut_proveedor : doc.rut_cliente;
+        const razon = formatText(tipoMov === 'compras' ? doc.razon_social_proveedor : doc.razon_social);
+        const lineas = calcLineasDefault(doc, tipoMov);
+        const res = await fetchWithAuth('/accounting/comprobantes', user.sessionId, {
+          method: 'POST',
+          body: {
+            empresaId: empresaIdPayload,
+            tipo: doc.tipo_dte === 61 ? 'nota_credito' : doc.tipo_dte === 56 ? 'nota_debito' : tipoMov,
+            fecha: doc.fecha_emision,
+            glosa: `${doc.tipo_dte === 61 ? 'Nota Crédito' : doc.tipo_dte === 56 ? 'Nota Débito' : tipoMov === 'ventas' ? 'Venta' : 'Compra'} Folio #${doc.folio} — ${razon || rut}`,
+            folio: doc.folio, rutAsociado: rut,
+            lineas: lineas.map(l => ({ cuenta: l.cuenta, debe: l.debe, haber: l.haber })),
+          },
+        });
+        if (res.ok) ok++; else fail++;
+      } catch { fail++; }
+    }
+    return { ok, fail };
+  };
+
+  const handleContabilizarTodo = async (auto = false) => {
+    const pendiente = (d) => !folioMap[String(d.folio)];
+    const ventasPend  = ventas.filter(pendiente);
+    const comprasPend = compras.filter(pendiente);
+    const total = ventasPend.length + comprasPend.length;
+    if (total === 0) {
+      if (!auto) toast({ title: 'Todo contabilizado', description: 'No hay documentos pendientes en el período.' });
+      return;
+    }
+    if (!auto && !confirm(`¿Contabilizar ${total} documento(s) pendiente(s) del período con su asiento sugerido?`)) return;
+    setIsContabilizando(true);
+    try {
+      const r1 = await contabilizarLote(ventasPend, 'ventas');
+      const r2 = await contabilizarLote(comprasPend, 'compras');
+      const ok = r1.ok + r2.ok, fail = r1.fail + r2.fail;
+      toast({
+        title: `✅ ${ok} contabilizado${ok !== 1 ? 's' : ''}`,
+        description: fail ? `${fail} con error.` : (auto ? 'Auto-contabilizados tras sincronizar SII.' : 'Pendientes del período listos.'),
+      });
+      cargarDatos();
+      queryClient.invalidateQueries(['comprobantes', targetId]);
+    } finally {
+      setIsContabilizando(false);
+    }
+  };
+
+  // Auto-contabilizar tras sincronizar SII (cuando los datos ya recargaron)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    if (autoContabilizar && !isLoading) {
+      setAutoContabilizar(false);
+      handleContabilizarTodo(true);
+    }
+  }, [autoContabilizar, isLoading]);
 
   const handleEnviarLibroDiario = () => {
     if (libroAsientos.length === 0) {
@@ -399,6 +470,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
         toast({ title:'✅ Extracción Exitosa', description: result.message });
         setIsSyncModalOpen(false);
         cargarDatos();
+        setAutoContabilizar(true); // contabiliza automáticamente los documentos extraídos
       } else {
         toast({ variant:'destructive', title:'❌ Error en el Robot', description: result.message });
       }
@@ -444,6 +516,11 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
             className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black uppercase text-[10px] tracking-widest">
             <Plus className="h-4 w-4 mr-2" />
             Nueva {activeTab === 'ventas' ? 'Venta' : activeTab === 'compras' ? 'Compra' : 'Honorario'}
+          </Button>
+          <Button onClick={() => handleContabilizarTodo(false)} disabled={isContabilizando || !hayDatos}
+            className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 disabled:opacity-50 text-white font-black uppercase text-[10px] tracking-widest">
+            {isContabilizando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bot className="h-4 w-4 mr-2" />}
+            {isContabilizando ? 'CONTABILIZANDO...' : 'CONTABILIZAR TODO'}
           </Button>
           <Button onClick={() => setIsLibroModalOpen(true)} disabled={!hayDatos}
             className={`font-black uppercase text-[10px] tracking-widest transition-all ${
@@ -569,9 +646,16 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                           {/* ESTADO */}
                           <td className="px-5 py-3.5 text-center">
                             {comp ? (
-                              <span className="text-[8px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 whitespace-nowrap">
-                                ✓ Guardado
-                              </span>
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-[8px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 whitespace-nowrap">
+                                  ✓ Contabilizado{comp.numero != null ? ` N°${comp.numero}` : ''}
+                                </span>
+                                {comp.contabilizadoPor && (
+                                  <span className="text-[8px] text-gray-500 normal-case whitespace-nowrap" title={comp.contabilizadoAt ? new Date(comp.contabilizadoAt).toLocaleString('es-CL') : ''}>
+                                    por {comp.contabilizadoPor}
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-[8px] font-black uppercase text-amber-400 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 whitespace-nowrap">
                                 Pendiente

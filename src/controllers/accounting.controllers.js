@@ -118,6 +118,7 @@ export const eliminarComprobante = async (req, res) => {
 
 export const guardarComprobante = async (req, res) => {
     const { empresaId, tipo, fecha, glosa, lineas, folio, rutAsociado } = req.body;
+    const usuario = req.user || {};
     const empId = (empresaId === 'ALL' || empresaId === 'undefined') ? null : (empresaId || null);
     if (!lineas?.length) {
         return res.status(400).json({ message: "lineas son requeridas" });
@@ -156,8 +157,9 @@ export const guardarComprobante = async (req, res) => {
         if (existing) {
             await client.query(`DELETE FROM comprobantes_detalle WHERE comprobante_id = $1`, [existing.id]);
             await client.query(
-                `UPDATE comprobantes SET fecha=$1, glosa=$2, tipo=$3 WHERE id=$4`,
-                [fechaFinal, gloseFinal, tipoDb, existing.id]
+                `UPDATE comprobantes SET fecha=$1, glosa=$2, tipo=$3, estado='Contabilizado',
+                        contabilizado_por=$4, contabilizado_por_id=$5, contabilizado_at=NOW() WHERE id=$6`,
+                [fechaFinal, gloseFinal, tipoDb, usuario.nombre || null, usuario.usuarioId || null, existing.id]
             );
             compId = existing.id;
             numero = existing.numero_comprobante;
@@ -168,9 +170,10 @@ export const guardarComprobante = async (req, res) => {
                 empId === null ? [] : [empId]
             );
             const { rows: [comp] } = await client.query(
-                `INSERT INTO comprobantes (id, empresa_id, numero_comprobante, fecha, tipo, glosa, estado)
-                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'Borrador') RETURNING id`,
-                [empId, max_num + 1, fechaFinal, tipoDb, gloseFinal]
+                `INSERT INTO comprobantes (id, empresa_id, numero_comprobante, fecha, tipo, glosa, estado,
+                        contabilizado_por, contabilizado_por_id, contabilizado_at)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'Contabilizado', $6, $7, NOW()) RETURNING id`,
+                [empId, max_num + 1, fechaFinal, tipoDb, gloseFinal, usuario.nombre || null, usuario.usuarioId || null]
             );
             compId = comp.id;
             numero = max_num + 1;
@@ -205,6 +208,7 @@ export const getComprobantes = async (req, res) => {
     try {
         const { rows } = await pool.query(
             `SELECT c.id, c.numero_comprobante, c.fecha, c.tipo, c.glosa, c.estado, c.created_at,
+                    c.contabilizado_por, c.contabilizado_at,
                     json_agg(json_build_object(
                         'id', cd.id, 'cuenta_codigo', cd.cuenta_codigo,
                         'descripcion', COALESCE(pc.descripcion, cd.cuenta_codigo),

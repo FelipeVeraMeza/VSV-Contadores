@@ -214,17 +214,16 @@ const NuevoMovimientoModal = ({ isOpen, setIsOpen, tipo, empresaId, onGuardado }
     if (!esValido) return;
     setIsSaving(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/dte-consulta/movimiento`, {
+      const res = await fetchWithAuth('/dte-consulta/movimiento', user.sessionId, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: {
           empresa_id: empresaId, tipo_movimiento: tipo,
           rut, nombre, tipo_documento: tipoDoc, folio, fecha, descripcion,
           lineas: lineas.map(l => ({
             numero_cuenta: l.cuenta, nombre_cuenta: l.nombre,
             debe: Number(l.debe) || 0, haber: Number(l.haber) || 0,
           })),
-        }),
+        },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar');

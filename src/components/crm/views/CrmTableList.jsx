@@ -1,13 +1,14 @@
 import React from 'react';
-import { Search, Filter, ChevronDown, Users, AlertTriangle, FileText, CheckCircle2, Building2, User, MessageSquare } from 'lucide-react';
-import { StatCard } from '../ui/CrmUI';
+import { Search, Filter, ChevronDown, ChevronUp, Users, AlertTriangle, FileText, CheckCircle2, Building2, User, MessageSquare, SlidersHorizontal } from 'lucide-react';
+import { FilterChip } from '../ui/CrmUI';
 
-const CrmTableList = ({ 
-    filteredClients, stats, onClientSelect, selectedClientId, 
+const CrmTableList = ({
+    filteredClients, stats, onClientSelect, selectedClientId,
     searchTerm, setSearchTerm, statusFilter, setStatusFilter, typeFilter, setTypeFilter,
     vistaActivas, setVistaActivas // RECIBE LOS PROPS
 }) => {
-    
+    const [showFilters, setShowFilters] = React.useState(true);
+
     const getScoreColor = (score) => {
         if(score >= 80) return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
         if(score >= 50) return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
@@ -17,16 +18,30 @@ const CrmTableList = ({
     return (
         <div className={`flex flex-col gap-6 transition-all duration-500 ease-in-out h-full min-h-0 ${selectedClientId ? 'lg:w-3/5' : 'w-full'}`}>
             
-            {/* KPI CARDS */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0">
-              <StatCard icon={Users} label="Global" value={stats?.total || 0} color="text-blue-500" onClick={() => setStatusFilter('Todos')} active={statusFilter === 'Todos'} />
-              <StatCard icon={AlertTriangle} label="Críticos" value={stats?.criticos || 0} color="text-red-500" onClick={() => setStatusFilter('Críticos')} active={statusFilter === 'Críticos'} />
-              <StatCard icon={FileText} label="F29 Pendientes" value={stats?.f29Pendientes || 0} color="text-amber-500" onClick={() => setStatusFilter('F29 Pendientes')} active={statusFilter === 'F29 Pendientes'} />
-              <StatCard icon={CheckCircle2} label="Al Día" value={stats?.alDia || 0} color="text-emerald-500" onClick={() => setStatusFilter('Al Día')} active={statusFilter === 'Al Día'} />
+            {/* FILTROS RÁPIDOS COMPACTOS (antes KPI CARDS) */}
+            <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-white/10 bg-black/40 text-[10px] font-black uppercase tracking-wider text-gray-400 hover:text-white transition-all"
+                title={showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}
+              >
+                <SlidersHorizontal size={14} />
+                <span className="hidden sm:inline">Filtros</span>
+                {showFilters ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+
+              {showFilters && (
+                <>
+                  <FilterChip icon={Users} label="Global" value={stats?.total || 0} color="text-blue-500" onClick={() => setStatusFilter('Todos')} active={statusFilter === 'Todos'} />
+                  <FilterChip icon={AlertTriangle} label="Críticos" value={stats?.criticos || 0} color="text-red-500" onClick={() => setStatusFilter('Críticos')} active={statusFilter === 'Críticos'} />
+                  <FilterChip icon={FileText} label="F29 Pendientes" value={stats?.f29Pendientes || 0} color="text-amber-500" onClick={() => setStatusFilter('F29 Pendientes')} active={statusFilter === 'F29 Pendientes'} />
+                  <FilterChip icon={CheckCircle2} label="Al Día" value={stats?.alDia || 0} color="text-emerald-500" onClick={() => setStatusFilter('Al Día')} active={statusFilter === 'Al Día'} />
+                </>
+              )}
             </div>
 
             {/* BOTONES PARA ALTERNAR ACTIVAS / INACTIVAS (LA BASURA) */}
-            <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 w-fit">
+            <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 w-fit flex-shrink-0">
                 <button
                     onClick={() => setVistaActivas(true)}
                     className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
@@ -55,7 +70,7 @@ const CrmTableList = ({
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
                     <input 
                         type="text" 
-                        placeholder="Buscar por Razón Social o RUT..." 
+                        placeholder="Buscar por nombre, RUT, correo, teléfono o representante..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white outline-none focus:border-blue-500 transition-colors placeholder:text-gray-600"

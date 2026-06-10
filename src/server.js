@@ -261,7 +261,11 @@ const ensureSchema = async () => {
     for (const t of ['documentos_emitidos', 'documentos_emitidos_empresa', 'documentos_recibidos', 'documentos_recibidos_empresa']) {
       await pool.query(`ALTER TABLE ${t} ALTER COLUMN folio TYPE BIGINT`);
     }
-    console.log('✅ Esquema verificado (documentos: razón social, montos, folio BIGINT)');
+    // Auditoría de contabilización: quién y cuándo
+    await pool.query(`ALTER TABLE comprobantes ADD COLUMN IF NOT EXISTS contabilizado_por TEXT`);
+    await pool.query(`ALTER TABLE comprobantes ADD COLUMN IF NOT EXISTS contabilizado_por_id TEXT`);
+    await pool.query(`ALTER TABLE comprobantes ADD COLUMN IF NOT EXISTS contabilizado_at TIMESTAMP`);
+    console.log('✅ Esquema verificado (documentos + auditoría de comprobantes)');
   } catch (e) {
     console.error('⚠️ No se pudo verificar el esquema:', e.message);
   }

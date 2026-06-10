@@ -1,20 +1,39 @@
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Building2, User, Edit, DollarSign, Briefcase, FileSpreadsheet, Key, Send, Save, Clock, AlertTriangle, CheckCircle2, Landmark, Receipt } from 'lucide-react';
+import { X, Building2, User, Edit, DollarSign, Briefcase, FileSpreadsheet, Key, Send, Save, Clock, AlertTriangle, CheckCircle2, Landmark, Receipt, Layers, Plus, Trash2, MessageSquare, Ticket, History, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { EditableField, SecureField } from '../ui/CrmUI';
-import { createNotaApi } from '@/services/crmService';
+import { createNotaApi, cambiarPlanApi, addServicioApi, removeServicioApi, toggleTicketApi } from '@/services/crmService';
 
-import { useAuth } from '@/hooks/useAuth'; 
+import { useAuth } from '@/hooks/useAuth';
 
-const ClientDetailDrawer = ({ client, onClose, onUpdateClient }) => {
-    const navigate = useNavigate(); 
+const getSessionId = () => {
+    try { return JSON.parse(localStorage.getItem('user') || '{}').sessionId; }
+    catch { return null; }
+};
+
+const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serviciosDisponibles = [], onRefresh }) => {
+    const navigate = useNavigate();
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState(client);
     const [newNote, setNewNote] = useState('');
     const [isSavingNote, setIsSavingNote] = useState(false);
+
+    // Bitácora: pestaña activa (conversaciones / tickets)
+    const [bitacoraTab, setBitacoraTab] = useState('conversacion');
+
+    // Administración de plan
+    const [selectedPlanId, setSelectedPlanId] = useState('');
+    const [planMotivo, setPlanMotivo] = useState('');
+    const [isSavingPlan, setIsSavingPlan] = useState(false);
+    const [showPlanHistory, setShowPlanHistory] = useState(false);
+
+    // Servicios contratados
+    const [newServicioId, setNewServicioId] = useState('');
+    const [newServicioPrecio, setNewServicioPrecio] = useState('');
+    const [isSavingServicio, setIsSavingServicio] = useState(false);
 
     // =========================================
     // LÓGICA PARA SELECCIONAR LA EMPRESA ACTIVA
@@ -35,6 +54,11 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient }) => {
         setFormData(client);
         setIsEditing(false);
         setNewNote('');
+        setBitacoraTab('conversacion');
+        setSelectedPlanId(client?.planId || '');
+        setPlanMotivo('');
+        setNewServicioId('');
+        setNewServicioPrecio('');
     }, [client]);
 
     const handleInputChange = (e) => {
@@ -51,19 +75,17 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient }) => {
         if(!newNote.trim()) return;
         setIsSavingNote(true);
         try {
-            const user = JSON.parse(localStorage.getItem('user') || '{}');
-            const sessionId = user.sessionId;
-            
-            const response = await createNotaApi(sessionId, formData.id, newNote);
+            const sessionId = getSessionId();
+            const response = await createNotaApi(sessionId, formData.id, newNote, bitacoraTab);
             const payload = await response.json();
-            
+
             if(payload.success) {
                 setFormData(prev => ({
                     ...prev,
                     notas: [payload.nota, ...(prev.notas || [])]
                 }));
                 setNewNote('');
-                toast({ title: "Nota agregada", description: "La gestión se guardó correctamente" });
+                toast({ title: bitacoraTab === 'ticket' ? "Ticket creado" : "Conversación registrada", description: "Se guardó correctamente en la bitácora." });
             } else {
                 throw new Error(payload.message);
             }
@@ -71,6 +93,95 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient }) => {
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
             setIsSavingNote(false);
+        }
+    };
+
+    // Marca un ticket como resuelto / reabierto
+    const handleToggleTicket = async (nota) => {
+        const nuevoEstado = !nota.resuelto;
+        try {
+            const response = await toggleTicketApi(getSessionId(), nota.id, nuevoEstado);
+            const payload = await response.json();
+            if (!payload.success) throw new Error(payload.message);
+            setFormData(prev => ({
+                ...prev,
+                notas: (prev.notas || []).map(n => n.id === nota.id ? { ...n, resuelto: nuevoEstado } : n)
+            }));
+        } catch (error) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        }
+    };
+
+    // Cambia el plan del cliente (registra fecha + historial)
+    const handleCambiarPlan = async () => {
+        if (!selectedPlanId || selectedPlanId === formData.planId) {
+            toast({ title: "Sin cambios", description: "Selecciona un plan distinto al actual.", variant: "destructive" });
+            return;
+        }
+        setIsSavingPlan(true);
+        try {
+            const response = await cambiarPlanApi(getSessionId(), formData.id, selectedPlanId, planMotivo);
+            const payload = await response.json();
+            if (!payload.success) throw new Error(payload.message);
+
+            const nuevoNombre = payload.plan;
+            const hoy = new Date().toLocaleDateString('es-CL');
+            setFormData(prev => ({
+                ...prev,
+                plan: nuevoNombre,
+                plan_nombre: nuevoNombre,
+                planId: selectedPlanId,
+                fechaCambioPlan: hoy,
+                planHistorial: [
+                    { planAnterior: prev.plan || prev.plan_nombre || '—', planNuevo: nuevoNombre, autor: 'Tú', motivo: planMotivo, fecha: new Date().toLocaleString('es-CL') },
+                    ...(prev.planHistorial || [])
+                ]
+            }));
+            setPlanMotivo('');
+            toast({ title: "Plan actualizado", description: `Nuevo plan: ${nuevoNombre}` });
+            if (onRefresh) onRefresh();
+        } catch (error) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        } finally {
+            setIsSavingPlan(false);
+        }
+    };
+
+    const handleAddServicio = async () => {
+        if (!newServicioId) {
+            toast({ title: "Selecciona un servicio", variant: "destructive" });
+            return;
+        }
+        setIsSavingServicio(true);
+        try {
+            const response = await addServicioApi(getSessionId(), formData.id, newServicioId, newServicioPrecio);
+            const payload = await response.json();
+            if (!payload.success) throw new Error(payload.message);
+            setFormData(prev => ({ ...prev, servicios: [...(prev.servicios || []), payload.servicio] }));
+            setNewServicioId('');
+            setNewServicioPrecio('');
+            toast({ title: "Servicio agregado", description: payload.servicio?.nombre });
+            if (onRefresh) onRefresh();
+        } catch (error) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        } finally {
+            setIsSavingServicio(false);
+        }
+    };
+
+    const handleRemoveServicio = async (servicio) => {
+        try {
+            const response = await removeServicioApi(getSessionId(), servicio.id);
+            const payload = await response.json();
+            if (!payload.success) throw new Error(payload.message);
+            setFormData(prev => ({
+                ...prev,
+                servicios: (prev.servicios || []).map(s => s.id === servicio.id ? { ...s, estado: 'Suspendido' } : s)
+            }));
+            toast({ title: "Servicio dado de baja", description: servicio.nombre });
+            if (onRefresh) onRefresh();
+        } catch (error) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
         }
     };
 
@@ -112,6 +223,20 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient }) => {
     const dtAtrasados = formData.dts_mensuales ?? formData.dtAtrasados ?? 0;
     const dtPendientesFirma = formData.pendientes_firma ?? formData.dtPendientesFirma ?? 0;
     const importante = formData.nota_urgente || formData.importante || '';
+
+    // --- Plan y servicios ---
+    const planHistorial = formData.planHistorial || [];
+    const fechaCambioPlan = formData.fechaCambioPlan || null;
+    const serviciosActivos = (formData.servicios || []).filter(s => s.estado !== 'Suspendido');
+    const idsContratados = new Set(serviciosActivos.map(s => s.nombre));
+    const serviciosParaAgregar = (serviciosDisponibles || []).filter(s => !idsContratados.has(s.nombre));
+
+    // --- Bitácora por tipo ---
+    const todasLasNotas = formData.notas || [];
+    const conversaciones = todasLasNotas.filter(n => (n.tipo || 'conversacion') !== 'ticket');
+    const tickets = todasLasNotas.filter(n => n.tipo === 'ticket');
+    const ticketsAbiertos = tickets.filter(t => !t.resuelto).length;
+    const notasVisibles = bitacoraTab === 'ticket' ? tickets : conversaciones;
 
     return (
         <motion.div 
@@ -233,6 +358,123 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient }) => {
                     </div>
                 </div>
 
+                {/* PLAN Y SERVICIOS CONTRATADOS */}
+                <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-2xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2">
+                            <Layers size={14} /> Plan y Servicios
+                        </h3>
+                        {planHistorial.length > 0 && (
+                            <button
+                                onClick={() => setShowPlanHistory(!showPlanHistory)}
+                                className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors"
+                            >
+                                <History size={12} /> Historial ({planHistorial.length})
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Plan actual + selector */}
+                    <div className="flex flex-wrap items-end gap-2 mb-2">
+                        <div className="flex flex-col gap-1 flex-1 min-w-[120px]">
+                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Plan Actual</span>
+                            <select
+                                value={selectedPlanId}
+                                onChange={(e) => setSelectedPlanId(e.target.value)}
+                                className="bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 cursor-pointer"
+                            >
+                                <option value="">— Selecciona un plan —</option>
+                                {planes.map(p => (
+                                    <option key={p.id} value={p.id}>{p.nombre}{p.precioBase ? ` ($${p.precioBase.toLocaleString('es-CL')})` : ''}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <input
+                            type="text"
+                            value={planMotivo}
+                            onChange={(e) => setPlanMotivo(e.target.value)}
+                            placeholder="Motivo (opcional)"
+                            className="flex-1 min-w-[120px] bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 placeholder:text-gray-600"
+                        />
+                        <Button
+                            onClick={handleCambiarPlan}
+                            disabled={isSavingPlan || !selectedPlanId || selectedPlanId === formData.planId}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 h-9 text-[10px] font-black uppercase tracking-widest"
+                        >
+                            Cambiar
+                        </Button>
+                    </div>
+                    {fechaCambioPlan && (
+                        <p className="text-[9px] text-gray-500 mb-3">Último cambio de plan: <span className="text-gray-300 font-bold">{fechaCambioPlan}</span></p>
+                    )}
+
+                    {/* Historial de cambios de plan */}
+                    <AnimatePresence>
+                        {showPlanHistory && planHistorial.length > 0 && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-3">
+                                <div className="space-y-2 bg-black/20 rounded-xl p-3 border border-white/5 max-h-40 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
+                                    {planHistorial.map((h, i) => (
+                                        <div key={i} className="text-[10px] border-b border-white/5 pb-1.5 last:border-0 last:pb-0">
+                                            <div className="flex items-center gap-1.5 text-gray-200 font-bold">
+                                                <span className="text-gray-500">{h.planAnterior}</span> → <span className="text-indigo-300">{h.planNuevo}</span>
+                                            </div>
+                                            <div className="text-gray-500 flex flex-wrap gap-x-2">
+                                                <span>{h.fecha}</span>
+                                                <span>· {h.autor}</span>
+                                                {h.motivo && <span className="italic">· {h.motivo}</span>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Servicios contratados */}
+                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Servicios Contratados</span>
+                    <div className="flex flex-wrap gap-2 mt-2 mb-3">
+                        {serviciosActivos.length > 0 ? serviciosActivos.map(s => (
+                            <span key={s.id} className="group flex items-center gap-1.5 bg-white/5 border border-white/10 text-gray-200 px-2 py-1 rounded-lg text-[10px] font-bold">
+                                {s.nombre}
+                                {s.precioPactado ? <span className="text-emerald-400">${Number(s.precioPactado).toLocaleString('es-CL')}</span> : null}
+                                <button onClick={() => handleRemoveServicio(s)} title="Dar de baja" className="text-gray-500 hover:text-red-400 transition-colors">
+                                    <Trash2 size={11} />
+                                </button>
+                            </span>
+                        )) : (
+                            <span className="text-[10px] text-gray-500 italic">Sin servicios contratados.</span>
+                        )}
+                    </div>
+
+                    {/* Agregar servicio */}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <select
+                            value={newServicioId}
+                            onChange={(e) => setNewServicioId(e.target.value)}
+                            className="flex-1 min-w-[120px] bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 cursor-pointer"
+                        >
+                            <option value="">+ Sumar servicio…</option>
+                            {serviciosParaAgregar.map(s => (
+                                <option key={s.id} value={s.id}>{s.nombre}</option>
+                            ))}
+                        </select>
+                        <input
+                            type="text"
+                            value={newServicioPrecio}
+                            onChange={(e) => setNewServicioPrecio(e.target.value)}
+                            placeholder="Precio"
+                            className="w-24 bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 placeholder:text-gray-600"
+                        />
+                        <Button
+                            onClick={handleAddServicio}
+                            disabled={isSavingServicio || !newServicioId}
+                            className="bg-white/10 hover:bg-white/20 text-white rounded-lg px-3 h-9"
+                        >
+                            <Plus size={16} />
+                        </Button>
+                    </div>
+                </div>
+
                 {/* 3. OPERACIÓN MENSUAL (FINANZAS) */}
                 <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-4">
                     <h3 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-2">
@@ -284,39 +526,67 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient }) => {
                     </div>
                 </div>
 
-                {/* 6. BITÁCORA DE GESTIÓN */}
+                {/* 6. BITÁCORA: CONVERSACIONES Y TICKETS */}
                 <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Clock size={14} /> Bitácora de Gestión
-                    </h3>
-                    
+                    {/* Pestañas */}
+                    <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 w-full mb-3">
+                        <button
+                            onClick={() => setBitacoraTab('conversacion')}
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${bitacoraTab === 'conversacion' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            <MessageSquare size={13} /> Conversaciones ({conversaciones.length})
+                        </button>
+                        <button
+                            onClick={() => setBitacoraTab('ticket')}
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${bitacoraTab === 'ticket' ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            <Ticket size={13} /> Tickets {ticketsAbiertos > 0 && <span className="bg-red-500/80 text-white px-1.5 rounded-full">{ticketsAbiertos}</span>}
+                        </button>
+                    </div>
+
+                    {/* Entrada nueva */}
                     <div className="flex gap-2 mb-4">
-                        <input 
-                            type="text" 
-                            value={newNote} 
-                            onChange={(e) => setNewNote(e.target.value)} 
-                            placeholder="Escribe una nueva gestión aquí..." 
+                        <input
+                            type="text"
+                            value={newNote}
+                            onChange={(e) => setNewNote(e.target.value)}
+                            placeholder={bitacoraTab === 'ticket' ? 'Describe el ticket / incidencia...' : 'Escribe una conversación o gestión...'}
                             className="flex-1 bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-white outline-none focus:border-blue-500 transition-colors placeholder:text-gray-600"
                             onKeyDown={(e) => e.key === 'Enter' && addNote()}
                         />
-                        <Button onClick={addNote} disabled={isSavingNote || !newNote.trim()} className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 h-auto">
+                        <Button onClick={addNote} disabled={isSavingNote || !newNote.trim()} className={`${bitacoraTab === 'ticket' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-blue-600 hover:bg-blue-500'} text-white rounded-xl px-4 h-auto`}>
                             <Send size={16} />
                         </Button>
                     </div>
 
-                    {formData.notas && formData.notas.length > 0 ? (
-                        <div className="space-y-3 max-h-40 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
-                            {formData.notas.map((nota, i) => (
-                                <div key={i} className="border-b border-white/5 pb-2 last:border-0 last:pb-0">
-                                    <div className="flex items-center gap-1.5 mb-1 text-gray-500">
-                                        <Clock size={10} /> <span className="text-[9px] font-black tracking-widest">{nota.fecha}</span>
+                    {notasVisibles.length > 0 ? (
+                        <div className="space-y-3 max-h-48 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
+                            {notasVisibles.map((nota, i) => (
+                                <div key={nota.id || i} className={`border border-white/5 rounded-xl p-2.5 ${nota.tipo === 'ticket' && nota.resuelto ? 'opacity-50' : ''} ${nota.tipo === 'ticket' ? 'bg-amber-500/5' : 'bg-black/20'}`}>
+                                    <div className="flex items-center justify-between gap-2 mb-1">
+                                        <div className="flex items-center gap-1.5 text-gray-500 min-w-0">
+                                            <Clock size={10} className="shrink-0" />
+                                            <span className="text-[9px] font-black tracking-widest truncate">{nota.fecha}</span>
+                                            {nota.autor && <span className="text-[9px] text-gray-600 truncate">· {nota.autor}</span>}
+                                        </div>
+                                        {nota.tipo === 'ticket' && (
+                                            <button
+                                                onClick={() => handleToggleTicket(nota)}
+                                                title={nota.resuelto ? 'Reabrir ticket' : 'Marcar como resuelto'}
+                                                className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors shrink-0 ${nota.resuelto ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' : 'text-amber-400 border-amber-400/30 bg-amber-400/10 hover:bg-amber-400/20'}`}
+                                            >
+                                                {nota.resuelto ? <><CheckCircle2 size={10} /> Resuelto</> : <><RotateCcw size={10} /> Abierto</>}
+                                            </button>
+                                        )}
                                     </div>
                                     <p className="text-xs text-gray-200">{nota.texto}</p>
                                 </div>
                             ))}
                         </div>
                     ) : (
-                        <p className="text-xs text-gray-500 italic text-center py-2">Sin gestiones registradas aún.</p>
+                        <p className="text-xs text-gray-500 italic text-center py-2">
+                            {bitacoraTab === 'ticket' ? 'Sin tickets registrados.' : 'Sin conversaciones registradas aún.'}
+                        </p>
                     )}
                 </div>
 
