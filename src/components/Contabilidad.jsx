@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FileText, BarChart3, GitMerge, TrendingUp,
-  Plus, BookCopy, Loader2, ArrowRightLeft, LayoutList
+  Plus, BookCopy, Loader2, ArrowRightLeft, LayoutList, Lock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
@@ -27,6 +27,10 @@ const Contabilidad = () => {
   const [activeTab, setActiveTab] = useState('movimientos');
   const [isAsientoModalOpen, setIsAsientoModalOpen] = useState(false);
   const [borradorLibro, setBorradorLibro] = useState(null);
+  const [balancePeriodo, setBalancePeriodo] = useState(null); // período seleccionado para el balance
+  // Flujo guiado: las pestañas se van desbloqueando por pasos
+  const [librosDesbloqueados, setLibrosDesbloqueados] = useState(false); // Libro Diario + Banco
+  const [balanceDesbloqueado, setBalanceDesbloqueado] = useState(false); // Balances
 
   // Período compartido entre Movimientos y Libro Diario
   const now = new Date();
@@ -35,7 +39,22 @@ const Contabilidad = () => {
 
   const handleGenerarBorrador = (data) => {
     if (data?.asientos?.length) setBorradorLibro(data);
+    // Derivar el período para el balance desde lo seleccionado en "Generar Libro"
+    if (data?.tipoPeriodo) {
+      const esAnual = data.tipoPeriodo === 'anual' || data.tipoPeriodo === 'trimestral';
+      setBalancePeriodo(esAnual
+        ? { tipo: 'anual', anio: data.anio }
+        : { tipo: 'mensual', mes: data.mes, anio: data.anio });
+    }
+    setLibrosDesbloqueados(true); // al enviar al libro se desbloquea Libro Diario y Banco
     setActiveTab('libro_diario');
+  };
+
+  // Un tab está bloqueado hasta completar el paso anterior del flujo
+  const tabBloqueado = (id) => {
+    if (id === 'libro_diario' || id === 'conciliacion') return !librosDesbloqueados;
+    if (id === 'balances') return !balanceDesbloqueado;
+    return false;
   };
 
   if (!empresaId && !isAdmin) {
@@ -115,17 +134,24 @@ const Contabilidad = () => {
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
+            const bloqueado = tabBloqueado(tab.id);
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => { if (!bloqueado) setActiveTab(tab.id); }}
+                disabled={bloqueado}
+                title={bloqueado ? 'Completa el paso anterior para desbloquear esta sección' : ''}
                 className={`flex-shrink-0 flex items-center space-x-2 px-6 py-4 font-bold uppercase text-[10px] tracking-widest transition-all ${
-                  isActive
-                    ? 'bg-blue-500/10 text-blue-400 border-b-2 border-blue-500'
-                    : 'text-gray-500 hover:text-white hover:bg-white/5'
+                  bloqueado
+                    ? 'text-gray-700 cursor-not-allowed opacity-50'
+                    : isActive
+                      ? 'bg-blue-500/10 text-blue-400 border-b-2 border-blue-500'
+                      : 'text-gray-500 hover:text-white hover:bg-white/5'
                 }`}
               >
-                <Icon className={`h-4 w-4 ${isActive ? 'text-blue-400' : 'text-gray-600'}`} />
+                {bloqueado
+                  ? <Lock className="h-4 w-4 text-gray-700" />
+                  : <Icon className={`h-4 w-4 ${isActive ? 'text-blue-400' : 'text-gray-600'}`} />}
                 <span>{tab.name}</span>
               </button>
             );
@@ -154,7 +180,17 @@ const Contabilidad = () => {
               {activeTab === 'libro_diario' && (
                 <div className="space-y-6">
                   {borradorLibro?.asientos?.length > 0 && (
-                    <LibroDiarioSuperficial asientos={borradorLibro.asientos} />
+                    <>
+                      <LibroDiarioSuperficial asientos={borradorLibro.asientos} />
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={() => { setBalanceDesbloqueado(true); setActiveTab('balances'); }}
+                          className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black uppercase text-xs tracking-widest h-11 px-5 shadow-lg shadow-purple-900/30"
+                        >
+                          <BarChart3 className="h-4 w-4 mr-2" /> Generar Balance
+                        </Button>
+                      </div>
+                    </>
                   )}
                   <AsientosContables
                     empresaId={empresaId}
@@ -165,7 +201,10 @@ const Contabilidad = () => {
                   />
                 </div>
               )}
-              {activeTab !== 'movimientos' && activeTab !== 'libro_diario' && ActiveModule && (
+              {activeTab === 'balances' && (
+                <Balances empresaId={empresaId} periodoInicial={balancePeriodo} />
+              )}
+              {activeTab !== 'movimientos' && activeTab !== 'libro_diario' && activeTab !== 'balances' && ActiveModule && (
                 <ActiveModule empresaId={empresaId} />
               )}
             </motion.div>

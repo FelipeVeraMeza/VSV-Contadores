@@ -26,6 +26,13 @@ export const getJournalEntriesApi = (sessionId, empresaId, page = 0, search = ""
     return fetchWithAuth(`/accounting/journal-entries?${params.toString()}`, sessionId);
 };
 
+export const getBalanceApi = (sessionId, empresaId, mes, anio) => {
+    const params = new URLSearchParams({ empresaId: empresaId ?? 'ALL' });
+    if (mes)  params.set('mes', mes);
+    if (anio) params.set('anio', anio);
+    return fetchWithAuth(`/accounting/balance?${params.toString()}`, sessionId);
+};
+
 export const runBankReconciliationApi = (sessionId, empresaId, cartolaId) => {
     return fetchWithAuth(`/accounting/reconcile-ia`, sessionId, {
         method: 'POST',

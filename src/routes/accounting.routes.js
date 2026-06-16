@@ -4,6 +4,8 @@ import {
     getAccountingMetrics,
     getChartOfAccounts,
     getJournalEntries,
+    getBalance,
+    getBalancePdf,
     runBankReconciliationIA,
     uploadAccountingExcel,
     guardarComprobante,
@@ -23,6 +25,8 @@ router.use(requireSession);
 router.get('/metrics',           getAccountingMetrics);
 router.get('/chart-of-accounts', getChartOfAccounts);
 router.get('/journal-entries',   getJournalEntries);
+router.get('/balance',           getBalance);
+router.get('/balance/pdf',       getBalancePdf);
 router.post('/reconcile-ia',     runBankReconciliationIA);
 router.post('/importar-excel',   upload.single('archivo'), uploadAccountingExcel);
 router.post('/comprobantes',        guardarComprobante);

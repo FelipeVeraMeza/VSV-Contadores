@@ -38,8 +38,8 @@ export const getMovimientosBancarios = async (req, res) => {
         const query = supabase.from('movimientos_bancarios').select('*');
 
         // Si NO estamos en modo global, filtramos por la empresa
-        if (empresaId && empresaId !== 'undefined' && empresaId !== 'null' && empresaId !== '') {
-            query.eq('empresa_id', empresaId); 
+        if (empresaId && empresaId !== 'undefined' && empresaId !== 'null' && empresaId !== '' && empresaId !== 'ALL') {
+            query.eq('empresa_id', empresaId);
         } else {
             console.log("📊 Cargando vista global/admin de VSV Consultores: Mostrando TODA la Bóveda...");
             // Si es Global, NO ponemos ningún filtro .eq o .is.

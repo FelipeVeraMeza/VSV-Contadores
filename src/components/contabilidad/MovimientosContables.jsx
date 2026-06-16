@@ -243,9 +243,18 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
       const mapa = {};
       docs.forEach(doc => getLineasDoc(doc, tipo).forEach(l => {
         if (!l.cuenta) return;
-        if (!mapa[l.cuenta]) mapa[l.cuenta] = { descripcion: getNombre(l.cuenta), debe: 0, haber: 0 };
+        if (!mapa[l.cuenta]) mapa[l.cuenta] = { descripcion: getNombre(l.cuenta), debe: 0, haber: 0, detalle: [] };
         mapa[l.cuenta].debe  += Number(l.debe)  || 0;
         mapa[l.cuenta].haber += Number(l.haber) || 0;
+        const rut   = tipo === 'compras' ? doc.rut_proveedor : doc.rut_cliente;
+        const razon = formatText(tipo === 'compras' ? doc.razon_social_proveedor : doc.razon_social);
+        mapa[l.cuenta].detalle.push({
+          folio: doc.folio,
+          razon: razon || rut || '—',
+          fecha: doc.fecha_emision,
+          debe: Number(l.debe) || 0,
+          haber: Number(l.haber) || 0,
+        });
       }));
       return mapa;
     };
@@ -254,11 +263,11 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     const lineas = [];
     if (libroVentas.length > 0) {
       lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN VENTAS ${libroPeriodo}` });
-      Object.entries(mapaV).forEach(([codigo, { descripcion, debe, haber }]) => { if (debe > 0 || haber > 0) lineas.push({ codigo, descripcion, debe, haber }); });
+      Object.entries(mapaV).forEach(([codigo, { descripcion, debe, haber, detalle }]) => { if (debe > 0 || haber > 0) lineas.push({ codigo, descripcion, debe, haber, detalle }); });
     }
     if (libroCompras.length > 0) {
       lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN COMPRAS ${libroPeriodo}` });
-      Object.entries(mapaC).forEach(([codigo, { descripcion, debe, haber }]) => { if (debe > 0 || haber > 0) lineas.push({ codigo, descripcion, debe, haber }); });
+      Object.entries(mapaC).forEach(([codigo, { descripcion, debe, haber, detalle }]) => { if (debe > 0 || haber > 0) lineas.push({ codigo, descripcion, debe, haber, detalle }); });
     }
     return lineas;
   }, [libroVentas, libroCompras, libroPeriodo, rowEdits, folioMap, plan]);
@@ -440,7 +449,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
       toast({ variant: 'destructive', title: 'Sin movimientos', description: `No hay datos para ${libroPeriodo}.` });
       return;
     }
-    onGenerarBorrador?.({ asientos: libroAsientos, periodoLabel: libroPeriodo });
+    onGenerarBorrador?.({ asientos: libroAsientos, periodoLabel: libroPeriodo, tipoPeriodo: tipoPeriodoLibro, mes, anio });
     toast({ title: '✅ Libro enviado', description: `Centralización ${libroPeriodo} disponible en Libro Diario.` });
     setIsLibroModalOpen(false);
   };

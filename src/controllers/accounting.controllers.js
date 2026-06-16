@@ -1,5 +1,7 @@
 import { pool } from "../database/db.js";
 import * as XLSX from 'xlsx';
+import PDFDocument from 'pdfkit';
+import { decrypt } from '../utils/crypto.js';
 
 export const getAccountingMetrics = async (req, res) => {
     const { empresaId } = req.query;
@@ -225,6 +227,254 @@ export const getComprobantes = async (req, res) => {
     } catch (error) {
         console.error("❌ Error obteniendo comprobantes:", error.message);
         res.status(500).json({ message: "Error al obtener comprobantes" });
+    }
+};
+
+// ========================================================
+// BALANCE: Libro Mayor + Balance General + Estado de Resultados
+// Clasifica por el primer dígito del código de cuenta:
+//   1 = Activo · 2/3 = Pasivo+Patrimonio · 4 = Gasto · 5 = Ingreso
+// ========================================================
+// Calcula el balance (8 columnas) desde los comprobantes. Reutilizable por JSON y PDF.
+const calcularBalanceData = async (empId, mes, anio) => {
+    const empCond = empId === null ? 'c.empresa_id IS NULL' : 'c.empresa_id = $1';
+    const params = empId === null ? [] : [empId];
+    let fechaCond = '';
+    if (mes && anio) {
+        fechaCond = `AND to_char(c.fecha, 'YYYY-MM') = $${params.length + 1}`;
+        params.push(`${anio}-${mes}`);
+    } else if (anio) {
+        fechaCond = `AND to_char(c.fecha, 'YYYY') = $${params.length + 1}`;
+        params.push(String(anio));
+    }
+    const { rows } = await pool.query(
+        `SELECT cd.cuenta_codigo,
+                COALESCE(pc.descripcion, cd.cuenta_codigo) AS nombre,
+                SUM(cd.debe)  AS total_debe,
+                SUM(cd.haber) AS total_haber
+         FROM comprobantes c
+         JOIN comprobantes_detalle cd ON cd.comprobante_id = c.id
+         LEFT JOIN plan_cuentas pc ON pc.codigo = cd.cuenta_codigo
+         WHERE ${empCond} ${fechaCond}
+         GROUP BY cd.cuenta_codigo, pc.descripcion
+         ORDER BY cd.cuenta_codigo`,
+        params
+    );
+    const cuentas = rows.map(r => {
+        const codigo = r.cuenta_codigo || '';
+        const debe  = Number(r.total_debe)  || 0;
+        const haber = Number(r.total_haber) || 0;
+        const d1 = codigo.charAt(0);
+        const esDeudor = d1 === '1' || d1 === '4';        // Activo y Gasto son de naturaleza deudora
+        const saldo = esDeudor ? (debe - haber) : (haber - debe);
+        return {
+            codigo, nombre: r.nombre, debe, haber,
+            naturaleza: esDeudor ? 'DEUDOR' : 'ACREEDOR',
+            saldo,
+            saldoDeudor:   esDeudor ? saldo : 0,
+            saldoAcreedor: esDeudor ? 0 : saldo,
+            activo:   d1 === '1' ? saldo : 0,
+            pasivo:   (d1 === '2' || d1 === '3') ? saldo : 0,
+            perdida:  d1 === '4' ? saldo : 0,
+            ganancia: d1 === '5' ? saldo : 0,
+        };
+    });
+    const tot = cuentas.reduce((a, c) => ({
+        debe: a.debe + c.debe, haber: a.haber + c.haber,
+        saldoDeudor: a.saldoDeudor + c.saldoDeudor, saldoAcreedor: a.saldoAcreedor + c.saldoAcreedor,
+        activo: a.activo + c.activo, pasivo: a.pasivo + c.pasivo,
+        perdida: a.perdida + c.perdida, ganancia: a.ganancia + c.ganancia,
+    }), { debe: 0, haber: 0, saldoDeudor: 0, saldoAcreedor: 0, activo: 0, pasivo: 0, perdida: 0, ganancia: 0 });
+    const utilidad = tot.ganancia - tot.perdida;
+    const cuadrado = Math.abs(tot.activo - (tot.pasivo + utilidad)) < 1;
+    return { cuentas, tot, utilidad, cuadrado };
+};
+
+export const getBalance = async (req, res) => {
+    const { empresaId, mes, anio } = req.query;
+    const empId = (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
+
+    try {
+        const { cuentas, tot, utilidad, cuadrado } = await calcularBalanceData(empId, mes, anio);
+
+        res.json({
+            ok: true,
+            periodo: (mes && anio) ? `${anio}-${mes}` : (anio ? `Año ${anio}` : 'Acumulado'),
+            libroMayor: cuentas,
+            totales: { ...tot, utilidad, cuadrado },
+            balanceGeneral: {
+                activos: cuentas.filter(c => c.activo !== 0).map(c => ({ codigo: c.codigo, nombre: c.nombre, saldo: c.activo })),
+                pasivos: cuentas.filter(c => c.pasivo !== 0).map(c => ({ codigo: c.codigo, nombre: c.nombre, saldo: c.pasivo })),
+                totalActivos: tot.activo,
+                totalPasivos: tot.pasivo,
+                utilidad,
+                cuadrado,
+            },
+            estadoResultados: {
+                ingresos: cuentas.filter(c => c.ganancia !== 0).map(c => ({ codigo: c.codigo, nombre: c.nombre, monto: c.ganancia })),
+                gastos:   cuentas.filter(c => c.perdida !== 0).map(c => ({ codigo: c.codigo, nombre: c.nombre, monto: c.perdida })),
+                totalIngresos: tot.ganancia,
+                totalGastos: tot.perdida,
+                utilidad,
+                margen: tot.ganancia > 0 ? ((utilidad / tot.ganancia) * 100).toFixed(1) : '0',
+            },
+        });
+    } catch (error) {
+        console.error('❌ Error calculando balance:', error.message);
+        res.status(500).json({ ok: false, message: 'Error al calcular el balance' });
+    }
+};
+
+const MESES_PDF = ['', 'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+
+// PDF: Balance de 8 columnas (mismo formato del reporte oficial)
+export const getBalancePdf = async (req, res) => {
+    const { empresaId, mes, anio } = req.query;
+    const empId = (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
+
+    try {
+        const { cuentas: cuentasData, utilidad } = await calcularBalanceData(empId, mes, anio);
+
+        // Datos de la empresa para el encabezado
+        let empresa = { nombre: 'BÓVEDA GLOBAL — VSV CONTADORES', rut: '', direccion: '', representante: '', representanteRut: '' };
+        if (empId) {
+            const { rows: [e] } = await pool.query(
+                `SELECT e.razon_social, e.rut_encrypted, e.nombre_rep, e.rut_rep_encrypted,
+                        s.direccion, s.comuna, s.ciudad
+                 FROM empresa e
+                 LEFT JOIN sucursal s ON e.id = s.empresa_id AND s.es_casa_matriz = TRUE
+                 WHERE e.id = $1`, [empId]);
+            if (e) {
+                const dec = (v) => { try { return v ? (decrypt(v) || '') : ''; } catch { return ''; } };
+                empresa = {
+                    nombre: e.razon_social || 'EMPRESA',
+                    rut: dec(e.rut_encrypted),
+                    direccion: [e.direccion, e.comuna, e.ciudad].filter(Boolean).join(', '),
+                    representante: e.nombre_rep || '',
+                    representanteRut: dec(e.rut_rep_encrypted),
+                };
+            }
+        }
+
+        const periodoLabel = (mes && anio) ? `${MESES_PDF[parseInt(mes)]} ${anio}` : (anio ? `AÑO ${anio}` : 'ACUMULADO');
+        const cuentas = cuentasData.map(c => ({
+            cod: c.codigo, nombre: c.nombre,
+            d: c.debe, c: c.haber, sd: c.saldoDeudor, sa: c.saldoAcreedor,
+            act: c.activo, pas: c.pasivo, per: c.perdida, gan: c.ganancia,
+        }));
+
+        const doc = new PDFDocument({ layout: 'landscape', size: 'LETTER', margin: 40 });
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="Balance_General.pdf"`);
+        doc.pipe(res);
+
+        // --- ENCABEZADO ---
+        doc.font('Helvetica-Bold').fontSize(9).text(`${empresa.rut} ${empresa.nombre}`.trim());
+        if (empresa.direccion) doc.font('Helvetica').text(empresa.direccion);
+        if (empresa.representante) doc.font('Helvetica').text(`Representante Legal: ${empresa.representanteRut} ${empresa.representante}`.trim());
+        doc.moveDown(1);
+        doc.font('Helvetica-Bold').fontSize(14).text('BALANCE GENERAL', { align: 'center' });
+        doc.fontSize(10).text(`PERIODO: ${periodoLabel}`, { align: 'center' });
+        doc.moveDown(2);
+
+        // --- TABLA ---
+        const tableTop = doc.y;
+        const colX = [40, 220, 290, 360, 430, 500, 570, 640, 710];
+        const colWidths = [180, 70, 70, 70, 70, 70, 70, 70, 70];
+
+        // Encabezados superiores agrupados
+        doc.rect(colX[1], tableTop, 140, 15).stroke();
+        doc.font('Helvetica-Bold').fontSize(8).text("SUMAS", colX[1], tableTop + 4, { width: 140, align: 'center' });
+        doc.rect(colX[3], tableTop, 140, 15).stroke();
+        doc.text("SALDOS", colX[3], tableTop + 4, { width: 140, align: 'center' });
+        doc.rect(colX[5], tableTop, 140, 15).stroke();
+        doc.text("INVENTARIO", colX[5], tableTop + 4, { width: 140, align: 'center' });
+        doc.rect(colX[7], tableTop, 140, 15).stroke();
+        doc.text("RESULTADO", colX[7], tableTop + 4, { width: 140, align: 'center' });
+
+        // Sub-encabezados
+        const subHeaderTop = tableTop + 15;
+        const headers = ["Cuenta", "Debitos", "Creditos", "Deudor", "Acreedor", "Activo", "Pasivo", "Perdidas", "Ganancias"];
+        headers.forEach((h, i) => {
+            doc.rect(colX[i], subHeaderTop, colWidths[i], 15).stroke();
+            doc.text(h, colX[i] + 2, subHeaderTop + 4, { width: colWidths[i] - 4, align: i === 0 ? 'left' : 'right' });
+        });
+
+        // --- DATOS ---
+        let currentY = subHeaderTop + 15;
+        let totales = Array(8).fill(0);
+
+        cuentas.forEach((c, idx) => {
+            doc.font('Helvetica').fontSize(8);
+            if (idx % 2 === 0) {
+                doc.rect(colX[0], currentY, 740, 15).fill('#f9f9f9').stroke('#eee');
+                doc.fill('#000');
+            } else {
+                doc.rect(colX[0], currentY, 740, 15).stroke('#eee');
+            }
+            const row = [c.cod + " " + c.nombre, c.d, c.c, c.sd, c.sa, c.act, c.pas, c.per, c.gan];
+            row.forEach((val, i) => {
+                const text = i === 0 ? val : (val === 0 ? "" : val.toLocaleString('es-CL'));
+                doc.fillColor('#000').text(text, colX[i] + 2, currentY + 4, { width: colWidths[i] - 4, align: i === 0 ? 'left' : 'right', lineBreak: false });
+                if (i > 0) totales[i - 1] += val;
+            });
+            currentY += 15;
+        });
+
+        // --- TOTALES Y UTILIDAD ---
+        const utilidadResultado = totales[7] - totales[6];
+        const utilidadPatrimonial = totales[4] - totales[5];
+
+        doc.font('Helvetica-Bold');
+        doc.rect(colX[0], currentY, 740, 15).fill('#f0f0f0').stroke();
+        doc.fill('#000').text("TOTALES", colX[0] + 2, currentY + 4);
+        totales.forEach((t, i) => {
+            doc.text(t.toLocaleString('es-CL'), colX[i + 1] + 2, currentY + 4, { width: colWidths[i + 1] - 4, align: 'right' });
+        });
+
+        currentY += 15;
+        doc.rect(colX[0], currentY, 740, 15).stroke();
+        doc.text(utilidadResultado >= 0 ? "UTILIDAD DEL EJERCICIO" : "PÉRDIDA DEL EJERCICIO", colX[0] + 2, currentY + 4);
+        doc.text(utilidadPatrimonial.toLocaleString('es-CL'), colX[6] + 2, currentY + 4, { width: colWidths[6] - 4, align: 'right' });
+        doc.text(utilidadResultado.toLocaleString('es-CL'), colX[7] + 2, currentY + 4, { width: colWidths[7] - 4, align: 'right' });
+
+        // Totales de cierre (cuadratura)
+        currentY += 15;
+        doc.rect(colX[0], currentY, 740, 15).fill('#e0e0e0').stroke();
+        doc.fill('#000').text("TOTALES IGUALES", colX[0] + 2, currentY + 4);
+        doc.text(totales[0].toLocaleString('es-CL'), colX[1] + 2, currentY + 4, { width: colWidths[1] - 4, align: 'right' });
+        doc.text(totales[1].toLocaleString('es-CL'), colX[2] + 2, currentY + 4, { width: colWidths[2] - 4, align: 'right' });
+        doc.text(totales[2].toLocaleString('es-CL'), colX[3] + 2, currentY + 4, { width: colWidths[3] - 4, align: 'right' });
+        doc.text(totales[3].toLocaleString('es-CL'), colX[4] + 2, currentY + 4, { width: colWidths[4] - 4, align: 'right' });
+        doc.text(totales[4].toLocaleString('es-CL'), colX[5] + 2, currentY + 4, { width: colWidths[5] - 4, align: 'right' });
+        doc.text((totales[5] + utilidadPatrimonial).toLocaleString('es-CL'), colX[6] + 2, currentY + 4, { width: colWidths[6] - 4, align: 'right' });
+        doc.text((totales[6] + utilidadResultado).toLocaleString('es-CL'), colX[7] + 2, currentY + 4, { width: colWidths[7] - 4, align: 'right' });
+        doc.text(totales[7].toLocaleString('es-CL'), colX[8] + 2, currentY + 4, { width: colWidths[8] - 4, align: 'right' });
+
+        // --- DECLARACIÓN Y FIRMAS ---
+        currentY += 40;
+        doc.font('Helvetica-Oblique').fontSize(8);
+        const declaracion = "Declaro(mos) dejando constancia que el presente Balance General ha sido confeccionado con datos e informaciones que hemos proporcionado como fidedignos a mi (nuestro) Contador.";
+        doc.text(declaracion, colX[0], currentY, { width: 740, align: 'left' });
+
+        currentY += 50;
+        const lineSize = 180;
+        const signatureY = currentY;
+
+        doc.moveTo(colX[0] + 50, signatureY).lineTo(colX[0] + 50 + lineSize, signatureY).stroke();
+        doc.font('Helvetica-Bold').fontSize(8).text("FIRMA REPRESENTANTE LEGAL", colX[0] + 50, signatureY + 5, { width: lineSize, align: 'center' });
+        doc.font('Helvetica').text(empresa.nombre, colX[0] + 50, signatureY + 15, { width: lineSize, align: 'center' });
+        doc.text("RUT: " + (empresa.rut || '—'), colX[0] + 50, signatureY + 25, { width: lineSize, align: 'center' });
+
+        doc.moveTo(colX[6] - 50, signatureY).lineTo(colX[6] - 50 + lineSize, signatureY).stroke();
+        doc.font('Helvetica-Bold').fontSize(8).text("FIRMA CONTADOR", colX[6] - 50, signatureY + 5, { width: lineSize, align: 'center' });
+        doc.font('Helvetica').text("NOMBRE DEL CONTADOR", colX[6] - 50, signatureY + 15, { width: lineSize, align: 'center' });
+        doc.text("RUT: XX.XXX.XXX-X", colX[6] - 50, signatureY + 25, { width: lineSize, align: 'center' });
+
+        doc.end();
+    } catch (error) {
+        console.error('❌ Error generando PDF de balance:', error.message);
+        if (!res.headersSent) res.status(500).json({ ok: false, message: 'Error al generar el PDF' });
     }
 };
 
