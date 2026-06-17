@@ -116,7 +116,7 @@ function MainPage() {
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto custom-scrollbar p-8">
+          <main className="flex-1 overflow-y-auto custom-scrollbar p-3 sm:p-5 lg:p-8">
             <div className="max-w-[1600px] mx-auto h-full">
               <SiiProvider>
                 <Suspense fallback={<DelayedLoader />}>

@@ -95,8 +95,8 @@ const CrmTableList = ({
 
             {/* TABLA DE CLIENTES */}
             <div className="flex-1 overflow-hidden rounded-2xl border border-white/10 bg-[#0f172a]/50 backdrop-blur-xl flex flex-col">
-              <div className="overflow-y-auto flex-1 scrollbar-hide">
-                <table className="w-full text-left border-collapse">
+              <div className="overflow-auto flex-1 scrollbar-hide">
+                <table className="w-full min-w-[680px] text-left border-collapse">
                   <thead className="bg-[#0f172a] sticky top-0 z-10">
                     <tr className="border-b border-white/10 text-[10px] uppercase tracking-widest text-gray-500">
                       <th className="p-4 font-black">Cliente</th>

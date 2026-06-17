@@ -108,9 +108,9 @@ const EmailPanel = () => {
     };
 
     return (
-        <div className="flex-1 min-h-0 flex gap-4 h-full">
+        <div className="flex-1 min-h-0 flex gap-3 lg:gap-4 h-full">
             {/* ===== COLUMNA 1: HILOS ===== */}
-            <div className="w-72 shrink-0 flex flex-col gap-3 bg-[#0f172a]/60 border border-white/10 rounded-2xl p-3">
+            <div className="w-52 lg:w-64 xl:w-72 shrink-0 flex flex-col gap-3 bg-[#0f172a]/60 border border-white/10 rounded-2xl p-3">
                 <div className="flex items-center gap-2 text-blue-400 font-black text-xs uppercase tracking-widest px-1">
                     <Mail size={16} /> Correo
                 </div>
@@ -199,7 +199,7 @@ const EmailPanel = () => {
             </div>
 
             {/* ===== COLUMNA 3: IA / NOTAS ===== */}
-            <div className="w-80 shrink-0 flex flex-col gap-4 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/10">
+            <div className="hidden lg:flex w-64 xl:w-72 2xl:w-80 shrink-0 flex-col gap-4 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/10">
                 <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4">
                     <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <Sparkles size={14} /> Asistente IA
