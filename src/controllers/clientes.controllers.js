@@ -17,6 +17,8 @@ const decryptData = (encryptedValue) => {
 
 export const getClientesCRM = async (req, res) => {
     try {
+        const usuarioId = req.user?.usuarioId;
+        
         const clientesResult = await pool.query(`
             SELECT 
                 e.*,
@@ -32,8 +34,10 @@ export const getClientesCRM = async (req, res) => {
             LEFT JOIN plan p ON e.plan_id = p.id
             LEFT JOIN empresa_credenciales ec ON e.id = ec.empresa_id
             LEFT JOIN sucursal s ON e.id = s.empresa_id AND s.es_casa_matriz = TRUE
+            JOIN audita a ON e.id = a.empresa_id
+            WHERE a.usuario_id = $1
             ORDER BY e.razon_social ASC
-        `);
+        `, [usuarioId]);
 
         const serviciosResult = await pool.query(`
             SELECT 
