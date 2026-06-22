@@ -63,8 +63,8 @@ export const useBunkerData = () => {
     setLoading(true);
 
     try {
-      const empresaId = selectedCompany?.id ?? selectedCompany?.empresaId ?? null;
-      const response = await getCrmDataApi(user.sessionId, empresaId);
+      // No filtrar por empresa seleccionada - cargar TODOS los clientes para el CRM
+      const response = await getCrmDataApi(user.sessionId, null);
       const payload = await response.json();
 
       if (!response.ok || payload?.success === false) {
