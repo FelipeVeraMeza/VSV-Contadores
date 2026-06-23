@@ -16,7 +16,7 @@ const MESES = [
 ];
 const ANIOS = ['2024', '2025', '2026', '2027'];
 
-const Balances = ({ empresaId, periodoInicial }) => {
+const Balances = ({ empresaId, periodoInicial, rango, vista = 'completo' }) => {
   const { user } = useAuth();
   const now = new Date();
   const [modo, setModo] = useState(periodoInicial?.tipo || 'acumulado'); // 'acumulado' | 'mensual' | 'anual'
@@ -28,7 +28,8 @@ const Balances = ({ empresaId, periodoInicial }) => {
     setIsPdf(true);
     try {
       const params = new URLSearchParams({ empresaId: empresaId ?? 'ALL' });
-      if (modo === 'mensual') { params.set('mes', mes); params.set('anio', anio); }
+      if (usaRango) { params.set('desde', rango.desde); params.set('hasta', rango.hasta); }
+      else if (modo === 'mensual') { params.set('mes', mes); params.set('anio', anio); }
       else if (modo === 'anual') { params.set('anio', anio); }
       const res = await fetch(`${API_BASE_URL}/accounting/balance/pdf?${params.toString()}`, {
         headers: { 'x-session-id': user.sessionId },
@@ -38,7 +39,7 @@ const Balances = ({ empresaId, periodoInicial }) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Balance_General_${modo === 'mensual' ? `${mes}-${anio}` : modo === 'anual' ? `Año_${anio}` : 'Acumulado'}.pdf`;
+      a.download = `Balance_General_${usaRango ? `${rango.desde}_${rango.hasta}` : modo === 'mensual' ? `${mes}-${anio}` : modo === 'anual' ? `Año_${anio}` : 'Acumulado'}.pdf`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -51,14 +52,17 @@ const Balances = ({ empresaId, periodoInicial }) => {
     }
   };
 
+  const usaRango = !!(rango?.desde && rango?.hasta);
   const { data, isLoading } = useQuery({
-    queryKey: ['balance', empresaId, modo, mes, anio],
+    queryKey: ['balance', empresaId, modo, mes, anio, rango?.desde, rango?.hasta],
     queryFn: async () => {
-      const res = await getBalanceApi(
-        user.sessionId, empresaId,
-        modo === 'mensual' ? mes : undefined,
-        (modo === 'mensual' || modo === 'anual') ? anio : undefined,
-      );
+      const res = usaRango
+        ? await getBalanceApi(user.sessionId, empresaId, undefined, undefined, rango.desde, rango.hasta)
+        : await getBalanceApi(
+            user.sessionId, empresaId,
+            modo === 'mensual' ? mes : undefined,
+            (modo === 'mensual' || modo === 'anual') ? anio : undefined,
+          );
       if (!res.ok) throw new Error('Error al calcular el balance');
       return res.json();
     },
@@ -92,6 +96,11 @@ const Balances = ({ empresaId, periodoInicial }) => {
     <div className="space-y-5">
       {/* CONTROLES DE PERÍODO */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {usaRango ? (
+          <div className="text-[10px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-2">
+            <CalendarDays className="h-3.5 w-3.5" /> Rango: {rango.desde} → {rango.hasta}
+          </div>
+        ) : (
         <div className="flex items-center gap-2">
           <button onClick={() => setModo('acumulado')}
             className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${modo === 'acumulado' ? 'bg-blue-600 text-white' : 'bg-black/40 border border-white/10 text-gray-400 hover:text-white'}`}>
@@ -121,6 +130,7 @@ const Balances = ({ empresaId, periodoInicial }) => {
             </div>
           )}
         </div>
+        )}
 
         {/* Indicador de cuadre + exportar */}
         <div className="flex items-center gap-2">
@@ -159,8 +169,9 @@ const Balances = ({ empresaId, periodoInicial }) => {
           <p className="text-[10px] mt-2 max-w-xs">Contabiliza movimientos (botón "Contabilizar Todo") para generar los saldos del balance.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className={`grid grid-cols-1 gap-6 ${vista === 'completo' ? 'lg:grid-cols-2' : 'max-w-3xl'}`}>
           {/* BALANCE GENERAL */}
+          {(vista === 'completo' || vista === 'balance') && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
             className="bg-white/5 rounded-xl p-6 border border-white/10 backdrop-blur-md">
             <h3 className="text-lg font-black text-white mb-4 uppercase italic tracking-tighter flex items-center gap-2">
@@ -196,8 +207,10 @@ const Balances = ({ empresaId, periodoInicial }) => {
               <span className="text-sm font-mono font-black text-red-300">{formatCLP(totalPasivosPatrimonio)}</span>
             </div>
           </motion.div>
+          )}
 
           {/* ESTADO DE RESULTADOS */}
+          {(vista === 'completo' || vista === 'resultados') && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}
             className="bg-white/5 rounded-xl p-6 border border-white/10 backdrop-blur-md">
             <h3 className="text-lg font-black text-white mb-4 uppercase italic tracking-tighter flex items-center gap-2">
@@ -241,6 +254,7 @@ const Balances = ({ empresaId, periodoInicial }) => {
               </p>
             </div>
           </motion.div>
+          )}
         </div>
       )}
     </div>

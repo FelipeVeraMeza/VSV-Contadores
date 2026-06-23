@@ -236,11 +236,14 @@ export const getComprobantes = async (req, res) => {
 //   1 = Activo · 2/3 = Pasivo+Patrimonio · 4 = Gasto · 5 = Ingreso
 // ========================================================
 // Calcula el balance (8 columnas) desde los comprobantes. Reutilizable por JSON y PDF.
-const calcularBalanceData = async (empId, mes, anio) => {
+const calcularBalanceData = async (empId, { mes, anio, desde, hasta } = {}) => {
     const empCond = empId === null ? 'c.empresa_id IS NULL' : 'c.empresa_id = $1';
     const params = empId === null ? [] : [empId];
     let fechaCond = '';
-    if (mes && anio) {
+    if (desde && hasta) {
+        fechaCond = `AND c.fecha::date BETWEEN $${params.length + 1} AND $${params.length + 2}`;
+        params.push(desde, hasta);
+    } else if (mes && anio) {
         fechaCond = `AND to_char(c.fecha, 'YYYY-MM') = $${params.length + 1}`;
         params.push(`${anio}-${mes}`);
     } else if (anio) {
@@ -291,15 +294,15 @@ const calcularBalanceData = async (empId, mes, anio) => {
 };
 
 export const getBalance = async (req, res) => {
-    const { empresaId, mes, anio } = req.query;
+    const { empresaId, mes, anio, desde, hasta } = req.query;
     const empId = (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
 
     try {
-        const { cuentas, tot, utilidad, cuadrado } = await calcularBalanceData(empId, mes, anio);
+        const { cuentas, tot, utilidad, cuadrado } = await calcularBalanceData(empId, { mes, anio, desde, hasta });
 
         res.json({
             ok: true,
-            periodo: (mes && anio) ? `${anio}-${mes}` : (anio ? `Año ${anio}` : 'Acumulado'),
+            periodo: (desde && hasta) ? `${desde} a ${hasta}` : (mes && anio) ? `${anio}-${mes}` : (anio ? `Año ${anio}` : 'Acumulado'),
             libroMayor: cuentas,
             totales: { ...tot, utilidad, cuadrado },
             balanceGeneral: {
@@ -329,11 +332,11 @@ const MESES_PDF = ['', 'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'J
 
 // PDF: Balance de 8 columnas (mismo formato del reporte oficial)
 export const getBalancePdf = async (req, res) => {
-    const { empresaId, mes, anio } = req.query;
+    const { empresaId, mes, anio, desde, hasta } = req.query;
     const empId = (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
 
     try {
-        const { cuentas: cuentasData, utilidad } = await calcularBalanceData(empId, mes, anio);
+        const { cuentas: cuentasData, utilidad } = await calcularBalanceData(empId, { mes, anio, desde, hasta });
 
         // Datos de la empresa para el encabezado
         let empresa = { nombre: 'BÓVEDA GLOBAL — VSV CONTADORES', rut: '', direccion: '', representante: '', representanteRut: '' };
@@ -356,7 +359,7 @@ export const getBalancePdf = async (req, res) => {
             }
         }
 
-        const periodoLabel = (mes && anio) ? `${MESES_PDF[parseInt(mes)]} ${anio}` : (anio ? `AÑO ${anio}` : 'ACUMULADO');
+        const periodoLabel = (desde && hasta) ? `${desde} A ${hasta}` : (mes && anio) ? `${MESES_PDF[parseInt(mes)]} ${anio}` : (anio ? `AÑO ${anio}` : 'ACUMULADO');
         const cuentas = cuentasData.map(c => ({
             cod: c.codigo, nombre: c.nombre,
             d: c.debe, c: c.haber, sd: c.saldoDeudor, sa: c.saldoAcreedor,

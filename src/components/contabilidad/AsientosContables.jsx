@@ -29,7 +29,7 @@ const MESES = [
 const ANIOS = ['2024','2025','2026','2027'];
 const ITEMS_PER_PAGE = 15;
 
-const AsientosContables = ({ empresaId, mes: mesProp, anio: anioProp, setMes: setMesProp, setAnio: setAnioProp }) => {
+const AsientosContables = ({ empresaId, mes: mesProp, anio: anioProp, setMes: setMesProp, setAnio: setAnioProp, rango }) => {
   const { user, selectedCompany } = useAuth();
   const targetId = empresaId || selectedCompany?.id;
 
@@ -63,10 +63,13 @@ const AsientosContables = ({ empresaId, mes: mesProp, anio: anioProp, setMes: se
     const all = data?.comprobantes || [];
     return all.filter(c => {
       if (!c.fecha) return true;
-      const f = c.fecha.slice(0, 7); // "YYYY-MM"
-      return f === `${anio}-${mes}`;
+      if (rango?.desde && rango?.hasta) {
+        const f = String(c.fecha).slice(0, 10);
+        return f >= rango.desde && f <= rango.hasta;
+      }
+      return c.fecha.slice(0, 7) === `${anio}-${mes}`;
     });
-  }, [data, mes, anio]);
+  }, [data, mes, anio, rango]);
 
   const totalPages = Math.ceil(comprobantes.length / ITEMS_PER_PAGE) || 1;
   const currentData = comprobantes.slice((currentPage-1)*ITEMS_PER_PAGE, currentPage*ITEMS_PER_PAGE);
@@ -109,18 +112,24 @@ const AsientosContables = ({ empresaId, mes: mesProp, anio: anioProp, setMes: se
 
       {/* FILTRO PERÍODO */}
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-1 py-1">
-          <div className="flex items-center pl-3 pr-1"><CalendarDays className="h-4 w-4 text-blue-400"/></div>
-          <select value={mes} onChange={e => { setMes(e.target.value); setCurrentPage(1); }}
-            className="bg-transparent text-white text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-400">
-            {MESES.map(m => <option key={m.v} value={m.v} className="bg-slate-900">{m.l}</option>)}
-          </select>
-          <span className="text-white/20 mx-1">/</span>
-          <select value={anio} onChange={e => { setAnio(e.target.value); setCurrentPage(1); }}
-            className="bg-transparent text-white text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-400">
-            {ANIOS.map(a => <option key={a} value={a} className="bg-slate-900">{a}</option>)}
-          </select>
-        </div>
+        {rango?.desde ? (
+          <div className="text-[10px] font-black uppercase tracking-widest text-blue-400">
+            Rango: {rango.desde} → {rango.hasta}
+          </div>
+        ) : (
+          <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-1 py-1">
+            <div className="flex items-center pl-3 pr-1"><CalendarDays className="h-4 w-4 text-blue-400"/></div>
+            <select value={mes} onChange={e => { setMes(e.target.value); setCurrentPage(1); }}
+              className="bg-transparent text-white text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-400">
+              {MESES.map(m => <option key={m.v} value={m.v} className="bg-slate-900">{m.l}</option>)}
+            </select>
+            <span className="text-white/20 mx-1">/</span>
+            <select value={anio} onChange={e => { setAnio(e.target.value); setCurrentPage(1); }}
+              className="bg-transparent text-white text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-400">
+              {ANIOS.map(a => <option key={a} value={a} className="bg-slate-900">{a}</option>)}
+            </select>
+          </div>
+        )}
 
         {/* Stats del período */}
         <div className="flex items-center gap-4">

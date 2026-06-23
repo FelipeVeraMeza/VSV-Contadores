@@ -610,5 +610,56 @@
         "montoIva": 120
       }
     }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "87135",
+    "fecha": "2026-06-19",
+    "montoTotal": 540,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 454,
+        "montoIva": 86
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "87000",
+    "fecha": "2026-06-18",
+    "montoTotal": 540,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 454,
+        "montoIva": 86
+      }
+    }
+  },
+  {
+    "rutEmisor": "97006000-6",
+    "razonSocial": "BANCO DE CREDITO E INVERSIONES",
+    "documento": "Factura Electronica",
+    "folio": "30231984",
+    "fecha": "2026-06-08",
+    "montoTotal": 6061,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 5093,
+        "montoIva": 968
+      }
+    }
   }
 ]

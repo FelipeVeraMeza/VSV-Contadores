@@ -434,7 +434,7 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
           </Button>
           <Button onClick={handleGuardar} disabled={!cuadrado || lineas.length < 2 || isSaving}
             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black uppercase text-xs tracking-widest disabled:opacity-40">
-            {isSaving ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />Guardando...</> : 'Guardar'}
+            {isSaving ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />Contabilizando...</> : 'Contabilizar'}
           </Button>
         </div>
       </DialogContent>

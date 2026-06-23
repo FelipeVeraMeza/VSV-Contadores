@@ -1,69 +1,100 @@
-import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  FileText, BarChart3, GitMerge, TrendingUp,
-  Plus, BookCopy, Loader2, ArrowRightLeft, LayoutList, Lock
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { toast } from '@/components/ui/use-toast';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
+import { Loader2, Hammer, CalendarRange } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useQueryClient } from '@tanstack/react-query';
 
 import MovimientosContables from '@/components/contabilidad/MovimientosContables';
 import AsientosContables from '@/components/contabilidad/AsientosContables';
-import PlanDeCuentas from '@/components/contabilidad/PlanDeCuentas';
-import Balances from '@/components/contabilidad/Balances';
 import ConciliacionBancaria from '@/components/contabilidad/ConciliacionBancaria';
-import ReportesContables from '@/components/contabilidad/ReportesContables';
-import LibroDiarioSuperficial from '@/components/contabilidad/LibroDiarioSuperficial';
-import NuevoAsientoModal from '@/components/contabilidad/modals/NuevoAsientoModal';
+import ReportesHub from '@/components/contabilidad/ReportesHub';
+import GestionCaja from '@/components/contabilidad/GestionCaja';
+
+const TITULOS = {
+  compras: 'Compras', ventas: 'Ventas', sii: 'Conexión SII', honorarios: 'Honorarios',
+  recaudaciones: 'Recaudaciones', pagos: 'Pagos', centralizacion: 'Centralización',
+  traspaso: 'Traspaso Apertura', reportes: 'Reportes',
+};
+
+const hoy = () => new Date().toISOString().slice(0, 10);
+
+const EnConstruccion = ({ titulo }) => (
+  <div className="h-[55vh] flex flex-col items-center justify-center text-center">
+    <div className="bg-white/5 p-6 rounded-full mb-4 border border-white/10">
+      <Hammer className="h-10 w-10 text-amber-400" />
+    </div>
+    <h3 className="text-white font-black uppercase tracking-tight text-lg">{titulo}</h3>
+    <p className="text-gray-500 text-xs mt-2 uppercase tracking-widest font-bold max-w-md leading-relaxed">
+      Este submódulo está en construcción. Próximamente disponible.
+    </p>
+  </div>
+);
+
+// Selector de rango de fechas global (compartido por todas las secciones)
+const SelectorRango = ({ rango, setRango }) => {
+  const anioActual = new Date().getFullYear();
+  const presets = [
+    { label: 'Este mes',  desde: `${anioActual}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`, hasta: hoy() },
+    { label: `${anioActual}`, desde: `${anioActual}-01-01`, hasta: `${anioActual}-12-31` },
+    { label: `${anioActual - 1}`, desde: `${anioActual - 1}-01-01`, hasta: `${anioActual - 1}-12-31` },
+    { label: 'Todo', desde: '2020-01-01', hasta: '2030-12-31' },
+  ];
+  const activo = (p) => rango.desde === p.desde && rango.hasta === p.hasta;
+
+  const Campo = ({ label, value, min, max, onChange }) => (
+    <label className="group relative flex flex-col cursor-pointer">
+      <span className="text-[8px] font-black uppercase tracking-[0.2em] text-gray-500 group-hover:text-blue-400 transition-colors mb-0.5">{label}</span>
+      <input type="date" value={value} min={min} max={max} onChange={onChange}
+        className="bg-transparent text-white text-[13px] font-bold focus:outline-none cursor-pointer [color-scheme:dark] w-[120px] tracking-tight" />
+    </label>
+  );
+
+  return (
+    <div className="flex flex-col xl:flex-row xl:items-center gap-2.5 bg-gradient-to-br from-slate-800/70 to-slate-900/70 border border-white/10 rounded-2xl p-2.5 backdrop-blur-xl shadow-xl shadow-black/20">
+      {/* Campos desde / hasta */}
+      <div className="flex items-center gap-3 bg-black/30 rounded-xl pl-3 pr-4 py-2 border border-white/5">
+        <div className="p-1.5 bg-blue-500/15 rounded-lg">
+          <CalendarRange className="h-4 w-4 text-blue-400" />
+        </div>
+        <Campo label="Desde" value={rango.desde} max={rango.hasta} onChange={e => setRango(r => ({ ...r, desde: e.target.value }))} />
+        <div className="flex items-center self-stretch">
+          <div className="h-7 w-px bg-white/10" />
+        </div>
+        <Campo label="Hasta" value={rango.hasta} min={rango.desde} onChange={e => setRango(r => ({ ...r, hasta: e.target.value }))} />
+      </div>
+
+      {/* Presets como chips */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {presets.map(p => (
+          <button key={p.label} onClick={() => setRango({ desde: p.desde, hasta: p.hasta })}
+            className={`px-3 py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border ${
+              activo(p)
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-400/50 text-white shadow-lg shadow-blue-900/40'
+                : 'bg-white/[0.04] border-white/10 text-gray-400 hover:text-white hover:border-blue-400/30 hover:bg-white/[0.08]'
+            }`}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 const Contabilidad = () => {
   const { selectedCompany, user } = useAuth();
   const isAdmin = user?.rol === 'Administrador';
   const empresaId = selectedCompany?.id;
+  const [searchParams] = useSearchParams();
+  const sub = searchParams.get('sub') || 'compras';
 
-  const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState('movimientos');
-  const [isAsientoModalOpen, setIsAsientoModalOpen] = useState(false);
-  const [borradorLibro, setBorradorLibro] = useState(null);
-  const [balancePeriodo, setBalancePeriodo] = useState(null); // período seleccionado para el balance
-  // Flujo guiado: las pestañas se van desbloqueando por pasos
-  const [librosDesbloqueados, setLibrosDesbloqueados] = useState(false); // Libro Diario + Banco
-  const [balanceDesbloqueado, setBalanceDesbloqueado] = useState(false); // Balances
-
-  // Período compartido entre Movimientos y Libro Diario
-  const now = new Date();
-  const [periodoMes,  setPeriodoMes]  = useState((now.getMonth()+1).toString().padStart(2,'0'));
-  const [periodoAnio, setPeriodoAnio] = useState(now.getFullYear().toString());
-
-  const handleGenerarBorrador = (data) => {
-    if (data?.asientos?.length) setBorradorLibro(data);
-    // Derivar el período para el balance desde lo seleccionado en "Generar Libro"
-    if (data?.tipoPeriodo) {
-      const esAnual = data.tipoPeriodo === 'anual' || data.tipoPeriodo === 'trimestral';
-      setBalancePeriodo(esAnual
-        ? { tipo: 'anual', anio: data.anio }
-        : { tipo: 'mensual', mes: data.mes, anio: data.anio });
-    }
-    setLibrosDesbloqueados(true); // al enviar al libro se desbloquea Libro Diario y Banco
-    setActiveTab('libro_diario');
-  };
-
-  // Un tab está bloqueado hasta completar el paso anterior del flujo
-  const tabBloqueado = (id) => {
-    if (id === 'libro_diario' || id === 'conciliacion') return !librosDesbloqueados;
-    if (id === 'balances') return !balanceDesbloqueado;
-    return false;
-  };
+  // Rango de fechas GLOBAL — compartido por todos los submódulos
+  const [rango, setRango] = useState({ desde: '2025-01-01', hasta: hoy() });
 
   if (!empresaId && !isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center h-[70vh] text-center">
         <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-        <h2 className="text-xl font-bold text-white uppercase tracking-tighter italic">
-          Bóveda Global de Contabilidad
-        </h2>
+        <h2 className="text-xl font-bold text-white uppercase tracking-tighter italic">Bóveda Global de Contabilidad</h2>
         <p className="text-gray-400 text-sm mt-2 font-bold uppercase tracking-widest">
           Selecciona una entidad en el CRM para acceder a sus registros contables.
         </p>
@@ -71,146 +102,38 @@ const Contabilidad = () => {
     );
   }
 
-  const tabs = useMemo(() => [
-    { id: 'movimientos',  name: 'Movimientos',    icon: ArrowRightLeft, Component: MovimientosContables },
-    { id: 'libro_diario', name: 'Libro Diario',   icon: FileText,       Component: AsientosContables },
-    { id: 'conciliacion', name: 'Banco',           icon: GitMerge,       Component: ConciliacionBancaria },
-    { id: 'balances',     name: 'Balances',        icon: BarChart3,      Component: Balances },
-    { id: 'planCuentas',  name: 'Plan de Cuentas', icon: BookCopy,       Component: PlanDeCuentas },
-    { id: 'reportes',     name: 'Reportes',        icon: TrendingUp,     Component: ReportesContables },
-  ], []);
-
-  const handleAddAsiento = () => {
-    queryClient.invalidateQueries(['asientos', empresaId]);
-    toast({ title: 'Asiento Creado', description: 'El asiento ha sido mayorizado correctamente.' });
-    setIsAsientoModalOpen(false);
+  const renderSub = () => {
+    switch (sub) {
+      case 'compras':       return <MovimientosContables empresaId={empresaId} tipoInicial="compras" ocultarTabs rango={rango} />;
+      case 'ventas':        return <MovimientosContables empresaId={empresaId} tipoInicial="ventas" ocultarTabs rango={rango} />;
+      case 'honorarios':    return <MovimientosContables empresaId={empresaId} tipoInicial="honorarios" ocultarTabs rango={rango} />;
+      case 'recaudaciones': return <GestionCaja empresaId={empresaId} rango={rango} tipo="recaudacion" />;
+      case 'pagos':         return <GestionCaja empresaId={empresaId} rango={rango} tipo="pago" />;
+      case 'centralizacion':return <AsientosContables empresaId={empresaId} rango={rango} />;
+      case 'reportes':      return <ReportesHub empresaId={empresaId} rango={rango} />;
+      case 'sii':           return <EnConstruccion titulo="Conexión SII" />;
+      case 'traspaso':      return <EnConstruccion titulo="Traspaso Apertura" />;
+      default:              return <MovimientosContables empresaId={empresaId} tipoInicial="compras" ocultarTabs rango={rango} />;
+    }
   };
 
-  const ActiveModule = tabs.find(t => t.id === activeTab)?.Component;
+  // Submódulos que usan el rango global
+  const usaRango = ['compras', 'ventas', 'honorarios', 'centralizacion', 'reportes', 'recaudaciones', 'pagos'].includes(sub);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <NuevoAsientoModal
-        isOpen={isAsientoModalOpen}
-        setIsOpen={setIsAsientoModalOpen}
-        onAddAsiento={handleAddAsiento}
-        empresaId={empresaId}
-      />
-
-      {/* CABECERA */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
-            Módulo Contable y Tributario
-          </h1>
+          <h1 className="text-3xl font-bold text-white mb-1 tracking-tight">{TITULOS[sub] || 'Contabilidad'}</h1>
           <p className="text-gray-400 text-sm font-medium uppercase tracking-wider">
             {selectedCompany?.razon_social || selectedCompany?.razonSocial || 'Bóveda Global'}
           </p>
         </div>
-
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <Button
-            onClick={() => setActiveTab('movimientos')}
-            variant="outline"
-            className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 h-11 px-4 text-xs font-bold uppercase tracking-widest transition-all"
-          >
-            <LayoutList className="h-4 w-4 mr-2" />
-            Ver Movimientos
-          </Button>
-
-          <Button
-            onClick={() => setIsAsientoModalOpen(true)}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white h-11 px-4 text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-emerald-900/20"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Nuevo Comprobante
-          </Button>
-        </div>
+        {usaRango && <SelectorRango rango={rango} setRango={setRango} />}
       </div>
-
-      {/* NAVEGACIÓN */}
-      <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 overflow-hidden shadow-2xl">
-        <div className="flex border-b border-white/5 overflow-x-auto no-scrollbar">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            const bloqueado = tabBloqueado(tab.id);
-            return (
-              <button
-                key={tab.id}
-                onClick={() => { if (!bloqueado) setActiveTab(tab.id); }}
-                disabled={bloqueado}
-                title={bloqueado ? 'Completa el paso anterior para desbloquear esta sección' : ''}
-                className={`flex-shrink-0 flex items-center space-x-2 px-6 py-4 font-bold uppercase text-[10px] tracking-widest transition-all ${
-                  bloqueado
-                    ? 'text-gray-700 cursor-not-allowed opacity-50'
-                    : isActive
-                      ? 'bg-blue-500/10 text-blue-400 border-b-2 border-blue-500'
-                      : 'text-gray-500 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                {bloqueado
-                  ? <Lock className="h-4 w-4 text-gray-700" />
-                  : <Icon className={`h-4 w-4 ${isActive ? 'text-blue-400' : 'text-gray-600'}`} />}
-                <span>{tab.name}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="p-6">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              {activeTab === 'movimientos' && (
-                <MovimientosContables
-                  empresaId={empresaId}
-                  onGenerarBorrador={handleGenerarBorrador}
-                  mes={periodoMes}
-                  anio={periodoAnio}
-                  setMes={setPeriodoMes}
-                  setAnio={setPeriodoAnio}
-                />
-              )}
-              {activeTab === 'libro_diario' && (
-                <div className="space-y-6">
-                  {borradorLibro?.asientos?.length > 0 && (
-                    <>
-                      <LibroDiarioSuperficial asientos={borradorLibro.asientos} />
-                      <div className="flex justify-end">
-                        <Button
-                          onClick={() => { setBalanceDesbloqueado(true); setActiveTab('balances'); }}
-                          className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black uppercase text-xs tracking-widest h-11 px-5 shadow-lg shadow-purple-900/30"
-                        >
-                          <BarChart3 className="h-4 w-4 mr-2" /> Generar Balance
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                  <AsientosContables
-                    empresaId={empresaId}
-                    mes={periodoMes}
-                    anio={periodoAnio}
-                    setMes={setPeriodoMes}
-                    setAnio={setPeriodoAnio}
-                  />
-                </div>
-              )}
-              {activeTab === 'balances' && (
-                <Balances empresaId={empresaId} periodoInicial={balancePeriodo} />
-              )}
-              {activeTab !== 'movimientos' && activeTab !== 'libro_diario' && activeTab !== 'balances' && ActiveModule && (
-                <ActiveModule empresaId={empresaId} />
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </div>
+      <motion.div key={sub} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+        {renderSub()}
+      </motion.div>
     </div>
   );
 };

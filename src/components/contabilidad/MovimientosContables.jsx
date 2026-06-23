@@ -4,7 +4,7 @@ import {
   ArrowUpRight, ArrowDownRight, Eye, Plus, Loader2, FileCheck,
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Award,
   DownloadCloud, RefreshCcw, BookCopy, ChevronUp, Send,
-  CheckCircle, AlertCircle, Trash2, Save, Bot
+  CheckCircle, AlertCircle, Trash2, Save, Bot, Search
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -70,18 +70,20 @@ const calcLineasDefault = (doc, tipo) => {
   return [{ cuenta: '4201-02', debe: total, haber: 0 }, { cuenta: '2105-04', debe: 0, haber: total }];
 };
 
-const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio: anioProp, setMes: setMesProp, setAnio: setAnioProp }) => {
+const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio: anioProp, setMes: setMesProp, setAnio: setAnioProp, tipoInicial, ocultarTabs, rango }) => {
   const { user, selectedCompany } = useAuth();
   const queryClient = useQueryClient();
   const targetId = empresaId || selectedCompany?.id || 'ALL';
 
-  const [activeTab, setActiveTab]           = useState('ventas');
+  const [activeTab, setActiveTab]           = useState(tipoInicial || 'ventas');
   const [isLoading, setIsLoading]           = useState(false);
   const [isSyncing, setIsSyncing]           = useState(false);
   const [rawVentas, setRawVentas]           = useState([]);
   const [rawCompras, setRawCompras]         = useState([]);
   const [honorarios]                        = useState([]);
   const [currentPage, setCurrentPage]       = useState(1);
+  const [busqueda, setBusqueda]             = useState('');
+  const [filtroEstado, setFiltroEstado]     = useState('contabilizado'); // contabilizado | pendiente | todos
   const [isNuevoModalOpen, setIsNuevoModalOpen]   = useState(false);
   const [isAsientoModalOpen, setIsAsientoModalOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen]     = useState(false);
@@ -121,7 +123,8 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => { cargarDatos(); }, [targetId]);
-  React.useEffect(() => { setCurrentPage(1); }, [activeTab, mes, anio]);
+  React.useEffect(() => { setCurrentPage(1); }, [activeTab, mes, anio, busqueda, rango, filtroEstado]);
+  React.useEffect(() => { if (tipoInicial) setActiveTab(tipoInicial); }, [tipoInicial]);
 
   // ── Plan de cuentas para dropdowns inline ────────────────────
   const { data: planData } = useQuery({
@@ -168,10 +171,37 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   }, [dataComp]);
 
   const periodo = `${anio}-${mes}`;
-  const ventas  = useMemo(() => rawVentas.filter(d => d.fecha_emision?.startsWith(periodo)), [rawVentas, periodo]);
-  const compras = useMemo(() => rawCompras.filter(d => d.fecha_emision?.startsWith(periodo)), [rawCompras, periodo]);
+  // Si viene un rango global, se filtra por rango; si no, por mes/año interno.
+  const dentroPeriodo = (d) => {
+    if (!d.fecha_emision) return false;
+    if (rango?.desde && rango?.hasta) {
+      const f = String(d.fecha_emision).slice(0, 10);
+      return f >= rango.desde && f <= rango.hasta;
+    }
+    return d.fecha_emision.startsWith(periodo);
+  };
+  const ventas  = useMemo(() => rawVentas.filter(dentroPeriodo),  [rawVentas, periodo, rango]); // eslint-disable-line react-hooks/exhaustive-deps
+  const compras = useMemo(() => rawCompras.filter(dentroPeriodo), [rawCompras, periodo, rango]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const docActivos = activeTab === 'ventas' ? ventas : activeTab === 'compras' ? compras : honorarios;
+  const docPorTab = activeTab === 'ventas' ? ventas : activeTab === 'compras' ? compras : honorarios;
+
+  // Filtro de estado (contabilizado/pendiente) + buscador unificado (folio + RUT + nombre)
+  const docActivos = useMemo(() => {
+    let docs = docPorTab;
+    if (filtroEstado === 'contabilizado') docs = docs.filter(d => folioMap[String(d.folio)]);
+    else if (filtroEstado === 'pendiente') docs = docs.filter(d => !folioMap[String(d.folio)]);
+    if (busqueda.trim()) {
+      const q = busqueda.toLowerCase().replace(/[.\-\s]/g, '');
+      docs = docs.filter(doc => {
+        const rut   = (activeTab === 'compras' ? doc.rut_proveedor : doc.rut_cliente) || '';
+        const razon = (activeTab === 'compras' ? doc.razon_social_proveedor : doc.razon_social) || '';
+        const hay = `${doc.folio || ''} ${rut} ${razon}`.toLowerCase().replace(/[.\-\s]/g, '');
+        return hay.includes(q);
+      });
+    }
+    return docs;
+  }, [docPorTab, busqueda, activeTab, filtroEstado, folioMap]);
+
   const totalPages = Math.ceil(docActivos.length / ITEMS_PER_PAGE) || 1;
   const currentData = docActivos.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
@@ -191,6 +221,15 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   }, [mes, anio]);
 
   const { libroVentas, libroCompras, libroPeriodo } = useMemo(() => {
+    // El rango de fechas global prevalece sobre el período interno del modal
+    if (rango?.desde && rango?.hasta) {
+      const filtro = d => {
+        if (!d.fecha_emision) return false;
+        const f = String(d.fecha_emision).slice(0, 10);
+        return f >= rango.desde && f <= rango.hasta;
+      };
+      return { libroVentas: rawVentas.filter(filtro), libroCompras: rawCompras.filter(filtro), libroPeriodo: `${rango.desde} A ${rango.hasta}` };
+    }
     const mesNum = parseInt(mes);
     const trimestre = Math.ceil(mesNum / 3);
     const mesInicioTrim = ((trimestre - 1) * 3 + 1).toString().padStart(2, '0');
@@ -219,10 +258,10 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
         label = `${mes}/${anio}`;
     }
     return { libroVentas: rawVentas.filter(filtro), libroCompras: rawCompras.filter(filtro), libroPeriodo: label };
-  }, [tipoPeriodoLibro, mes, anio, diaLibro, rawVentas, rawCompras]);
+  }, [tipoPeriodoLibro, mes, anio, diaLibro, rawVentas, rawCompras, rango]);
 
-  // Solo incluir docs con asiento guardado (en BD o editado en sesión)
-  const esGuardado = (doc) => folioMap[String(doc.folio)] || (doc.id && rowEdits[doc.id]);
+  // Contabilizado = tiene comprobante en la BD (coherente con la centralización)
+  const esGuardado = (doc) => !!folioMap[String(doc.folio)];
 
   const libroVentasGuardadas  = useMemo(() => libroVentas.filter(esGuardado),  [libroVentas,  folioMap, rowEdits]);
   const libroComprasGuardadas = useMemo(() => libroCompras.filter(esGuardado), [libroCompras, folioMap, rowEdits]);
@@ -231,17 +270,15 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   const libroPendientesTotal   = libroVentasPendientes + libroComprasPendientes;
 
   const libroAsientos = useMemo(() => {
-    // Pendientes (sin asiento guardado) usan su asiento sugerido por defecto.
-    const getLineasDoc = (doc, tipo) => {
-      const rowId = doc.id;
-      if (rowId && rowEdits[rowId]) return rowEdits[rowId];
+    // Solo se centraliza lo que YA está contabilizado (tiene comprobante).
+    const contabilizado = (doc) => !!folioMap[String(doc.folio)];
+    const getLineasDoc = (doc) => {
       const comp = folioMap[String(doc.folio)];
-      if (comp) return comp.lineas.map(l => ({ cuenta: l.cuentaCodigo || l.cuenta_codigo, debe: Number(l.debe)||0, haber: Number(l.haber)||0 }));
-      return calcLineasDefault(doc, tipo);
+      return comp ? comp.lineas.map(l => ({ cuenta: l.cuentaCodigo || l.cuenta_codigo, debe: Number(l.debe)||0, haber: Number(l.haber)||0 })) : [];
     };
     const acumular = (docs, tipo) => {
       const mapa = {};
-      docs.forEach(doc => getLineasDoc(doc, tipo).forEach(l => {
+      docs.forEach(doc => getLineasDoc(doc).forEach(l => {
         if (!l.cuenta) return;
         if (!mapa[l.cuenta]) mapa[l.cuenta] = { descripcion: getNombre(l.cuenta), debe: 0, haber: 0, detalle: [] };
         mapa[l.cuenta].debe  += Number(l.debe)  || 0;
@@ -258,19 +295,21 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
       }));
       return mapa;
     };
-    const mapaV = acumular(libroVentas,  'ventas');
-    const mapaC = acumular(libroCompras, 'compras');
+    const ventasC  = libroVentas.filter(contabilizado);
+    const comprasC = libroCompras.filter(contabilizado);
+    const mapaV = acumular(ventasC,  'ventas');
+    const mapaC = acumular(comprasC, 'compras');
     const lineas = [];
-    if (libroVentas.length > 0) {
+    if (ventasC.length > 0) {
       lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN VENTAS ${libroPeriodo}` });
       Object.entries(mapaV).forEach(([codigo, { descripcion, debe, haber, detalle }]) => { if (debe > 0 || haber > 0) lineas.push({ codigo, descripcion, debe, haber, detalle }); });
     }
-    if (libroCompras.length > 0) {
+    if (comprasC.length > 0) {
       lineas.push({ tipo: 'header', glosa: `CENTRALIZACIÓN COMPRAS ${libroPeriodo}` });
       Object.entries(mapaC).forEach(([codigo, { descripcion, debe, haber, detalle }]) => { if (debe > 0 || haber > 0) lineas.push({ codigo, descripcion, debe, haber, detalle }); });
     }
     return lineas;
-  }, [libroVentas, libroCompras, libroPeriodo, rowEdits, folioMap, plan]);
+  }, [libroVentas, libroCompras, libroPeriodo, folioMap, plan]);
 
   // ── Toggle fila expandida ─────────────────────────────────────
   const toggleRow = (rowId, doc) => {
@@ -501,18 +540,52 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     <div className="space-y-5">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-1 py-1">
-          <div className="flex items-center pl-3 pr-1"><CalendarDays className="h-4 w-4 text-blue-400" /></div>
-          <select value={mes} onChange={e => setMes(e.target.value)}
-            className="bg-transparent text-white text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-400 transition-colors">
-            {MESES.map(m => <option key={m.value} value={m.value} className="bg-slate-900 text-white">{m.label}</option>)}
-          </select>
-          <span className="text-white/20 font-light mx-1">/</span>
-          <select value={anio} onChange={e => setAnio(e.target.value)}
-            className="bg-transparent text-white text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-400 transition-colors">
-            {ANIOS.map(a => <option key={a} value={a} className="bg-slate-900 text-white">{a}</option>)}
-          </select>
-          <div className="pr-3 pl-1 pointer-events-none"><ChevronDown className="h-4 w-4 text-gray-500" /></div>
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          {!rango?.desde && (
+            <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-1 py-1 flex-shrink-0">
+              <div className="flex items-center pl-3 pr-1"><CalendarDays className="h-4 w-4 text-blue-400" /></div>
+              <select value={mes} onChange={e => setMes(e.target.value)}
+                className="bg-transparent text-white text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-400 transition-colors">
+                {MESES.map(m => <option key={m.value} value={m.value} className="bg-slate-900 text-white">{m.label}</option>)}
+              </select>
+              <span className="text-white/20 font-light mx-1">/</span>
+              <select value={anio} onChange={e => setAnio(e.target.value)}
+                className="bg-transparent text-white text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-400 transition-colors">
+                {ANIOS.map(a => <option key={a} value={a} className="bg-slate-900 text-white">{a}</option>)}
+              </select>
+              <div className="pr-3 pl-1 pointer-events-none"><ChevronDown className="h-4 w-4 text-gray-500" /></div>
+            </div>
+          )}
+          {/* BUSCADOR unificado: folio + RUT + nombre */}
+          <div className="relative flex-1 max-w-xs">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            <input type="text" value={busqueda} onChange={e => setBusqueda(e.target.value)}
+              placeholder="Buscar por folio, RUT o nombre..."
+              className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-8 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+            {busqueda && (
+              <button onClick={() => setBusqueda('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                <span className="text-xs">✕</span>
+              </button>
+            )}
+          </div>
+
+          {/* FILTRO DE ESTADO */}
+          <div className="flex items-center bg-black/40 border border-white/10 rounded-xl p-1 flex-shrink-0">
+            {[
+              { id: 'contabilizado', label: '✓ Contabilizados' },
+              { id: 'pendiente',     label: 'Pendientes' },
+              { id: 'todos',         label: 'Todos' },
+            ].map(f => (
+              <button key={f.id} onClick={() => setFiltroEstado(f.id)}
+                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                  filtroEstado === f.id
+                    ? (f.id === 'contabilizado' ? 'bg-emerald-600 text-white' : f.id === 'pendiente' ? 'bg-amber-600 text-white' : 'bg-blue-600 text-white')
+                    : 'text-gray-400 hover:text-white'
+                }`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -537,12 +610,13 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
               : 'bg-black/40 border border-white/10 text-gray-500 opacity-50 cursor-not-allowed'
             }`}>
             <BookCopy className="h-4 w-4 mr-2" />
-            GENERAR LIBRO
+            CENTRALIZAR
           </Button>
         </div>
       </div>
 
-      {/* SUB-TABS */}
+      {/* SUB-TABS (se ocultan cuando la navegación viene del menú de Contabilidad) */}
+      {!ocultarTabs && (
       <div className="flex border-b border-white/5">
         {TABS.map(({ id, label, icon: Icon, count }) => {
           const isActive = activeTab === id;
@@ -557,6 +631,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
           );
         })}
       </div>
+      )}
 
       {/* RESUMEN */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -735,7 +810,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                                             disabled={!cuadrado || isSavingRow}
                                             className="flex items-center gap-1.5 text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20">
                                             {isSavingRow ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-                                            {isSavingRow ? 'Guardando...' : 'Guardar'}
+                                            {isSavingRow ? 'Contabilizando...' : 'Contabilizar'}
                                           </button>
                                         </div>
                                       </div>
@@ -836,64 +911,74 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3 text-lg font-black uppercase tracking-tight text-purple-400">
               <BookCopy className="h-5 w-5" />
-              Libro Diario Centralizado
+              Centralización Contable
             </DialogTitle>
           </DialogHeader>
 
           <div className="max-h-[65vh] overflow-y-auto custom-scrollbar pr-1 space-y-4 mt-2">
-            {/* Selector de período */}
-            <div className="bg-black/40 border border-white/5 rounded-xl p-4">
-              <p className="text-[9px] font-black uppercase tracking-widest text-blue-300 mb-3 flex items-center gap-2">
-                <CalendarDays className="h-3.5 w-3.5" /> Tipo de Período
-              </p>
-              <div className="grid grid-cols-4 gap-2">
-                {[{v:'diario',l:'Diario'},{v:'mensual',l:'Mensual'},{v:'trimestral',l:'Trimestral'},{v:'anual',l:'Anual'}].map(({v,l}) => (
-                  <button key={v} onClick={() => setTipoPeriodoLibro(v)}
-                    className={`py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                      tipoPeriodoLibro === v ? 'bg-purple-600 text-white shadow-lg' : 'bg-slate-800/50 text-gray-500 hover:text-white hover:bg-slate-700/50 border border-white/5'
-                    }`}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-              {tipoPeriodoLibro === 'diario' && (
-                <div className="mt-3">
-                  <label className="text-[9px] font-bold uppercase text-gray-500 mb-1.5 block">Día</label>
-                  <select value={diaLibro} onChange={e => setDiaLibro(e.target.value)}
-                    className="w-28 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500">
-                    {diasDelMes.map(d => <option key={d} value={d} className="bg-slate-900">{d}</option>)}
-                  </select>
+            {/* Resumen del período a centralizar */}
+            <div className="bg-black/40 border border-white/5 rounded-xl p-4 space-y-3">
+              {/* Tipo de período: solo cuando NO hay rango global activo */}
+              {!rango?.desde && (
+                <div>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-blue-300 mb-2 flex items-center gap-2">
+                    <CalendarDays className="h-3.5 w-3.5" /> Tipo de Período
+                  </p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[{v:'diario',l:'Diario'},{v:'mensual',l:'Mensual'},{v:'trimestral',l:'Trimestral'},{v:'anual',l:'Anual'}].map(({v,l}) => (
+                      <button key={v} onClick={() => setTipoPeriodoLibro(v)}
+                        className={`py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                          tipoPeriodoLibro === v ? 'bg-purple-600 text-white shadow-lg' : 'bg-slate-800/50 text-gray-500 hover:text-white hover:bg-slate-700/50 border border-white/5'
+                        }`}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                  {tipoPeriodoLibro === 'diario' && (
+                    <div className="mt-3">
+                      <label className="text-[9px] font-bold uppercase text-gray-500 mb-1.5 block">Día</label>
+                      <select value={diaLibro} onChange={e => setDiaLibro(e.target.value)}
+                        className="w-28 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500">
+                        {diasDelMes.map(d => <option key={d} value={d} className="bg-slate-900">{d}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
               )}
-              <div className="mt-3 flex items-center gap-4 text-[10px] font-black uppercase tracking-widest flex-wrap">
-                <span className="text-purple-400">Período: {libroPeriodo}</span>
-                <span className="text-emerald-400">{libroVentasGuardadas.length} ventas guardadas</span>
-                <span className="text-red-400">{libroComprasGuardadas.length} compras guardadas</span>
+
+              {/* Chips de resumen */}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1.5 rounded-lg">
+                  <CalendarDays className="h-3 w-3" /> {libroPeriodo}
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg">
+                  <CheckCircle className="h-3 w-3" /> {libroVentasGuardadas.length + libroComprasGuardadas.length} contabilizado{(libroVentasGuardadas.length + libroComprasGuardadas.length) !== 1 ? 's' : ''} a centralizar
+                </span>
+                {libroPendientesTotal > 0 && (
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-lg">
+                    <AlertCircle className="h-3 w-3" /> {libroPendientesTotal} sin contabilizar (excluido{libroPendientesTotal !== 1 ? 's' : ''})
+                  </span>
+                )}
               </div>
 
-              {/* Advertencia pendientes */}
+              {/* Nota cuando hay pendientes */}
               {libroPendientesTotal > 0 && (
-                <div className="mt-3 flex items-start gap-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2.5">
-                  <AlertCircle className="h-3.5 w-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">
-                      {libroPendientesTotal} documento{libroPendientesTotal > 1 ? 's' : ''} pendiente{libroPendientesTotal > 1 ? 's' : ''} de guardar
-                    </p>
-                    <p className="text-[9px] text-amber-500/70 mt-0.5">
-                      {libroVentasPendientes > 0 && `${libroVentasPendientes} venta${libroVentasPendientes > 1 ? 's' : ''}`}
-                      {libroVentasPendientes > 0 && libroComprasPendientes > 0 && ' · '}
-                      {libroComprasPendientes > 0 && `${libroComprasPendientes} compra${libroComprasPendientes > 1 ? 's' : ''}`}
-                      {' '}se incluyen con su asiento sugerido (revisa/guarda para confirmarlos).
-                    </p>
-                  </div>
-                </div>
+                <p className="text-[9px] text-amber-500/70 leading-relaxed">
+                  Solo se centraliza lo que está contabilizado. Los documentos sin contabilizar quedan fuera —
+                  contabilízalos primero (desde el listado o "Contabilizar Todo") si quieres incluirlos.
+                </p>
               )}
             </div>
 
             {/* Tabla de asientos */}
             {libroAsientos.length === 0 ? (
-              <div className="text-center py-10 text-gray-500 font-bold uppercase text-xs tracking-widest">
-                Sin movimientos para el período seleccionado.
+              <div className="text-center py-12 flex flex-col items-center gap-2">
+                <AlertCircle className="h-8 w-8 text-amber-400/40" />
+                <p className="text-gray-300 font-black uppercase text-xs tracking-widest">Nada que centralizar</p>
+                <p className="text-gray-500 text-[10px] max-w-sm leading-relaxed">
+                  No hay documentos <span className="text-emerald-400">contabilizados</span> en este período.
+                  Contabiliza compras o ventas primero y vuelve a centralizar.
+                </p>
               </div>
             ) : (() => {
               const lineas = libroAsientos.filter(a => !a.tipo);

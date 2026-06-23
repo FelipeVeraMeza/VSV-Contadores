@@ -30,6 +30,7 @@ import rrhhRoutes from './routes/rrhh.routes.js';
 import rentaRoutes from './routes/renta.routes.js';
 import bancoRoutes from './routes/bancos.routes.js';
 import dteConsultaRoutes from "./routes/dteConsulta.routes.js";
+import cajaRoutes from "./routes/caja.routes.js";
 
 // Importación del Robot Manual
 import { ejecutarRobotSII } from './components/contabilidad/scripts/sincronizador_sii.mjs';
@@ -78,6 +79,7 @@ app.use('/api/renta', apiLimiter, rentaRoutes);
 app.use('/api/bancos', apiLimiter, bancoRoutes);
 app.use('/api/dte', apiLimiter, dteRoutes);
 app.use("/api/dte-consulta", apiLimiter, dteConsultaRoutes);
+app.use("/api/caja", apiLimiter, cajaRoutes);
 
 // ============================================================================
 // 🤖 MOTOR CENTRAL DE SINCRONIZACIÓN (Bóveda Global)
@@ -265,7 +267,19 @@ const ensureSchema = async () => {
     await pool.query(`ALTER TABLE comprobantes ADD COLUMN IF NOT EXISTS contabilizado_por TEXT`);
     await pool.query(`ALTER TABLE comprobantes ADD COLUMN IF NOT EXISTS contabilizado_por_id TEXT`);
     await pool.query(`ALTER TABLE comprobantes ADD COLUMN IF NOT EXISTS contabilizado_at TIMESTAMP`);
-    console.log('✅ Esquema verificado (documentos + auditoría de comprobantes)');
+    // Recaudaciones y Pagos (caja)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS movimientos_caja (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        empresa_id TEXT,
+        tipo TEXT NOT NULL,
+        fecha DATE NOT NULL DEFAULT CURRENT_DATE,
+        rut TEXT, nombre TEXT, folio_asociado TEXT,
+        monto NUMERIC NOT NULL DEFAULT 0,
+        medio_pago TEXT, glosa TEXT, creado_por TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )`);
+    console.log('✅ Esquema verificado (documentos + comprobantes + caja)');
   } catch (e) {
     console.error('⚠️ No se pudo verificar el esquema:', e.message);
   }

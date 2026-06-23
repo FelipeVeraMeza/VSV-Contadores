@@ -26,10 +26,12 @@ export const getJournalEntriesApi = (sessionId, empresaId, page = 0, search = ""
     return fetchWithAuth(`/accounting/journal-entries?${params.toString()}`, sessionId);
 };
 
-export const getBalanceApi = (sessionId, empresaId, mes, anio) => {
+export const getBalanceApi = (sessionId, empresaId, mes, anio, desde, hasta) => {
     const params = new URLSearchParams({ empresaId: empresaId ?? 'ALL' });
-    if (mes)  params.set('mes', mes);
-    if (anio) params.set('anio', anio);
+    if (mes)   params.set('mes', mes);
+    if (anio)  params.set('anio', anio);
+    if (desde) params.set('desde', desde);
+    if (hasta) params.set('hasta', hasta);
     return fetchWithAuth(`/accounting/balance?${params.toString()}`, sessionId);
 };
 
