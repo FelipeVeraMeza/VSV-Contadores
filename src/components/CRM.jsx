@@ -129,7 +129,7 @@ const CRM = () => {
   if (loading) return <div className="h-full flex items-center justify-center text-white"><div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div>;
 
   return (
-    <div className="h-full flex flex-col gap-6 relative">
+    <div className="h-full flex flex-col gap-3 lg:gap-5 relative">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
         <div>
             <h1 className="text-xl md:text-3xl font-black text-white uppercase tracking-tighter">Panel de Gestión CRM</h1>
@@ -147,7 +147,7 @@ const CRM = () => {
       </div>
 
       {activeTab === 'list' && (
-        <div className="flex gap-6 relative items-stretch flex-1 min-h-0">
+        <div className="flex gap-4 lg:gap-6 relative items-stretch flex-1 min-h-[600px]">
             <CrmTableList 
                 filteredClients={filteredClients} 
                 stats={stats} 

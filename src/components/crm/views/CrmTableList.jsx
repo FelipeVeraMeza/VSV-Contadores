@@ -16,7 +16,7 @@ const CrmTableList = ({
     };
 
     return (
-        <div className={`flex flex-col gap-6 transition-all duration-500 ease-in-out h-full min-h-0 ${selectedClientId ? 'lg:w-3/5' : 'w-full'}`}>
+        <div className={`flex flex-col gap-3 lg:gap-4 transition-all duration-500 ease-in-out h-full min-h-0 ${selectedClientId ? 'lg:w-3/5' : 'w-full'}`}>
             
             {/* FILTROS RÁPIDOS COMPACTOS (antes KPI CARDS) */}
             <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
@@ -40,49 +40,48 @@ const CrmTableList = ({
               )}
             </div>
 
-            {/* BOTONES PARA ALTERNAR ACTIVAS / INACTIVAS (LA BASURA) */}
-            <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 w-fit flex-shrink-0">
-                <button
-                    onClick={() => setVistaActivas(true)}
-                    className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                        vistaActivas 
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' 
-                        : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-                    }`}
-                >
-                    Clientes Activos
-                </button>
-                <button
-                    onClick={() => setVistaActivas(false)}
-                    className={`px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                        !vistaActivas 
-                        ? 'bg-red-600/80 text-white shadow-lg shadow-red-500/20' 
-                        : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-                    }`}
-                >
-                    Inactivos / Sin Registro
-                </button>
-            </div>
-
-            {/* BARRA DE BÚSQUEDA Y FILTROS */}
-            <div className="flex flex-col md:flex-row gap-4 flex-shrink-0 bg-[#0f172a]/80 p-4 rounded-2xl border border-white/10 backdrop-blur-xl">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
-                    <input 
-                        type="text" 
-                        placeholder="Buscar por nombre, RUT, correo, teléfono o representante..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-black/20 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white outline-none focus:border-blue-500 transition-colors placeholder:text-gray-600"
-                    />
+            {/* TOGGLE ACTIVOS/INACTIVOS + BÚSQUEDA + FILTRO (una sola fila compacta) */}
+            <div className="flex flex-col lg:flex-row gap-2 lg:gap-3 flex-shrink-0 lg:items-center">
+                <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 w-fit flex-shrink-0">
+                    <button
+                        onClick={() => setVistaActivas(true)}
+                        className={`px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                            vistaActivas
+                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                            : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                        }`}
+                    >
+                        Activos
+                    </button>
+                    <button
+                        onClick={() => setVistaActivas(false)}
+                        className={`px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                            !vistaActivas
+                            ? 'bg-red-600/80 text-white shadow-lg shadow-red-500/20'
+                            : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                        }`}
+                    >
+                        Inactivos
+                    </button>
                 </div>
-                <div className="flex gap-2">
-                    <div className="relative">
+
+                <div className="flex flex-1 gap-2 bg-[#0f172a]/80 p-2 rounded-xl border border-white/10 backdrop-blur-xl">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Buscar por nombre, RUT, correo, teléfono o representante..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full bg-black/20 border border-white/10 rounded-lg pl-10 pr-4 py-2 text-xs text-white outline-none focus:border-blue-500 transition-colors placeholder:text-gray-600"
+                        />
+                    </div>
+                    <div className="relative shrink-0">
                         <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
-                        <select 
+                        <select
                             value={typeFilter}
                             onChange={(e) => setTypeFilter(e.target.value)}
-                            className="bg-black/20 border border-white/10 rounded-xl pl-9 pr-8 py-2.5 text-xs text-white outline-none focus:border-blue-500 appearance-none cursor-pointer"
+                            className="h-full bg-black/20 border border-white/10 rounded-lg pl-9 pr-8 py-2 text-xs text-white outline-none focus:border-blue-500 appearance-none cursor-pointer"
                         >
                             <option value="Todos">Todos los Tipos</option>
                             <option value="Empresa">Empresas</option>
@@ -99,11 +98,11 @@ const CrmTableList = ({
                 <table className="w-full min-w-[680px] text-left border-collapse">
                   <thead className="bg-[#0f172a] sticky top-0 z-10">
                     <tr className="border-b border-white/10 text-[10px] uppercase tracking-widest text-gray-500">
-                      <th className="p-4 font-black">Cliente</th>
-                      <th className="p-4 font-black">Plan & Score</th>
-                      <th className="p-4 font-black">Contacto y Alertas</th>
-                      <th className="p-4 font-black">Estados</th>
-                      <th className="p-4 font-black text-right">Neto a Pagar</th>
+                      <th className="px-4 py-2.5 font-black">Cliente</th>
+                      <th className="px-4 py-2.5 font-black">Plan & Score</th>
+                      <th className="px-4 py-2.5 font-black">Contacto y Alertas</th>
+                      <th className="px-4 py-2.5 font-black">Estados</th>
+                      <th className="px-4 py-2.5 font-black text-right">Neto a Pagar</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -136,7 +135,7 @@ const CrmTableList = ({
                           onClick={() => onClientSelect(client)}
                           className={`border-b border-white/5 transition-all cursor-pointer hover:bg-white/[0.02] ${selectedClientId === client.id ? 'bg-white/[0.04] border-blue-500/30' : ''}`}
                         >
-                          <td className="p-4">
+                          <td className="px-4 py-2.5">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-blue-400">
                                 {tipoCliente === 'Empresa' ? <Building2 size={16}/> : <User size={16}/>}
@@ -148,14 +147,14 @@ const CrmTableList = ({
                             </div>
                           </td>
                           
-                          <td className="p-4">
+                          <td className="px-4 py-2.5">
                              <div className="flex flex-col items-start gap-1">
                                 <span className="bg-white/10 text-gray-200 border border-white/10 px-2 py-0.5 rounded text-[9px] font-black uppercase max-w-[120px] truncate" title={plan}>{plan}</span>
                                 <span className={`text-[9px] font-black px-2 py-0.5 rounded border ${getScoreColor(score)}`}>Score: {score}</span>
                              </div>
                           </td>
                           
-                          <td className="p-4">
+                          <td className="px-4 py-2.5">
                              <div className="flex flex-col items-start gap-1.5">
                                 {importante && importante !== 'SIN_DATO' && (
                                     <span className="flex items-center gap-1 text-[9px] font-black text-red-400 bg-red-400/10 px-2 py-0.5 rounded border border-red-400/20 uppercase max-w-[150px] truncate" title={importante}>
@@ -172,7 +171,7 @@ const CrmTableList = ({
                              </div>
                           </td>
 
-                          <td className="p-4">
+                          <td className="px-4 py-2.5">
                              <div className="flex flex-col items-start gap-1">
                                 <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase ${isAlDiaPago ? 'text-emerald-400 border-emerald-400/20 bg-emerald-400/10' : 'text-red-400 border-red-400/20 bg-red-400/10'}`}>
                                     Pago: {pagoServicio}
@@ -183,7 +182,7 @@ const CrmTableList = ({
                              </div>
                           </td>
 
-                          <td className="p-4 text-right">
+                          <td className="px-4 py-2.5 text-right">
                              <div className="flex flex-col items-end gap-1">
                                  <span className="text-gray-400 text-[9px] font-bold uppercase tracking-widest">Neto a Pagar</span>
                                  <span className="text-emerald-400 font-mono font-bold text-sm">${(isNaN(neto) ? 0 : neto).toLocaleString('es-CL')}</span>
