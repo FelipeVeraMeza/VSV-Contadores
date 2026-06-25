@@ -6,7 +6,8 @@ import {
   LayoutDashboard, Calculator, Users, FileText,
   Landmark, ShieldCheck, FileBarChart, LogOut, Menu, X, Package,
   ChevronDown, ShoppingCart, TrendingUp, Cloud, UserCheck,
-  Wallet, CreditCard, BookCopy, ArrowRightLeft
+  Wallet, CreditCard, BookCopy, ArrowRightLeft,
+  Building2, UserPlus, MessageCircle, Mail, Activity, PieChart
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth.jsx';
@@ -36,9 +37,20 @@ function MainPage() {
     { id: 'reportes',       name: 'Reportes',          icon: FileBarChart },
   ];
 
+  const subCRM = [
+    { id: 'dashboard',     name: 'Dashboard',     icon: LayoutDashboard },
+    { id: 'list',          name: 'Clientes',      icon: Building2 },
+    { id: 'prospectos',    name: 'Prospectos',    icon: UserPlus },
+    { id: 'whatsapp',      name: 'WhatsApp',      icon: MessageCircle },
+    { id: 'correo',        name: 'Correo',        icon: Mail },
+    { id: 'interacciones', name: 'Interacciones', icon: Activity },
+    { id: 'analytics',     name: 'Métricas',      icon: PieChart },
+  ];
+
   // Auto-expandir Contabilidad cuando estás dentro de esa ruta
   useEffect(() => {
     if (location.pathname.startsWith('/contabilidad')) setExpandedModule('contabilidad');
+    else if (location.pathname.startsWith('/CRM')) setExpandedModule('CRM');
   }, [location.pathname]);
 
   const subActivo = new URLSearchParams(location.search).get('sub');
@@ -67,7 +79,7 @@ function MainPage() {
   } else {
     modules = [
       { id: 'dashboard', path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard, color: 'from-blue-500 to-cyan-500' },
-      { id: 'CRM', path: '/CRM', name: 'CRM', icon: Package, color: 'from-pink-500 to-rose-500' },
+      { id: 'CRM', path: '/CRM', name: 'CRM', icon: Package, color: 'from-pink-500 to-rose-500', sub: subCRM },
       { id: 'contabilidad', path: '/contabilidad', name: 'Contabilidad', icon: Calculator, color: 'from-green-500 to-emerald-500', sub: subContabilidad },
       { id: 'rrhh', path: '/rrhh', name: 'Recursos Humanos', icon: Users, color: 'from-purple-500 to-violet-500' },
       { id: 'facturacion', path: '/facturacion', name: 'Facturación SII', icon: FileText, color: 'from-orange-500 to-red-500' },

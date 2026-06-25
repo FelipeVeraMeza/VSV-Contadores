@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LayoutList, BarChart3, Building2, ChevronDown, Search, CheckCircle2 } from 'lucide-react';
+import { LayoutList, BarChart3, Building2, ChevronDown, Search, CheckCircle2, UserPlus } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
 import { useBunkerData } from './crm/crmData'; 
@@ -11,12 +12,25 @@ import ClientDetailDrawer from './crm/modals/ClientDetailDrawer';
 import WhatsappPanel from './crm/views/WhatsappPanel';
 import EmailPanel from './crm/views/EmailPanel';
 import InteraccionesPanel from './crm/views/InteraccionesPanel';
+import CrearClienteModal from './crm/modals/CrearClienteModal';
+import PersonasPanel from './crm/views/PersonasPanel';
+import CrmDashboard from './crm/views/CrmDashboard';
 
 import { useAuth } from '@/hooks/useAuth';
 
 const cleanStr = (str) => {
   if (!str) return '';
   return String(str).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+};
+
+const TITULOS = {
+  dashboard: 'Dashboard CRM',
+  list: 'Clientes',
+  prospectos: 'Prospectos',
+  whatsapp: 'WhatsApp',
+  correo: 'Correo',
+  interacciones: 'Interacciones',
+  analytics: 'Métricas',
 };
 
 const isEmptyField = (val) => {
@@ -26,7 +40,10 @@ const isEmptyField = (val) => {
 };
 
 const CRM = () => {
-  const [activeTab, setActiveTab] = useState('list');
+  // La navegación de sub-páginas vive en el menú lateral (?sub=...)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = searchParams.get('sub') || 'dashboard';
+  const setActiveTab = (id) => setSearchParams({ sub: id });
   const { clients: dbClients, planes, serviciosDisponibles, cashFlow, services, compliance, risk, loading, refresh } = useBunkerData();
   const [clients, setClients] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,6 +51,8 @@ const CRM = () => {
   const [typeFilter, setTypeFilter] = useState('Todos');
   const [selectedClient, setSelectedClient] = useState(null);
   const [vistaActivas, setVistaActivas] = useState(true);
+  const [showCrearCliente, setShowCrearCliente] = useState(false);
+  const [personasReload, setPersonasReload] = useState(0);
 
   useEffect(() => {
     if (dbClients) setClients(dbClients);
@@ -130,21 +149,28 @@ const CRM = () => {
 
   return (
     <div className="h-full flex flex-col gap-3 lg:gap-5 relative">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
-        <div>
-            <h1 className="text-xl md:text-3xl font-black text-white uppercase tracking-tighter">Panel de Gestión CRM</h1>
+      {activeTab !== 'dashboard' && (
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
+          <div>
+              <h1 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter">{TITULOS[activeTab] || 'CRM'}</h1>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 z-50">
+              <button
+                  onClick={() => setShowCrearCliente(true)}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 transition-colors"
+              >
+                  <UserPlus size={14} /> {activeTab === 'prospectos' ? 'Crear Prospecto' : 'Crear Cliente'}
+              </button>
+          </div>
         </div>
-        
-        <div className="flex flex-wrap items-center gap-3 z-50">
-            <div className="flex flex-wrap bg-[#0f172a]/80 border border-white/10 rounded-xl p-1">
-                <button onClick={() => setActiveTab('list')} className={`px-3 lg:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase ${activeTab === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Clientes</button>
-                <button onClick={() => setActiveTab('whatsapp')} className={`px-3 lg:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase ${activeTab === 'whatsapp' ? 'bg-emerald-600 text-white' : 'text-gray-400'}`}>WhatsApp</button>
-                <button onClick={() => setActiveTab('correo')} className={`px-3 lg:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase ${activeTab === 'correo' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Correo</button>
-                <button onClick={() => setActiveTab('interacciones')} className={`px-3 lg:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase ${activeTab === 'interacciones' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Interacciones</button>
-                <button onClick={() => setActiveTab('analytics')} className={`px-3 lg:px-5 py-2.5 rounded-xl text-[10px] font-black uppercase ${activeTab === 'analytics' ? 'bg-blue-600 text-white' : 'text-gray-400'}`}>Métricas</button>
-            </div>
+      )}
+
+      {activeTab === 'dashboard' && (
+        <div className="flex-1 min-h-0">
+          <CrmDashboard clients={clients} onCrear={() => setShowCrearCliente(true)} />
         </div>
-      </div>
+      )}
 
       {activeTab === 'list' && (
         <div className="flex gap-4 lg:gap-6 relative items-stretch flex-1 min-h-[600px]">
@@ -178,6 +204,12 @@ const CRM = () => {
         </div>
       )}
 
+      {activeTab === 'prospectos' && (
+        <div className="flex-1 min-h-0">
+          <PersonasPanel reloadKey={personasReload} onCrear={() => setShowCrearCliente(true)} />
+        </div>
+      )}
+
       {activeTab === 'whatsapp' && (
         <div className="flex-1 min-h-0">
           <WhatsappPanel />
@@ -199,6 +231,15 @@ const CRM = () => {
       {activeTab === 'analytics' && (
         <CrmAnalytics clients={clients} cashFlow={cashFlow} />
       )}
+
+      <AnimatePresence>
+        {showCrearCliente && (
+          <CrearClienteModal
+            onClose={() => setShowCrearCliente(false)}
+            onCreated={() => { setPersonasReload(n => n + 1); setActiveTab('prospectos'); }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
