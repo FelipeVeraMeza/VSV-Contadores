@@ -3,9 +3,14 @@ import 'dotenv/config';
 import { cleanRut } from '../lib/rut.js';
 
 const ALGORITHM = 'aes-256-cbc';
-const KEY = Buffer.from(process.env.ENCRYPTION_KEY); 
+// ⚠️ Si la variable no está, NO tumbamos el server al importar: avisamos y dejamos KEY null.
+// Buffer.from(undefined) lanzaría error y crashearía todo el backend al boot.
+const KEY = process.env.ENCRYPTION_KEY ? Buffer.from(process.env.ENCRYPTION_KEY) : null;
+if (!KEY) {
+    console.error("⚠️ [CRYPTO] Falta la variable de entorno ENCRYPTION_KEY. El cifrado/descifrado no funcionará hasta configurarla.");
+}
 
-const IV_LENGTH = 16; 
+const IV_LENGTH = 16;
 
 export const encrypt = (text) => {
     if (!text) return null;
