@@ -9,6 +9,8 @@ import { crear_cliente } from '../controllers/clientes.controllers.js';
 // Robots para Factura Electrónica (DTE 33)
 import { emitirFacturaPuppeteer } from '../components/facturacion/scripts/factura_manual.mjs';
 import { emitirLotePuppeteer, estadoRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
+import { reenviarCorreoIndividual, reenviarCorreosMasivo } from '../components/facturacion/scripts/revisar para envios/mensajes_facturador_masivo.mjs';
+import { pool } from '../database/db.js';
 
 // Robots para Factura Exenta (DTE 34)
 import { emitirExentaPuppeteer } from '../components/facturacion/scripts/exenta_manual.mjs';
@@ -54,9 +56,80 @@ export const emitirMasivoController = async (req, res) => {
 
         emitirLotePuppeteer(facturas).catch(error => {
             console.error(`\n❌ Error en proceso masivo (33):`, error);
+            // 🔓 Si el motor reventó, liberamos el candado para no bloquear las sincronizaciones del SII.
+            estadoRobot.activo = false;
         });
 
     } catch (error) {
+        if (!res.headersSent) res.status(500).json({ ok: false, error: error.message });
+    }
+};
+
+// ==========================================
+// 📧 REENVÍO MANUAL DE UN CORREO (desde el registro)
+// ==========================================
+export const reenviarCorreoController = async (req, res) => {
+    try {
+        const { folio, datos } = req.body;
+        if (!folio) {
+            return res.status(400).json({ ok: false, error: "Falta el número de folio." });
+        }
+        // No reenviar mientras el facturador masivo está usando el SII (misma cuenta).
+        if (estadoRobot.activo) {
+            return res.status(409).json({ ok: false, error: "El facturador masivo está en ejecución. Espera a que termine para reenviar correos." });
+        }
+
+        console.log(`[INFO] Reenvío manual de correo solicitado para folio ${folio}`);
+        const enviado = await reenviarCorreoIndividual(folio, datos || {}, true);
+
+        if (enviado) {
+            return res.json({ ok: true, mensaje: `Correo del folio ${folio} reenviado con éxito.` });
+        }
+        return res.json({ ok: false, error: `No se pudo reenviar el correo del folio ${folio}. Revisa el registro para ver el motivo.` });
+
+    } catch (error) {
+        console.error("❌ Error en reenviarCorreoController:", error);
+        if (!res.headersSent) res.status(500).json({ ok: false, error: error.message });
+    }
+};
+
+// 📒 Leer el registro de correos desde la BASE DE DATOS
+export const getCorreosLogController = async (req, res) => {
+    try {
+        const { rows } = await pool.query(
+            `SELECT folio, rut, razon_social AS "razonSocial", correo, estado, motivo, datos, fecha
+             FROM correos_facturas
+             ORDER BY fecha DESC
+             LIMIT 2000`
+        );
+        res.json({ ok: true, correos: rows });
+    } catch (e) {
+        console.error("❌ Error leyendo correos_facturas:", e.message);
+        res.json({ ok: true, correos: [], error: e.message });
+    }
+};
+
+// 📧 Reenvío MASIVO de los correos seleccionados (en segundo plano)
+export const reenviarCorreosMasivoController = async (req, res) => {
+    try {
+        const { items } = req.body; // [{ folio, datos }]
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ ok: false, error: "No hay correos seleccionados." });
+        }
+        if (estadoRobot.activo) {
+            return res.status(409).json({ ok: false, error: "El facturador masivo está en ejecución. Espera a que termine." });
+        }
+
+        console.log(`[INFO] Reenvío MASIVO de ${items.length} correo(s) solicitado.`);
+        // Respondemos de inmediato; el proceso corre en segundo plano (puede tardar minutos).
+        res.json({ ok: true, mensaje: `Reenvío masivo iniciado para ${items.length} correo(s). Refresca el registro en unos minutos.` });
+
+        reenviarCorreosMasivo(items, true).catch(err => {
+            console.error("❌ Error en reenvío masivo de correos:", err);
+        });
+
+    } catch (error) {
+        console.error("❌ Error en reenviarCorreosMasivoController:", error);
         if (!res.headersSent) res.status(500).json({ ok: false, error: error.message });
     }
 };

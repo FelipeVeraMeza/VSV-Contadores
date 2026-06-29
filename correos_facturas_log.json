@@ -1,0 +1,56 @@
+[
+  {
+    "fecha": "2026-06-29T16:54:50.040Z",
+    "folio": "1145",
+    "rut": "78398566-7",
+    "razonSocial": "CONSTRUYE B&F SPA",
+    "correo": "cesar.baeza.s@gmail.com",
+    "estado": "enviado",
+    "motivo": ""
+  },
+  {
+    "fecha": "2026-06-29T16:54:54.804Z",
+    "folio": "1146",
+    "rut": "78116703-7",
+    "razonSocial": "FÁBRICA DE EMPANADAS LA PERLA SPA",
+    "correo": "loo-0528@hotmail.com",
+    "estado": "enviado",
+    "motivo": ""
+  },
+  {
+    "fecha": "2026-06-29T16:54:59.807Z",
+    "folio": "1147",
+    "rut": "78305639-9",
+    "razonSocial": "ILUMINA VENTANAS SPA",
+    "correo": "maurilopezx25@gmail.com",
+    "estado": "enviado",
+    "motivo": ""
+  },
+  {
+    "fecha": "2026-06-29T17:00:37.291Z",
+    "folio": "1148",
+    "rut": "78128622-2",
+    "razonSocial": "ARQUITECTURA MATÍAS IGNACIO ALFARO ACEVEDO E.I.R.L.",
+    "correo": "matignacio.arq@gmail.com",
+    "estado": "enviado",
+    "motivo": ""
+  },
+  {
+    "fecha": "2026-06-29T17:00:41.744Z",
+    "folio": "1149",
+    "rut": "77941998-3",
+    "razonSocial": "ANDRES IVAN LEIVA LURASCHI, TATUAJES E.I.R.L.",
+    "correo": "andyluraschi72@gmail.com",
+    "estado": "enviado",
+    "motivo": ""
+  },
+  {
+    "fecha": "2026-06-29T17:00:46.004Z",
+    "folio": "1150",
+    "rut": "77787781-K",
+    "razonSocial": "CAREGIVER SPA",
+    "correo": "caregiver347@gmail.com",
+    "estado": "enviado",
+    "motivo": ""
+  }
+]

@@ -10,6 +10,9 @@ import {
     cerrarSesion,
     emitirManualController,
     emitirMasivoController,
+    reenviarCorreoController,
+    reenviarCorreosMasivoController,
+    getCorreosLogController,
     emitirExentaManualController,
     emitirExentaMasivaController,
     emitirNotaController, // <-- NUEVO CONTROLADOR INTEGRADO
@@ -49,9 +52,18 @@ dteRoutes.post('/emitir-manual', emitirManualController);
 dteRoutes.post('/emitir-masivo', emitirMasivoController);
 dteRoutes.get('/progreso-masivo', (req, res) => res.json(estadoRobot));
 dteRoutes.post('/detener-masivo', (req, res) => {
-    detenerRobot(); 
+    detenerRobot();
     res.json({ ok: true, message: "Orden de detención enviada (DTE 33)." });
 });
+
+// 📧 Reenviar manualmente el correo de una factura (por folio)
+dteRoutes.post('/reenviar-correo', reenviarCorreoController);
+
+// 📧 Reenvío MASIVO de los correos seleccionados
+dteRoutes.post('/reenviar-correos-masivo', reenviarCorreosMasivoController);
+
+// 📒 Registro de correos enviados (desde la BD)
+dteRoutes.get('/correos-log', getCorreosLogController);
 
 // ==========================================
 // 🌟 RUTAS DE PUPPETEER: DTE 34 (EXENTA)

@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { API_BASE_URL } from "../../../../../config.js";
 import { cleanRut } from "@/lib/rut.js";
+import * as XLSX from "xlsx";
 
 // CONTEXTO Y SERVICIOS
 import { useAuth } from "@/hooks/useAuth.jsx"; 
@@ -32,6 +33,7 @@ const DOC_CONFIG = {
 const TABS = {
   UNICA: "unica",
   MASIVA: "masiva",
+  CORREOS: "correos",
 };
 
 // --- UTILIDADES ---
@@ -77,49 +79,77 @@ const createEmptyItem = () => ({
 });
 
 // =======================================================
-// 🚀 PARSER AVANZADO DE CSV
+// 🚀 PARSER DE PLANILLAS (EXCEL / CSV) BASADO EN COLUMNAS
 // =======================================================
-const rutRegex = /\d{7,8}-[0-9Kk]/i;
-const montoRegex = /\$\s?[\d.,]+/g;
+// El RUT chileno válido tiene cuerpo de 7 u 8 dígitos + guion + dígito verificador.
+const rutRegex = /\d{7,8}-?[0-9Kk]/i;
 
 function limpiarMonto(m) {
-  if (!m) return 0;
-  return Number(m.replace("$", "").replace(/\./g, "").replace(/,/g, ""));
+  if (m === null || m === undefined) return 0;
+  // Acepta "$50.000", "50.000", "-$526.649", 50000, etc.
+  const limpio = String(m).replace(/[^0-9-]/g, "");
+  if (limpio === "" || limpio === "-") return 0;
+  return Number(limpio);
 }
 
-function parseLineaAvanzada(linea) {
-  const rutMatch = linea.match(rutRegex);
-  if (!rutMatch) return null; 
-  const rut = rutMatch[0].toUpperCase();
+// Normaliza un texto para comparar encabezados (sin tildes, mayúsculas, sin espacios extra)
+const normalizarHeader = (s) =>
+  String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
 
-  const correosCrudos = linea.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g);
-  const correo = correosCrudos && correosCrudos.length > 0 ? correosCrudos[0].toLowerCase() : "";
+// Extrae el primer correo válido de una celda que puede traer varios separados por ; , / o espacios
+function extraerCorreo(celda) {
+  if (!celda) return "";
+  const match = String(celda).match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  return match ? match[0].toLowerCase().trim() : "";
+}
 
-  const montos = linea.match(montoRegex) || [];
-  const netoNum = montos.length > 0 ? limpiarMonto(montos[0]) : 0;
-  const netoStr = montos.length > 0 ? String(netoNum) : "0";
+// Detecta en qué posición está cada columna leyendo la fila de encabezados.
+// Funciona aunque cambie el orden o haya columnas extra (Tramo, RRHH, BRUTO, etc.).
+function detectarColumnas(headerRow) {
+  const idx = {};
+  (headerRow || []).forEach((h, i) => {
+    const n = normalizarHeader(h);
+    if (!n) return;
+    if (idx.razon === undefined && n.includes("RAZON")) idx.razon = i;
+    else if (idx.plan === undefined && n.includes("PLAN")) idx.plan = i;
+    // "NETO" exacto: así no confunde con "COMPRAS NETAS" / "VENTAS NETAS"
+    else if (idx.neto === undefined && n === "NETO") idx.neto = i;
+    else if (idx.bruto === undefined && n === "BRUTO") idx.bruto = i;
+    // "RUT" exacto: así no confunde con "BRUTO" (que contiene "RUT")
+    else if (idx.rut === undefined && n === "RUT") idx.rut = i;
+    else if (idx.correo === undefined && (n.includes("CORREO") || n.includes("MAIL"))) idx.correo = i;
+    // Columnas extra que necesita el correo (Tramo, RRHH, Compras, Ventas, Total)
+    else if (idx.tramo === undefined && n.includes("TRAMO")) idx.tramo = i;
+    else if (idx.trabajadores === undefined && (n === "RRHH" || n.includes("TRABAJ"))) idx.trabajadores = i;
+    else if (idx.compras === undefined && n.includes("COMPRAS")) idx.compras = i;
+    else if (idx.ventas === undefined && n.includes("VENTAS")) idx.ventas = i;
+    else if (idx.total === undefined && (n.includes("FACTURACION") || n === "TOTAL")) idx.total = i;
+  });
+  return idx;
+}
 
-  let textoPrevio = "";
-  if (montos.length > 0) {
-    textoPrevio = linea.split(montos[0])[0];
-  } else {
-    textoPrevio = linea.split(rut)[0];
+// Convierte un archivo (xlsx/xls/csv/txt) en una matriz de filas (array de arrays).
+async function archivoAMatriz(file) {
+  const nombre = file.name.toLowerCase();
+  const opciones = { header: 1, raw: false, defval: "", blankrows: false };
+
+  if (nombre.endsWith(".xlsx") || nombre.endsWith(".xls")) {
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, { type: "array" });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(ws, opciones);
   }
 
-  textoPrevio = textoPrevio.replace(/"/g, "").trim();
-  if (textoPrevio.endsWith(',')) textoPrevio = textoPrevio.slice(0, -1);
-  if (textoPrevio.endsWith(';')) textoPrevio = textoPrevio.slice(0, -1);
+  // CSV / TXT: detectamos el separador (tabulador, ; o ,) y dejamos que XLSX
+  // respete las comas que vengan dentro de los nombres (ej: "LURASCHI, TATUAJES").
+  const texto = await file.text();
+  let separador = ",";
+  if (texto.includes("\t")) separador = "\t";
+  else if (texto.split("\n")[0]?.includes(";")) separador = ";";
 
-  const partes = textoPrevio.split(/,|;/);
-  let plan = "";
-  let razonSocial = textoPrevio;
-
-  if (partes.length >= 2) {
-    plan = partes.pop().trim(); 
-    razonSocial = partes.join(" ").trim(); 
-  }
-
-  return { rut, correo, netoNum, netoStr, razonSocial, plan };
+  const wb = XLSX.read(texto, { type: "string", FS: separador });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws, opciones);
 }
 
 export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
@@ -136,6 +166,14 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [empresaEncontrada, setEmpresaEncontrada] = useState(null);
   const [isLoadingCrm, setIsLoadingCrm] = useState(false);
+
+  // 📒 Registro de correos enviados
+  const [correosLog, setCorreosLog] = useState([]);
+  const [isLoadingCorreos, setIsLoadingCorreos] = useState(false);
+  const [reenviandoFolio, setReenviandoFolio] = useState(null);
+  const [manualFolio, setManualFolio] = useState("");
+  const [selectedFolios, setSelectedFolios] = useState([]);
+  const [isReenviandoMasivo, setIsReenviandoMasivo] = useState(false);
 
   const [bulkRows, setBulkRows] = useState([]);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
@@ -166,6 +204,89 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
 
   const goToNextPage = () => setCurrentPage((prev) => Math.min(prev + 1, totalPages));
   const goToPrevPage = () => setCurrentPage((prev) => Math.max(prev - 1, 1));
+
+  // ====================================================
+  // 📒 CARGA DEL REGISTRO DE CORREOS
+  // ====================================================
+  const cargarCorreosLog = async () => {
+    setIsLoadingCorreos(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/dte/correos-log`);
+      const data = await res.json();
+      if (data?.correos) setCorreosLog(data.correos);
+    } catch (e) {
+      console.error("Error cargando registro de correos:", e);
+    } finally {
+      setIsLoadingCorreos(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && activeTab === TABS.CORREOS) cargarCorreosLog();
+  }, [isOpen, activeTab]);
+
+  // Reenviar (o enviar) el correo de una factura por su folio
+  const reenviarCorreo = async (folio, datos) => {
+    const folioLimpio = String(folio || "").replace(/[^0-9]/g, "");
+    if (!folioLimpio) return toast({ variant: "destructive", title: "Falta el folio", description: "Ingresa el N° de folio de la factura." });
+
+    setReenviandoFolio(folioLimpio);
+    toast({ title: "📧 Reenviando correo...", description: `Folio ${folioLimpio}. El robot entra al SII y envía; puede tardar ~1 minuto.`, duration: 9000 });
+    try {
+      const res = await fetch(`${API_BASE_URL}/dte/reenviar-correo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folio: folioLimpio, datos: datos || null }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast({ title: "✅ Correo reenviado", description: data.mensaje || `Folio ${folioLimpio} enviado.` });
+      } else {
+        toast({ variant: "destructive", title: "No se pudo reenviar", description: data.error || "Revisa el registro." });
+      }
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error de conexión", description: e.message });
+    } finally {
+      setReenviandoFolio(null);
+      cargarCorreosLog();
+    }
+  };
+
+  // Selección de filas (por folio)
+  const toggleFolio = (folio) => {
+    const f = String(folio);
+    setSelectedFolios((prev) => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]);
+  };
+  const seleccionarPendientes = () => {
+    // Selecciona los que faltan (fallidos + omitidos)
+    setSelectedFolios(correosLog.filter(c => c.estado === 'fallido' || c.estado === 'omitido').map(c => String(c.folio)));
+  };
+  const limpiarSeleccion = () => setSelectedFolios([]);
+
+  // Reenvío masivo de los seleccionados
+  const reenviarSeleccionados = async () => {
+    if (selectedFolios.length === 0) return;
+    const items = correosLog
+      .filter(c => selectedFolios.includes(String(c.folio)))
+      .map(c => ({ folio: String(c.folio), datos: c.datos || { razonSocial: c.razonSocial, rut: c.rut, correo: c.correo } }));
+
+    setIsReenviandoMasivo(true);
+    toast({ title: "📧 Reenvío masivo iniciado", description: `Procesando ${items.length} correo(s) en segundo plano. Puede tardar varios minutos; refresca para ver el avance.`, duration: 10000 });
+    try {
+      const res = await fetch(`${API_BASE_URL}/dte/reenviar-correos-masivo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+      });
+      const data = await res.json();
+      if (!data.ok) toast({ variant: "destructive", title: "No se pudo iniciar", description: data.error || "Error" });
+      setSelectedFolios([]);
+    } catch (e) {
+      toast({ variant: "destructive", title: "Error de conexión", description: e.message });
+    } finally {
+      setIsReenviandoMasivo(false);
+    }
+  };
 
   // ====================================================
   // 🌟 ESCUCHADOR DE PROGRESO EN VIVO
@@ -231,7 +352,9 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     setActiveTab(TABS.UNICA);
     setIsBulkSubmitting(false);
 
-    if (!selectedCompany && user?.sessionId) {
+    // 🔥 Siempre cargamos la lista del CRM: la pestaña MASIVA la necesita para
+    // cruzar los RUT del Excel y saber qué empresas ya están registradas (no son externas).
+    if (user?.sessionId) {
       setIsLoadingCrm(true);
       getCrmDataApi(user.sessionId, null)
         .then(res => res.json())
@@ -240,19 +363,65 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
         })
         .catch(err => console.error("Error CRM:", err))
         .finally(() => setIsLoadingCrm(false));
-      setItem(createEmptyItem());
-    } else if (selectedCompany) {
+    }
+
+    if (selectedCompany) {
       const email = String(selectedCompany.email_corporativo || selectedCompany.correo || "").split(/[,;/\s]+/)[0].trim();
       setItem({
         ...createEmptyItem(),
-        rutFacturar: formatRutSimple(selectedCompany.rut_encrypted || selectedCompany.rut || ""),
+        rutFacturar: formatRutSimple(selectedCompany.rut || selectedCompany.rut_encrypted || ""),
         contactoReceptor: email,
-        name: selectedCompany.plan_nombre || selectedCompany.plan || "", 
+        name: selectedCompany.plan_nombre || selectedCompany.plan || "",
         precio: selectedCompany.impuesto_pagar || selectedCompany.neto || "",
         descripcionProducto: `SERVICIOS CORRESPONDIENTES A ${getCurrentMonth()}`,
       });
+    } else {
+      setItem(createEmptyItem());
     }
   }, [isOpen, selectedCompany, user]);
+
+  // ====================================================
+  // 🔗 RE-VINCULACIÓN AUTOMÁTICA CON EL CRM
+  // El endpoint del CRM puede tardar ~1s. Si subiste el Excel antes de que
+  // llegara la lista, las filas quedaron como "EXTERNO". Cuando la lista termina
+  // de cargar (o cambia), volvemos a cruzar los RUT y enlazamos las que sí están.
+  // ====================================================
+  useEffect(() => {
+    if (!allClientes.length) return;
+
+    setBulkRows((prev) => {
+      if (prev.length === 0) return prev;
+      let cambiado = false;
+
+      const next = prev.map((row) => {
+        if (row.id !== "EXTERNO" || !row.rut) return row;
+
+        const rutBuscar = cleanRut(row.rut);
+        const match = allClientes.find((c) => {
+          try { return cleanRut(c.rut || c.rut_encrypted || "") === rutBuscar; }
+          catch (err) { return false; }
+        });
+        if (!match) return row;
+
+        cambiado = true;
+        const razonActual = String(row.razonSocial || "");
+        const esPlaceholder =
+          razonActual.length < 3 ||
+          razonActual.includes("EXTERNO") ||
+          razonActual.includes("NUEVO CLIENTE");
+
+        return {
+          ...row,
+          id: match.id,
+          razonSocial: esPlaceholder ? (match.razonSocial || match.razon_social || razonActual) : razonActual,
+          plan: row.plan || match.plan || match.planNombre || "",
+          contacto: row.contacto || extraerCorreo(match.correo || match.emailCorporativo),
+        };
+      });
+
+      return cambiado ? next : prev;
+    });
+  }, [allClientes]);
 
   const filteredSuggestions = useMemo(() => {
     if (!searchTerm || String(searchTerm).trim() === "") return [];
@@ -261,7 +430,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
 
     return allClientes.filter(c => {
       const rs = cleanStr(c.razon_social || c.razonSocial || "");
-      const rutPuro = String(c.rut_encrypted || c.rut || "").replace(/[^0-9kK]/gi, '').toLowerCase();
+      const rutPuro = String(c.rut || c.rut_encrypted || "").replace(/[^0-9kK]/gi, '').toLowerCase();
       return rs.includes(termStr) || (termRut !== "" && rutPuro.includes(termRut));
     }).slice(0, 5);
   }, [searchTerm, allClientes]);
@@ -281,7 +450,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     setSearchTerm(cliente.razon_social || cliente.razonSocial);
     setShowSuggestions(false);
     
-    const rut = formatRutSimple(cliente.rut_encrypted || cliente.rut || "");
+    const rut = formatRutSimple(cliente.rut || cliente.rut_encrypted || "");
     const email = String(cliente.email_corporativo || cliente.correo || "").split(/[,;/\s]+/)[0].trim();
 
     setItem(prev => ({
@@ -309,77 +478,146 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     if (!file) return;
 
     try {
-      const text = await file.text();
-      const lineas = text
-        .replace(/\t/g, ",")
-        .replace(/;+/g, ",")
-        .split(/\r?\n/)
-        .map(l => l.trim())
-        .filter(l => l.length > 5);
+      const matriz = await archivoAMatriz(file);
+      if (!matriz || matriz.length < 2) {
+        return toast({ variant: "destructive", title: "Planilla vacía", description: "No se encontraron filas de datos." });
+      }
 
-      lineas.shift();
-      if (lineas.length === 0) return toast({ variant: "destructive", title: "CSV Vacío o Inválido" });
+      // 1. Ubicar las columnas leyendo el encabezado
+      const idx = detectarColumnas(matriz[0]);
 
-      const rowsData = lineas.map((linea, index) => {
-        try {
-            const parsed = parseLineaAvanzada(linea);
-            if (!parsed) return null;
+      if (idx.rut === undefined) {
+        return toast({
+          variant: "destructive",
+          title: "No encuentro la columna RUT",
+          description: "El encabezado debe incluir una columna llamada 'RUT'. Revisa que la primera fila sean los títulos.",
+        });
+      }
+      if (idx.neto === undefined) {
+        toast({
+          title: "⚠️ Aviso: sin columna NETO",
+          description: "No detecté la columna 'NETO'. Los montos quedarán en 0 (deberás completarlos a mano).",
+          duration: 7000,
+        });
+      }
 
-            const rutLimpio = formatRutSimple(parsed.rut);
-            const rutParaBuscar = cleanRut(rutLimpio);
+      // 2. Recorrer las filas de datos
+      const filas = [];
+      const errores = [];
 
-            const crmMatch = allClientes.find(c => {
-                try { return cleanRut(c.rut_encrypted || c.rut || "") === rutParaBuscar; } 
-                catch (err) { return false; }
-            });
+      for (let r = 1; r < matriz.length; r++) {
+        const cols = matriz[r] || [];
+        if (cols.every((c) => String(c ?? "").trim() === "")) continue; // fila vacía
 
-            const planFinal = parsed.plan ? parsed.plan : (crmMatch ? (crmMatch.plan_nombre || crmMatch.plan || '') : 'SERVICIOS');
-            const correoFinal = parsed.correo ? parsed.correo : (crmMatch ? (crmMatch.email_corporativo || '') : '');
-            
-            let precioFinal = "";
-            if (parsed.netoNum > 0) {
-                precioFinal = parsed.netoStr;
-            } else if (linea.includes("$0")) {
-                precioFinal = "0"; 
-            } else {
-                precioFinal = crmMatch ? String(crmMatch.impuesto_pagar || crmMatch.neto || '') : '';
-            }
+        const tomar = (i) => (i !== undefined ? String(cols[i] ?? "").trim() : "");
+        const rutCelda = tomar(idx.rut);
+        const razonCelda = tomar(idx.razon);
 
-            const razonFinal = parsed.razonSocial.length > 2 ? parsed.razonSocial : (crmMatch ? (crmMatch.razon_social || crmMatch.razonSocial) : 'NUEVO CLIENTE (SII)');
-            const estadoFila = Number(precioFinal) > 0 ? 'pendiente' : 'omitido';
-
-            return {
-              id: crmMatch ? crmMatch.id : 'EXTERNO',
-              searchQuery: rutLimpio, 
-              rut: rutLimpio,
-              razonSocial: razonFinal,
-              plan: planFinal,
-              precio: precioFinal === "0" ? "" : precioFinal, 
-              observacion: `SERVICIOS CORRESPONDIENTES A ${getCurrentMonth()}`,
-              contacto: correoFinal,
-              estado: estadoFila
-            };
-        } catch (innerError) {
-            return null; 
+        // --- Validación de RUT ---
+        const rutMatch = rutCelda.match(rutRegex);
+        if (!rutMatch) {
+          // Solo reportamos como error si la fila parece tener datos reales
+          if (rutCelda || razonCelda) {
+            errores.push(`Fila ${r + 1}${razonCelda ? ` (${razonCelda})` : ""}: RUT inválido o vacío → "${rutCelda || "—"}"`);
+          }
+          continue;
         }
-      }).filter(Boolean);
 
-      const filasValidas = rowsData.filter(r => r.rut);
-      filasValidas.sort((a, b) => (a.estado === 'omitido' ? 1 : -1));
+        const rutLimpio = formatRutSimple(rutMatch[0]);
+        const rutParaBuscar = cleanRut(rutLimpio);
 
-      setBulkRows(prev => [...prev, ...filasValidas]);
-      setCurrentPage(1); 
-      
-      const facturables = filasValidas.filter(r => r.estado === 'pendiente').length;
-      const omitidos = filasValidas.filter(r => r.estado === 'omitido').length;
+        // 🔥 El CRM entrega el RUT descifrado en `c.rut` (rut_encrypted es el blob, no sirve para comparar)
+        const crmMatch = allClientes.find((c) => {
+          try { return cleanRut(c.rut || c.rut_encrypted || "") === rutParaBuscar; }
+          catch (err) { return false; }
+        });
 
-      toast({ 
-          title: "Planilla Procesada", 
-          description: `Se detectaron ${facturables} a facturar y ${omitidos} en $0 (Omitidos).` 
+        // --- Plan / Concepto (columna PLAN CONTABLE, con respaldo en el CRM) ---
+        const planFinal =
+          tomar(idx.plan) || (crmMatch ? crmMatch.plan || crmMatch.plan_nombre || "" : "") || "SERVICIOS";
+
+        // --- Correo (columna CORREO, con respaldo en el CRM) ---
+        const correoFinal =
+          extraerCorreo(tomar(idx.correo)) || (crmMatch ? extraerCorreo(crmMatch.correo || crmMatch.email_corporativo) : "");
+
+        // --- Neto (columna NETO; si viene 0/vacío, intentamos el CRM) ---
+        let netoNum = limpiarMonto(tomar(idx.neto));
+        if (netoNum <= 0 && crmMatch) {
+          netoNum = limpiarMonto(crmMatch.neto || crmMatch.impuesto_pagar || 0);
+        }
+
+        const razonFinal =
+          razonCelda.length > 2
+            ? razonCelda
+            : crmMatch
+            ? crmMatch.razon_social || crmMatch.razonSocial
+            : "NUEVO CLIENTE (SII)";
+
+        const estadoFila = netoNum > 0 ? "pendiente" : "omitido";
+
+        // --- Datos extra del Excel que necesita el correo (bruto, compras, ventas, total, tramo, trabajadores) ---
+        const brutoNum = limpiarMonto(tomar(idx.bruto));
+        const comprasNum = limpiarMonto(tomar(idx.compras));
+        const ventasNum = limpiarMonto(tomar(idx.ventas));
+        const totalNum = limpiarMonto(tomar(idx.total));
+
+        filas.push({
+          id: crmMatch ? crmMatch.id : "EXTERNO",
+          searchQuery: rutLimpio,
+          rut: rutLimpio,
+          razonSocial: razonFinal,
+          plan: planFinal,
+          precio: netoNum > 0 ? String(netoNum) : "",
+          observacion: `SERVICIOS CORRESPONDIENTES A ${getCurrentMonth()}`,
+          contacto: correoFinal,
+          estado: estadoFila,
+          motivo: estadoFila === "omitido" ? "Neto en $0 — no se factura" : "",
+          // Datos para el correo (se mandan al backend, no se muestran en la grilla)
+          bruto: brutoNum > 0 ? String(brutoNum) : "",
+          compras: comprasNum > 0 ? String(comprasNum) : "",
+          ventas: ventasNum > 0 ? String(ventasNum) : "",
+          totalFacturacion: totalNum > 0 ? String(totalNum) : "",
+          tramo: tomar(idx.tramo),
+          trabajadores: tomar(idx.trabajadores),
+        });
+      }
+
+      // Las que se facturan primero, las omitidas al final
+      filas.sort((a, b) => (a.estado === "omitido" ? 1 : -1));
+
+      if (filas.length === 0) {
+        return toast({
+          variant: "destructive",
+          title: "Ninguna fila válida",
+          description: errores.length ? `Revisa los ${errores.length} errores detectados (consola F12).` : "No se pudo leer ningún RUT.",
+        });
+      }
+
+      setBulkRows((prev) => [...prev, ...filas]);
+      setCurrentPage(1);
+
+      const facturables = filas.filter((r) => r.estado === "pendiente").length;
+      const omitidos = filas.filter((r) => r.estado === "omitido").length;
+
+      toast({
+        title: "✅ Planilla Procesada",
+        description: `${facturables} a facturar · ${omitidos} en $0 (omitidas)${errores.length ? ` · ${errores.length} con errores` : ""}.`,
+        duration: 6000,
       });
 
+      // 3. Reportar los errores de importación (RUT inválido, etc.)
+      if (errores.length > 0) {
+        console.warn("[FACTURADOR MASIVO] Filas NO importadas:\n" + errores.join("\n"));
+        toast({
+          variant: "destructive",
+          title: `⚠️ ${errores.length} fila(s) NO se importaron`,
+          description: errores.slice(0, 4).join(" | ") + (errores.length > 4 ? ` …y ${errores.length - 4} más (ver consola F12).` : ""),
+          duration: 12000,
+        });
+      }
     } catch (err) {
-      toast({ variant: "destructive", title: "Error leyendo archivo", description: "El archivo tiene caracteres corruptos." });
+      console.error("[FACTURADOR MASIVO] Error leyendo archivo:", err);
+      toast({ variant: "destructive", title: "Error leyendo archivo", description: "Revisa que sea un Excel (.xlsx) o CSV válido." });
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
@@ -395,7 +633,8 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
       precio: '',
       observacion: `SERVICIOS CORRESPONDIENTES A ${getCurrentMonth()}`,
       contacto: '',
-      estado: 'pendiente'
+      estado: 'pendiente',
+      motivo: ''
     }, ...bulkRows]);
     setCurrentPage(1); 
   };
@@ -407,7 +646,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     if (val.length > 7 && /^[0-9kK.\-]+$/.test(val)) {
       newRows[absoluteIndex].rut = formatRutSimple(val);
       const rutParaBuscar = cleanRut(val);
-      const match = allClientes.find(c => cleanRut(c.rut_encrypted || c.rut || "") === rutParaBuscar);
+      const match = allClientes.find(c => cleanRut(c.rut || c.rut_encrypted || "") === rutParaBuscar);
       
       if (match) {
         newRows[absoluteIndex].id = match.id;
@@ -423,14 +662,14 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
 
   const applyClientToRow = (absoluteIndex, cliente) => {
     const newRows = [...bulkRows];
-    const rutLimpio = formatRutSimple(cliente.rut_encrypted || cliente.rut);
+    const rutLimpio = formatRutSimple(cliente.rut || cliente.rut_encrypted);
     newRows[absoluteIndex].id = cliente.id;
     newRows[absoluteIndex].rut = rutLimpio;
     newRows[absoluteIndex].searchQuery = rutLimpio;
     newRows[absoluteIndex].razonSocial = cliente.razon_social || cliente.razonSocial;
     newRows[absoluteIndex].plan = cliente.plan_nombre || cliente.plan || newRows[absoluteIndex].plan;
     newRows[absoluteIndex].precio = cliente.impuesto_pagar || cliente.neto || newRows[absoluteIndex].precio;
-    newRows[absoluteIndex].contacto = (cliente.email_corporativo || '').split(/[,;/\s]+/)[0].trim();
+    newRows[absoluteIndex].contacto = (cliente.correo || cliente.email_corporativo || '').split(/[,;/\s]+/)[0].trim();
     setBulkRows(newRows);
     setActiveRowIndex(null);
   };
@@ -449,6 +688,18 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   const updateBulkRow = (absoluteIndex, field, value) => {
     const newRows = [...bulkRows];
     newRows[absoluteIndex][field] = value;
+
+    // Si el usuario corrige el RUT o el monto a mano, recalculamos el estado
+    // (salvo que ya esté emitida) para que la fila vuelva a entrar al lote.
+    const row = newRows[absoluteIndex];
+    if ((field === "rut" || field === "precio") && row.estado !== "completado" && row.estado !== "procesando") {
+      const rutOk = rutRegex.test(cleanRut(row.rut || ""));
+      const precioOk = Number(String(row.precio).replace(/[^0-9]/g, "")) > 0;
+      if (!rutOk) { row.estado = "error"; row.motivo = "RUT inválido o incompleto"; }
+      else if (!precioOk) { row.estado = "omitido"; row.motivo = "Neto en $0 — no se factura"; }
+      else { row.estado = "pendiente"; row.motivo = ""; }
+    }
+
     setBulkRows(newRows);
   };
 
@@ -492,6 +743,18 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
           unidad: "1",
           precio: String(row.precio || 0).replace(/[^0-9]/g, ''),
           descripcion: row.observacion,
+        },
+        // 📧 Datos extra del Excel para armar el correo al cliente
+        datosCorreo: {
+          razonSocial: row.razonSocial || '',
+          planContable: row.plan || '',
+          neto: String(row.precio || '').replace(/[^0-9]/g, ''),
+          bruto: String(row.bruto || '').replace(/[^0-9]/g, ''),
+          compras: String(row.compras || '').replace(/[^0-9]/g, ''),
+          ventas: String(row.ventas || '').replace(/[^0-9]/g, ''),
+          totalFacturacion: String(row.totalFacturacion || '').replace(/[^0-9]/g, ''),
+          tramo: row.tramo || '',
+          trabajadores: row.trabajadores || '',
         },
       };
     });
@@ -572,7 +835,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   return (
     <Dialog open={isOpen} onOpenChange={(val) => { if (!isSubmitting && !isBulkSubmitting) setIsOpen(val); }}>
       <DialogContent className={`w-full bg-[#0a0a0a] border-white/10 text-white overflow-hidden p-0 shadow-2xl flex flex-col transition-all duration-500 max-h-[95vh] ${
-          activeTab === TABS.MASIVA ? 'max-w-[95vw] lg:max-w-[1250px]' : 'sm:max-w-[800px]'
+          (activeTab === TABS.MASIVA || activeTab === TABS.CORREOS) ? 'max-w-[95vw] lg:max-w-[1250px]' : 'sm:max-w-[800px]'
       }`}>
         
         {(isSubmitting || isFinished) && activeTab === TABS.UNICA && (
@@ -629,6 +892,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
             <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 mb-4">
                 <button onClick={() => setActiveTab(TABS.UNICA)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.UNICA ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}>Factura Única</button>
                 <button onClick={() => setActiveTab(TABS.MASIVA)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.MASIVA ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}><FileText size={14} /> Factura Masiva (CSV o Manual)</button>
+                <button onClick={() => setActiveTab(TABS.CORREOS)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.CORREOS ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}><Mail size={14} /> Correos Enviados</button>
             </div>
           </div>
 
@@ -665,7 +929,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                 <div key={i} onMouseDown={() => onSelectCliente(c)} className="px-5 py-3 cursor-pointer hover:bg-blue-600/20 border-b border-white/5 flex justify-between items-center group transition-colors">
                                   <div>
                                     <div className="text-sm font-bold text-white">{cleanStr(c.razon_social || c.razonSocial)}</div>
-                                    <div className="text-[10px] text-gray-500 font-mono mt-0.5 tracking-widest">{formatRutSimple(c.rut_encrypted || c.rut)}</div>
+                                    <div className="text-[10px] text-gray-500 font-mono mt-0.5 tracking-widest">{formatRutSimple(c.rut || c.rut_encrypted)}</div>
                                   </div>
                                   <CheckCircle2 size={16} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-all" />
                                 </div>
@@ -771,7 +1035,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                     <div className="flex-1 bg-blue-900/10 border border-blue-500/30 rounded-xl p-3 flex flex-col items-center justify-center border-dashed cursor-pointer hover:bg-blue-900/20 transition-all" onClick={() => fileInputRef.current?.click()}>
                       <UploadCloud size={20} className="text-blue-400 mb-1" />
                       <span className="text-[10px] font-bold text-white uppercase tracking-widest">Subir Excel / CSV</span>
-                      <Input ref={fileInputRef} type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" disabled={isBulkSubmitting}/>
+                      <Input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls,.txt" onChange={handleCsvUpload} className="hidden" disabled={isBulkSubmitting}/>
                     </div>
 
                     <div className="flex-1 bg-emerald-900/10 border border-emerald-500/30 rounded-xl p-3 flex flex-col items-center justify-center border-dashed cursor-pointer hover:bg-emerald-900/20 transition-all" onClick={handleAddManualRow}>
@@ -847,7 +1111,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                            const termRut = String(row.searchQuery !== undefined ? row.searchQuery : row.rut).replace(/[^0-9kK]/gi, '').toLowerCase();
                                            const matches = allClientes.filter(c => {
                                               const rs = cleanStr(c.razon_social || c.razonSocial || "");
-                                              const rutPuro = String(c.rut_encrypted || c.rut || "").replace(/[^0-9kK]/gi, '').toLowerCase();
+                                              const rutPuro = String(c.rut || c.rut_encrypted || "").replace(/[^0-9kK]/gi, '').toLowerCase();
                                               return rs.includes(term) || (termRut !== "" && rutPuro.includes(termRut));
                                            }).slice(0, 5);
 
@@ -857,7 +1121,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                                  <div key={idx} onMouseDown={() => applyClientToRow(absoluteIndex, c)} className="px-5 py-2.5 cursor-pointer hover:bg-blue-600/20 border-b border-white/5 flex justify-between items-center group transition-colors">
                                                    <div>
                                                      <div className="text-xs font-bold text-white">{cleanStr(c.razon_social || c.razonSocial)}</div>
-                                                     <div className="text-[9px] text-gray-500 font-mono mt-0.5 tracking-widest">{formatRutSimple(c.rut_encrypted || c.rut)}</div>
+                                                     <div className="text-[9px] text-gray-500 font-mono mt-0.5 tracking-widest">{formatRutSimple(c.rut || c.rut_encrypted)}</div>
                                                    </div>
                                                    <CheckCircle2 size={14} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-all" />
                                                  </div>
@@ -944,12 +1208,12 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                   </td>
 
                                   <td className="px-3 py-1.5 text-center">
-                                    <div className="flex justify-center">
+                                    <div className="flex justify-center" title={row.motivo || ''}>
                                       {isOmitted && <span className="px-2 py-1 rounded-full bg-gray-500/10 text-gray-500 font-black text-[7px] uppercase border border-gray-500/20 tracking-widest">🚫 Omite</span>}
                                       {row.estado === "pendiente" && <span className="px-2 py-1 rounded-full bg-white/5 text-gray-400 font-black text-[7px] uppercase border border-white/10 tracking-widest">En Fila</span>}
                                       {row.estado === "completado" && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 font-black text-[7px] uppercase border border-emerald-500/20 flex items-center gap-1"><CheckCircle2 size={8}/> Listo</span>}
                                       {row.estado === "procesando" && <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-400 font-black text-[7px] uppercase border border-blue-500/20 flex items-center gap-1"><Loader2 size={8} className="animate-spin"/> Emite</span>}
-                                      {row.estado === "error" && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-400 font-black text-[7px] uppercase border border-red-500/20 flex items-center gap-1"><AlertCircle size={8}/> Error</span>}
+                                      {row.estado === "error" && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-400 font-black text-[7px] uppercase border border-red-500/20 flex items-center gap-1" title={row.motivo || 'Revisar fila'}><AlertCircle size={8}/> Error</span>}
                                     </div>
                                   </td>
 
@@ -1001,16 +1265,139 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                   )}
                 </div>
               )}
+
+              {/* ================================================= */}
+              {/* PESTAÑA: CORREOS ENVIADOS */}
+              {/* ================================================= */}
+              {activeTab === TABS.CORREOS && (
+                <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-300">
+                  <div className="flex items-center justify-between mb-3 flex-shrink-0 gap-4 flex-wrap">
+                    <div className="flex gap-6 text-[10px] font-bold uppercase tracking-widest">
+                      <span className="text-gray-400">Total: <span className="text-white">{correosLog.length}</span></span>
+                      <span className="text-emerald-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Enviados: {correosLog.filter(c => c.estado === 'enviado').length}</span>
+                      <span className="text-red-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>Fallidos: {correosLog.filter(c => c.estado === 'fallido').length}</span>
+                      <span className="text-gray-500 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span>Omitidos: {correosLog.filter(c => c.estado === 'omitido').length}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {/* Enviar por folio manual */}
+                      <div className="flex items-center gap-1 bg-black/40 border border-white/10 rounded-lg pl-3 pr-1 h-9">
+                        <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Folio N°</span>
+                        <Input
+                          value={manualFolio}
+                          onChange={(e) => setManualFolio(e.target.value.replace(/[^0-9]/g, ''))}
+                          placeholder="1145"
+                          className="h-7 w-24 bg-transparent border-0 text-xs font-mono font-bold text-blue-300 focus:ring-0 shadow-none"
+                        />
+                        <Button
+                          onClick={() => reenviarCorreo(manualFolio, null)}
+                          disabled={!manualFolio || reenviandoFolio !== null}
+                          className="h-7 px-3 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 text-[10px] font-black uppercase tracking-widest rounded-md"
+                        >
+                          {reenviandoFolio === manualFolio ? <Loader2 size={13} className="animate-spin" /> : 'Enviar'}
+                        </Button>
+                      </div>
+                      <Button onClick={cargarCorreosLog} disabled={isLoadingCorreos} className="h-9 px-4 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-300 text-[10px] font-black uppercase tracking-widest rounded-lg">
+                        {isLoadingCorreos ? <Loader2 size={14} className="animate-spin" /> : '🔄 Refrescar'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Barra de acciones masivas */}
+                  <div className="flex items-center justify-between mb-2 flex-shrink-0 gap-3 flex-wrap bg-white/[0.02] border border-white/10 rounded-xl px-4 py-2">
+                    <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest">
+                      <span className="text-gray-400">Seleccionados: <span className="text-blue-400">{selectedFolios.length}</span></span>
+                      <button onClick={seleccionarPendientes} className="text-orange-400 hover:text-orange-300 underline-offset-2 hover:underline">Seleccionar los que faltan</button>
+                      {selectedFolios.length > 0 && <button onClick={limpiarSeleccion} className="text-gray-500 hover:text-gray-300">Limpiar</button>}
+                    </div>
+                    <Button
+                      onClick={reenviarSeleccionados}
+                      disabled={selectedFolios.length === 0 || isReenviandoMasivo || reenviandoFolio !== null}
+                      className="h-9 px-5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-emerald-600/20 inline-flex items-center gap-2"
+                    >
+                      {isReenviandoMasivo ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+                      Enviar seleccionados ({selectedFolios.length})
+                    </Button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto custom-scrollbar rounded-xl border border-white/10 bg-[#0a0a0a]">
+                    {correosLog.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full text-gray-600 gap-2 py-16">
+                        <Mail size={32} className="opacity-40" />
+                        <p className="text-xs font-bold uppercase tracking-widest">Aún no hay correos registrados</p>
+                      </div>
+                    ) : (
+                      <table className="w-full text-left whitespace-nowrap border-collapse">
+                        <thead className="bg-[#121212] sticky top-0 z-10 border-b border-white/10">
+                          <tr className="text-gray-500 font-black uppercase tracking-widest text-[9px]">
+                            <th className="px-3 py-2.5 w-8 text-center">
+                              <input
+                                type="checkbox"
+                                className="accent-emerald-500 cursor-pointer"
+                                checked={correosLog.length > 0 && selectedFolios.length === correosLog.length}
+                                onChange={(e) => setSelectedFolios(e.target.checked ? correosLog.map(c => String(c.folio)) : [])}
+                                title="Seleccionar todos"
+                              />
+                            </th>
+                            <th className="px-4 py-2.5">Fecha</th>
+                            <th className="px-3 py-2.5">Folio</th>
+                            <th className="px-3 py-2.5 min-w-[160px]">Razón Social</th>
+                            <th className="px-3 py-2.5 min-w-[160px]">Correo</th>
+                            <th className="px-3 py-2.5 text-center">Estado</th>
+                            <th className="px-3 py-2.5 min-w-[200px]">Detalle</th>
+                            <th className="px-3 py-2.5 text-center">Acción</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5">
+                          {correosLog.map((c, i) => (
+                            <tr key={i} className={`hover:bg-white/[0.04] transition-colors ${selectedFolios.includes(String(c.folio)) ? 'bg-emerald-500/5' : ''}`}>
+                              <td className="px-3 py-2 text-center">
+                                <input
+                                  type="checkbox"
+                                  className="accent-emerald-500 cursor-pointer"
+                                  checked={selectedFolios.includes(String(c.folio))}
+                                  onChange={() => toggleFolio(c.folio)}
+                                />
+                              </td>
+                              <td className="px-4 py-2 text-[10px] text-gray-400 font-mono">{c.fecha ? new Date(c.fecha).toLocaleString('es-CL') : '—'}</td>
+                              <td className="px-3 py-2 text-[10px] font-mono font-bold text-blue-400">{c.folio || '—'}</td>
+                              <td className="px-3 py-2 text-[10px] font-bold text-gray-200 uppercase truncate max-w-[200px]">{c.razonSocial || '—'}</td>
+                              <td className="px-3 py-2 text-[10px] text-gray-300 truncate max-w-[200px]">{c.correo || '—'}</td>
+                              <td className="px-3 py-2 text-center">
+                                {c.estado === 'enviado' && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 font-black text-[8px] uppercase border border-emerald-500/20 inline-flex items-center gap-1"><CheckCircle2 size={9} /> Enviado</span>}
+                                {c.estado === 'fallido' && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-400 font-black text-[8px] uppercase border border-red-500/20 inline-flex items-center gap-1"><AlertCircle size={9} /> Fallido</span>}
+                                {c.estado === 'omitido' && <span className="px-2 py-1 rounded-full bg-gray-500/10 text-gray-400 font-black text-[8px] uppercase border border-gray-500/20">Omitido</span>}
+                                {!['enviado', 'fallido', 'omitido'].includes(c.estado) && <span className="text-gray-600 text-[9px]">{c.estado}</span>}
+                              </td>
+                              <td className="px-3 py-2 text-[9px] text-gray-500 whitespace-normal max-w-[260px]">{c.motivo || (c.estado === 'enviado' ? '✓ Entregado al cliente' : '—')}</td>
+                              <td className="px-3 py-2 text-center">
+                                <Button
+                                  onClick={() => reenviarCorreo(c.folio, c.datos)}
+                                  disabled={!c.folio || reenviandoFolio !== null}
+                                  title="Reenviar este correo"
+                                  className="h-7 px-3 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-300 text-[9px] font-black uppercase tracking-widest rounded-md inline-flex items-center gap-1"
+                                >
+                                  {reenviandoFolio === String(c.folio) ? <Loader2 size={12} className="animate-spin" /> : <><Mail size={11} /> {c.estado === 'enviado' ? 'Reenviar' : 'Enviar'}</>}
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              )}
           </div>
 
           <div className="flex gap-4 pt-4 mt-2 border-t border-white/5 flex-shrink-0 relative z-20">
             <Button type="button" onClick={() => setIsOpen(false)} className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 uppercase font-black text-[11px] tracking-widest h-10 rounded-xl transition-all">Cerrar</Button>
             
-            {activeTab === TABS.UNICA ? (
+            {activeTab === TABS.UNICA && (
               <Button onClick={handleSubmitUnica} disabled={!empresaEfectiva || isSubmitting} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
                 {isSubmitting ? 'Procesando...' : 'Emitir Factura Individual'}
               </Button>
-            ) : (
+            )}
+            {activeTab === TABS.MASIVA && (
               <Button onClick={handleBulkSubmit} disabled={isBulkSubmitting || bulkRows.filter(r => r.estado === 'pendiente').length === 0} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
                 {isBulkSubmitting ? 'Procesando Lote...' : `Facturar Todo el Lote (${bulkRows.filter(r => r.estado === 'pendiente').length})`}
               </Button>

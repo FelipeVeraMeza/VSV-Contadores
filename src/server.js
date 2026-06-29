@@ -37,6 +37,9 @@ import cajaRoutes from "./routes/caja.routes.js";
 import { ejecutarRobotSII } from './components/contabilidad/scripts/sincronizador_sii.mjs';
 import { cargarJSONaBD } from './components/contabilidad/scripts/subir_documentos_db.mjs';
 
+// 🔒 Estado del Facturador Masivo: si está activo, NO sincronizamos el SII (misma cuenta = se botan la sesión)
+import { estadoRobot } from './components/facturacion/scripts/factura_masiva.mjs';
+
 // --- Inicialización del Servidor ---
 const app = express();
 app.set('trust proxy', 1); 
@@ -87,6 +90,13 @@ app.use("/api/caja", apiLimiter, cajaRoutes);
 // 🤖 MOTOR CENTRAL DE SINCRONIZACIÓN (Bóveda Global)
 // ============================================================================
 const ejecutarSincronizacion = async (tipo) => {
+    // 🔒 CANDADO: si el Facturador Masivo está emitiendo, NO sincronizamos.
+    // Ambos usan el SII con la MISMA cuenta y se botarían la sesión mutuamente.
+    if (estadoRobot.activo) {
+        console.log(`⏸️ [SYNC ${tipo}] OMITIDA: el Facturador Masivo está activo (no se toca el SII para no botar su sesión).`);
+        return false;
+    }
+
     console.log("\n==================================================");
     console.log(`🤖 [ROBOT GLOBAL] INICIANDO SINCRONIZACIÓN AUTOMÁTICA: ${tipo}`);
     console.log("==================================================");
@@ -197,10 +207,14 @@ app.post('/api/sincronizar-sii', apiLimiter, async (req, res) => {
 
 // Sincronización Nocturna (02:00 AM)
 cron.schedule('0 2 * * *', async () => {
+    if (estadoRobot.activo) {
+        console.log('⏸️ [CRON NOCTURNO] Pospuesto: el Facturador Masivo está activo.');
+        return;
+    }
     console.log('\n==================================================');
     console.log('⏰ [CRON] INICIANDO RUTINA NOCTURNA DEL SII');
     console.log('==================================================');
-    
+
     const ventasOk = await ejecutarSincronizacion('VENTAS');
     if (ventasOk) {
         await ejecutarSincronizacion('COMPRAS');
@@ -210,10 +224,14 @@ cron.schedule('0 2 * * *', async () => {
 
 // Sincronización cada 4 horas
 cron.schedule('0 */4 * * *', async () => {
+    if (estadoRobot.activo) {
+        console.log('⏸️ [CRON 4H] Pospuesto: el Facturador Masivo está activo (no se toca el SII).');
+        return;
+    }
     console.log('\n==================================================');
     console.log('⏰ [CRON] INICIANDO RUTINA DE SINCRONIZACIÓN (CADA 4 HORAS)');
     console.log('==================================================');
-    
+
     const ventasOk = await ejecutarSincronizacion('VENTAS');
     if (ventasOk) {
         await ejecutarSincronizacion('COMPRAS');
@@ -281,7 +299,20 @@ const ensureSchema = async () => {
         medio_pago TEXT, glosa TEXT, creado_por TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       )`);
-    console.log('✅ Esquema verificado (documentos + comprobantes + caja)');
+    // 📧 Registro de correos de facturas (1 fila por folio, se actualiza en cada envío/reenvío)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS correos_facturas (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        folio TEXT UNIQUE,
+        rut TEXT,
+        razon_social TEXT,
+        correo TEXT,
+        estado TEXT,
+        motivo TEXT,
+        datos JSONB,
+        fecha TIMESTAMP DEFAULT NOW()
+      )`);
+    console.log('✅ Esquema verificado (documentos + comprobantes + caja + correos)');
   } catch (e) {
     console.error('⚠️ No se pudo verificar el esquema:', e.message);
   }
