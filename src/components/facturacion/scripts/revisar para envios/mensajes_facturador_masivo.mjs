@@ -258,15 +258,44 @@ function fmtRut(rut) {
     return `${cuerpo}-${limpio.slice(-1)}`;
 }
 
+// Crea un transporter de Gmail por puerto (465 SSL o 587 STARTTLS) con timeouts.
+function crearTransporterGmail(port) {
+    return nodemailer.createTransport({
+        host: 'smtp.gmail.com',
+        port,
+        secure: port === 465, // 465 = SSL directo; 587 = STARTTLS
+        auth: {
+            user: process.env.GMAIL_EMAIL_PRINCIPAL,
+            pass: process.env.GMAIL_PASSWORD_PRINCIPAL
+        },
+        connectionTimeout: 30000, // 30s para conectar
+        greetingTimeout: 30000,
+        socketTimeout: 45000,
+        tls: { rejectUnauthorized: false }
+    });
+}
+
+// Envía con fallback de puerto: prueba 465 y, si falla la conexión, 587. Con reintentos.
+async function enviarConReintentos(mailOptions) {
+    let ultimoError = null;
+    for (const port of [465, 587]) {
+        for (let intento = 1; intento <= 2; intento++) {
+            try {
+                const transporter = crearTransporterGmail(port);
+                await transporter.sendMail(mailOptions);
+                return true; // ✅ enviado
+            } catch (err) {
+                ultimoError = err;
+                console.log(`   ⚠️ Envío falló (puerto ${port}, intento ${intento}): ${err.message}`);
+                await new Promise(r => setTimeout(r, 2000));
+            }
+        }
+    }
+    throw ultimoError || new Error('No se pudo enviar el correo.');
+}
+
 async function enviarCorreo(datosFactura, datosExtraidos, rutaPDF) {
     try {
-        const transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: process.env.GMAIL_EMAIL_PRINCIPAL,
-                pass: process.env.GMAIL_PASSWORD_PRINCIPAL
-            }
-        });
 
         // ==========================================================
         // Datos del correo: priorizamos lo que mandó el facturador
@@ -341,8 +370,8 @@ Saludos cordiales,`;
             ]
         };
         
-        await transporter.sendMail(mailOptions);
-        
+        await enviarConReintentos(mailOptions);
+
         console.log(`   🔍 DATOS LEÍDOS DEL PDF:`);
         console.log(`      - Descripción : ${datosExtraidos.descripcion}`);
         console.log(`   ✅ ¡ENVÍO EXITOSO! Correo entregado al cliente: ${datosExtraidos.correo}`);
