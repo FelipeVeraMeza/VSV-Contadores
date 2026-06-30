@@ -293,20 +293,138 @@ function crearTransporterGmail(port) {
     });
 }
 
-// Envía con fallback de puerto. Probamos 587 PRIMERO (el más permitido por las redes)
-// y si falla, 465. Hacemos 2 rondas para cubrir baches transitorios.
+// ============================================================
+// 📧 ENVÍO POR LA API DE GMAIL (HTTPS) — el correo SALE de tu Gmail,
+// pero por HTTPS en vez de SMTP, así NO lo bloquea Railway.
+// Requiere: GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN.
+// ============================================================
+async function obtenerAccessTokenGmail() {
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            client_id: process.env.GMAIL_CLIENT_ID,
+            client_secret: process.env.GMAIL_CLIENT_SECRET,
+            refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+            grant_type: 'refresh_token'
+        })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!data.access_token) {
+        throw new Error(`No se obtuvo access_token de Google (${res.status}): ${JSON.stringify(data)}`);
+    }
+    return data.access_token;
+}
+
+// Arma el mensaje MIME crudo (con adjuntos/firma) usando nodemailer SIN enviarlo.
+function construirMime(mailOptions) {
+    return new Promise((resolve, reject) => {
+        const t = nodemailer.createTransport({ streamTransport: true, newline: 'unix', buffer: true });
+        t.sendMail(mailOptions, (err, info) => {
+            if (err) return reject(err);
+            resolve(info.message); // Buffer con el MIME completo
+        });
+    });
+}
+
+async function enviarPorGmailApi(mailOptions) {
+    const accessToken = await obtenerAccessTokenGmail();
+    const mime = await construirMime(mailOptions);
+    // base64url (sin +, /, ni = al final), como exige la API de Gmail.
+    const raw = mime.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw })
+    });
+    if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`Gmail API ${res.status}: ${txt}`);
+    }
+    return true;
+}
+
+// Envía por la API HTTPS de Resend (funciona donde SMTP está bloqueado, ej: Railway).
+// Reusa el mismo mailOptions de nodemailer: lee los adjuntos (PDF) y embebe la firma inline.
+async function enviarPorResend(mailOptions) {
+    const apiKey = process.env.RESEND_API_KEY;
+    let html = mailOptions.html;
+    const attachments = [];
+
+    for (const att of (mailOptions.attachments || [])) {
+        try {
+            const content = fs.readFileSync(att.path);
+            if (att.cid) {
+                // Imagen inline (firma): la embebemos como data URI en el HTML.
+                const mime = att.filename.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+                html = html.replace(`cid:${att.cid}`, `data:${mime};base64,${content.toString('base64')}`);
+            } else {
+                attachments.push({ filename: att.filename, content: content.toString('base64') });
+            }
+        } catch (e) {
+            console.log(`   ⚠️ [RESEND] No se pudo leer adjunto ${att.filename}: ${e.message}`);
+        }
+    }
+
+    const from = process.env.RESEND_FROM || mailOptions.from || 'Simple Pyme <onboarding@resend.dev>';
+    const payload = {
+        from,
+        to: Array.isArray(mailOptions.to) ? mailOptions.to : [mailOptions.to],
+        subject: mailOptions.subject,
+        html,
+        attachments
+    };
+
+    const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`Resend API ${res.status}: ${txt}`);
+    }
+    return true;
+}
+
+// Envía el correo: si hay RESEND_API_KEY usa Resend (HTTPS, sirve en Railway);
+// si no, o si Resend falla, cae a Gmail SMTP (587 → 465, 2 rondas).
 async function enviarConReintentos(mailOptions) {
+    // 1) API de GMAIL por HTTPS (el correo sale de tu Gmail; no bloqueado por Railway).
+    if (process.env.GMAIL_REFRESH_TOKEN && process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET) {
+        try {
+            await enviarPorGmailApi(mailOptions);
+            console.log('   ✅ Enviado vía API de Gmail (HTTPS).');
+            return true;
+        } catch (err) {
+            console.log(`   ⚠️ Gmail API falló: ${err.message}. Probando otros métodos...`);
+        }
+    }
+
+    // 2) Resend por HTTPS (no bloqueado por los PaaS).
+    if (process.env.RESEND_API_KEY) {
+        try {
+            await enviarPorResend(mailOptions);
+            console.log('   ✅ Enviado vía Resend (HTTPS).');
+            return true;
+        } catch (err) {
+            console.log(`   ⚠️ Resend falló: ${err.message}. Probando por SMTP...`);
+        }
+    }
+
+    // 3) Gmail SMTP (funciona en local; bloqueado en muchos PaaS como Railway).
     let ultimoError = null;
     for (let ronda = 1; ronda <= 2; ronda++) {
         for (const port of [587, 465]) {
             try {
                 const transporter = crearTransporterGmail(port);
                 await transporter.sendMail(mailOptions);
-                if (port !== 587 || ronda !== 1) console.log(`   ✅ Enviado por puerto ${port}.`);
-                return true; // ✅ enviado
+                if (port !== 587 || ronda !== 1) console.log(`   ✅ Enviado por SMTP puerto ${port}.`);
+                return true;
             } catch (err) {
                 ultimoError = err;
-                console.log(`   ⚠️ Envío falló (puerto ${port}, ronda ${ronda}): ${err.message}`);
+                console.log(`   ⚠️ SMTP falló (puerto ${port}, ronda ${ronda}): ${err.message}`);
                 await new Promise(r => setTimeout(r, 1500));
             }
         }

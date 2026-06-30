@@ -82,7 +82,7 @@ async function navegarAEmision(page) {
                 waitUntil: 'domcontentloaded',
                 timeout: 20000
             });
-            await delay(2000);
+            await delay(800);
             exito = true;
         } catch (error) {
             intentos++;
@@ -166,9 +166,10 @@ const esperarFormularioEmision = async (page, maxRefrescos = 3) => {
         if (estadoRobot.cancelar) throw new Error("Operación cancelada por el usuario.");
 
         // 1) ¿Está el campo principal (RUT del receptor)?
+        // Esperamos menos (8s): si no carga, refrescar suele ser más rápido que seguir esperando.
         let rutOk = false;
         try {
-            await page.waitForSelector('input[name="EFXP_RUT_RECEP"], #EFXP_RUT_RECEP', { visible: true, timeout: 15000 });
+            await page.waitForSelector('input[name="EFXP_RUT_RECEP"], #EFXP_RUT_RECEP', { visible: true, timeout: 8000 });
             rutOk = true;
         } catch (e) { rutOk = false; }
 
@@ -193,7 +194,7 @@ const esperarFormularioEmision = async (page, maxRefrescos = 3) => {
             await navegarAEmision(page).catch(() => {});
         }
         await esperarEstable(page);
-        await delay(2500);
+        await delay(1200);
     }
     return false; // ni con refrescos cargó => el caller hará HARD RESET como último recurso
 };
@@ -306,19 +307,17 @@ export async function emitirLotePuppeteer(facturasFront) {
 
         const loteActual = pendientes.slice(i, i + TAMANO_LOTE);
 
-        // 📧 Folios emitidos en ESTE lote (se envían los correos al cerrar el lote,
-        // NO entre factura y factura, para no inestabilizar la sesión de emisión).
+        // 📧 Folios emitidos en ESTE lote (se envían los correos al cerrar el lote).
         const correosBatch = [];
 
         console.log(`\n📦 INICIANDO LOTE DE FACTURAS (Procesando del ${i + 1} al ${Math.min(i + loteActual.length, pendientes.length)} de ${pendientes.length})`);
 
-        // 🔥 OBRIM NAVEGADOR
-        let browser = await puppeteer.launch({ 
-            headless: HEADLESS, 
-            defaultViewport: null, 
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--start-maximized', '--disable-blink-features=AutomationControlled'] 
+        // 🔥 ABRIMOS UN NAVEGADOR NUEVO POR CADA LOTE (sesión fresca = no se degrada).
+        let browser = await puppeteer.launch({
+            headless: HEADLESS,
+            defaultViewport: null,
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--start-maximized', '--disable-blink-features=AutomationControlled']
         });
-
         let page = (await browser.pages())[0];
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
         page.on('dialog', async d => await d.accept());
@@ -414,17 +413,17 @@ export async function emitirLotePuppeteer(facturasFront) {
                                     if (document.querySelector('#clave')) document.querySelector('#clave').value = '';
                                 });
 
-                                await page.type('#rutcntr', `${process.env.DTE_RUT}-${process.env.DTE_DV}`, { delay: 100 });
-                                await page.type('#clave', process.env.DTE_PASS, { delay: 100 });
-                                
+                                await page.type('#rutcntr', `${process.env.DTE_RUT}-${process.env.DTE_DV}`, { delay: 35 });
+                                await page.type('#clave', process.env.DTE_PASS, { delay: 35 });
+
                                 await Promise.all([
                                     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
                                     page.click('#bt_ingresar')
                                 ]);
-                                
-                                await delay(2000); 
+
+                                await delay(800);
                                 await navegarAEmision(page);
-                                await delay(2000);
+                                await delay(800);
 
                                 const sigueEnLogin = await buscarSelectorSeguro(page, '#rutcntr');
                                 if (sigueEnLogin) throw new Error("Rebotó de nuevo al login.");
@@ -433,7 +432,7 @@ export async function emitirLotePuppeteer(facturasFront) {
                             } catch (errLogin) {
                                 console.log(`⚠️ El login falló. Volviendo a intentar...`);
                                 await navegarAEmision(page);
-                                await delay(3000); 
+                                await delay(1500);
                             }
                         } else {
                             loginCompletado = true; 
@@ -462,24 +461,24 @@ export async function emitirLotePuppeteer(facturasFront) {
                         });
                         if (valueSegundaEmpresa) {
                             await page.select('select[name="RUT_EMP"]', valueSegundaEmpresa);
-                            await delay(500);
+                            await delay(300);
                             await Promise.all([
                                 page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
                                 page.evaluate(() => { document.querySelector('button[type="submit"], input[type="submit"]').click(); })
                             ]);
-                            await delay(2000);
+                            await delay(800);
                         }
                     }
 
                     if (estadoRobot.cancelar) throw new Error("Operación cancelada por el usuario.");
 
                     console.log('⏳ Página cargada. Esperando que aparezca el formulario...');
-                    await delay(3000);
+                    await delay(1000);
 
                     // 🔄 Si el formulario carga a medias, REFRESCA la página (no cierra sesión).
                     const formListo = await esperarFormularioEmision(page, 3);
                     if (!formListo) throw new Error("El formulario de emisión no cargó ni tras refrescar la página (EFXP_RUT_RECEP ausente).");
-                    await delay(1000);
+                    await delay(500);
 
                     const rutInputSelector = await page.$('#EFXP_RUT_RECEP') ? '#EFXP_RUT_RECEP' : 'input[name="EFXP_RUT_RECEP"]';
                     const dvInputSelector = await page.$('#EFXP_DV_RECEP') ? '#EFXP_DV_RECEP' : 'input[name="EFXP_DV_RECEP"]';
@@ -779,18 +778,15 @@ export async function emitirLotePuppeteer(facturasFront) {
 
             if (j < loteActual.length - 1 && indiceGlobal < pendientes.length) {
                 console.log('⏱️ Factura registrada. Enfriando conexión por 20 segundos antes de la siguiente empresa...');
-                await delay(20000); 
+                await delay(20000);
             } else {
-                 console.log('⏱️ Factura procesada. Finalizando ciclo del lote...');
-                 await delay(5000); 
+                console.log('⏱️ Factura procesada. Finalizando ciclo del lote...');
+                await delay(3000);
             }
         }
 
         // =======================================================================
-        // 📧 ENVÍO DE CORREOS DEL LOTE (reusando la MISMA sesión)
-        // Recién ahora que YA emitimos las facturas del lote, mandamos los correos.
-        // Así no interrumpimos la emisión entre una factura y otra (que era lo que
-        // botaba la sesión y obligaba al HARD RESET).
+        // 📧 ENVÍO DE CORREOS DEL LOTE (antes de cerrar la sesión)
         // =======================================================================
         // ⚠️ Enviamos los correos AUNQUE hayan detenido el robot: esas facturas YA se
         // emitieron, así que el cliente debe recibir su correo igual.
@@ -807,8 +803,8 @@ export async function emitirLotePuppeteer(facturasFront) {
             console.log('✅ [CORREOS LOTE] Correos del lote procesados.');
         }
 
-        // 🔥 AL TERMINAR EL LOTE DE 3, CERRAMOS SESIÓN Y NAVEGADOR
-        console.log(`\n🧹 [LOTE DE 3 FINALIZADO / O CANCELADO] Cerrando sesión SII y navegador...`);
+        // 🔥 AL TERMINAR EL LOTE: cerramos sesión y navegador (sesión fresca para el próximo lote).
+        console.log(`\n🧹 [LOTE FINALIZADO] Cerrando sesión SII y navegador...`);
         await cerrarSesionSII(page, browser);
 
         if (estadoRobot.cancelar) {
@@ -816,13 +812,12 @@ export async function emitirLotePuppeteer(facturasFront) {
              break; // 🔥 Salimos del ciclo principal definitivamente
         }
 
-        // 🔥 DESCANSO CORTO ENTRE LOTES
+        // Descanso corto antes de abrir el próximo navegador limpio.
         if (i + TAMANO_LOTE < pendientes.length) {
-            console.log('⏱️ Descansando 3 segundos antes de abrir el próximo navegador limpio...');
-            await delay(3000); 
+            await delay(2000);
         }
-    } 
-    
+    }
+
     estadoRobot.activo = false;
     estadoRobot.cancelar = false; // Lo reseteamos para el futuro
     console.log('🏁 ¡PROCESO TOTAL FINALIZADO!');
