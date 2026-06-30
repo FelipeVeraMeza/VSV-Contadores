@@ -275,7 +275,7 @@ function fmtRut(rut) {
     return `${cuerpo}-${limpio.slice(-1)}`;
 }
 
-// Crea un transporter de Gmail por puerto (465 SSL o 587 STARTTLS) con timeouts.
+// Crea un transporter de Gmail por puerto (587 STARTTLS o 465 SSL) con timeouts cortos.
 function crearTransporterGmail(port) {
     return nodemailer.createTransport({
         host: 'smtp.gmail.com',
@@ -285,26 +285,28 @@ function crearTransporterGmail(port) {
             user: process.env.GMAIL_EMAIL_PRINCIPAL,
             pass: process.env.GMAIL_PASSWORD_PRINCIPAL
         },
-        connectionTimeout: 30000, // 30s para conectar
-        greetingTimeout: 30000,
-        socketTimeout: 45000,
+        connectionTimeout: 15000, // 15s: si el puerto está bloqueado, fallamos rápido y probamos el otro
+        greetingTimeout: 15000,
+        socketTimeout: 20000,
         tls: { rejectUnauthorized: false }
     });
 }
 
-// Envía con fallback de puerto: prueba 465 y, si falla la conexión, 587. Con reintentos.
+// Envía con fallback de puerto. Probamos 587 PRIMERO (el más permitido por las redes)
+// y si falla, 465. Hacemos 2 rondas para cubrir baches transitorios.
 async function enviarConReintentos(mailOptions) {
     let ultimoError = null;
-    for (const port of [465, 587]) {
-        for (let intento = 1; intento <= 2; intento++) {
+    for (let ronda = 1; ronda <= 2; ronda++) {
+        for (const port of [587, 465]) {
             try {
                 const transporter = crearTransporterGmail(port);
                 await transporter.sendMail(mailOptions);
+                if (port !== 587 || ronda !== 1) console.log(`   ✅ Enviado por puerto ${port}.`);
                 return true; // ✅ enviado
             } catch (err) {
                 ultimoError = err;
-                console.log(`   ⚠️ Envío falló (puerto ${port}, intento ${intento}): ${err.message}`);
-                await new Promise(r => setTimeout(r, 2000));
+                console.log(`   ⚠️ Envío falló (puerto ${port}, ronda ${ronda}): ${err.message}`);
+                await new Promise(r => setTimeout(r, 1500));
             }
         }
     }
