@@ -1544,5 +1544,71 @@
       "tramo": "3",
       "trabajadores": "0"
     }
+  },
+  {
+    "fecha": "2026-06-30T17:57:31.795Z",
+    "folio": "1234",
+    "rut": "77886719-2",
+    "razonSocial": "CIVIL PRO SPA",
+    "correo": "luxogara@gmail.com",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {
+      "razonSocial": "CIVIL PRO SPA",
+      "rut": "77886719-2",
+      "correo": "luxogara@gmail.com",
+      "planContable": "EMPRENDEDOR",
+      "neto": "10000",
+      "bruto": "11900",
+      "compras": "18311",
+      "ventas": "",
+      "totalFacturacion": "18311",
+      "tramo": "0",
+      "trabajadores": "0"
+    }
+  },
+  {
+    "fecha": "2026-06-30T18:47:07.849Z",
+    "folio": "1234",
+    "rut": "77886719-2",
+    "razonSocial": "CIVIL PRO SPA",
+    "correo": "luxogara@gmail.com",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {
+      "rut": "77886719-2",
+      "neto": "10000",
+      "bruto": "11900",
+      "tramo": "0",
+      "correo": "luxogara@gmail.com",
+      "ventas": "",
+      "compras": "18311",
+      "razonSocial": "CIVIL PRO SPA",
+      "planContable": "EMPRENDEDOR",
+      "trabajadores": "0",
+      "totalFacturacion": "18311"
+    }
+  },
+  {
+    "fecha": "2026-06-30T18:47:15.651Z",
+    "folio": "1232",
+    "rut": "77583495-1",
+    "razonSocial": "FARMACIAS HIGIA SPA",
+    "correo": "karlafranv@gmail.com",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {
+      "rut": "77583495-1",
+      "neto": "50000",
+      "bruto": "59500",
+      "tramo": "3",
+      "correo": "karlafranv@gmail.com",
+      "ventas": "17987443",
+      "compras": "11819816",
+      "razonSocial": "FARMACIAS HIGIA SPA",
+      "planContable": "GO",
+      "trabajadores": "0",
+      "totalFacturacion": "29807259"
+    }
   }
 ]

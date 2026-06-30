@@ -28,6 +28,42 @@ export const crearMovimientoCaja = async (req, res) => {
   }
 };
 
+// Registrar varios movimientos de una sola vez ("hacer efectivo" en lote)
+export const crearMovimientosCajaLote = async (req, res) => {
+  const { empresaId, tipo, movimientos } = req.body;
+  const usuario = req.user || {};
+  const empId = normEmp(empresaId);
+
+  if (!tipo || !Array.isArray(movimientos) || movimientos.length === 0) {
+    return res.status(400).json({ ok: false, error: 'tipo y movimientos[] (no vacío) son requeridos' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const creados = [];
+    for (const mv of movimientos) {
+      if (!(Number(mv.monto) > 0)) continue;
+      const { rows: [m] } = await client.query(
+        `INSERT INTO movimientos_caja
+           (id, empresa_id, tipo, fecha, rut, nombre, folio_asociado, monto, medio_pago, glosa, creado_por)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+        [empId, tipo, mv.fecha ? new Date(mv.fecha) : new Date(), mv.rut || '', mv.nombre || '',
+         mv.folio_asociado || '', Number(mv.monto) || 0, mv.medio_pago || 'efectivo', mv.glosa || '', usuario.nombre || null]
+      );
+      creados.push(m);
+    }
+    await client.query('COMMIT');
+    return res.json({ ok: true, creados });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error registrando caja (lote):', error.message);
+    return res.status(500).json({ ok: false, error: 'Error al registrar los movimientos.' });
+  } finally {
+    client.release();
+  }
+};
+
 // Listar recaudaciones o pagos (por empresa, tipo y rango de fechas)
 export const listarMovimientosCaja = async (req, res) => {
   const { empresaId, tipo, desde, hasta } = req.query;

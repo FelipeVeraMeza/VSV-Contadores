@@ -104,6 +104,14 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   const setMes  = setMesProp  ?? setMesInterno;
   const setAnio = setAnioProp ?? setAnioInterno;
 
+  // Período APLICADO: la lista solo se actualiza al presionar "Buscar" (no en vivo)
+  const [periodoAplicado, setPeriodoAplicado] = useState({ desde: rango?.desde, hasta: rango?.hasta, mes, anio });
+  const hayCambiosPeriodo =
+    periodoAplicado.desde !== (rango?.desde ?? undefined) ||
+    periodoAplicado.hasta !== (rango?.hasta ?? undefined) ||
+    periodoAplicado.mes !== mes || periodoAplicado.anio !== anio;
+  const aplicarBusqueda = () => setPeriodoAplicado({ desde: rango?.desde, hasta: rango?.hasta, mes, anio });
+
   // ── Cargar movimientos ────────────────────────────────────────
   const cargarDatos = useCallback(async () => {
     setIsLoading(true);
@@ -123,7 +131,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => { cargarDatos(); }, [targetId]);
-  React.useEffect(() => { setCurrentPage(1); }, [activeTab, mes, anio, busqueda, rango, filtroEstado]);
+  React.useEffect(() => { setCurrentPage(1); }, [activeTab, busqueda, periodoAplicado, filtroEstado]);
   React.useEffect(() => { if (tipoInicial) setActiveTab(tipoInicial); }, [tipoInicial]);
 
   // ── Plan de cuentas para dropdowns inline ────────────────────
@@ -170,18 +178,18 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     return map;
   }, [dataComp]);
 
-  const periodo = `${anio}-${mes}`;
-  // Si viene un rango global, se filtra por rango; si no, por mes/año interno.
+  const periodo = `${periodoAplicado.anio}-${periodoAplicado.mes}`;
+  // Se filtra por el período APLICADO (al presionar "Buscar"), no por el seleccionado en vivo.
   const dentroPeriodo = (d) => {
     if (!d.fecha_emision) return false;
-    if (rango?.desde && rango?.hasta) {
+    if (periodoAplicado.desde && periodoAplicado.hasta) {
       const f = String(d.fecha_emision).slice(0, 10);
-      return f >= rango.desde && f <= rango.hasta;
+      return f >= periodoAplicado.desde && f <= periodoAplicado.hasta;
     }
     return d.fecha_emision.startsWith(periodo);
   };
-  const ventas  = useMemo(() => rawVentas.filter(dentroPeriodo),  [rawVentas, periodo, rango]); // eslint-disable-line react-hooks/exhaustive-deps
-  const compras = useMemo(() => rawCompras.filter(dentroPeriodo), [rawCompras, periodo, rango]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ventas  = useMemo(() => rawVentas.filter(dentroPeriodo),  [rawVentas, periodoAplicado]); // eslint-disable-line react-hooks/exhaustive-deps
+  const compras = useMemo(() => rawCompras.filter(dentroPeriodo), [rawCompras, periodoAplicado]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const docPorTab = activeTab === 'ventas' ? ventas : activeTab === 'compras' ? compras : honorarios;
 
@@ -221,14 +229,14 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   }, [mes, anio]);
 
   const { libroVentas, libroCompras, libroPeriodo } = useMemo(() => {
-    // El rango de fechas global prevalece sobre el período interno del modal
-    if (rango?.desde && rango?.hasta) {
+    // El rango aplicado (al presionar "Buscar") prevalece sobre el período interno del modal
+    if (periodoAplicado.desde && periodoAplicado.hasta) {
       const filtro = d => {
         if (!d.fecha_emision) return false;
         const f = String(d.fecha_emision).slice(0, 10);
-        return f >= rango.desde && f <= rango.hasta;
+        return f >= periodoAplicado.desde && f <= periodoAplicado.hasta;
       };
-      return { libroVentas: rawVentas.filter(filtro), libroCompras: rawCompras.filter(filtro), libroPeriodo: `${rango.desde} A ${rango.hasta}` };
+      return { libroVentas: rawVentas.filter(filtro), libroCompras: rawCompras.filter(filtro), libroPeriodo: `${periodoAplicado.desde} A ${periodoAplicado.hasta}` };
     }
     const mesNum = parseInt(mes);
     const trimestre = Math.ceil(mesNum / 3);
@@ -258,7 +266,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
         label = `${mes}/${anio}`;
     }
     return { libroVentas: rawVentas.filter(filtro), libroCompras: rawCompras.filter(filtro), libroPeriodo: label };
-  }, [tipoPeriodoLibro, mes, anio, diaLibro, rawVentas, rawCompras, rango]);
+  }, [tipoPeriodoLibro, mes, anio, diaLibro, rawVentas, rawCompras, periodoAplicado]);
 
   // Contabilizado = tiene comprobante en la BD (coherente con la centralización)
   const esGuardado = (doc) => !!folioMap[String(doc.folio)];
@@ -556,6 +564,15 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
               <div className="pr-3 pl-1 pointer-events-none"><ChevronDown className="h-4 w-4 text-gray-500" /></div>
             </div>
           )}
+          {/* BOTÓN BUSCAR: aplica el período seleccionado (la lista no cambia hasta presionarlo) */}
+          <Button onClick={aplicarBusqueda}
+            className={`flex-shrink-0 font-black uppercase text-[10px] tracking-widest h-[42px] px-4 transition-all ${
+              hayCambiosPeriodo
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-900/40 ring-2 ring-blue-400/40 animate-pulse'
+                : 'bg-blue-600/80 hover:bg-blue-600 text-white'
+            }`}>
+            <Search className="h-4 w-4 mr-2" /> Buscar
+          </Button>
           {/* BUSCADOR unificado: folio + RUT + nombre */}
           <div className="relative flex-1 max-w-xs">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />

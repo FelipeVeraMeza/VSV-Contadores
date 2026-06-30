@@ -9,6 +9,21 @@ dotenv.config();
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Espera a que el SII deje de navegar (drena las recargas del formulario).
+// Evita "Execution context was destroyed" al tocar el DOM mientras el SII recarga
+// (por ejemplo, tras escribir el RUT del receptor).
+const esperarEstable = async (page) => {
+    for (let i = 0; i < 6; i++) {
+        try {
+            await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 2000 });
+            await delay(400);
+        } catch (e) {
+            break; // Sin más navegaciones => página estable.
+        }
+    }
+    await delay(500);
+};
+
 const limpiarYTipar = async (page, selector, texto) => {
     if (!texto) return; 
     try {
@@ -55,20 +70,24 @@ export async function emitirFacturaPuppeteer(datos) {
             try {
                 console.log(`\n🌐 Levantando navegador (Intento ${intentosNavegacion}/3)...`);
                 
-                browser = await puppeteer.launch({ 
+                browser = await puppeteer.launch({
                     headless: true, // 👁️ Ponlo en 'false' si quieres ver el proceso en tu pantalla
-                    defaultViewport: null, 
+                    defaultViewport: null,
+                    protocolTimeout: 120000, // ⏱️ Evita que un clic/comando lento tumbe todo
                     args: [
-                        '--no-sandbox', 
-                        '--disable-setuid-sandbox', 
-                        '--start-maximized', 
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--start-maximized',
                         '--disable-blink-features=AutomationControlled'
-                    ] 
+                    ]
                 });
 
                 page = await browser.newPage();
+                // 🔔 Aceptamos automáticamente las alertas/confirmaciones del SII para que NO
+                // bloqueen los clics (esos diálogos colgaban el "Input.dispatchMouseEvent").
+                page.on('dialog', async d => { try { await d.accept(); } catch (e) {} });
                 // Aumentamos un poco el timeout general para darle respiro
-                page.setDefaultNavigationTimeout(60000); 
+                page.setDefaultNavigationTimeout(60000);
 
                 // Intentamos llegar a la página
                 await page.goto('https://www1.sii.cl/cgi-bin/Portal001/mipeLaunchPage.cgi?OPCION=33&TIPO=4', { 
@@ -160,12 +179,18 @@ export async function emitirFacturaPuppeteer(datos) {
         await page.keyboard.press('Tab');
         await page.mouse.click(10, 10);
 
+        // 🕒 CLAVE: al validar el RUT del receptor, el SII RECARGA el formulario.
+        // Esperamos a que esa recarga termine ANTES de tocar el DOM (evita "context destroyed").
+        console.log('⏳ Esperando que el SII termine de validar el RUT (posible recarga)...');
+        await delay(1200);
+        await esperarEstable(page);
+        await delay(1200);
+
         // =======================================================================
         // 5. LLENAR DATOS SECUNDARIOS MIENTRAS SII PIENSA
         // =======================================================================
-        console.log('⏩ Llenando datos secundarios mientras el SII busca...');
-        await delay(2000); 
-        
+        console.log('⏩ Llenando datos secundarios...');
+
         await limpiarYTipar(page, 'input[name="EFXP_CIUDAD_ORIGEN"]', datos.ciudadEmisor || 'Santiago');
         await limpiarYTipar(page, 'input[name="EFXP_FONO_EMISOR"]', datos.telefonoEmisor || '56978278733');
         await limpiarYTipar(page, 'input[name="EFXP_CIUDAD_RECEP"]', datos.ciudadReceptor || 'Santiago');
@@ -182,7 +207,8 @@ export async function emitirFacturaPuppeteer(datos) {
         console.log('⏳ Extrayendo la Razón Social del RECEPTOR...');
         
         let nombreEncontrado = null;
-        for (let i = 0; i < 6; i++) { 
+        for (let i = 0; i < 8; i++) {
+          try {
             nombreEncontrado = await page.evaluate(() => {
                 const inputExacto = document.querySelector('#EFXP_NMB_RECEP') || document.querySelector('input[name="EFXP_NMB_RECEP"]');
                 if (inputExacto && inputExacto.value && inputExacto.value.trim().length > 2) return inputExacto.value.trim();
@@ -212,13 +238,19 @@ export async function emitirFacturaPuppeteer(datos) {
                 }
                 return null;
             });
+          } catch (eEval) {
+            // Si el SII recargó (contexto destruido), esperamos a que se estabilice y reintentamos.
+            await esperarEstable(page);
+            await delay(500);
+            continue;
+          }
 
             if (nombreEncontrado) {
                 razonSocialCapturadaDelSII = nombreEncontrado;
                 console.log(`✅ ¡Nombre capturado para la Base de Datos!: "${razonSocialCapturadaDelSII}"`);
-                break; 
+                break;
             }
-            await delay(500); 
+            await delay(500);
         }
 
         if (!nombreEncontrado) {
@@ -247,8 +279,12 @@ export async function emitirFacturaPuppeteer(datos) {
         await page.select('select[name="EFXP_FMA_PAGO"]', '1'); 
 
         console.log('✅ Validando montos...');
-        await page.click('button[name="Button_Update"]');
-        await delay(3500); 
+        // Clic vía JS (no por el mouse de CDP) para evitar el "Input.dispatchMouseEvent timed out".
+        await page.evaluate(() => {
+            const btn = document.querySelector('button[name="Button_Update"]');
+            if (btn) btn.click();
+        });
+        await delay(3500);
         
         try {
             const alertaAceptada = await page.evaluate(() => {
@@ -272,7 +308,10 @@ export async function emitirFacturaPuppeteer(datos) {
                 cajaVisible = true;
             } catch (e) {
                 intentosFirma++;
-                await page.click('button[name="Button_Update"]').catch(()=> {}); 
+                await page.evaluate(() => {
+                    const btn = document.querySelector('button[name="Button_Update"]');
+                    if (btn) btn.click();
+                }).catch(() => {});
                 await delay(2000);
             }
         }
