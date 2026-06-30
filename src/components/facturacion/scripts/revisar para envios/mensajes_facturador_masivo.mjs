@@ -281,6 +281,7 @@ function crearTransporterGmail(port) {
         host: 'smtp.gmail.com',
         port,
         secure: port === 465, // 465 = SSL directo; 587 = STARTTLS
+        family: 4, // 🔧 FORZAR IPv4: la red no tiene IPv6 (daba "ENETUNREACH" a una IP v6)
         auth: {
             user: process.env.GMAIL_EMAIL_PRINCIPAL,
             pass: process.env.GMAIL_PASSWORD_PRINCIPAL
