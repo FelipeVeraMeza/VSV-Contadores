@@ -52,5 +52,71 @@
     "correo": "caregiver347@gmail.com",
     "estado": "enviado",
     "motivo": ""
+  },
+  {
+    "fecha": "2026-06-30T01:59:18.982Z",
+    "folio": "1155",
+    "rut": "77911337-K",
+    "razonSocial": "SOCIEDAD COMERCIAL ERICES Y TRESKOW LIMITADA",
+    "correo": "alpasoalmacenes@gmail.com",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {
+      "rut": "77911337-K",
+      "neto": "30000",
+      "bruto": "35700",
+      "tramo": "1",
+      "correo": "alpasoalmacenes@gmail.com",
+      "ventas": "26091",
+      "compras": "2962599",
+      "razonSocial": "SOCIEDAD COMERCIAL ERICES Y TRESKOW LIMITADA",
+      "planContable": "GO",
+      "trabajadores": "0",
+      "totalFacturacion": "2988690"
+    }
+  },
+  {
+    "fecha": "2026-06-30T01:59:36.543Z",
+    "folio": "1154",
+    "rut": "78271993-9",
+    "razonSocial": "MGC INVERSIÓNES SPA",
+    "correo": "talo19@gmail.com",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {
+      "rut": "78271993-9",
+      "neto": "60000",
+      "bruto": "71400",
+      "tramo": "3",
+      "correo": "talo19@gmail.com",
+      "ventas": "22108738",
+      "compras": "65027",
+      "razonSocial": "MGC INVERSIÓNES SPA",
+      "planContable": "EXECUTIVE",
+      "trabajadores": "1",
+      "totalFacturacion": "22173765"
+    }
+  },
+  {
+    "fecha": "2026-06-30T01:59:58.497Z",
+    "folio": "1153",
+    "rut": "78262268-4",
+    "razonSocial": "MIARTE SPA",
+    "correo": "orlandoalzamora591420@gmail.com",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {
+      "rut": "78262268-4",
+      "neto": "30000",
+      "bruto": "35700",
+      "tramo": "1",
+      "correo": "orlandoalzamora591420@gmail.com",
+      "ventas": "1057332",
+      "compras": "326428",
+      "razonSocial": "MIARTE SPA",
+      "planContable": "GO",
+      "trabajadores": "0",
+      "totalFacturacion": "1383760"
+    }
   }
 ]

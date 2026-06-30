@@ -65,6 +65,9 @@ export const emitirMasivoController = async (req, res) => {
     }
 };
 
+// 🔒 Candado: solo un envío/reenvío de correos a la vez (misma cuenta SII = no concurrencia).
+let correoEnCurso = false;
+
 // ==========================================
 // 📧 REENVÍO MANUAL DE UN CORREO (desde el registro)
 // ==========================================
@@ -78,16 +81,21 @@ export const reenviarCorreoController = async (req, res) => {
         if (estadoRobot.activo) {
             return res.status(409).json({ ok: false, error: "El facturador masivo está en ejecución. Espera a que termine para reenviar correos." });
         }
-
-        console.log(`[INFO] Reenvío manual de correo solicitado para folio ${folio}`);
-        const enviado = await reenviarCorreoIndividual(folio, datos || {}, true);
-
-        if (enviado) {
-            return res.json({ ok: true, mensaje: `Correo del folio ${folio} reenviado con éxito.` });
+        if (correoEnCurso) {
+            return res.status(409).json({ ok: false, error: "Ya hay un envío de correos en curso. Espera a que termine." });
         }
-        return res.json({ ok: false, error: `No se pudo reenviar el correo del folio ${folio}. Revisa el registro para ver el motivo.` });
+
+        correoEnCurso = true;
+        console.log(`[INFO] Reenvío manual de correo solicitado para folio ${folio}`);
+        // Respondemos de inmediato y procesamos en segundo plano (tarda ~1 min: login SII + PDF + envío).
+        res.json({ ok: true, mensaje: `Reenvío del folio ${folio} iniciado. Refresca el registro en ~1 minuto para ver el resultado.` });
+
+        reenviarCorreoIndividual(folio, datos || {}, true)
+            .catch(err => console.error(`❌ Error reenviando correo del folio ${folio}:`, err.message))
+            .finally(() => { correoEnCurso = false; });
 
     } catch (error) {
+        correoEnCurso = false;
         console.error("❌ Error en reenviarCorreoController:", error);
         if (!res.headersSent) res.status(500).json({ ok: false, error: error.message });
     }
@@ -119,16 +127,21 @@ export const reenviarCorreosMasivoController = async (req, res) => {
         if (estadoRobot.activo) {
             return res.status(409).json({ ok: false, error: "El facturador masivo está en ejecución. Espera a que termine." });
         }
+        if (correoEnCurso) {
+            return res.status(409).json({ ok: false, error: "Ya hay un envío de correos en curso. Espera a que termine." });
+        }
 
+        correoEnCurso = true;
         console.log(`[INFO] Reenvío MASIVO de ${items.length} correo(s) solicitado.`);
         // Respondemos de inmediato; el proceso corre en segundo plano (puede tardar minutos).
         res.json({ ok: true, mensaje: `Reenvío masivo iniciado para ${items.length} correo(s). Refresca el registro en unos minutos.` });
 
-        reenviarCorreosMasivo(items, true).catch(err => {
-            console.error("❌ Error en reenvío masivo de correos:", err);
-        });
+        reenviarCorreosMasivo(items, true)
+            .catch(err => console.error("❌ Error en reenvío masivo de correos:", err))
+            .finally(() => { correoEnCurso = false; });
 
     } catch (error) {
+        correoEnCurso = false;
         console.error("❌ Error en reenviarCorreosMasivoController:", error);
         if (!res.headersSent) res.status(500).json({ ok: false, error: error.message });
     }

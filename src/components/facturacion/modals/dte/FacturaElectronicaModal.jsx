@@ -231,7 +231,6 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     if (!folioLimpio) return toast({ variant: "destructive", title: "Falta el folio", description: "Ingresa el N° de folio de la factura." });
 
     setReenviandoFolio(folioLimpio);
-    toast({ title: "📧 Reenviando correo...", description: `Folio ${folioLimpio}. El robot entra al SII y envía; puede tardar ~1 minuto.`, duration: 9000 });
     try {
       const res = await fetch(`${API_BASE_URL}/dte/reenviar-correo`, {
         method: "POST",
@@ -240,15 +239,15 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
       });
       const data = await res.json();
       if (data.ok) {
-        toast({ title: "✅ Correo reenviado", description: data.mensaje || `Folio ${folioLimpio} enviado.` });
+        toast({ title: "📧 Reenvío iniciado", description: data.mensaje || `Folio ${folioLimpio}: enviando en segundo plano. Se refresca solo en ~1 min.`, duration: 9000 });
+        setTimeout(cargarCorreosLog, 65000); // refresca cuando ya debería estar listo
       } else {
-        toast({ variant: "destructive", title: "No se pudo reenviar", description: data.error || "Revisa el registro." });
+        toast({ variant: "destructive", title: "No se pudo iniciar", description: data.error || "Revisa el registro." });
       }
     } catch (e) {
       toast({ variant: "destructive", title: "Error de conexión", description: e.message });
     } finally {
       setReenviandoFolio(null);
-      cargarCorreosLog();
     }
   };
 
@@ -279,8 +278,14 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
         body: JSON.stringify({ items }),
       });
       const data = await res.json();
-      if (!data.ok) toast({ variant: "destructive", title: "No se pudo iniciar", description: data.error || "Error" });
-      setSelectedFolios([]);
+      if (!data.ok) {
+        toast({ variant: "destructive", title: "No se pudo iniciar", description: data.error || "Error" });
+      } else {
+        setSelectedFolios([]);
+        // Refrescamos periódicamente mientras el lote se procesa en segundo plano.
+        setTimeout(cargarCorreosLog, 30000);
+        setTimeout(cargarCorreosLog, 90000);
+      }
     } catch (e) {
       toast({ variant: "destructive", title: "Error de conexión", description: e.message });
     } finally {

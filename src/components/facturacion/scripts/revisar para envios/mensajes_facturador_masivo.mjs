@@ -403,21 +403,38 @@ export async function enviarCorreoFacturaEnSesion(page, folio, datos = {}) {
         );
 
         // 2. Si pide elegir empresa emisora, elegimos la nuestra (78306207)
-        await page.evaluate(() => {
+        const seleccionoEmpresa = await page.evaluate(() => {
             const select = document.querySelector('select');
             if (select) {
                 const opt = Array.from(select.options).find(o => o.text.includes('78306207'));
                 if (opt) {
                     select.value = opt.value;
                     const btn = document.querySelector('input[type="submit"], button[type="submit"], input[name="btnContinuar"]');
-                    if (btn) btn.click();
+                    if (btn) { btn.click(); return true; }
                 }
             }
+            return false;
         });
-        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+        // Solo esperamos navegación si realmente hicimos clic en "Continuar" (si no, evitamos 30s muertos).
+        if (seleccionoEmpresa) {
+            await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+        }
 
         // 3. Esperar la tabla y ubicar la fila del folio
-        await page.waitForSelector('table tbody tr', { timeout: 20000 });
+        console.log(`   📂 [CORREO EN SESIÓN] Portal abierto. Cargando la tabla de documentos...`);
+        try {
+            await page.waitForSelector('table tbody tr', { timeout: 20000 });
+        } catch (eTabla) {
+            console.log(`   ⚠️ [CORREO EN SESIÓN] La tabla de emitidos no cargó (¿sesión/empresa?). Folio ${folioStr} omitido.`);
+            await registrarCorreoEnLog({
+                folio: folioStr, rut: datos.rut || '', razonSocial: datos.razonSocial || '',
+                correo: datos.correo || '', estado: 'omitido',
+                motivo: 'No cargó la tabla de documentos emitidos en el SII.',
+                datos
+            });
+            return false;
+        }
+
         const docInfo = await page.evaluate((folioBuscado) => {
             const filas = Array.from(document.querySelectorAll('table tbody tr'));
             for (const fila of filas) {
@@ -449,6 +466,7 @@ export async function enviarCorreoFacturaEnSesion(page, folio, datos = {}) {
         }
 
         // 4. Descargar el PDF con las cookies de la sesión actual
+        console.log(`   📄 [CORREO EN SESIÓN] Folio ${folioStr} encontrado. Descargando PDF...`);
         const urlDescarga = `https://www1.sii.cl/cgi-bin/Portal001/mipeDisplayPDF.cgi?DHDR_CODIGO=${docInfo.codigo}`;
         const cookies = await page.cookies();
         const cookieString = cookies.map(c => `${c.name}=${c.value}`).join('; ');
@@ -487,6 +505,7 @@ export async function enviarCorreoFacturaEnSesion(page, folio, datos = {}) {
         }
 
         // 6. Enviar el correo
+        console.log(`   ✉️  [CORREO EN SESIÓN] Enviando correo a ${datosExtraidos.correo}...`);
         const enviado = await enviarCorreo(docInfo, datosExtraidos, rutaTemporal);
 
         // 📒 Registrar el resultado para mostrarlo en la página.
