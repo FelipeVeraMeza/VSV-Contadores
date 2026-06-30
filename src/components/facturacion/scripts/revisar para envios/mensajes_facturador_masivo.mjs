@@ -13,6 +13,23 @@ const __dirname = path.dirname(__filename);
 
 const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
+// Cierra sesión en el SII de forma segura antes de matar el navegador.
+async function cerrarSesionSiiSimple(page) {
+    if (!page || page.isClosed?.()) return;
+    try {
+        await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { waitUntil: 'domcontentloaded', timeout: 10000 });
+        await delay(1500);
+        console.log('   🔒 [SII] Sesión cerrada correctamente.');
+    } catch (e) {
+        // Respaldo: limpiar cookies para que no quede sesión "fantasma".
+        try {
+            const client = await page.target().createCDPSession();
+            await client.send('Network.clearBrowserCookies');
+            console.log('   🧹 [SII] Cookies limpiadas (logout de respaldo).');
+        } catch (e2) {}
+    }
+}
+
 // =====================================================================
 // ⚙️ CONFIGURACIONES PRINCIPALES
 // =====================================================================
@@ -551,8 +568,9 @@ export async function reenviarCorreoIndividual(folio, datos = {}, headless = tru
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--start-maximized', '--disable-blink-features=AutomationControlled']
     });
 
+    let page;
     try {
-        const page = (await browser.pages())[0];
+        page = (await browser.pages())[0];
         page.setDefaultNavigationTimeout(60000);
         page.on('dialog', async d => await d.accept());
 
@@ -587,6 +605,8 @@ export async function reenviarCorreoIndividual(folio, datos = {}, headless = tru
         });
         return false;
     } finally {
+        // 🔒 Cerramos la sesión del SII ANTES de matar el navegador (no dejar sesión abierta).
+        await cerrarSesionSiiSimple(page);
         try { await browser.close(); } catch (e) {}
     }
 }
@@ -607,8 +627,9 @@ export async function reenviarCorreosMasivo(items, headless = true) {
     });
 
     let enviados = 0, fallidos = 0;
+    let page;
     try {
-        const page = (await browser.pages())[0];
+        page = (await browser.pages())[0];
         page.setDefaultNavigationTimeout(60000);
         page.on('dialog', async d => await d.accept());
 
@@ -642,6 +663,8 @@ export async function reenviarCorreosMasivo(items, headless = true) {
     } catch (error) {
         console.log(`❌ [REENVÍO MASIVO] Error general: ${error.message}`);
     } finally {
+        // 🔒 Cerramos la sesión del SII antes de matar el navegador.
+        await cerrarSesionSiiSimple(page);
         try { await browser.close(); } catch (e) {}
     }
 
