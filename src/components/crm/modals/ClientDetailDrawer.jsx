@@ -1,11 +1,11 @@
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Building2, User, Edit, DollarSign, Briefcase, FileSpreadsheet, Key, Send, Save, Clock, AlertTriangle, CheckCircle2, Landmark, Receipt, Layers, Plus, Trash2, MessageSquare, Ticket, History, RotateCcw } from 'lucide-react';
+import { X, Building2, User, Edit, DollarSign, Briefcase, FileSpreadsheet, Key, Send, Save, Clock, AlertTriangle, CheckCircle2, Landmark, Receipt, Layers, Plus, Trash2, MessageSquare, Ticket, History, RotateCcw, Search, Flag, CalendarClock, Phone, Mail, Copy, Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
-import { EditableField, SecureField } from '../ui/CrmUI';
-import { createNotaApi, cambiarPlanApi, addServicioApi, removeServicioApi, toggleTicketApi } from '@/services/crmService';
+import { EditableField, SecureField, SelectField } from '../ui/CrmUI';
+import { createNotaApi, editarNotaApi, eliminarNotaApi, cambiarPlanApi, addServicioApi, removeServicioApi, reactivarServicioApi, toggleTicketApi } from '@/services/crmService';
 
 import { useAuth } from '@/hooks/useAuth';
 
@@ -13,22 +13,65 @@ const getSessionId = () => {
     try { return JSON.parse(localStorage.getItem('user') || '{}').sessionId; }
     catch { return null; }
 };
+const getUserNombre = () => {
+    try { return JSON.parse(localStorage.getItem('user') || '{}').nombre || 'Tú'; }
+    catch { return 'Tú'; }
+};
+// Formatea un número con separador de miles (es-CL); devuelve '' si no hay dígitos
+const formatMiles = (val) => {
+    const digits = String(val ?? '').replace(/\D/g, '');
+    return digits ? Number(digits).toLocaleString('es-CL') : '';
+};
 
-const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serviciosDisponibles = [], onRefresh }) => {
+// Valores permitidos por el CHECK de la BD (no enviar otros o falla la restricción)
+const OPCIONES_PAGO = ['AL DIA', 'NO PAGADO', 'SERVICIO SUSPENDIDO'];
+const OPCIONES_F29 = ['DECLARADO', 'PENDIENTE', 'NO DECLARAR'];
+// Incluye el valor actual si no está en la lista canónica (para no perderlo ni forzar cambio)
+const conActual = (opts, actual) => (actual && !opts.includes(actual)) ? [actual, ...opts] : opts;
+
+// Dígito verificador (módulo 11)
+const validarRutDV = (rut) => {
+    const limpio = String(rut || '').toUpperCase().replace(/[^0-9K]/g, '');
+    if (limpio.length < 2) return false;
+    const body = limpio.slice(0, -1);
+    const dv = limpio.slice(-1);
+    let suma = 0, mul = 2;
+    for (let i = body.length - 1; i >= 0; i--) {
+        suma += parseInt(body[i], 10) * mul;
+        mul = mul < 7 ? mul + 1 : 2;
+    }
+    const resto = 11 - (suma % 11);
+    const esperado = resto === 11 ? '0' : resto === 10 ? 'K' : String(resto);
+    return dv === esperado;
+};
+const validarCorreo = (c) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(c || '').trim());
+
+const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes = [], serviciosDisponibles = [], preciosPlanTramo = [], onRefresh }) => {
     const navigate = useNavigate();
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState(client);
     const [newNote, setNewNote] = useState('');
     const [isSavingNote, setIsSavingNote] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Bitácora: pestaña activa (conversaciones / tickets)
     const [bitacoraTab, setBitacoraTab] = useState('conversacion');
+    const [bitacoraSearch, setBitacoraSearch] = useState('');
+    // Metadatos de ticket para nueva entrada
+    const [ticketPrioridad, setTicketPrioridad] = useState('Media');
+    const [ticketResponsable, setTicketResponsable] = useState('');
+    const [ticketVencimiento, setTicketVencimiento] = useState('');
+    // Edición de nota existente
+    const [editingNoteId, setEditingNoteId] = useState(null);
+    const [editNoteText, setEditNoteText] = useState('');
 
     // Administración de plan
     const [selectedPlanId, setSelectedPlanId] = useState('');
     const [planMotivo, setPlanMotivo] = useState('');
     const [isSavingPlan, setIsSavingPlan] = useState(false);
     const [showPlanHistory, setShowPlanHistory] = useState(false);
+    const [confirmPlan, setConfirmPlan] = useState(false);
 
     // Servicios contratados
     const [newServicioId, setNewServicioId] = useState('');
@@ -50,13 +93,32 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
     };
     // =========================================
 
+    const handleDelete = async () => {
+        if (!onDelete) return;
+        setIsDeleting(true);
+        try {
+            await onDelete(client);
+            // el cierre lo maneja el padre al refrescar la lista
+        } finally {
+            setIsDeleting(false);
+            setConfirmDelete(false);
+        }
+    };
+
     useEffect(() => {
         setFormData(client);
         setIsEditing(false);
+        setConfirmDelete(false);
         setNewNote('');
         setBitacoraTab('conversacion');
+        setBitacoraSearch('');
+        setEditingNoteId(null);
+        setTicketPrioridad('Media');
+        setTicketResponsable('');
+        setTicketVencimiento('');
         setSelectedPlanId(client?.planId || '');
         setPlanMotivo('');
+        setConfirmPlan(false);
         setNewServicioId('');
         setNewServicioPrecio('');
     }, [client]);
@@ -67,8 +129,18 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
     };
 
     const handleSave = async () => {
+        // Validación al editar: RUT representante y correo
+        if (formData.repRut && String(formData.repRut).trim() && !validarRutDV(formData.repRut)) {
+            toast({ title: "RUT del representante inválido", description: "Revisa el dígito verificador.", variant: "destructive" });
+            return;
+        }
+        if (formData.correo && String(formData.correo).trim() && !validarCorreo(formData.correo)) {
+            toast({ title: "Correo inválido", description: "Ingresa un correo con formato válido.", variant: "destructive" });
+            return;
+        }
         if (onUpdateClient) await onUpdateClient(formData);
         setIsEditing(false);
+        if (onRefresh) onRefresh(); // re-sincroniza el score recalculado por el trigger
     };
 
     const addNote = async () => {
@@ -76,7 +148,10 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
         setIsSavingNote(true);
         try {
             const sessionId = getSessionId();
-            const response = await createNotaApi(sessionId, formData.id, newNote, bitacoraTab);
+            const meta = bitacoraTab === 'ticket'
+                ? { prioridad: ticketPrioridad, responsable: ticketResponsable, fechaVencimiento: ticketVencimiento || null }
+                : {};
+            const response = await createNotaApi(sessionId, formData.id, newNote, bitacoraTab, meta);
             const payload = await response.json();
 
             if(payload.success) {
@@ -85,6 +160,9 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                     notas: [payload.nota, ...(prev.notas || [])]
                 }));
                 setNewNote('');
+                setTicketResponsable('');
+                setTicketVencimiento('');
+                setTicketPrioridad('Media');
                 toast({ title: bitacoraTab === 'ticket' ? "Ticket creado" : "Conversación registrada", description: "Se guardó correctamente en la bitácora." });
             } else {
                 throw new Error(payload.message);
@@ -93,6 +171,44 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
             toast({ title: "Error", description: error.message, variant: "destructive" });
         } finally {
             setIsSavingNote(false);
+        }
+    };
+
+    const startEditNote = (nota) => {
+        setEditingNoteId(nota.id);
+        setEditNoteText(nota.texto);
+    };
+
+    const handleSaveEditNote = async (nota) => {
+        if (!editNoteText.trim()) return;
+        try {
+            const response = await editarNotaApi(getSessionId(), nota.id, { texto: editNoteText });
+            const payload = await response.json();
+            if (!payload.success) throw new Error(payload.message);
+            setFormData(prev => ({
+                ...prev,
+                notas: (prev.notas || []).map(n => n.id === nota.id ? { ...n, ...payload.nota } : n)
+            }));
+            setEditingNoteId(null);
+            setEditNoteText('');
+            toast({ title: "Nota actualizada" });
+        } catch (error) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        }
+    };
+
+    const handleDeleteNote = async (nota) => {
+        try {
+            const response = await eliminarNotaApi(getSessionId(), nota.id);
+            const payload = await response.json();
+            if (!payload.success) throw new Error(payload.message);
+            setFormData(prev => ({
+                ...prev,
+                notas: (prev.notas || []).filter(n => n.id !== nota.id)
+            }));
+            toast({ title: "Nota eliminada" });
+        } catch (error) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
         }
     };
 
@@ -133,11 +249,12 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                 planId: selectedPlanId,
                 fechaCambioPlan: hoy,
                 planHistorial: [
-                    { planAnterior: prev.plan || prev.plan_nombre || '—', planNuevo: nuevoNombre, autor: 'Tú', motivo: planMotivo, fecha: new Date().toLocaleString('es-CL') },
+                    { planAnterior: prev.plan || prev.plan_nombre || '—', planNuevo: nuevoNombre, autor: getUserNombre(), motivo: planMotivo, fecha: new Date().toLocaleString('es-CL') },
                     ...(prev.planHistorial || [])
                 ]
             }));
             setPlanMotivo('');
+            setConfirmPlan(false);
             toast({ title: "Plan actualizado", description: `Nuevo plan: ${nuevoNombre}` });
             if (onRefresh) onRefresh();
         } catch (error) {
@@ -170,6 +287,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
     };
 
     const handleRemoveServicio = async (servicio) => {
+        if (!window.confirm(`¿Dar de baja el servicio "${servicio.nombre}"? Quedará suspendido (podrás reactivarlo después).`)) return;
         try {
             const response = await removeServicioApi(getSessionId(), servicio.id);
             const payload = await response.json();
@@ -179,6 +297,22 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                 servicios: (prev.servicios || []).map(s => s.id === servicio.id ? { ...s, estado: 'Suspendido' } : s)
             }));
             toast({ title: "Servicio dado de baja", description: servicio.nombre });
+            if (onRefresh) onRefresh();
+        } catch (error) {
+            toast({ title: "Error", description: error.message, variant: "destructive" });
+        }
+    };
+
+    const handleReactivarServicio = async (servicio) => {
+        try {
+            const response = await reactivarServicioApi(getSessionId(), servicio.id);
+            const payload = await response.json();
+            if (!payload.success) throw new Error(payload.message);
+            setFormData(prev => ({
+                ...prev,
+                servicios: (prev.servicios || []).map(s => s.id === servicio.id ? { ...s, estado: 'Activo', fechaTermino: null, fechaInicio: payload.servicio?.fechaInicio || s.fechaInicio } : s)
+            }));
+            toast({ title: "Servicio reactivado", description: servicio.nombre });
             if (onRefresh) onRefresh();
         } catch (error) {
             toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -201,9 +335,26 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
     const telRaw = formData.telefono_corporativo || formData.telefono || '';
     const wsRaw = formData.whatsapp || '';
     const whatsapp = wsRaw.length > 5 ? wsRaw : (telRaw.length > 5 ? telRaw : 'Sin Registro');
+    const telParaLink = String(wsRaw || telRaw || '').replace(/\D/g, '');
+    const correoLink = correo && correo !== 'Sin Registro' ? correo : '';
+    const copiar = (texto, label) => {
+        if (!texto || texto === 'Sin Registro' || texto === 'Sin RUT') return;
+        navigator.clipboard?.writeText(String(texto));
+        toast({ title: 'Copiado', description: `${label} copiado al portapapeles`, duration: 1500 });
+    };
 
     const claveWeb = formData.web_password_encrypted || formData.claveWeb || 'SIN CLAVE';
     const claveSII = formData.sii_password_encrypted || formData.claveSII || 'SIN CLAVE';
+
+    const giro = formData.giro || 'Sin Registro';
+    const regimen = formData.regimen || formData.regimen_tributario || 'Sin Registro';
+    const direccion = formData.direccion || 'Sin Registro';
+    const comuna = formData.comuna || 'Sin Registro';
+    const ciudad = formData.ciudad || 'Sin Registro';
+    const score = formData.score ?? 50;
+    const pagoServicio = formData.pagoServicio || formData.estado_pago || 'AL DIA';
+    const estadoF29 = formData.estadoFormulario || formData.estado_f29 || 'PENDIENTE';
+    const logoUrl = formData.logo || formData.logo_url || '';
 
     const ventas = formData.ventas_mensuales ?? formData.ventas ?? 0;
     const compras = formData.compras_mensuales ?? formData.compras ?? 0;
@@ -224,19 +375,68 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
     const dtPendientesFirma = formData.pendientes_firma ?? formData.dtPendientesFirma ?? 0;
     const importante = formData.nota_urgente || formData.importante || '';
 
+    // --- Precio de plan según tramo de facturación de la empresa ---
+    const facturacionMensual = Number(ventas) || 0; // ventas mensuales = facturación mensual
+    const nombreDePlanId = (id) => planes.find(p => p.id === id)?.nombre;
+    const precioDePlan = (planNombre) => {
+        const rows = (preciosPlanTramo || []).filter(r => r.plan === planNombre);
+        if (!rows.length) return null;
+        const fijo = rows.find(r => r.tramoOrden === 0);
+        const row = fijo || rows.find(r => facturacionMensual >= r.tramoMin && (r.tramoMax == null || facturacionMensual < r.tramoMax)) || rows[rows.length - 1];
+        if (!row) return null;
+        return { neto: row.precioNeto, iva: Math.round(row.precioNeto * 0.19), total: Math.round(row.precioNeto * 1.19), rrhhGratis: row.rrhhGratis, tramoMin: row.tramoMin, tramoMax: row.tramoMax, fijo: !!fijo };
+    };
+    const precioSeleccionado = precioDePlan(nombreDePlanId(selectedPlanId));
+
     // --- Plan y servicios ---
     const planHistorial = formData.planHistorial || [];
     const fechaCambioPlan = formData.fechaCambioPlan || null;
     const serviciosActivos = (formData.servicios || []).filter(s => s.estado !== 'Suspendido');
+    const serviciosSuspendidos = (formData.servicios || []).filter(s => s.estado === 'Suspendido');
     const idsContratados = new Set(serviciosActivos.map(s => s.nombre));
     const serviciosParaAgregar = (serviciosDisponibles || []).filter(s => !idsContratados.has(s.nombre));
+
+    // --- Honorarios: plan actual + servicios contratados ---
+    const precioPlanActual = precioDePlan(plan);              // plan que tiene HOY la empresa
+    const totalServicios = serviciosActivos.reduce((acc, s) => acc + (Number(s.precioPactado) || 0), 0);
+    const netoPlan = precioPlanActual?.neto || 0;
+    const totalHonorariosNeto = netoPlan + totalServicios;
+    const totalHonorariosConIva = Math.round(totalHonorariosNeto * 1.19);
+
+    // --- Precio sugerido (plan según tramo) vs. lo configurado en servicios ---
+    // Útil para detectar clientes mal cobrados respecto de la matriz de precios.
+    const sugeridoVsCobrado = precioPlanActual
+        ? { sugerido: precioPlanActual.neto, cobrado: totalServicios, dif: totalServicios - precioPlanActual.neto }
+        : null;
 
     // --- Bitácora por tipo ---
     const todasLasNotas = formData.notas || [];
     const conversaciones = todasLasNotas.filter(n => (n.tipo || 'conversacion') !== 'ticket');
     const tickets = todasLasNotas.filter(n => n.tipo === 'ticket');
     const ticketsAbiertos = tickets.filter(t => !t.resuelto).length;
-    const notasVisibles = bitacoraTab === 'ticket' ? tickets : conversaciones;
+    const _notasBase = bitacoraTab === 'ticket' ? tickets : conversaciones;
+    const _term = bitacoraSearch.trim().toLowerCase();
+    const notasVisibles = _term
+        ? _notasBase.filter(n =>
+            String(n.texto || '').toLowerCase().includes(_term) ||
+            String(n.autor || '').toLowerCase().includes(_term) ||
+            String(n.responsable || '').toLowerCase().includes(_term))
+        : _notasBase;
+
+    // --- Recordatorios / alertas automáticas del cliente ---
+    const recordatorios = [];
+    const pagoUp = String(pagoServicio).toUpperCase();
+    const f29Up = String(estadoF29).toUpperCase();
+    if (pagoUp === 'NO PAGADO') recordatorios.push({ t: 'Pago pendiente', tone: 'red' });
+    if (pagoUp === 'SERVICIO SUSPENDIDO') recordatorios.push({ t: 'Servicio suspendido', tone: 'red' });
+    if (f29Up === 'PENDIENTE') recordatorios.push({ t: 'F29 pendiente de declarar', tone: 'amber' });
+    if (Number(dtAtrasados) > 0) recordatorios.push({ t: `${dtAtrasados} trámite(s) DT atrasado(s)`, tone: 'amber' });
+    if (ticketsAbiertos > 0) recordatorios.push({ t: `${ticketsAbiertos} ticket(s) abierto(s)`, tone: 'sky' });
+    const toneCls = {
+        red: 'text-red-300 bg-red-500/10 border-red-500/30',
+        amber: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
+        sky: 'text-sky-300 bg-sky-500/10 border-sky-500/30',
+    };
 
     return (
         <motion.div 
@@ -250,20 +450,43 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                 
                 {/* 1. Nombre y Plan */}
                 <div className="flex gap-4 items-center">
-                    <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
-                        {type === 'Empresa' ? <Building2 size={24} /> : <User size={24} />}
+                    <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 overflow-hidden">
+                        {logoUrl ? (
+                            <img src={logoUrl} alt="logo" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        ) : (
+                            type === 'Empresa' ? <Building2 size={24} /> : <User size={24} />
+                        )}
                     </div>
                     <div className="min-w-0">
                         <h2 className="text-sm md:text-base font-black text-white uppercase tracking-tight leading-tight truncate">
                             {razonSocial}
                         </h2>
                         <div className="flex flex-wrap items-center gap-2 mt-1">
-                            <span className="text-xs text-gray-400 font-mono bg-black/30 px-2 py-0.5 rounded border border-white/5 truncate">
-                                {rut}
-                            </span>
+                            <button onClick={() => copiar(rut, 'RUT')} title="Copiar RUT" className="group flex items-center gap-1 text-xs text-gray-400 font-mono bg-black/30 hover:bg-black/50 px-2 py-0.5 rounded border border-white/5 truncate transition-colors">
+                                {rut} <Copy size={11} className="opacity-40 group-hover:opacity-100" />
+                            </button>
                             <span className="text-[10px] font-black px-2 py-0.5 rounded border border-blue-500/30 text-blue-400 bg-blue-500/10 uppercase shrink-0">
                                 Plan: {plan}
                             </span>
+                        </div>
+
+                        {/* Acciones rápidas de contacto */}
+                        <div className="flex items-center gap-1.5 mt-2">
+                            {telParaLink.length >= 8 && (
+                                <>
+                                    <a href={`https://wa.me/${telParaLink}`} target="_blank" rel="noreferrer" title="WhatsApp" className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 border border-emerald-500/30 px-2 py-1 rounded-lg transition-colors">
+                                        <MessageSquare size={12} /> WhatsApp
+                                    </a>
+                                    <a href={`tel:+${telParaLink}`} title="Llamar" className="flex items-center gap-1 text-[10px] font-bold text-sky-400 hover:text-white bg-sky-500/10 hover:bg-sky-600 border border-sky-500/30 px-2 py-1 rounded-lg transition-colors">
+                                        <Phone size={12} /> Llamar
+                                    </a>
+                                </>
+                            )}
+                            {correoLink && (
+                                <a href={`mailto:${correoLink}`} title="Enviar correo" className="flex items-center gap-1 text-[10px] font-bold text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-600 border border-purple-500/30 px-2 py-1 rounded-lg transition-colors">
+                                    <Mail size={12} /> Correo
+                                </a>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -311,12 +534,17 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                         )}
                     </button>
 
-                    {/* Controles de Ventana (Editar y Cerrar) */}
+                    {/* Controles de Ventana (Editar, Eliminar y Cerrar) */}
                     <div className="flex gap-1 ml-auto">
-                        <button onClick={() => setIsEditing(!isEditing)} className={`p-1.5 md:p-2 rounded-xl border transition-colors ${isEditing ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-transparent text-gray-400 hover:text-white'}`}>
+                        <button onClick={() => setIsEditing(!isEditing)} aria-label={isEditing ? 'Salir de edición' : 'Editar cliente'} title="Editar" className={`p-1.5 md:p-2 rounded-xl border transition-colors ${isEditing ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-transparent text-gray-400 hover:text-white'}`}>
                             <Edit size={16} />
                         </button>
-                        <button onClick={onClose} className="p-1.5 md:p-2 rounded-xl bg-white/5 text-gray-400 hover:text-red-400 transition-colors">
+                        {onDelete && (
+                            <button onClick={() => setConfirmDelete(true)} title="Eliminar cliente" className="p-1.5 md:p-2 rounded-xl bg-white/5 border border-transparent text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                                <Trash2 size={16} />
+                            </button>
+                        )}
+                        <button onClick={onClose} aria-label="Cerrar ficha" title="Cerrar" className="p-1.5 md:p-2 rounded-xl bg-white/5 text-gray-400 hover:text-red-400 transition-colors">
                             <X size={16} />
                         </button>
                     </div>
@@ -334,6 +562,61 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                     </div>
                 )}
 
+                {/* RECORDATORIOS / ALERTAS */}
+                {recordatorios.length > 0 && (
+                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-3">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <Bell size={13} /> Recordatorios ({recordatorios.length})
+                        </h3>
+                        <div className="flex flex-wrap gap-1.5">
+                            {recordatorios.map((r, i) => (
+                                <span key={i} className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${toneCls[r.tone]}`}>{r.t}</span>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* 0. ESTADO Y CLASIFICACIÓN */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                            <CheckCircle2 size={14} /> Estado y Clasificación
+                        </h3>
+                        {!isEditing && (
+                            <button onClick={() => setIsEditing(true)} className="text-[9px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                                <Edit size={11} /> Editar
+                            </button>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                        {isEditing ? (
+                            <>
+                                <SelectField label="Estado de Pago" name="pagoServicio" value={formData.pagoServicio || pagoServicio} isEditing={true} onChange={handleInputChange} options={conActual(OPCIONES_PAGO, formData.pagoServicio || pagoServicio)} />
+                                <SelectField label="Estado F29" name="estadoFormulario" value={formData.estadoFormulario || estadoF29} isEditing={true} onChange={handleInputChange} options={conActual(OPCIONES_F29, formData.estadoFormulario || estadoF29)} />
+                                <div className="flex flex-col gap-1.5">
+                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Score (automático)</span>
+                                    <span className="text-[10px] text-gray-500 italic">Se recalcula según los estados</span>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex flex-col gap-1.5">
+                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Estado de Pago</span>
+                                    <span className={`w-fit text-[10px] font-black px-2 py-0.5 rounded-full border uppercase ${(pagoServicio === 'PAGADO' || pagoServicio === 'AL DIA') ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30' : pagoServicio === 'NO PAGADO' ? 'text-red-300 bg-red-500/10 border-red-500/30' : 'text-slate-300 bg-slate-500/10 border-slate-500/30'}`}>{pagoServicio}</span>
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Estado F29</span>
+                                    <span className={`w-fit text-[10px] font-black px-2 py-0.5 rounded-full border uppercase ${(estadoF29 === 'DECLARADO' || estadoF29 === 'NO DECLARAR') ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30' : estadoF29 === 'PENDIENTE' ? 'text-amber-300 bg-amber-500/10 border-amber-500/30' : 'text-orange-300 bg-orange-500/10 border-orange-500/30'}`}>{estadoF29}</span>
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Score</span>
+                                    <span className={`w-fit text-[10px] font-black px-2 py-0.5 rounded-md border ${score >= 80 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : score >= 50 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'}`}>Score {score}</span>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </div>
+
                 {/* 1. INFO GENERAL */}
                 <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
                     <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
@@ -344,6 +627,25 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                         <EditableField label="RUT Representante" name="repRut" value={isEditing ? formData.repRut : repRut} isEditing={isEditing} onChange={handleInputChange} />
                         <EditableField label="Correo Electrónico" name="correo" value={isEditing ? formData.correo : correo} isEditing={isEditing} onChange={handleInputChange} />
                         <EditableField label="WhatsApp / Teléfono" name="whatsapp" value={isEditing ? formData.whatsapp : whatsapp} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="Giro" name="giro" value={isEditing ? formData.giro : giro} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="Régimen Tributario" name="regimen" value={isEditing ? formData.regimen : regimen} isEditing={isEditing} onChange={handleInputChange} />
+                    </div>
+                </div>
+
+                {/* DIRECCIÓN */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Landmark size={14} /> Dirección (Casa Matriz)
+                    </h3>
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                        <EditableField label="Dirección" name="direccion" value={isEditing ? formData.direccion : direccion} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="Comuna" name="comuna" value={isEditing ? formData.comuna : comuna} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="Ciudad" name="ciudad" value={isEditing ? formData.ciudad : ciudad} isEditing={isEditing} onChange={handleInputChange} />
+                        {isEditing && (
+                            <div className="col-span-2 lg:col-span-3">
+                                <EditableField label="URL del Logo (opcional)" name="logo" value={formData.logo || ''} isEditing={true} onChange={handleInputChange} />
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -384,26 +686,73 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                                 className="bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 cursor-pointer"
                             >
                                 <option value="">— Selecciona un plan —</option>
-                                {planes.map(p => (
-                                    <option key={p.id} value={p.id}>{p.nombre}{p.precioBase ? ` ($${p.precioBase.toLocaleString('es-CL')})` : ''}</option>
-                                ))}
+                                {planes.map(p => {
+                                    const pr = precioDePlan(p.nombre);
+                                    return <option key={p.id} value={p.id}>{p.nombre}{pr ? ` — ${fmt(pr.neto)} +IVA` : ''}</option>;
+                                })}
                             </select>
                         </div>
                         <input
                             type="text"
                             value={planMotivo}
                             onChange={(e) => setPlanMotivo(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && selectedPlanId && selectedPlanId !== formData.planId) setConfirmPlan(true); }}
                             placeholder="Motivo (opcional)"
                             className="flex-1 min-w-[120px] bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 placeholder:text-gray-600"
                         />
                         <Button
-                            onClick={handleCambiarPlan}
+                            onClick={() => setConfirmPlan(true)}
                             disabled={isSavingPlan || !selectedPlanId || selectedPlanId === formData.planId}
                             className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 h-9 text-[10px] font-black uppercase tracking-widest"
                         >
                             Cambiar
                         </Button>
                     </div>
+
+                    {/* Confirmación de cambio de plan */}
+                    <AnimatePresence>
+                        {confirmPlan && selectedPlanId && selectedPlanId !== formData.planId && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                                className="overflow-hidden mb-2"
+                            >
+                                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
+                                    <p className="text-[11px] text-amber-100 font-bold mb-2">
+                                        ¿Cambiar plan de <span className="text-white">{plan}</span> a <span className="text-white">{nombreDePlanId(selectedPlanId)}</span>?
+                                        {precioSeleccionado && <span className="text-emerald-300"> Nuevo valor: {fmt(precioSeleccionado.neto)} +IVA.</span>}
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <Button onClick={() => setConfirmPlan(false)} disabled={isSavingPlan} className="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg h-8 text-[10px] font-black uppercase tracking-widest">
+                                            Cancelar
+                                        </Button>
+                                        <Button onClick={handleCambiarPlan} disabled={isSavingPlan} className="flex-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg h-8 text-[10px] font-black uppercase tracking-widest">
+                                            {isSavingPlan ? 'Cambiando…' : 'Sí, cambiar'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                    {/* Precio del plan según facturación de la empresa */}
+                    {precioSeleccionado && (
+                        <div className="bg-black/20 border border-indigo-500/20 rounded-xl p-3 mb-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[9px] text-gray-500 uppercase tracking-widest">Valor del plan</span>
+                                <span className="text-[9px] text-gray-500">
+                                    {precioSeleccionado.fijo ? 'Precio fijo' : `Facturación: ${fmt(facturacionMensual)}`}
+                                </span>
+                            </div>
+                            <div className="flex items-baseline gap-2 mt-1">
+                                <span className="text-lg font-black text-white">{fmt(precioSeleccionado.neto)}</span>
+                                <span className="text-[10px] text-gray-400">neto</span>
+                                <span className="text-[10px] text-gray-500">+ IVA {fmt(precioSeleccionado.iva)}</span>
+                            </div>
+                            <div className="flex items-center justify-between mt-0.5">
+                                <span className="text-[11px] font-bold text-emerald-400">Total: {fmt(precioSeleccionado.total)}</span>
+                                {precioSeleccionado.rrhhGratis > 0 && <span className="text-[9px] font-black text-amber-400">🎁 {precioSeleccionado.rrhhGratis} RRHH gratis</span>}
+                            </div>
+                        </div>
+                    )}
                     {fechaCambioPlan && (
                         <p className="text-[9px] text-gray-500 mb-3">Último cambio de plan: <span className="text-gray-300 font-bold">{fechaCambioPlan}</span></p>
                     )}
@@ -430,21 +779,50 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                         )}
                     </AnimatePresence>
 
-                    {/* Servicios contratados */}
+                    {/* Servicios contratados (activos) */}
                     <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Servicios Contratados</span>
-                    <div className="flex flex-wrap gap-2 mt-2 mb-3">
+                    <div className="flex flex-col gap-1.5 mt-2 mb-3">
                         {serviciosActivos.length > 0 ? serviciosActivos.map(s => (
-                            <span key={s.id} className="group flex items-center gap-1.5 bg-white/5 border border-white/10 text-gray-200 px-2 py-1 rounded-lg text-[10px] font-bold">
-                                {s.nombre}
-                                {s.precioPactado ? <span className="text-emerald-400">${Number(s.precioPactado).toLocaleString('es-CL')}</span> : null}
-                                <button onClick={() => handleRemoveServicio(s)} title="Dar de baja" className="text-gray-500 hover:text-red-400 transition-colors">
-                                    <Trash2 size={11} />
-                                </button>
-                            </span>
+                            <div key={s.id} className="flex items-center justify-between gap-2 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5">
+                                <div className="flex flex-col min-w-0">
+                                    <span className="text-[11px] font-bold text-gray-200 truncate">{s.nombre}</span>
+                                    {s.fechaInicio && <span className="text-[8px] text-gray-500">Desde {s.fechaInicio}</span>}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    {s.precioPactado ? <span className="text-[11px] font-black text-emerald-400">${Number(s.precioPactado).toLocaleString('es-CL')}</span> : <span className="text-[9px] text-gray-600 italic">sin precio</span>}
+                                    <button onClick={() => handleRemoveServicio(s)} title="Dar de baja" className="text-gray-500 hover:text-red-400 transition-colors">
+                                        <Trash2 size={12} />
+                                    </button>
+                                </div>
+                            </div>
                         )) : (
                             <span className="text-[10px] text-gray-500 italic">Sin servicios contratados.</span>
                         )}
                     </div>
+
+                    {/* Servicios suspendidos (con opción de reactivar) */}
+                    {serviciosSuspendidos.length > 0 && (
+                        <div className="mb-3">
+                            <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Suspendidos</span>
+                            <div className="flex flex-col gap-1.5 mt-2">
+                                {serviciosSuspendidos.map(s => (
+                                    <div key={s.id} className="flex items-center justify-between gap-2 bg-black/20 border border-white/5 rounded-lg px-2.5 py-1.5 opacity-70">
+                                        <div className="flex flex-col min-w-0">
+                                            <span className="text-[11px] font-bold text-gray-400 line-through truncate">{s.nombre}</span>
+                                            {s.fechaTermino && <span className="text-[8px] text-gray-600">Baja: {s.fechaTermino}</span>}
+                                        </div>
+                                        <button
+                                            onClick={() => handleReactivarServicio(s)}
+                                            title="Reactivar servicio"
+                                            className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-emerald-400 hover:text-emerald-300 border border-emerald-400/30 bg-emerald-400/10 hover:bg-emerald-400/20 px-2 py-0.5 rounded-full transition-colors shrink-0"
+                                        >
+                                            <RotateCcw size={10} /> Reactivar
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Agregar servicio */}
                     <div className="flex flex-wrap items-center gap-2">
@@ -460,8 +838,10 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                         </select>
                         <input
                             type="text"
+                            inputMode="numeric"
                             value={newServicioPrecio}
-                            onChange={(e) => setNewServicioPrecio(e.target.value)}
+                            onChange={(e) => setNewServicioPrecio(formatMiles(e.target.value))}
+                            onKeyDown={(e) => { if (e.key === 'Enter' && newServicioId) handleAddServicio(); }}
                             placeholder="Precio"
                             className="w-24 bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 placeholder:text-gray-600"
                         />
@@ -473,6 +853,51 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                             <Plus size={16} />
                         </Button>
                     </div>
+
+                    {/* Total de honorarios (plan + servicios) */}
+                    <div className="mt-3 bg-black/30 border border-emerald-500/20 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-[10px] text-gray-400 mb-1">
+                            <span>Plan ({plan})</span>
+                            <span className="font-bold text-gray-200">{fmt(netoPlan)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] text-gray-400 mb-1.5">
+                            <span>Servicios activos ({serviciosActivos.length})</span>
+                            <span className="font-bold text-gray-200">{fmt(totalServicios)}</span>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-white/10 pt-1.5">
+                            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Total honorarios</span>
+                            <div className="text-right">
+                                <div className="text-sm font-black text-white">{fmt(totalHonorariosNeto)} <span className="text-[9px] text-gray-500 font-normal">neto</span></div>
+                                <div className="text-[9px] text-emerald-400 font-bold">{fmt(totalHonorariosConIva)} c/IVA</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Sugerido (matriz) vs. configurado (servicios) */}
+                    {sugeridoVsCobrado && (
+                        <div className="mt-2 bg-black/20 border border-white/5 rounded-xl p-3">
+                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Sugerido vs. configurado</span>
+                            <div className="flex items-center justify-between mt-1.5 text-[11px]">
+                                <div className="flex flex-col">
+                                    <span className="text-gray-500 text-[9px]">Sugerido (plan/tramo)</span>
+                                    <span className="font-bold text-indigo-300">{fmt(sugeridoVsCobrado.sugerido)}</span>
+                                </div>
+                                <div className="flex flex-col text-center">
+                                    <span className="text-gray-500 text-[9px]">Configurado (servicios)</span>
+                                    <span className="font-bold text-gray-200">{fmt(sugeridoVsCobrado.cobrado)}</span>
+                                </div>
+                                <div className="flex flex-col text-right">
+                                    <span className="text-gray-500 text-[9px]">Diferencia</span>
+                                    <span className={`font-black ${sugeridoVsCobrado.dif < 0 ? 'text-red-400' : sugeridoVsCobrado.dif > 0 ? 'text-emerald-400' : 'text-gray-400'}`}>
+                                        {sugeridoVsCobrado.dif > 0 ? '+' : ''}{fmt(sugeridoVsCobrado.dif)}
+                                    </span>
+                                </div>
+                            </div>
+                            {sugeridoVsCobrado.dif < 0 && (
+                                <p className="text-[9px] text-red-300/80 mt-1.5">⚠️ Se está cobrando menos que el precio sugerido para su facturación.</p>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* 3. OPERACIÓN MENSUAL (FINANZAS) */}
@@ -545,7 +970,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                     </div>
 
                     {/* Entrada nueva */}
-                    <div className="flex gap-2 mb-4">
+                    <div className="flex gap-2 mb-2">
                         <input
                             type="text"
                             value={newNote}
@@ -559,8 +984,50 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                         </Button>
                     </div>
 
+                    {/* Metadatos de ticket para la nueva entrada */}
+                    {bitacoraTab === 'ticket' && (
+                        <div className="grid grid-cols-3 gap-2 mb-3">
+                            <select
+                                value={ticketPrioridad}
+                                onChange={(e) => setTicketPrioridad(e.target.value)}
+                                title="Prioridad"
+                                className="bg-black/40 border border-white/10 rounded-lg p-2 text-[11px] text-white outline-none focus:border-amber-500 cursor-pointer"
+                            >
+                                <option value="Alta">🔴 Alta</option>
+                                <option value="Media">🟡 Media</option>
+                                <option value="Baja">🟢 Baja</option>
+                            </select>
+                            <input
+                                type="text"
+                                value={ticketResponsable}
+                                onChange={(e) => setTicketResponsable(e.target.value)}
+                                placeholder="Responsable"
+                                className="bg-black/40 border border-white/10 rounded-lg p-2 text-[11px] text-white outline-none focus:border-amber-500 placeholder:text-gray-600"
+                            />
+                            <input
+                                type="date"
+                                value={ticketVencimiento}
+                                onChange={(e) => setTicketVencimiento(e.target.value)}
+                                title="Vencimiento"
+                                className="bg-black/40 border border-white/10 rounded-lg p-2 text-[11px] text-white outline-none focus:border-amber-500"
+                            />
+                        </div>
+                    )}
+
+                    {/* Buscador en la bitácora */}
+                    <div className="relative mb-3">
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                        <input
+                            type="text"
+                            value={bitacoraSearch}
+                            onChange={(e) => setBitacoraSearch(e.target.value)}
+                            placeholder="Buscar en la bitácora..."
+                            className="w-full bg-black/20 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-white outline-none focus:border-blue-500 placeholder:text-gray-600"
+                        />
+                    </div>
+
                     {notasVisibles.length > 0 ? (
-                        <div className="space-y-3 max-h-48 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
+                        <div className="space-y-3 max-h-56 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
                             {notasVisibles.map((nota, i) => (
                                 <div key={nota.id || i} className={`border border-white/5 rounded-xl p-2.5 ${nota.tipo === 'ticket' && nota.resuelto ? 'opacity-50' : ''} ${nota.tipo === 'ticket' ? 'bg-amber-500/5' : 'bg-black/20'}`}>
                                     <div className="flex items-center justify-between gap-2 mb-1">
@@ -568,29 +1035,115 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, planes = [], serv
                                             <Clock size={10} className="shrink-0" />
                                             <span className="text-[9px] font-black tracking-widest truncate">{nota.fecha}</span>
                                             {nota.autor && <span className="text-[9px] text-gray-600 truncate">· {nota.autor}</span>}
+                                            {nota.editado && <span className="text-[9px] text-gray-600 italic">· editado</span>}
                                         </div>
-                                        {nota.tipo === 'ticket' && (
-                                            <button
-                                                onClick={() => handleToggleTicket(nota)}
-                                                title={nota.resuelto ? 'Reabrir ticket' : 'Marcar como resuelto'}
-                                                className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors shrink-0 ${nota.resuelto ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' : 'text-amber-400 border-amber-400/30 bg-amber-400/10 hover:bg-amber-400/20'}`}
-                                            >
-                                                {nota.resuelto ? <><CheckCircle2 size={10} /> Resuelto</> : <><RotateCcw size={10} /> Abierto</>}
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            {nota.tipo === 'ticket' && (
+                                                <button
+                                                    onClick={() => handleToggleTicket(nota)}
+                                                    title={nota.resuelto ? 'Reabrir ticket' : 'Marcar como resuelto'}
+                                                    className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors ${nota.resuelto ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' : 'text-amber-400 border-amber-400/30 bg-amber-400/10 hover:bg-amber-400/20'}`}
+                                                >
+                                                    {nota.resuelto ? <><CheckCircle2 size={10} /> Resuelto</> : <><RotateCcw size={10} /> Abierto</>}
+                                                </button>
+                                            )}
+                                            <button onClick={() => startEditNote(nota)} title="Editar nota" className="p-1 text-gray-500 hover:text-blue-400 transition-colors">
+                                                <Edit size={11} />
                                             </button>
-                                        )}
+                                            <button onClick={() => handleDeleteNote(nota)} title="Eliminar nota" className="p-1 text-gray-500 hover:text-red-400 transition-colors">
+                                                <Trash2 size={11} />
+                                            </button>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-gray-200">{nota.texto}</p>
+
+                                    {/* Badges de ticket (prioridad / responsable / vencimiento) */}
+                                    {nota.tipo === 'ticket' && (nota.prioridad || nota.responsable || nota.fechaVencimiento) && (
+                                        <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
+                                            {nota.prioridad && (
+                                                <span className={`flex items-center gap-1 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${nota.prioridad === 'Alta' ? 'text-red-300 border-red-400/30 bg-red-400/10' : nota.prioridad === 'Media' ? 'text-amber-300 border-amber-400/30 bg-amber-400/10' : 'text-emerald-300 border-emerald-400/30 bg-emerald-400/10'}`}>
+                                                    <Flag size={9} /> {nota.prioridad}
+                                                </span>
+                                            )}
+                                            {nota.responsable && (
+                                                <span className="flex items-center gap-1 text-[8px] font-bold text-gray-300 px-1.5 py-0.5 rounded-full border border-white/10 bg-white/5">
+                                                    <User size={9} /> {nota.responsable}
+                                                </span>
+                                            )}
+                                            {nota.fechaVencimiento && (
+                                                <span className="flex items-center gap-1 text-[8px] font-bold text-sky-300 px-1.5 py-0.5 rounded-full border border-sky-400/30 bg-sky-400/10">
+                                                    <CalendarClock size={9} /> {nota.fechaVencimiento}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {editingNoteId === nota.id ? (
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={editNoteText}
+                                                onChange={(e) => setEditNoteText(e.target.value)}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEditNote(nota); if (e.key === 'Escape') setEditingNoteId(null); }}
+                                                autoFocus
+                                                className="flex-1 bg-black/40 border border-blue-500/50 rounded-lg p-1.5 text-xs text-white outline-none"
+                                            />
+                                            <button onClick={() => handleSaveEditNote(nota)} className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"><Save size={12} /></button>
+                                            <button onClick={() => setEditingNoteId(null)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400"><X size={12} /></button>
+                                        </div>
+                                    ) : (
+                                        <p className="text-xs text-gray-200">{nota.texto}</p>
+                                    )}
                                 </div>
                             ))}
                         </div>
                     ) : (
                         <p className="text-xs text-gray-500 italic text-center py-2">
-                            {bitacoraTab === 'ticket' ? 'Sin tickets registrados.' : 'Sin conversaciones registradas aún.'}
+                            {bitacoraSearch ? 'Sin resultados para tu búsqueda.' : (bitacoraTab === 'ticket' ? 'Sin tickets registrados.' : 'Sin conversaciones registradas aún.')}
                         </p>
                     )}
                 </div>
 
+                {formData.ultimaModificacion && (
+                    <p className="text-[9px] text-gray-600 text-center pt-1">Última modificación: {formData.ultimaModificacion}</p>
+                )}
+
             </div>
+
+            {/* OVERLAY DE CONFIRMACIÓN DE ELIMINACIÓN */}
+            <AnimatePresence>
+                {confirmDelete && (
+                    <motion.div
+                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }}
+                            className="bg-[#0f172a] border border-red-500/30 rounded-2xl p-5 w-full max-w-sm shadow-2xl"
+                        >
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-400 shrink-0">
+                                    <AlertTriangle size={20} />
+                                </div>
+                                <h3 className="text-sm font-black text-white uppercase tracking-tight">Eliminar cliente</h3>
+                            </div>
+                            <p className="text-xs text-gray-300 leading-relaxed mb-1">
+                                Vas a eliminar <span className="font-bold text-white">{razonSocial}</span> de forma <span className="text-red-400 font-bold">permanente</span>.
+                            </p>
+                            <p className="text-[10px] text-gray-500 mb-4">
+                                Se borrarán sus notas, servicios e historial de plan. Esta acción no se puede deshacer.
+                            </p>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" onClick={() => setConfirmDelete(false)} disabled={isDeleting} className="flex-1 uppercase font-black text-[10px] tracking-widest text-gray-400 h-10 rounded-xl bg-white/5 hover:bg-white/10">
+                                    Cancelar
+                                </Button>
+                                <Button onClick={handleDelete} disabled={isDeleting} className="flex-1 bg-red-600 hover:bg-red-500 text-white uppercase font-black text-[10px] tracking-widest h-10 rounded-xl flex items-center justify-center gap-2">
+                                    <Trash2 size={14} /> {isDeleting ? 'Eliminando…' : 'Sí, eliminar'}
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* FOOTER BOTÓN GUARDAR */}
             {isEditing && (

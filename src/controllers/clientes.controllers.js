@@ -1,5 +1,21 @@
 import { pool } from '../database/db.js';
-import { decrypt, encrypt } from '../utils/crypto.js';
+import { decrypt, encrypt, generateHash } from '../utils/crypto.js';
+import { cleanRut } from '../lib/rut.js';
+
+// RUT chileno con dígito verificador (módulo 11)
+const validarRutDV = (rut) => {
+    const limpio = cleanRut(rut); // "BODY-DV"
+    if (!/^\d+-[\dkK]$/.test(limpio)) return false;
+    const [body, dv] = limpio.split('-');
+    let suma = 0, mul = 2;
+    for (let i = body.length - 1; i >= 0; i--) {
+        suma += parseInt(body[i], 10) * mul;
+        mul = mul < 7 ? mul + 1 : 2;
+    }
+    const resto = 11 - (suma % 11);
+    const esperado = resto === 11 ? '0' : resto === 10 ? 'K' : String(resto);
+    return dv.toUpperCase() === esperado;
+};
 
 /**
  * Desencripta datos de forma segura. 
@@ -17,8 +33,18 @@ const decryptData = (encryptedValue) => {
 
 export const getClientesCRM = async (req, res) => {
     try {
+        // Seguridad multi-tenant: los usuarios rol 'Cliente' solo ven las empresas
+        // que tengan asignadas en `audita`. El staff (Administrador/Consultor) ve todo.
+        const esCliente = req.user?.rol === 'Cliente';
+        const empresaParams = [];
+        let auditaJoin = '';
+        if (esCliente && req.user?.usuarioId) {
+            auditaJoin = ' JOIN audita a ON a.empresa_id = e.id AND a.usuario_id = $1 ';
+            empresaParams.push(req.user.usuarioId);
+        }
+
         const clientesResult = await pool.query(`
-            SELECT 
+            SELECT
                 e.*,
                 p.nombre as plan_nombre,
                 ec.sii_rut_encrypted,
@@ -29,37 +55,55 @@ export const getClientesCRM = async (req, res) => {
                 s.comuna,
                 s.ciudad
             FROM empresa e
+            ${auditaJoin}
             LEFT JOIN plan p ON e.plan_id = p.id
             LEFT JOIN empresa_credenciales ec ON e.id = ec.empresa_id
             LEFT JOIN sucursal s ON e.id = s.empresa_id AND s.es_casa_matriz = TRUE
             ORDER BY e.razon_social ASC
-        `);
+        `, empresaParams);
 
-        const serviciosResult = await pool.query(`
-            SELECT 
+        // IDs visibles: se usan para acotar el resto de consultas (seguridad + rendimiento)
+        const empresaIds = clientesResult.rows.map(r => r.id);
+        const empty = { rows: [] };
+
+        const serviciosResult = empresaIds.length === 0 ? empty : await pool.query(`
+            SELECT
                 es.id,
                 es.empresa_id,
                 s.nombre,
                 s.categoria,
                 es.estado,
-                es.precio_pactado
+                es.precio_pactado,
+                es.fecha_inicio,
+                es.fecha_termino
             FROM empresa_servicio es
             JOIN servicio s ON es.servicio_id = s.id
+            WHERE es.empresa_id = ANY($1)
             ORDER BY es.empresa_id
-        `);
+        `, [empresaIds]);
 
-        const notasResult = await pool.query(`
-            SELECT
-                id,
-                empresa_id,
-                texto,
-                tipo_mensaje,
-                usuario_nombre,
-                leido,
-                created_at
-            FROM bitacora_gestion
-            ORDER BY created_at DESC
-        `);
+        let notasResult = empty;
+        if (empresaIds.length > 0) {
+            try {
+                notasResult = await pool.query(`
+                    SELECT
+                        id, empresa_id, texto, tipo_mensaje, usuario_nombre, leido,
+                        prioridad, responsable_nombre, fecha_vencimiento, updated_at,
+                        created_at
+                    FROM bitacora_gestion
+                    WHERE empresa_id = ANY($1)
+                    ORDER BY created_at DESC
+                `, [empresaIds]);
+            } catch (err) {
+                if (err.code !== '42703') throw err; // columnas de ticket aún no migradas → query base
+                notasResult = await pool.query(`
+                    SELECT id, empresa_id, texto, tipo_mensaje, usuario_nombre, leido, created_at
+                    FROM bitacora_gestion
+                    WHERE empresa_id = ANY($1)
+                    ORDER BY created_at DESC
+                `, [empresaIds]);
+            }
+        }
 
         // Catálogo de planes disponibles (para el selector en la ficha)
         const planesResult = await pool.query(`
@@ -76,17 +120,31 @@ export const getClientesCRM = async (req, res) => {
             ORDER BY nombre ASC
         `);
 
+        // Matriz de precios Plan × Tramo (si la tabla existe)
+        let preciosResult = { rows: [] };
+        try {
+            preciosResult = await pool.query(`
+                SELECT p.nombre AS plan, ppt.tramo_orden, ppt.tramo_min, ppt.tramo_max, ppt.precio_neto, ppt.rrhh_gratis
+                FROM plan_precio_tramo ppt JOIN plan p ON p.id = ppt.plan_id
+                WHERE ppt.activo
+                ORDER BY p.nombre, ppt.tramo_orden
+            `);
+        } catch (err) {
+            if (err.code !== '42P01') throw err; // tabla no existe aún → degradar
+        }
+
         // Historial de cambios de plan por empresa.
         // Si la migración aún no se corrió (tabla inexistente), degradamos a vacío
         // en lugar de romper toda la carga del CRM.
         let planHistorialResult = { rows: [] };
         try {
-            planHistorialResult = await pool.query(`
+            planHistorialResult = empresaIds.length === 0 ? { rows: [] } : await pool.query(`
                 SELECT empresa_id, plan_anterior_nombre, plan_nuevo_nombre,
                        usuario_nombre, motivo, created_at
                 FROM empresa_plan_historial
+                WHERE empresa_id = ANY($1)
                 ORDER BY created_at DESC
-            `);
+            `, [empresaIds]);
         } catch (err) {
             if (err.code === '42P01') { // undefined_table
                 console.warn('⚠️ Tabla empresa_plan_historial no existe aún. Ejecuta la migración 2026-06-10_crm_ficha_planes_bitacora.sql');
@@ -105,7 +163,9 @@ export const getClientesCRM = async (req, res) => {
                 nombre: srv.nombre,
                 categoria: srv.categoria,
                 estado: srv.estado,
-                precioPactado: parseFloat(srv.precio_pactado) || 0
+                precioPactado: parseFloat(srv.precio_pactado) || 0,
+                fechaInicio: srv.fecha_inicio ? new Date(srv.fecha_inicio).toLocaleDateString('es-CL') : null,
+                fechaTermino: srv.fecha_termino ? new Date(srv.fecha_termino).toLocaleDateString('es-CL') : null
             });
         });
 
@@ -120,7 +180,11 @@ export const getClientesCRM = async (req, res) => {
                 texto: nota.texto,
                 tipo: nota.tipo_mensaje || 'conversacion',
                 autor: nota.usuario_nombre || 'Sistema',
-                resuelto: nota.leido === true
+                resuelto: nota.leido === true,
+                prioridad: nota.prioridad || null,
+                responsable: nota.responsable_nombre || null,
+                fechaVencimiento: nota.fecha_vencimiento ? new Date(nota.fecha_vencimiento).toLocaleDateString('es-CL') : null,
+                editado: !!nota.updated_at
             });
         });
 
@@ -193,7 +257,8 @@ export const getClientesCRM = async (req, res) => {
 
             notas: notasPorEmpresa[cliente.id] || [],
             servicios: serviciosPorEmpresa[cliente.id] || [],
-            type: cliente.tipo_cliente || 'Empresa'
+            type: cliente.tipo_cliente || 'Empresa',
+            ultimaModificacion: cliente.updated_at ? new Date(cliente.updated_at).toLocaleString('es-CL') : null
         }));
 
         const planes = planesResult.rows.map(p => ({
@@ -209,11 +274,21 @@ export const getClientesCRM = async (req, res) => {
             esCritico: s.es_critico === true
         }));
 
+        const preciosPlanTramo = preciosResult.rows.map(r => ({
+            plan: r.plan,
+            tramoOrden: r.tramo_orden,
+            tramoMin: parseFloat(r.tramo_min) || 0,
+            tramoMax: r.tramo_max === null ? null : parseFloat(r.tramo_max),
+            precioNeto: parseFloat(r.precio_neto) || 0,
+            rrhhGratis: parseInt(r.rrhh_gratis) || 0,
+        }));
+
         return res.json({
             success: true,
             clients,
             planes,
             serviciosDisponibles,
+            preciosPlanTramo,
             total: clients.length
         });
     } catch (error) {
@@ -225,25 +300,37 @@ export const getClientesCRM = async (req, res) => {
     }
 };
 
+const validarCorreoFmt = (c) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(c).trim());
+
+// Registro de auditoría de acciones sobre el cliente (best-effort).
+// Si la tabla no existe (migración no aplicada), se ignora silenciosamente.
+const registrarAuditoria = async (empresaId, user, accion, detalle) => {
+    try {
+        await pool.query(
+            `INSERT INTO empresa_auditoria (empresa_id, usuario_id, usuario_nombre, accion, detalle)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [empresaId, user?.usuarioId || null, user?.nombre || null, accion, detalle || null]
+        );
+    } catch (err) {
+        if (err.code !== '42P01') console.warn('Auditoría no registrada:', err.message);
+    }
+};
+
 export const updateClienteCRM = async (req, res) => {
     try {
         const { empresaId } = req.params;
-        const {
-            razonSocial, rut, repRut, repNombre, giro, regimen,
-            telefono, correo, plan, pagoServicio, estadoFormulario,
-            score, direccion, comuna, ciudad, bruto, neto,
-            ventas, compras, impuestoUnico, numeroFactura,
-            montoRenta, contratoRenta, formularioRenta, whatsapp, importante,
-            rentaMarzoNeto, rentaMarzoBruto, claveWeb, claveSII 
-        } = req.body;
+        const b = req.body;
+        const { rut, repRut, plan, direccion, comuna, ciudad, claveWeb, claveSII } = b;
 
-        const rutEncrypted = rut ? encrypt(rut) : null;
-        const repRutEncrypted = repRut ? encrypt(repRut) : null;
-
-        let planId = null;
-        if (plan) {
-            const planResult = await pool.query('SELECT id FROM plan WHERE nombre = $1', [plan]);
-            planId = planResult.rows[0]?.id;
+        // --- Validación server-side ---
+        if (rut !== undefined && String(rut).trim() !== '' && !validarRutDV(rut)) {
+            return res.status(400).json({ success: false, message: 'El RUT no es válido (dígito verificador).' });
+        }
+        if (repRut !== undefined && String(repRut).trim() !== '' && !validarRutDV(repRut)) {
+            return res.status(400).json({ success: false, message: 'El RUT del representante no es válido.' });
+        }
+        if (b.correo !== undefined && String(b.correo).trim() !== '' && !validarCorreoFmt(b.correo)) {
+            return res.status(400).json({ success: false, message: 'El correo electrónico no es válido.' });
         }
 
         const parseNum = (val) => {
@@ -251,63 +338,81 @@ export const updateClienteCRM = async (req, res) => {
             const clean = String(val).replace(/[^0-9.-]+/g, "");
             return isNaN(parseFloat(clean)) ? null : parseFloat(clean);
         };
+        const txt = (v) => (v === undefined || v === null || String(v).trim() === '') ? null : String(v).trim();
 
-        const updateQuery = `
-            UPDATE empresa SET
-                razon_social = COALESCE($1, razon_social),
-                rut_encrypted = COALESCE($2, rut_encrypted),
-                rut_rep_encrypted = COALESCE($3, rut_rep_encrypted),
-                nombre_rep = COALESCE($4, nombre_rep),
-                giro = COALESCE($5, giro),
-                regimen_tributario = COALESCE($6, regimen_tributario),
-                telefono_corporativo = COALESCE($7, telefono_corporativo),
-                email_corporativo = COALESCE($8, email_corporativo),
-                plan_id = COALESCE($9, plan_id),
-                estado_pago = COALESCE($10, estado_pago),
-                estado_f29 = COALESCE($11, estado_f29),
-                score = COALESCE($12, score),
-                monto_bruto = COALESCE($13, monto_bruto),
-                impuesto_pagar = COALESCE($14, impuesto_pagar),
-                ventas_mensuales = COALESCE($15, ventas_mensuales),
-                compras_mensuales = COALESCE($16, compras_mensuales),
-                impuesto_unico = COALESCE($17, impuesto_unico),
-                nro_factura = COALESCE($18, nro_factura),
-                monto_renta = COALESCE($19, monto_renta),
-                contrato_renta = COALESCE($20, contrato_renta),
-                estado_formulario_renta = COALESCE($21, estado_formulario_renta),
-                whatsapp = COALESCE($22, whatsapp),
-                nota_urgente = COALESCE($23, nota_urgente),
-                renta_marzo_neto = COALESCE($24, renta_marzo_neto),
-                renta_marzo_bruto = COALESCE($25, renta_marzo_bruto),
-                updated_at = NOW()
-            WHERE id = $26
-            RETURNING *
-        `;
+        // Mapeo campo body → columna. Solo se actualizan las claves presentes en el body,
+        // y '' se convierte en null (ahora SÍ se puede vaciar un campo).
+        const textCols = {
+            razonSocial: 'razon_social', repNombre: 'nombre_rep', giro: 'giro',
+            regimen: 'regimen_tributario', telefono: 'telefono_corporativo', correo: 'email_corporativo',
+            pagoServicio: 'estado_pago', estadoFormulario: 'estado_f29', numeroFactura: 'nro_factura',
+            formularioRenta: 'estado_formulario_renta', whatsapp: 'whatsapp', importante: 'nota_urgente',
+            logo: 'logo_url'
+        };
+        const numCols = {
+            score: 'score', bruto: 'monto_bruto', neto: 'impuesto_pagar', ventas: 'ventas_mensuales',
+            compras: 'compras_mensuales', impuestoUnico: 'impuesto_unico', montoRenta: 'monto_renta',
+            rentaMarzoNeto: 'renta_marzo_neto', rentaMarzoBruto: 'renta_marzo_bruto'
+        };
 
-        const result = await pool.query(updateQuery, [
-            razonSocial || null, rutEncrypted || null, repRutEncrypted || null,
-            repNombre || null, giro || null, regimen || null, telefono || null,
-            correo || null, planId || null, pagoServicio || null, estadoFormulario || null,
-            score || null, parseNum(bruto), parseNum(neto), parseNum(ventas),
-            parseNum(compras), parseNum(impuestoUnico), numeroFactura || null,
-            parseNum(montoRenta),
-            contratoRenta !== undefined ? (contratoRenta === 'SÍ' || contratoRenta === true) : null,
-            formularioRenta || null, whatsapp || null, importante || null,
-            parseNum(rentaMarzoNeto), parseNum(rentaMarzoBruto),
-            empresaId
-        ]);
+        const sets = [];
+        const vals = [];
+        let i = 1;
+        for (const [key, col] of Object.entries(textCols)) {
+            if (b[key] !== undefined) { sets.push(`${col} = $${i++}`); vals.push(txt(b[key])); }
+        }
+        for (const [key, col] of Object.entries(numCols)) {
+            if (b[key] !== undefined) { sets.push(`${col} = $${i++}`); vals.push(parseNum(b[key])); }
+        }
+        // RUT propio: nunca se vacía (es el identificador). Si viene, se re-encripta + rehashea.
+        if (rut !== undefined && String(rut).trim() !== '') {
+            const clean = cleanRut(rut);
+            sets.push(`rut_encrypted = $${i++}`); vals.push(encrypt(clean));
+            sets.push(`rut_hash = $${i++}`); vals.push(generateHash(clean));
+        }
+        // RUT representante: se puede vaciar
+        if (repRut !== undefined) {
+            if (String(repRut).trim() === '') {
+                sets.push(`rut_rep_encrypted = $${i++}`); vals.push(null);
+                sets.push(`rut_rep_hash = $${i++}`); vals.push(null);
+            } else {
+                const cleanR = cleanRut(repRut);
+                sets.push(`rut_rep_encrypted = $${i++}`); vals.push(encrypt(cleanR));
+                sets.push(`rut_rep_hash = $${i++}`); vals.push(generateHash(cleanR));
+            }
+        }
+        if (b.contratoRenta !== undefined) {
+            sets.push(`contrato_renta = $${i++}`); vals.push(b.contratoRenta === 'SÍ' || b.contratoRenta === true);
+        }
+        if (plan) {
+            const planResult = await pool.query('SELECT id FROM plan WHERE nombre = $1', [plan]);
+            if (planResult.rows[0]?.id) { sets.push(`plan_id = $${i++}`); vals.push(planResult.rows[0].id); }
+        }
 
-        if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Empresa no encontrada.' });
+        if (sets.length > 0) {
+            vals.push(empresaId);
+            const result = await pool.query(
+                `UPDATE empresa SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${i} RETURNING id`,
+                vals
+            );
+            if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Empresa no encontrada.' });
+        }
 
-        if (direccion || comuna || ciudad) {
-            await pool.query(`
-                UPDATE sucursal SET
-                    direccion = COALESCE($1, direccion),
-                    comuna = COALESCE($2, comuna),
-                    ciudad = COALESCE($3, ciudad),
-                    updated_at = NOW()
-                WHERE empresa_id = $4 AND es_casa_matriz = TRUE
-            `, [direccion || null, comuna || null, ciudad || null, empresaId]);
+        // Dirección (casa matriz): también permite vaciar
+        if (direccion !== undefined || comuna !== undefined || ciudad !== undefined) {
+            const dsets = [];
+            const dvals = [];
+            let j = 1;
+            if (direccion !== undefined) { dsets.push(`direccion = $${j++}`); dvals.push(txt(direccion)); }
+            if (comuna !== undefined) { dsets.push(`comuna = $${j++}`); dvals.push(txt(comuna)); }
+            if (ciudad !== undefined) { dsets.push(`ciudad = $${j++}`); dvals.push(txt(ciudad)); }
+            if (dsets.length > 0) {
+                dvals.push(empresaId);
+                await pool.query(
+                    `UPDATE sucursal SET ${dsets.join(', ')}, updated_at = NOW() WHERE empresa_id = $${j} AND es_casa_matriz = TRUE`,
+                    dvals
+                );
+            }
         }
 
         // GUARDAR CONTRASEÑAS EN SU TABLA CORRESPONDIENTE
@@ -336,7 +441,17 @@ export const updateClienteCRM = async (req, res) => {
             }
         }
 
-        return res.json({ success: true, message: 'Datos de empresa actualizados correctamente.' });
+        // Auditoría: registra la edición en tabla dedicada (best-effort, no rompe si falta)
+        await registrarAuditoria(empresaId, req.user, 'editar', 'Datos del cliente actualizados');
+
+        // Devuelve la última modificación para mostrarla en la ficha
+        let updatedAt = null;
+        try {
+            const u = await pool.query('SELECT updated_at FROM empresa WHERE id = $1', [empresaId]);
+            updatedAt = u.rows[0]?.updated_at || null;
+        } catch { /* opcional */ }
+
+        return res.json({ success: true, message: 'Datos de empresa actualizados correctamente.', updatedAt });
     } catch (error) {
         console.error('❌ Error updating cliente:', error.message);
         return res.status(500).json({
@@ -348,39 +463,111 @@ export const updateClienteCRM = async (req, res) => {
 
 const TIPOS_BITACORA = ['conversacion', 'ticket', 'cambio_plan', 'servicio', 'sistema'];
 
+const PRIORIDADES = ['Alta', 'Media', 'Baja'];
+const mapNota = (nota) => ({
+    id: nota.id,
+    empresaId: nota.empresa_id,
+    texto: nota.texto,
+    tipo: nota.tipo_mensaje || 'conversacion',
+    autor: nota.usuario_nombre || 'Sistema',
+    resuelto: nota.leido === true,
+    prioridad: nota.prioridad || null,
+    responsable: nota.responsable_nombre || null,
+    fechaVencimiento: nota.fecha_vencimiento ? new Date(nota.fecha_vencimiento).toLocaleDateString('es-CL') : null,
+    editado: !!nota.updated_at,
+    fecha: nota.created_at ? new Date(nota.created_at).toLocaleString('es-CL') : ''
+});
+
 export const addNotaCRM = async (req, res) => {
     try {
         const { empresaId } = req.params;
-        const { texto, tipo } = req.body;
+        const { texto, tipo, prioridad, responsable, fechaVencimiento } = req.body;
         if (!texto || !texto.trim()) return res.status(400).json({ success: false, message: 'La nota no puede estar vacía.' });
 
         const tipoMensaje = TIPOS_BITACORA.includes(tipo) ? tipo : 'conversacion';
+        const esTicket = tipoMensaje === 'ticket';
+        const prio = esTicket && PRIORIDADES.includes(prioridad) ? prioridad : null;
+        const resp = esTicket && responsable?.trim() ? responsable.trim() : null;
+        const venc = esTicket && fechaVencimiento ? fechaVencimiento : null;
 
-        const result = await pool.query(
-            `INSERT INTO bitacora_gestion (empresa_id, usuario_id, texto, tipo_mensaje, usuario_nombre, leido)
-             VALUES ($1, $2, $3, $4, $5, FALSE)
-             RETURNING id, empresa_id, texto, tipo_mensaje, usuario_nombre, leido, created_at`,
-            [empresaId, req.user?.usuarioId || null, texto.trim(), tipoMensaje, req.user?.nombre || null]
-        );
-        const nota = result.rows[0];
-        return res.json({
-            success: true,
-            nota: {
-                id: nota.id,
-                empresaId: nota.empresa_id,
-                texto: nota.texto,
-                tipo: nota.tipo_mensaje || 'conversacion',
-                autor: nota.usuario_nombre || 'Sistema',
-                resuelto: nota.leido === true,
-                fecha: nota.created_at ? new Date(nota.created_at).toLocaleString('es-CL') : ''
-            }
-        });
+        let result;
+        try {
+            result = await pool.query(
+                `INSERT INTO bitacora_gestion
+                    (empresa_id, usuario_id, texto, tipo_mensaje, usuario_nombre, leido, prioridad, responsable_nombre, fecha_vencimiento)
+                 VALUES ($1, $2, $3, $4, $5, FALSE, $6, $7, $8)
+                 RETURNING id, empresa_id, texto, tipo_mensaje, usuario_nombre, leido, prioridad, responsable_nombre, fecha_vencimiento, updated_at, created_at`,
+                [empresaId, req.user?.usuarioId || null, texto.trim(), tipoMensaje, req.user?.nombre || null, prio, resp, venc]
+            );
+        } catch (err) {
+            if (err.code !== '42703') throw err; // columnas de ticket no migradas → insert base
+            result = await pool.query(
+                `INSERT INTO bitacora_gestion (empresa_id, usuario_id, texto, tipo_mensaje, usuario_nombre, leido)
+                 VALUES ($1, $2, $3, $4, $5, FALSE)
+                 RETURNING id, empresa_id, texto, tipo_mensaje, usuario_nombre, leido, created_at`,
+                [empresaId, req.user?.usuarioId || null, texto.trim(), tipoMensaje, req.user?.nombre || null]
+            );
+        }
+        return res.json({ success: true, nota: mapNota(result.rows[0]) });
     } catch (error) {
         console.error('❌ Error guardando nota CRM:', error.message);
         return res.status(500).json({
             success: false,
             message: 'No se pudo guardar la gestión en la bitácora.'
         });
+    }
+};
+
+// Edita el texto y, si vienen, los metadatos de ticket de una nota de la bitácora.
+// Solo actualiza los campos presentes en el body (no borra prioridad/responsable/vencimiento al editar texto).
+export const editarNotaCRM = async (req, res) => {
+    try {
+        const { notaId } = req.params;
+        const { texto, prioridad, responsable, fechaVencimiento } = req.body;
+        if (!texto || !texto.trim()) return res.status(400).json({ success: false, message: 'La nota no puede estar vacía.' });
+
+        const sets = ['texto = $1'];
+        const vals = [texto.trim()];
+        let i = 2;
+        if (prioridad !== undefined) { sets.push(`prioridad = $${i++}`); vals.push(PRIORIDADES.includes(prioridad) ? prioridad : null); }
+        if (responsable !== undefined) { sets.push(`responsable_nombre = $${i++}`); vals.push(responsable?.trim() || null); }
+        if (fechaVencimiento !== undefined) { sets.push(`fecha_vencimiento = $${i++}`); vals.push(fechaVencimiento || null); }
+
+        const returning = `RETURNING id, empresa_id, texto, tipo_mensaje, usuario_nombre, leido, prioridad, responsable_nombre, fecha_vencimiento, updated_at, created_at`;
+        vals.push(notaId);
+
+        let result;
+        try {
+            result = await pool.query(
+                `UPDATE bitacora_gestion SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${i} ${returning}`,
+                vals
+            );
+        } catch (err) {
+            if (err.code !== '42703') throw err; // columnas de ticket no migradas → solo texto
+            result = await pool.query(
+                `UPDATE bitacora_gestion SET texto = $1 WHERE id = $2
+                 RETURNING id, empresa_id, texto, tipo_mensaje, usuario_nombre, leido, created_at`,
+                [texto.trim(), notaId]
+            );
+        }
+        if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Nota no encontrada.' });
+        return res.json({ success: true, nota: mapNota(result.rows[0]) });
+    } catch (error) {
+        console.error('❌ Error editando nota CRM:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo editar la nota.' });
+    }
+};
+
+// Elimina una nota de la bitácora
+export const eliminarNotaCRM = async (req, res) => {
+    try {
+        const { notaId } = req.params;
+        const result = await pool.query(`DELETE FROM bitacora_gestion WHERE id = $1 RETURNING id`, [notaId]);
+        if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Nota no encontrada.' });
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('❌ Error eliminando nota CRM:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo eliminar la nota.' });
     }
 };
 
@@ -545,6 +732,214 @@ export const removeServicioCRM = async (req, res) => {
     } catch (error) {
         console.error('❌ Error quitando servicio CRM:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo quitar el servicio.' });
+    }
+};
+
+// Reactiva un servicio suspendido (el trigger restablece fecha_inicio y limpia fecha_termino)
+export const reactivarServicioCRM = async (req, res) => {
+    try {
+        const { empresaServicioId } = req.params;
+
+        // Evita reactivar si ya hay otro servicio activo del mismo tipo
+        const info = await pool.query('SELECT empresa_id, servicio_id FROM empresa_servicio WHERE id = $1', [empresaServicioId]);
+        if (info.rows.length === 0) return res.status(404).json({ success: false, message: 'Servicio no encontrado.' });
+        const { empresa_id, servicio_id } = info.rows[0];
+        const dup = await pool.query(
+            `SELECT id FROM empresa_servicio WHERE empresa_id = $1 AND servicio_id = $2 AND estado = 'Activo' AND id <> $3`,
+            [empresa_id, servicio_id, empresaServicioId]
+        );
+        if (dup.rows.length > 0) {
+            return res.status(409).json({ success: false, message: 'Ya existe una versión activa de ese servicio.' });
+        }
+
+        const result = await pool.query(
+            `UPDATE empresa_servicio SET estado = 'Activo', updated_at = NOW() WHERE id = $1
+             RETURNING id, fecha_inicio, fecha_termino`,
+            [empresaServicioId]
+        );
+        const row = result.rows[0];
+        return res.json({
+            success: true,
+            servicio: {
+                id: row.id,
+                estado: 'Activo',
+                fechaInicio: row.fecha_inicio ? new Date(row.fecha_inicio).toLocaleDateString('es-CL') : null,
+                fechaTermino: null
+            }
+        });
+    } catch (error) {
+        console.error('❌ Error reactivando servicio CRM:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo reactivar el servicio.' });
+    }
+};
+
+// =========================================================
+// CREAR CLIENTE (EMPRESA) — inserción real en la BD
+// =========================================================
+export const crearEmpresaCRM = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const {
+            razonSocial, rut, giro, regimen,
+            telefono, correo, whatsapp,
+            repNombre, repRut,
+            planId, tipoCliente,
+            direccion, comuna, ciudad,
+            importante
+        } = req.body;
+
+        if (!rut || !rut.trim() || !validarRutDV(rut)) {
+            return res.status(400).json({ success: false, message: 'El RUT ingresado no es válido (revisa el dígito verificador).' });
+        }
+        if (repRut && repRut.trim() && !validarRutDV(repRut)) {
+            return res.status(400).json({ success: false, message: 'El RUT del representante no es válido.' });
+        }
+        if (correo && correo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim())) {
+            return res.status(400).json({ success: false, message: 'El correo electrónico no es válido.' });
+        }
+
+        const rutStandard = cleanRut(rut);
+        const rutHash = generateHash(rutStandard);
+        // El nombre es opcional: si no viene, usamos el RUT como identificador provisional
+        const nombreFinal = razonSocial?.trim() || rutStandard;
+
+        await client.query('BEGIN');
+
+        // Detección de duplicado por RUT
+        const dup = await client.query('SELECT id, razon_social FROM empresa WHERE rut_hash = $1', [rutHash]);
+        if (dup.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({
+                success: false,
+                code: 'DUPLICADO',
+                message: `Ya existe un cliente con ese RUT: ${dup.rows[0].razon_social}.`,
+                empresaId: dup.rows[0].id
+            });
+        }
+
+        // Plan: usa el indicado o cae al plan FREE por defecto (si existe)
+        let finalPlanId = planId || null;
+        if (!finalPlanId) {
+            const free = await client.query(`SELECT id FROM plan WHERE UPPER(nombre) = 'FREE' LIMIT 1`);
+            finalPlanId = free.rows[0]?.id || null;
+        }
+
+        const repRutLimpio = repRut && repRut.trim() ? cleanRut(repRut) : null;
+
+        const ins = await client.query(
+            `INSERT INTO empresa (
+                razon_social, rut_encrypted, rut_hash, giro, regimen_tributario,
+                telefono_corporativo, email_corporativo, whatsapp,
+                nombre_rep, rut_rep_encrypted, rut_rep_hash,
+                plan_id, tipo_cliente, nota_urgente
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+            RETURNING id, razon_social`,
+            [
+                nombreFinal,
+                encrypt(rutStandard),
+                rutHash,
+                giro?.trim() || 'Sin especificar',
+                regimen?.trim() || 'Sin especificar',
+                telefono?.trim() || null,
+                correo?.trim() || null,
+                whatsapp?.trim() || null,
+                repNombre?.trim() || null,
+                repRutLimpio ? encrypt(repRutLimpio) : null,
+                repRutLimpio ? generateHash(repRutLimpio) : null,
+                finalPlanId,
+                tipoCliente || 'Empresa',
+                importante?.trim() || null
+            ]
+        );
+        const empresaId = ins.rows[0].id;
+
+        // Fila de credenciales (columnas NOT NULL) para que luego se puedan guardar claves SII/Web
+        await client.query(
+            `INSERT INTO empresa_credenciales
+                (empresa_id, sii_rut_encrypted, sii_email_encrypted, sii_password_encrypted, web_password_encrypted)
+             VALUES ($1, '', '', '', '')`,
+            [empresaId]
+        );
+
+        // Casa matriz para que luego se pueda editar dirección/comuna/ciudad
+        await client.query(
+            `INSERT INTO sucursal (empresa_id, direccion, comuna, ciudad, es_casa_matriz)
+             VALUES ($1, $2, $3, $4, TRUE)`,
+            [empresaId, direccion?.trim() || 'Sin dirección', comuna?.trim() || 'Sin especificar', ciudad?.trim() || 'Sin especificar']
+        );
+
+        // Vincula la empresa al usuario que la creó (para que aparezca en su selector)
+        if (req.user?.usuarioId) {
+            await client.query(
+                `INSERT INTO audita (usuario_id, empresa_id) VALUES ($1, $2)
+                 ON CONFLICT DO NOTHING`,
+                [req.user.usuarioId, empresaId]
+            );
+        }
+
+        await client.query('COMMIT');
+        await registrarAuditoria(empresaId, req.user, 'crear', `Cliente creado: ${ins.rows[0].razon_social}`);
+        return res.status(201).json({
+            success: true,
+            id: empresaId,
+            empresaId,
+            razonSocial: ins.rows[0].razon_social,
+            message: 'Cliente creado correctamente.'
+        });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error creando empresa CRM:', error.message);
+        if (error.code === '23505') {
+            return res.status(409).json({ success: false, code: 'DUPLICADO', message: 'El RUT ya existe en los registros.' });
+        }
+        return res.status(500).json({ success: false, message: 'No se pudo crear el cliente.' });
+    } finally {
+        client.release();
+    }
+};
+
+// =========================================================
+// ELIMINAR CLIENTE (EMPRESA) — borrado definitivo con guarda de FK
+// =========================================================
+export const eliminarEmpresaCRM = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { empresaId } = req.params;
+
+        const existe = await client.query('SELECT id, razon_social FROM empresa WHERE id = $1', [empresaId]);
+        if (existe.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Empresa no encontrada.' });
+        }
+
+        await client.query('BEGIN');
+
+        // Limpia primero las filas dependientes del CRM (por si no cascadean)
+        await client.query('DELETE FROM bitacora_gestion WHERE empresa_id = $1', [empresaId]);
+        await client.query('DELETE FROM empresa_servicio WHERE empresa_id = $1', [empresaId]);
+        try { await client.query('DELETE FROM empresa_plan_historial WHERE empresa_id = $1', [empresaId]); }
+        catch (e) { if (e.code !== '42P01') throw e; }
+        await client.query('DELETE FROM empresa_credenciales WHERE empresa_id = $1', [empresaId]);
+        await client.query('DELETE FROM sucursal WHERE empresa_id = $1', [empresaId]);
+        await client.query('DELETE FROM persona_empresa WHERE empresa_id = $1', [empresaId]);
+        await client.query('DELETE FROM audita WHERE empresa_id = $1', [empresaId]);
+
+        await client.query('DELETE FROM empresa WHERE id = $1', [empresaId]);
+
+        await client.query('COMMIT');
+        return res.json({ success: true, message: `Cliente "${existe.rows[0].razon_social}" eliminado.` });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error eliminando empresa CRM:', error.message);
+        // FK: la empresa tiene registros contables/asociados que impiden el borrado
+        if (error.code === '23503') {
+            return res.status(409).json({
+                success: false,
+                message: 'No se puede eliminar: el cliente tiene registros asociados (facturación, movimientos, etc.).'
+            });
+        }
+        return res.status(500).json({ success: false, message: 'No se pudo eliminar el cliente.' });
+    } finally {
+        client.release();
     }
 };
 

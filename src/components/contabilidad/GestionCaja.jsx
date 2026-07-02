@@ -1,14 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import {
   Plus, Loader2, Trash2, Wallet, ArrowDownRight, Banknote, CreditCard,
-  ArrowLeftRight, Coins, Search, CheckCircle2, Check, CircleDollarSign, RefreshCcw,
+  ArrowLeftRight, Coins, Search, CheckCircle2, Check, CircleDollarSign, RefreshCcw, Pencil,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { crearMovimientoCajaApi, crearMovimientosCajaLoteApi, listarMovimientosCajaApi, eliminarMovimientoCajaApi } from '@/services/cajaService';
+import { crearMovimientoCajaApi, crearMovimientosCajaLoteApi, listarMovimientosCajaApi, editarMovimientoCajaApi, eliminarMovimientoCajaApi } from '@/services/cajaService';
 import { obtenerHistorialBunker, obtenerComprasBunker } from '@/services/dteConsultasService';
 import { fetchWithAuth } from '@/services/apiClient';
 
@@ -44,9 +44,11 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
   const [isOpen, setIsOpen]           = useState(false);
   const [isSaving, setIsSaving]       = useState(false);
   const [deletingId, setDeletingId]   = useState(null);
+  const [medioModal, setMedioModal]   = useState(null); // { titulo, ids:[], actual }
+  const [savingMedio, setSavingMedio] = useState(false);
   const [form, setForm] = useState({
     fecha: new Date().toISOString().slice(0, 10),
-    rut: '', nombre: '', folio_asociado: '', monto: '', medio_pago: 'efectivo', glosa: '',
+    rut: '', nombre: '', folio_asociado: '', monto: '', medio_pago: 'transferencia', glosa: '',
   });
 
   const desde = rango?.desde, hasta = rango?.hasta;
@@ -97,7 +99,13 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
     enabled: !!user?.sessionId,
     staleTime: 0,
   });
-  const movimientos = movData?.movimientos || [];
+  // fetchWithAuth pasa la respuesta por mapperToCamel, que renombra folio_asociado → folioAsociado.
+  // Normalizamos para que el enlace por folio funcione con o sin el mapper.
+  const movimientos = (movData?.movimientos || []).map(m => ({
+    ...m,
+    folio_asociado: m.folio_asociado ?? m.folioAsociado ?? '',
+    medio_pago: m.medio_pago ?? m.medioPago ?? 'efectivo',
+  }));
 
   const pagadoPorFolio = useMemo(() => {
     const m = {};
@@ -108,6 +116,19 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
     });
     return m;
   }, [movimientos]);
+
+  // Medio(s) de pago por folio: Set con los medios usados en los movimientos de ese folio
+  const mediosPorFolio = useMemo(() => {
+    const m = {};
+    movimientos.forEach(mv => {
+      const f = limpiarFolio(mv.folio_asociado);
+      if (!f) return;
+      (m[f] ||= new Set()).add(mv.medio_pago || 'efectivo');
+    });
+    return m;
+  }, [movimientos]);
+
+  const infoMedio = (id) => MEDIOS.find(x => x.id === id) || MEDIOS[MEDIOS.length - 1];
 
   const dentroRango = (fecha) => {
     if (!fecha) return false;
@@ -193,7 +214,7 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
         empresaId: targetId, tipo,
         movimientos: objetivo.map(c => ({
           fecha: hoy, rut: c.rut || '', nombre: c.nombre || '',
-          folio_asociado: String(c.folio), monto: c.saldo, medio_pago: 'efectivo',
+          folio_asociado: String(c.folio), monto: c.saldo, medio_pago: 'transferencia',
           glosa: `${esRecaudacion ? 'Cobro' : 'Pago'} folio #${c.folio}`,
         })),
       });
@@ -243,7 +264,7 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
 
   const resetForm = () => setForm({
     fecha: new Date().toISOString().slice(0, 10),
-    rut: '', nombre: '', folio_asociado: '', monto: '', medio_pago: 'efectivo', glosa: '',
+    rut: '', nombre: '', folio_asociado: '', monto: '', medio_pago: 'transferencia', glosa: '',
   });
 
   const handleGuardar = async () => {
@@ -272,6 +293,50 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
       refrescar();
     } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
     finally { setDeletingId(null); }
+  };
+
+  // ── Editar medio de pago ──
+  // Para un documento pagado: edita TODOS los movimientos de ese folio.
+  const abrirMedioFolio = (folio) => {
+    const ids = movimientos.filter(mv => limpiarFolio(mv.folio_asociado) === limpiarFolio(folio)).map(mv => mv.id);
+    if (ids.length === 0) return;
+    const medios = mediosPorFolio[limpiarFolio(folio)];
+    const actual = medios && medios.size === 1 ? [...medios][0] : 'efectivo';
+    setMedioModal({ titulo: `Folio #${folio}`, ids, actual });
+  };
+  // Para un movimiento manual suelto.
+  const abrirMedioMovimiento = (mv) =>
+    setMedioModal({ titulo: mv.glosa || mv.nombre || 'Movimiento', ids: [mv.id], actual: mv.medio_pago || 'efectivo' });
+
+  const guardarMedio = async (nuevoMedio) => {
+    if (!medioModal || savingMedio) return;
+    setSavingMedio(true);
+    try {
+      for (const id of medioModal.ids) {
+        const res = await editarMovimientoCajaApi(user.sessionId, id, { medio_pago: nuevoMedio });
+        if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Error al actualizar'); }
+      }
+      toast({ title: '✅ Medio de pago actualizado', description: infoMedio(nuevoMedio).label });
+      setMedioModal(null);
+      refrescar();
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Error', description: e.message });
+    } finally { setSavingMedio(false); }
+  };
+
+  // Badge del medio de pago (clickeable para editar)
+  const MedioBadge = ({ folio, onClick }) => {
+    const medios = mediosPorFolio[limpiarFolio(folio)];
+    if (!medios || medios.size === 0) return null;
+    const varios = medios.size > 1;
+    const info = varios ? { label: 'Varios', icon: Wallet } : infoMedio([...medios][0]);
+    const Icon = info.icon;
+    return (
+      <button onClick={onClick} title="Cambiar medio de pago"
+        className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-blue-400/40 transition-all whitespace-nowrap">
+        <Icon className="h-3 w-3" /> {info.label} <Pencil className="h-2.5 w-2.5 opacity-60" />
+      </button>
+    );
   };
 
   const EstadoBadge = ({ c }) => {
@@ -429,11 +494,14 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
                             {efectivizandoId === c.id ? <Loader2 className="h-3 w-3 animate-spin inline" /> : verboEfectivo}
                           </button>
                         ) : (
-                          <button onClick={() => deshacerEfectivo(c.folio)} disabled={deshaciendoFolio === String(c.folio)}
-                            title="Deshacer y volver a pendiente"
-                            className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:bg-red-500/15 hover:border-red-500/30 hover:text-red-400 transition-all disabled:opacity-40 whitespace-nowrap">
-                            {deshaciendoFolio === String(c.folio) ? <Loader2 className="h-3 w-3 animate-spin inline" /> : 'Deshacer'}
-                          </button>
+                          <div className="flex items-center justify-center gap-2">
+                            <MedioBadge folio={c.folio} onClick={() => abrirMedioFolio(c.folio)} />
+                            <button onClick={() => deshacerEfectivo(c.folio)} disabled={deshaciendoFolio === String(c.folio)}
+                              title="Deshacer y volver a pendiente"
+                              className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:bg-red-500/15 hover:border-red-500/30 hover:text-red-400 transition-all disabled:opacity-40 whitespace-nowrap">
+                              {deshaciendoFolio === String(c.folio) ? <Loader2 className="h-3 w-3 animate-spin inline" /> : 'Deshacer'}
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -463,11 +531,19 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
                     </td>
                     <td className="px-5 py-3 text-xs text-gray-400 truncate max-w-[200px]">{m.glosa || '—'}</td>
                     <td className={`px-5 py-3 text-right font-black font-mono ${esRecaudacion ? 'text-emerald-400' : 'text-red-400'}`}>{formatCLP(m.monto)}</td>
-                    <td className="px-5 py-3 text-center">
-                      <button onClick={() => handleEliminar(m.id)} disabled={deletingId === m.id}
-                        className="p-1.5 text-gray-600 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-all disabled:opacity-40">
-                        {deletingId === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                      </button>
+                    <td className="px-5 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        {(() => { const info = infoMedio(m.medio_pago || 'efectivo'); const Icon = info.icon; return (
+                          <button onClick={() => abrirMedioMovimiento(m)} title="Cambiar medio de pago"
+                            className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-blue-400/40 transition-all whitespace-nowrap">
+                            <Icon className="h-3 w-3" /> {info.label} <Pencil className="h-2.5 w-2.5 opacity-60" />
+                          </button>
+                        ); })()}
+                        <button onClick={() => handleEliminar(m.id)} disabled={deletingId === m.id}
+                          className="p-1.5 text-gray-600 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-all disabled:opacity-40">
+                          {deletingId === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -540,6 +616,40 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
               className={`${esRecaudacion ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'} text-white font-black uppercase text-xs tracking-widest disabled:opacity-40`}>
               {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />} Registrar
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL EDITAR MEDIO DE PAGO */}
+      <Dialog open={!!medioModal} onOpenChange={(o) => { if (!o) setMedioModal(null); }}>
+        <DialogContent className="sm:max-w-[460px] bg-[#0f172a] border-white/10 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black uppercase tracking-tight text-blue-400">Cambiar medio de pago</DialogTitle>
+          </DialogHeader>
+          {medioModal && (
+            <div className="space-y-4 mt-2">
+              <p className="text-[11px] text-gray-400 font-bold">
+                {medioModal.titulo}
+                {medioModal.ids.length > 1 && <span className="text-gray-600"> · {medioModal.ids.length} movimientos</span>}
+              </p>
+              <div className="grid grid-cols-5 gap-2">
+                {MEDIOS.map(med => {
+                  const Icon = med.icon; const active = medioModal.actual === med.id;
+                  return (
+                    <button key={med.id} disabled={savingMedio} onClick={() => guardarMedio(med.id)}
+                      className={`flex flex-col items-center gap-1 py-2.5 rounded-lg text-[8px] font-black uppercase tracking-wide transition-all border disabled:opacity-40 ${
+                        active ? 'bg-blue-600 border-blue-400/50 text-white' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                      }`}>
+                      <Icon className="h-4 w-4" /> {med.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {savingMedio && <p className="text-[10px] text-blue-400 font-bold flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Guardando…</p>}
+            </div>
+          )}
+          <DialogFooter className="mt-4">
+            <Button variant="ghost" onClick={() => setMedioModal(null)} className="text-gray-400 hover:text-white">Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

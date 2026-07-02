@@ -43,10 +43,12 @@ export const useBunkerData = () => {
   const [clients, setClients] = useState([]);
   const [planes, setPlanes] = useState([]);
   const [serviciosDisponibles, setServiciosDisponibles] = useState([]);
+  const [preciosPlanTramo, setPreciosPlanTramo] = useState([]);
   const [cashFlow, setCashFlow] = useState([]);
   const [services, setServices] = useState([]);
   const [compliance, setCompliance] = useState([]);
   const [risk, setRisk] = useState([]);
+  const [chartsSample, setChartsSample] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const loadAll = async () => {
@@ -75,13 +77,16 @@ export const useBunkerData = () => {
       setClients(payload?.clients || []);
       setPlanes(payload?.planes || []);
       setServiciosDisponibles(payload?.serviciosDisponibles || []);
+      setPreciosPlanTramo(payload?.preciosPlanTramo || []);
       
       // MAGIA AQUÍ: Si el backend no envía datos para los gráficos (porque la DB está vacía), 
       // usamos los datos de respaldo para que la pantalla no se rompa ni quede en blanco.
-      setCashFlow(payload?.cashFlow?.length > 0 ? payload.cashFlow : FALLBACK_CASH_FLOW);
+      const hayGraficosReales = payload?.cashFlow?.length > 0;
+      setCashFlow(hayGraficosReales ? payload.cashFlow : FALLBACK_CASH_FLOW);
       setServices(payload?.services?.length > 0 ? payload.services : FALLBACK_SERVICES);
       setCompliance(payload?.compliance?.length > 0 ? payload.compliance : FALLBACK_COMPLIANCE);
       setRisk(payload?.risk?.length > 0 ? payload.risk : FALLBACK_RISK);
+      setChartsSample(!hayGraficosReales);
 
     } catch (error) {
       console.error("Error en el Búnker:", error.message);
@@ -91,6 +96,7 @@ export const useBunkerData = () => {
       setServices(FALLBACK_SERVICES);
       setCompliance(FALLBACK_COMPLIANCE);
       setRisk(FALLBACK_RISK);
+      setChartsSample(true);
     } finally {
       setLoading(false);
     }
@@ -100,5 +106,5 @@ export const useBunkerData = () => {
     loadAll(); 
   }, [user?.sessionId, selectedCompany?.id, selectedCompany?.empresaId]);
 
-  return { clients, planes, serviciosDisponibles, cashFlow, services, compliance, risk, loading, refresh: loadAll };
+  return { clients, planes, serviciosDisponibles, preciosPlanTramo, cashFlow, services, compliance, risk, chartsSample, loading, refresh: loadAll };
 };

@@ -14,5 +14,9 @@ export const listarMovimientosCajaApi = (sessionId, empresaId, tipo, desde, hast
   return fetchWithAuth(`/caja?${params.toString()}`, sessionId);
 };
 
+// Editar un movimiento (medio de pago, monto, fecha, glosa)
+export const editarMovimientoCajaApi = (sessionId, id, data) =>
+  fetchWithAuth(`/caja/${id}`, sessionId, { method: 'PATCH', body: data });
+
 export const eliminarMovimientoCajaApi = (sessionId, id) =>
   fetchWithAuth(`/caja/${id}`, sessionId, { method: 'DELETE' });

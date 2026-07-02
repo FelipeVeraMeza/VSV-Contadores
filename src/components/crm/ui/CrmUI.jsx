@@ -43,6 +43,25 @@ export const EditableField = ({ label, name, value, isEditing, onChange, isMono 
   </div>
 );
 
+export const SelectField = ({ label, name, value, isEditing, onChange, options = [], badgeClass = '' }) => (
+  <div className="flex flex-col gap-1.5 w-full">
+    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{label}</span>
+    {isEditing ? (
+      <select name={name} value={value || ''} onChange={onChange} className="bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-blue-500 transition-colors w-full cursor-pointer">
+        {options.map(opt => {
+          const val = typeof opt === 'string' ? opt : opt.value;
+          const lbl = typeof opt === 'string' ? opt : opt.label;
+          return <option key={val} value={val}>{lbl}</option>;
+        })}
+      </select>
+    ) : (
+      <div className={`text-xs font-bold w-fit ${badgeClass || 'text-gray-200'}`}>
+        {value || <span className="text-gray-600 italic text-[10px]">Vacío</span>}
+      </div>
+    )}
+  </div>
+);
+
 export const SecureField = ({ label, name, value, isEditing, onChange }) => {
     const [show, setShow] = useState(false);
     

@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { LayoutList, BarChart3, Building2, ChevronDown, Search, CheckCircle2, UserPlus } from 'lucide-react';
+import { LayoutList, BarChart3, Building2, ChevronDown, Search, CheckCircle2, UserPlus, Download, Upload, FileSpreadsheet } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 
-import { useBunkerData } from './crm/crmData'; 
-import { updateClienteApi } from '@/services/crmService';
+import { useBunkerData } from './crm/crmData';
+import { updateClienteApi, eliminarEmpresaApi } from '@/services/crmService';
+import { exportClientsToExcel, exportClientsToCSV } from './crm/utils/exportClients';
+import CrmImportModal from './crm/modals/CrmImportModal';
+import CrmErrorBoundary from './crm/CrmErrorBoundary';
 import CrmTableList from './crm/views/CrmTableList';
 import CrmAnalytics from './crm/modals/CrmAnalytics';
 import ClientDetailDrawer from './crm/modals/ClientDetailDrawer';
@@ -13,6 +16,7 @@ import WhatsappPanel from './crm/views/WhatsappPanel';
 import EmailPanel from './crm/views/EmailPanel';
 import InteraccionesPanel from './crm/views/InteraccionesPanel';
 import CrearClienteModal from './crm/modals/CrearClienteModal';
+import CrearEmpresaModal from './crm/modals/CrearEmpresaModal';
 import PersonasPanel from './crm/views/PersonasPanel';
 import CrmDashboard from './crm/views/CrmDashboard';
 
@@ -39,19 +43,36 @@ const isEmptyField = (val) => {
     return strVal === '' || strVal === 'SIN_DATO' || strVal === 'SIN REGISTRO';
 };
 
+// Persistencia de filtros del CRM (se recuerdan entre sesiones)
+const CRM_FILTERS_KEY = 'crm_filters_v1';
+const loadFilters = () => {
+    try { return JSON.parse(localStorage.getItem(CRM_FILTERS_KEY) || '{}'); }
+    catch { return {}; }
+};
+
 const CRM = () => {
   // La navegación de sub-páginas vive en el menú lateral (?sub=...)
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('sub') || 'dashboard';
   const setActiveTab = (id) => setSearchParams({ sub: id });
-  const { clients: dbClients, planes, serviciosDisponibles, cashFlow, services, compliance, risk, loading, refresh } = useBunkerData();
+  const { clients: dbClients, planes, serviciosDisponibles, preciosPlanTramo, cashFlow, services, compliance, risk, chartsSample, loading, refresh } = useBunkerData();
+  const _saved = useMemo(loadFilters, []);
   const [clients, setClients] = useState([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('Todos'); 
-  const [typeFilter, setTypeFilter] = useState('Todos');
+  const [searchTerm, setSearchTerm] = useState(_saved.searchTerm || '');
+  const [statusFilter, setStatusFilter] = useState(_saved.statusFilter || 'Todos');
+  const [typeFilter, setTypeFilter] = useState(_saved.typeFilter || 'Todos');
+  const [planFilter, setPlanFilter] = useState(_saved.planFilter || 'Todos');
   const [selectedClient, setSelectedClient] = useState(null);
-  const [vistaActivas, setVistaActivas] = useState(true);
+  const [vistaActivas, setVistaActivas] = useState(_saved.vistaActivas ?? true);
+
+  // Recuerda los filtros entre sesiones
+  useEffect(() => {
+    localStorage.setItem(CRM_FILTERS_KEY, JSON.stringify({ searchTerm, statusFilter, typeFilter, planFilter, vistaActivas }));
+  }, [searchTerm, statusFilter, typeFilter, planFilter, vistaActivas]);
   const [showCrearCliente, setShowCrearCliente] = useState(false);
+  const [showCrearEmpresa, setShowCrearEmpresa] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const [personasReload, setPersonasReload] = useState(0);
 
   useEffect(() => {
@@ -101,6 +122,10 @@ const CRM = () => {
           const rutRep = c.rut_rep_encrypted || c.repRut;
           const correo = c.email_corporativo || c.correo;
           const tel = c.whatsapp || c.telefono_corporativo || c.telefono;
+          const giro = c.giro || '';
+          const direccion = c.direccion || '';
+          const comuna = c.comuna || '';
+          const planNombre = c.plan || c.plan_nombre || '';
           const esInactiva = isEmptyField(rep) && isEmptyField(rutRep) && isEmptyField(correo) && isEmptyField(tel);
           const matchActividad = vistaActivas ? !esInactiva : esInactiva;
 
@@ -116,8 +141,12 @@ const CRM = () => {
               rut.includes(term) ||
               cleanStr(correo).includes(termClean) ||
               cleanStr(rep).includes(termClean) ||
+              cleanStr(giro).includes(termClean) ||
+              cleanStr(direccion).includes(termClean) ||
+              cleanStr(comuna).includes(termClean) ||
               (termDigits !== '' && telDigits.includes(termDigits));
           const matchType = typeFilter === 'Todos' || tipo === typeFilter;
+          const matchPlan = planFilter === 'Todos' || planNombre === planFilter;
           let matchStatus = true;
           if (statusFilter === 'Críticos') {
               matchStatus = pago === 'NO PAGADO' || pago === 'SERVICIO SUSPENDIDO' || dts > 0;
@@ -126,9 +155,55 @@ const CRM = () => {
           } else if (statusFilter === 'Al Día') {
               matchStatus = (pago === 'AL DIA' || pago === 'PAGADO') && (f29 === 'DECLARADO' || f29 === 'NO DECLARAR');
           }
-          return matchSearch && matchType && matchStatus && matchActividad;
+          return matchSearch && matchType && matchPlan && matchStatus && matchActividad;
       });
-  }, [clients, searchTerm, statusFilter, typeFilter, vistaActivas]);
+  }, [clients, searchTerm, statusFilter, typeFilter, planFilter, vistaActivas]);
+
+  const handleDeleteClient = async (clientToDelete) => {
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      if (!user.sessionId) throw new Error("Sesión inválida");
+      const res = await eliminarEmpresaApi(user.sessionId, clientToDelete.id);
+      const payload = await res.json();
+      if (!payload.success) throw new Error(payload.message || 'No se pudo eliminar.');
+      setClients(prev => prev.filter(c => c.id !== clientToDelete.id));
+      setSelectedClient(null);
+      toast({ title: "Cliente eliminado", description: payload.message });
+    } catch (error) {
+      toast({ variant: "destructive", title: "No se pudo eliminar", description: error.message });
+    }
+  };
+
+  const handleBulkDelete = async (clientsArr) => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!user.sessionId) return;
+    let ok = 0, fail = 0;
+    for (const c of clientsArr) {
+      try {
+        const res = await eliminarEmpresaApi(user.sessionId, c.id);
+        const payload = await res.json();
+        if (payload.success) ok++; else fail++;
+      } catch { fail++; }
+    }
+    const ids = new Set(clientsArr.map(c => c.id));
+    setClients(prev => prev.filter(c => !ids.has(c.id)));
+    setSelectedClient(null);
+    toast({ title: "Eliminación masiva", description: `${ok} eliminados${fail ? `, ${fail} no se pudieron (tienen registros asociados)` : ''}.` });
+  };
+
+  const handleBulkEstadoPago = async (clientsArr, estado) => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (!user.sessionId) return;
+    let ok = 0;
+    for (const c of clientsArr) {
+      try {
+        await updateClienteApi(user.sessionId, c.id, { ...c, pagoServicio: estado });
+        ok++;
+      } catch { /* sigue */ }
+    }
+    toast({ title: "Estado actualizado", description: `${ok} cliente(s) marcados como ${estado}.` });
+    refresh();
+  };
 
   const handleUpdateClient = async (updatedClient) => {
     try {
@@ -148,6 +223,7 @@ const CRM = () => {
   if (loading) return <div className="h-full flex items-center justify-center text-white"><div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div>;
 
   return (
+    <CrmErrorBoundary>
     <div className="h-full flex flex-col gap-3 lg:gap-5 relative">
       {activeTab !== 'dashboard' && (
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
@@ -156,8 +232,36 @@ const CRM = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 z-50">
+              {activeTab === 'list' && (
+                <>
+                  <button
+                      onClick={() => setShowImport(true)}
+                      className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                  >
+                      <Upload size={14} /> Importar
+                  </button>
+                  <div className="relative">
+                    <button
+                        onClick={() => setShowExportMenu(v => !v)}
+                        className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                    >
+                        <Download size={14} /> Exportar <ChevronDown size={12} />
+                    </button>
+                    {showExportMenu && (
+                      <div className="absolute right-0 mt-1 w-44 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+                        <button onClick={() => { exportClientsToExcel(filteredClients); setShowExportMenu(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-[11px] text-gray-200 hover:bg-white/5 transition-colors">
+                          <FileSpreadsheet size={13} className="text-emerald-400" /> Excel (.xlsx) · {filteredClients.length}
+                        </button>
+                        <button onClick={() => { exportClientsToCSV(filteredClients); setShowExportMenu(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-[11px] text-gray-200 hover:bg-white/5 transition-colors border-t border-white/5">
+                          <Download size={13} className="text-blue-400" /> CSV
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
               <button
-                  onClick={() => setShowCrearCliente(true)}
+                  onClick={() => activeTab === 'prospectos' ? setShowCrearCliente(true) : setShowCrearEmpresa(true)}
                   className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 transition-colors"
               >
                   <UserPlus size={14} /> {activeTab === 'prospectos' ? 'Crear Prospecto' : 'Crear Cliente'}
@@ -181,12 +285,18 @@ const CRM = () => {
                 selectedClientId={selectedClient?.id}
                 searchTerm={searchTerm} 
                 setSearchTerm={setSearchTerm}
-                statusFilter={statusFilter} 
+                statusFilter={statusFilter}
                 setStatusFilter={setStatusFilter}
-                typeFilter={typeFilter} 
+                typeFilter={typeFilter}
                 setTypeFilter={setTypeFilter}
+                planFilter={planFilter}
+                setPlanFilter={setPlanFilter}
+                planes={planes}
                 vistaActivas={vistaActivas}
                 setVistaActivas={setVistaActivas}
+                onBulkDelete={handleBulkDelete}
+                onBulkEstadoPago={handleBulkEstadoPago}
+                onCrear={() => setShowCrearEmpresa(true)}
             />
 
             <AnimatePresence>
@@ -195,8 +305,10 @@ const CRM = () => {
                         client={selectedClient}
                         onClose={() => setSelectedClient(null)}
                         onUpdateClient={handleUpdateClient}
+                        onDelete={handleDeleteClient}
                         planes={planes}
                         serviciosDisponibles={serviciosDisponibles}
+                        preciosPlanTramo={preciosPlanTramo}
                         onRefresh={refresh}
                     />
                 )}
@@ -229,7 +341,14 @@ const CRM = () => {
       )}
 
       {activeTab === 'analytics' && (
-        <CrmAnalytics clients={clients} cashFlow={cashFlow} />
+        <div className="flex-1 min-h-0 flex flex-col gap-3">
+          {chartsSample && (
+            <div className="flex items-center gap-2 text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2 flex-shrink-0">
+              <FileSpreadsheet size={13} /> Los gráficos muestran <span className="uppercase tracking-widest">datos de ejemplo</span> — aún no hay historial financiero real cargado.
+            </div>
+          )}
+          <CrmAnalytics clients={clients} cashFlow={cashFlow} />
+        </div>
       )}
 
       <AnimatePresence>
@@ -240,7 +359,27 @@ const CRM = () => {
           />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {showCrearEmpresa && (
+          <CrearEmpresaModal
+            planes={planes}
+            onClose={() => setShowCrearEmpresa(false)}
+            onCreated={() => { refresh(); setActiveTab('list'); }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showImport && (
+          <CrmImportModal
+            onClose={() => setShowImport(false)}
+            onImported={() => refresh()}
+          />
+        )}
+      </AnimatePresence>
     </div>
+    </CrmErrorBoundary>
   );
 };
 
