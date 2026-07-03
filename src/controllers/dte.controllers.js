@@ -10,6 +10,7 @@ import { crear_cliente } from '../controllers/clientes.controllers.js';
 import { emitirFacturaPuppeteer } from '../components/facturacion/scripts/factura_manual.mjs';
 import { emitirLotePuppeteer, estadoRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
 import { reenviarCorreoIndividual, reenviarCorreosMasivo } from '../components/facturacion/scripts/revisar para envios/mensajes_facturador_masivo.mjs';
+import { obtenerDestinatariosRecordatorio, enviarRecordatoriosPago, estadoRecordatorio } from '../components/facturacion/scripts/revisar para envios/recordatorio_pago.mjs';
 import { pool } from '../database/db.js';
 
 // Robots para Factura Exenta (DTE 34)
@@ -103,6 +104,11 @@ export const reenviarCorreoController = async (req, res) => {
 
 // 📒 Leer el registro de correos desde la BASE DE DATOS
 export const getCorreosLogController = async (req, res) => {
+    // 🔒 El registro global de correos es una vista de administrador.
+    // Esta tabla no tiene empresa_id, así que un cliente no puede verla acotada.
+    if (req.user?.rol !== 'Administrador') {
+        return res.json({ ok: true, correos: [] });
+    }
     try {
         const { rows } = await pool.query(
             `SELECT folio, rut, razon_social AS "razonSocial", correo, estado, motivo, datos, fecha
@@ -145,6 +151,67 @@ export const reenviarCorreosMasivoController = async (req, res) => {
         console.error("❌ Error en reenviarCorreosMasivoController:", error);
         if (!res.headersSent) res.status(500).json({ ok: false, error: error.message });
     }
+};
+
+// ==========================================
+// 📢 RECORDATORIOS DE PAGO (módulo aparte)
+// ==========================================
+
+// 👀 Vista previa: a cuántas empresas y a qué correos se enviaría (sin enviar nada).
+export const previewRecordatoriosController = async (req, res) => {
+    try {
+        const { desde, hasta } = req.query;
+        const destinatarios = await obtenerDestinatariosRecordatorio({
+            desde: desde || undefined,
+            hasta: hasta || null,
+        });
+        res.json({ ok: true, total: destinatarios.length, destinatarios });
+    } catch (error) {
+        console.error("❌ Error en previewRecordatoriosController:", error.message);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+};
+
+// 🚀 Dispara el envío de recordatorios en segundo plano (botón en Facturación).
+export const enviarRecordatoriosController = async (req, res) => {
+    try {
+        // Mismos candados que el reenvío de correos (misma cuenta de Gmail / SII).
+        if (estadoRobot.activo) {
+            return res.status(409).json({ ok: false, error: "El facturador masivo está en ejecución. Espera a que termine." });
+        }
+        if (correoEnCurso || estadoRecordatorio.activo) {
+            return res.status(409).json({ ok: false, error: "Ya hay un envío de correos en curso. Espera a que termine." });
+        }
+
+        const { desde, hasta, fechaLimite } = req.body || {};
+
+        correoEnCurso = true;
+        console.log("[INFO] Envío de recordatorios de pago solicitado.");
+        res.json({ ok: true, mensaje: "Envío de recordatorios iniciado. Sigue el progreso en pantalla." });
+
+        enviarRecordatoriosPago({
+            desde: desde || undefined,
+            hasta: hasta || null,
+            fechaLimite: fechaLimite || undefined,
+        })
+            .catch(err => {
+                console.error("❌ Error en envío de recordatorios:", err);
+                estadoRecordatorio.activo = false;
+                estadoRecordatorio.finalizado = true;
+                estadoRecordatorio.error = err.message;
+            })
+            .finally(() => { correoEnCurso = false; });
+
+    } catch (error) {
+        correoEnCurso = false;
+        console.error("❌ Error en enviarRecordatoriosController:", error.message);
+        if (!res.headersSent) res.status(500).json({ ok: false, error: error.message });
+    }
+};
+
+// 📊 Progreso en vivo del envío de recordatorios.
+export const getProgresoRecordatoriosController = (req, res) => {
+    res.status(200).json(estadoRecordatorio);
 };
 
 // ==========================================

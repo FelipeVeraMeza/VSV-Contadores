@@ -235,6 +235,112 @@ export const updateUser = async (req, res) => {
     }
 };
 
+export const updateOwnProfile = async (req, res) => {
+    const { id } = req.params;
+    const { nombre, rut, email, clave } = req.body;
+    const sessionUser = req.user;
+
+    try {
+        console.log('🔧 updateOwnProfile - Iniciando');
+        console.log('  ID esperado:', sessionUser.usuarioId);
+        console.log('  ID recibido:', id);
+        console.log('  Datos:', { nombre, email, tieneRut: !!rut, tieneClave: !!clave });
+
+        // Validación: solo puedes actualizar tu propio perfil
+        if (sessionUser.usuarioId !== id) {
+            console.log('❌ ID no coincide');
+            return res.status(403).json({
+                success: false,
+                message: "Acceso Restringido: Solo puedes actualizar tu propio perfil."
+            });
+        }
+
+        await pool.query('BEGIN');
+
+        const checkUser = await pool.query('SELECT id FROM usuario WHERE id = $1', [id]);
+
+        if (checkUser.rows.length === 0) {
+            await pool.query('ROLLBACK');
+            return res.status(404).json({ success: false, message: "Usuario no encontrado." });
+        }
+
+        // Validar que email no esté vacío
+        if (!email || !email.trim()) {
+            await pool.query('ROLLBACK');
+            return res.status(400).json({ success: false, message: "El email es requerido." });
+        }
+
+        if (!nombre || !nombre.trim()) {
+            await pool.query('ROLLBACK');
+            return res.status(400).json({ success: false, message: "El nombre es requerido." });
+        }
+
+        const emailLimpio = email.toLowerCase().trim();
+        const emailEncrypted = encrypt(emailLimpio);
+        const emailHash = generateHash(emailLimpio);
+
+        let query = `UPDATE usuario SET nombre = $1, email_encrypted = $2, email_hash = $3`;
+        let params = [nombre.trim(), emailEncrypted, emailHash];
+
+        // RUT es opcional - solo actualiza si se proporciona
+        if (rut && rut.trim()) {
+            const rutLimpio = cleanRut(rut);
+            const rutEncrypted = encrypt(rutLimpio);
+            const rutHash = generateHash(rutLimpio);
+            query += `, rut_encrypted = $${params.length + 1}, rut_hash = $${params.length + 2}`;
+            params.push(rutEncrypted, rutHash);
+        }
+
+        // Contraseña es opcional
+        let paramIndex = params.length + 1;
+        if (clave && clave.trim().length >= 8) {
+            const saltRounds = 10;
+            const hashedPassword = await bcrypt.hash(clave, saltRounds);
+            query += `, clave = $${paramIndex}`;
+            params.push(hashedPassword);
+            paramIndex++;
+        }
+
+        query += ` WHERE id = $${paramIndex}`;
+        params.push(id);
+
+        console.log('📝 Ejecutando query:', query);
+
+        await pool.query(query, params);
+        await pool.query('COMMIT');
+
+        console.log('✅ Perfil actualizado correctamente');
+
+        res.json({
+            success: true,
+            message: "Perfil actualizado correctamente."
+        });
+
+    } catch (error) {
+        try {
+            await pool.query('ROLLBACK');
+        } catch (rollbackError) {
+            console.error("⚠️ Error en ROLLBACK:", rollbackError.message);
+        }
+
+        console.error("❌ Error en updateOwnProfile:", error.message);
+        console.error("📍 Stack:", error.stack);
+
+        if (error.code === '23505') {
+            return res.status(409).json({
+                success: false,
+                message: "Conflicto: El RUT o Email ya pertenecen a otro usuario."
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            error: "Error interno al actualizar el perfil.",
+            details: error.message
+        });
+    }
+};
+
 export const deleteUser = async (req, res) => {
     const { id } = req.params;
 

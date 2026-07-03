@@ -44,6 +44,24 @@ export async function requireSession(req, res, next) {
       sessionId: sessionId,
       empresaId: empresaIdFromHeader || null
     };
+
+    // Cargar permisos de módulos si es administrador
+    if (session.rol === 'Administrador') {
+      try {
+        const modulosResult = await pool.query(
+          `SELECT puede_ver_contabilidad, puede_ver_facturacion, puede_ver_rrhh,
+                  puede_ver_operacion_renta, puede_ver_crm, puede_ver_admin
+           FROM admin_modulos
+           WHERE usuario_id = $1`,
+          [session.usuario_id]
+        );
+        if (modulosResult.rows.length > 0) {
+          req.user.modulos = modulosResult.rows[0];
+        }
+      } catch (err) {
+        console.warn("⚠️ Error cargando módulos:", err.message);
+      }
+    }
    
     next();
   } catch (error) {
@@ -54,10 +72,45 @@ export async function requireSession(req, res, next) {
 
 export const requireAdmin = (req, res, next) => {
   if (req.user?.rol !== 'Administrador') {
-    return res.status(403).json({ 
+    return res.status(403).json({
       success: false,
-      message: "Acceso Denegado: Esta acción requiere privilegios de Administrador de VSV Pro." 
+      message: "Acceso Denegado: Esta acción requiere privilegios de Administrador de VSV Pro."
     });
   }
   next();
+};
+
+export const requireModulo = (modulo) => {
+  return (req, res, next) => {
+    if (req.user?.rol !== 'Administrador') {
+      return res.status(403).json({
+        success: false,
+        message: "Acceso Denegado: Esta acción requiere privilegios de Administrador."
+      });
+    }
+
+    // Si no tiene módulos asignados (backward compatibility), permitir todo
+    if (!req.user?.modulos) {
+      return next();
+    }
+
+    const moduloMap = {
+      'contabilidad': 'puede_ver_contabilidad',
+      'facturacion': 'puede_ver_facturacion',
+      'rrhh': 'puede_ver_rrhh',
+      'operacion_renta': 'puede_ver_operacion_renta',
+      'crm': 'puede_ver_crm',
+      'admin': 'puede_ver_admin'
+    };
+
+    const permiso = moduloMap[modulo];
+    if (!permiso || !req.user?.modulos?.[permiso]) {
+      return res.status(403).json({
+        success: false,
+        message: `Acceso Denegado: No tienes permiso para acceder a ${modulo}.`
+      });
+    }
+
+    next();
+  };
 };

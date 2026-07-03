@@ -31,25 +31,32 @@ export const getConnectedBanks = async (req, res) => {
     }
 };
 
-// 2. OBTENER MOVIMIENTOS (Adaptado para Modo Global y Clientes)
+// 2. OBTENER MOVIMIENTOS (Modo Global solo para Admin, Clientes solo su empresa)
 export const getMovimientosBancarios = async (req, res) => {
     try {
         let { empresaId } = req.query;
+        const esAdmin = req.user?.rol === 'Administrador';
         const query = supabase.from('movimientos_bancarios').select('*');
 
-        // Si NO estamos en modo global, filtramos por la empresa
-        if (empresaId && empresaId !== 'undefined' && empresaId !== 'null' && empresaId !== '' && empresaId !== 'ALL') {
+        const empresaValida = empresaId && empresaId !== 'undefined' && empresaId !== 'null' && empresaId !== '' && empresaId !== 'ALL';
+
+        if (empresaValida) {
+            // Hay empresa seleccionada: filtramos por ella (aplica a admin y cliente)
             query.eq('empresa_id', empresaId);
+        } else if (esAdmin) {
+            // Solo el ADMIN sin empresa seleccionada ve la Bóveda Global completa
+            console.log("📊 Cargando vista global/admin: Mostrando TODA la Bóveda...");
+            // Sin filtro: Supabase devuelve todos los registros
         } else {
-            console.log("📊 Cargando vista global/admin de VSV Consultores: Mostrando TODA la Bóveda...");
-            // Si es Global, NO ponemos ningún filtro .eq o .is.
-            // Al no poner filtros, Supabase devuelve TODOS los registros de la tabla.
+            // 🔒 Un CLIENTE sin empresa NO puede ver datos globales del búnker
+            console.log("🔒 Cliente sin empresa seleccionada: devolviendo espacio vacío.");
+            return res.status(200).json([]);
         }
 
         const { data, error } = await query.order('fecha', { ascending: false });
 
         if (error) throw error;
-        
+
         console.log(`[BACKEND] Devolviendo ${data.length} movimientos al Frontend.`);
         res.status(200).json(data);
     } catch (error) {

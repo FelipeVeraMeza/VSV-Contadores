@@ -18,6 +18,7 @@ const Bancos = lazy(() => import('../components/Bancos'));
 const GestionUsuarios = lazy(() => import('../components/admin/GestionUsuarios.jsx'));
 const GestionEmpresas = lazy(() => import('../components/admin/GestionEmpresas.jsx'));
 const Administracion = lazy(() => import('../components/admin/Administracion.jsx'));
+const ProfileEditor = lazy(() => import('../components/ProfileEditor.jsx'));
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
@@ -77,6 +78,7 @@ function App() {
             <Route element={<MainPage />}>
               {/* Rutas directas sin el CompanyGuard */}
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/perfil" element={<ProfileEditor />} />
               <Route path="/CRM" element={<CRM />} />
               <Route path="/contabilidad" element={<Contabilidad />} />
               <Route path="/rrhh" element={<RecursosHumanos />} />

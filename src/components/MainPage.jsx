@@ -7,7 +7,7 @@ import {
   Landmark, ShieldCheck, FileBarChart, LogOut, Menu, X, Package,
   ChevronDown, ShoppingCart, TrendingUp, Cloud, UserCheck,
   Wallet, CreditCard, BookCopy, ArrowRightLeft,
-  Building2, UserPlus, MessageCircle, Mail, Activity, PieChart
+  Building2, UserPlus, MessageCircle, Mail, Activity, PieChart, UserCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth.jsx';
@@ -72,9 +72,13 @@ function MainPage() {
   if (user?.rol === 'Cliente') {
     modules = [
       { id: 'dashboard', path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard, color: 'from-blue-500 to-cyan-500' },
+      { id: 'CRM', path: '/CRM', name: 'CRM', icon: Package, color: 'from-pink-500 to-rose-500', sub: subCRM },
       { id: 'contabilidad', path: '/contabilidad', name: 'Contabilidad', icon: Calculator, color: 'from-green-500 to-emerald-500', sub: subContabilidad },
+      { id: 'rrhh', path: '/rrhh', name: 'Recursos Humanos', icon: Users, color: 'from-purple-500 to-violet-500' },
       { id: 'facturacion', path: '/facturacion', name: 'Facturación SII', icon: FileText, color: 'from-orange-500 to-red-500' },
-      { id: 'rrhh', path: '/rrhh', name: 'Recursos Humanos', icon: Users, color: 'from-purple-500 to-violet-500' }
+      { id: 'operacionRenta', path: '/operacion-renta', name: 'Operación Renta', icon: FileBarChart, color: 'from-teal-500 to-cyan-600' },
+      { id: 'bancos', path: '/bancos', name: 'Bancos', icon: Landmark, color: 'from-indigo-500 to-blue-600' },
+      { id: 'perfil', path: '/perfil', name: 'Mi Perfil', icon: UserCircle, color: 'from-cyan-500 to-blue-600' }
     ];
   } else {
     modules = [

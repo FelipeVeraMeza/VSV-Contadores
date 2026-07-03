@@ -1,12 +1,16 @@
 import { Router } from 'express';
-import { 
+import {
     getConnectedBanks,
-    getMovimientosBancarios, 
-    uploadCartola, 
+    getMovimientosBancarios,
+    uploadCartola,
     connectBank
 } from '../controllers/bancos.controllers.js';
+import { requireSession } from '../middleware/auth.js';
 
 const router = Router();
+
+// Todas las rutas de bancos requieren sesión válida
+router.use(requireSession);
 
 // Revisar si la empresa ya tiene el banco conectado
 router.get('/connected', getConnectedBanks);

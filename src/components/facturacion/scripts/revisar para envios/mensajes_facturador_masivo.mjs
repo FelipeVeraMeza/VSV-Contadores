@@ -390,7 +390,8 @@ async function enviarPorResend(mailOptions) {
 
 // Envía el correo: si hay RESEND_API_KEY usa Resend (HTTPS, sirve en Railway);
 // si no, o si Resend falla, cae a Gmail SMTP (587 → 465, 2 rondas).
-async function enviarConReintentos(mailOptions) {
+// 📤 Exportada para reutilizarla en otros envíos (ej: recordatorios de pago).
+export async function enviarConReintentos(mailOptions) {
     // 1) API de GMAIL por HTTPS (el correo sale de tu Gmail; no bloqueado por Railway).
     if (process.env.GMAIL_REFRESH_TOKEN && process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET) {
         try {

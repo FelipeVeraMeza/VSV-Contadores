@@ -55,13 +55,29 @@ export const loginUser = async (req, res) => {
             [sessionId, user.id, expiresAt]
         );
 
+        // Obtener permisos de módulos si es administrador
+        let modulos = null;
+        if (user.rol === 'Administrador') {
+            const modulosResult = await pool.query(
+                `SELECT puede_ver_contabilidad, puede_ver_facturacion, puede_ver_rrhh,
+                        puede_ver_operacion_renta, puede_ver_crm, puede_ver_admin
+                 FROM admin_modulos
+                 WHERE usuario_id = $1`,
+                [user.id]
+            );
+            if (modulosResult.rows.length > 0) {
+                modulos = modulosResult.rows[0];
+            }
+        }
+
         return res.json({
             id: user.id,
             nombre: user.nombre,
             email: decrypt(user.email_encrypted),
             rol: user.rol,
             assignedCompanies,
-            sessionId
+            sessionId,
+            modulos
         });
 
     } catch (err) {

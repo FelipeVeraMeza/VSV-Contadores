@@ -1610,5 +1610,28 @@
       "trabajadores": "0",
       "totalFacturacion": "29807259"
     }
+  },
+  {
+    "fecha": "2026-07-03T20:28:32.330Z",
+    "folio": "1144",
+    "rut": "",
+    "razonSocial": "MAESTRANZA CVM SPA",
+    "correo": "maestranza.cvm@gmail.com",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {}
+  },
+  {
+    "fecha": "2026-07-03T20:34:21.984Z",
+    "folio": "1217",
+    "rut": "",
+    "razonSocial": "INVERSIONES MUNDO CANINO SPA",
+    "correo": "inversionesmundocanino@gmail.com",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {
+      "correo": "inversionesmundocanino@gmail.com",
+      "razonSocial": "INVERSIONES MUNDO CANINO SPA"
+    }
   }
 ]

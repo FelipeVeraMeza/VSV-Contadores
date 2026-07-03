@@ -175,6 +175,10 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   const [selectedFolios, setSelectedFolios] = useState([]);
   const [isReenviandoMasivo, setIsReenviandoMasivo] = useState(false);
 
+  // 📢 Recordatorios de pago
+  const [isEnviandoRecordatorios, setIsEnviandoRecordatorios] = useState(false);
+  const [progresoRecordatorio, setProgresoRecordatorio] = useState(null);
+
   const [bulkRows, setBulkRows] = useState([]);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   const [activeRowIndex, setActiveRowIndex] = useState(null); 
@@ -292,6 +296,67 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
       setIsReenviandoMasivo(false);
     }
   };
+
+  // ====================================================
+  // 📢 RECORDATORIO DE PAGO (módulo aparte)
+  // ====================================================
+  const enviarRecordatoriosPago = async () => {
+    try {
+      // 1) Vista previa: cuántas empresas recibirán el recordatorio.
+      const prev = await fetch(`${API_BASE_URL}/dte/recordatorios/preview`);
+      const prevData = await prev.json();
+      if (!prevData.ok) {
+        return toast({ variant: "destructive", title: "No se pudo calcular", description: prevData.error || "Error al obtener destinatarios." });
+      }
+      if (!prevData.total) {
+        return toast({ title: "Sin destinatarios", description: "No hay facturas enviadas con correo válido en el rango." });
+      }
+
+      // 2) Confirmación explícita antes de un envío real a clientes.
+      const ok = window.confirm(
+        `Se enviará el RECORDATORIO DE PAGO a ${prevData.total} empresa(s) con factura enviada (desde el 27 de junio).\n\n` +
+        `Este correo SÍ se manda de verdad a los clientes. ¿Continuar?`
+      );
+      if (!ok) return;
+
+      setIsEnviandoRecordatorios(true);
+      const res = await fetch(`${API_BASE_URL}/dte/enviar-recordatorios`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast({ title: "📢 Recordatorios en camino", description: data.mensaje || `Enviando a ${prevData.total} empresa(s) en segundo plano.`, duration: 9000 });
+      } else {
+        setIsEnviandoRecordatorios(false);
+        toast({ variant: "destructive", title: "No se pudo iniciar", description: data.error || "Error." });
+      }
+    } catch (e) {
+      setIsEnviandoRecordatorios(false);
+      toast({ variant: "destructive", title: "Error de conexión", description: e.message });
+    }
+  };
+
+  // Progreso en vivo de los recordatorios mientras se envían.
+  useEffect(() => {
+    let interval;
+    if (isOpen && activeTab === TABS.CORREOS && isEnviandoRecordatorios) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`${API_BASE_URL}/dte/recordatorios/progreso`);
+          if (!res.ok) return;
+          const data = await res.json();
+          setProgresoRecordatorio(data);
+          if (data.finalizado || (!data.activo && data.total > 0 && data.actual >= data.total)) {
+            setIsEnviandoRecordatorios(false);
+            toast({ title: "🏁 Recordatorios enviados", description: `Enviados: ${data.enviados} | Fallidos: ${data.fallidos}`, duration: 10000 });
+          }
+        } catch (e) {}
+      }, 2500);
+    }
+    return () => clearInterval(interval);
+  }, [isOpen, activeTab, isEnviandoRecordatorios]);
 
   // ====================================================
   // 🌟 ESCUCHADOR DE PROGRESO EN VIVO
@@ -1314,14 +1379,27 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                       <button onClick={seleccionarPendientes} className="text-orange-400 hover:text-orange-300 underline-offset-2 hover:underline">Seleccionar los que faltan</button>
                       {selectedFolios.length > 0 && <button onClick={limpiarSeleccion} className="text-gray-500 hover:text-gray-300">Limpiar</button>}
                     </div>
-                    <Button
-                      onClick={reenviarSeleccionados}
-                      disabled={selectedFolios.length === 0 || isReenviandoMasivo || reenviandoFolio !== null}
-                      className="h-9 px-5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-emerald-600/20 inline-flex items-center gap-2"
-                    >
-                      {isReenviandoMasivo ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
-                      Enviar seleccionados ({selectedFolios.length})
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {/* 📢 Recordatorio de pago a todas las empresas facturadas (desde el 27-jun) */}
+                      <Button
+                        onClick={enviarRecordatoriosPago}
+                        disabled={isEnviandoRecordatorios || isReenviandoMasivo || reenviandoFolio !== null}
+                        title="Envía un correo recordando el pago a todas las empresas con factura enviada"
+                        className="h-9 px-5 bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-amber-600/20 inline-flex items-center gap-2"
+                      >
+                        {isEnviandoRecordatorios
+                          ? <><Loader2 size={14} className="animate-spin" />{progresoRecordatorio?.total ? ` ${progresoRecordatorio.actual}/${progresoRecordatorio.total}` : ' Enviando…'}</>
+                          : <><Mail size={14} /> Recordatorio de pago</>}
+                      </Button>
+                      <Button
+                        onClick={reenviarSeleccionados}
+                        disabled={selectedFolios.length === 0 || isReenviandoMasivo || reenviandoFolio !== null}
+                        className="h-9 px-5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-emerald-600/20 inline-flex items-center gap-2"
+                      >
+                        {isReenviandoMasivo ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+                        Enviar seleccionados ({selectedFolios.length})
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="flex-1 overflow-y-auto custom-scrollbar rounded-xl border border-white/10 bg-[#0a0a0a]">

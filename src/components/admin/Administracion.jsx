@@ -1,10 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Users as UsersIcon, ChevronRight, Shield, Building2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom'; 
+import { Users as UsersIcon, ChevronRight, Shield, Building2, Lock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 
 const Administracion = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   return (
     <div className="space-y-8">
@@ -20,19 +22,19 @@ const Administracion = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl">
-        
+
         {/* GESTIÓN DE USUARIOS */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          whileHover={{ 
+          whileHover={{
             y: -5,
             backgroundColor: "rgba(255, 255, 255, 0.08)",
             borderColor: "rgba(255, 255, 255, 0.2)",
-            transition: { duration: 0.2 } 
+            transition: { duration: 0.2 }
           }}
-          onClick={() => navigate('/admin/usuarios')} 
+          onClick={() => navigate('/admin/usuarios')}
           className="relative group p-8 bg-white/5 backdrop-blur-xl rounded-[2.5rem] border border-white/5 shadow-2xl overflow-hidden cursor-pointer transition-colors"
         >
           <div className="absolute -right-4 -top-4 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-colors" />
@@ -90,7 +92,7 @@ const Administracion = () => {
             </div>
           </div>
         </motion.div>
-        
+
         {/*Algunas ideas a futuro*/}
         {/*Configuraciones globales*/}
         {/*Logs*/}

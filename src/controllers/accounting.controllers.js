@@ -2,6 +2,7 @@ import { pool } from "../database/db.js";
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
 import { decrypt } from '../utils/crypto.js';
+import { clienteSinEmpresa } from '../utils/scope.js';
 
 export const getAccountingMetrics = async (req, res) => {
     const { empresaId } = req.query;
@@ -27,6 +28,8 @@ export const getAccountingMetrics = async (req, res) => {
 
 export const getChartOfAccounts = async (req, res) => {
     const { empresaId } = req.query;
+    // 🔒 Un cliente sin empresa no ve el plan global del búnker
+    if (clienteSinEmpresa(req, empresaId)) return res.json({ plan: [] });
     try {
         const usarEmpresa = empresaId && empresaId !== 'undefined' && empresaId !== 'ALL';
         const query = usarEmpresa
@@ -204,6 +207,8 @@ export const guardarComprobante = async (req, res) => {
 
 export const getComprobantes = async (req, res) => {
     const { empresaId } = req.query;
+    // 🔒 Un cliente sin empresa no ve los comprobantes globales del búnker
+    if (clienteSinEmpresa(req, empresaId)) return res.json({ comprobantes: [] });
     const empId = (!empresaId || empresaId === 'undefined' || empresaId === 'ALL' || empresaId === 'null')
         ? null : empresaId;
     const empCond = empId === null ? 'c.empresa_id IS NULL' : 'c.empresa_id = $1';
@@ -295,6 +300,14 @@ const calcularBalanceData = async (empId, { mes, anio, desde, hasta } = {}) => {
 
 export const getBalance = async (req, res) => {
     const { empresaId, mes, anio, desde, hasta } = req.query;
+    // 🔒 Un cliente sin empresa no ve el balance global del búnker
+    if (clienteSinEmpresa(req, empresaId)) {
+        return res.json({
+            ok: true, periodo: 'Sin datos', libroMayor: [],
+            totales: {}, balanceGeneral: { activos: [], pasivos: [], totalActivos: 0, totalPasivos: 0, utilidad: 0, cuadrado: true },
+            estadoResultados: { ingresos: [], gastos: [], totalIngresos: 0, totalGastos: 0, utilidad: 0, margen: '0' }
+        });
+    }
     const empId = (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
 
     try {
@@ -333,6 +346,10 @@ const MESES_PDF = ['', 'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'J
 // PDF: Balance de 8 columnas (mismo formato del reporte oficial)
 export const getBalancePdf = async (req, res) => {
     const { empresaId, mes, anio, desde, hasta } = req.query;
+    // 🔒 Un cliente sin empresa no puede descargar el balance global del búnker
+    if (clienteSinEmpresa(req, empresaId)) {
+        return res.status(403).json({ message: "Selecciona una empresa para generar el balance." });
+    }
     const empId = (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
 
     try {
@@ -483,6 +500,8 @@ export const getBalancePdf = async (req, res) => {
 
 export const getJournalEntries = async (req, res) => {
     const { empresaId, page = 0, search = "" } = req.query;
+    // 🔒 Un cliente sin empresa no ve el libro diario global
+    if (clienteSinEmpresa(req, empresaId)) return res.json({ asientos: [], total: 0, page: Number(page) });
     try {
         res.json({
             asientos: [

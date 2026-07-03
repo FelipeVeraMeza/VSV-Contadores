@@ -156,10 +156,29 @@ const ejecutarSincronizacion = async (tipo) => {
 };
 
 // ============================================================================
-// 🌐 RUTA API (Sincronización Manual por Empresa)
+// 🌐 RUTA API (Sincronización Manual - SOLO ADMINISTRADOR)
 // ============================================================================
 app.post('/api/sincronizar-sii', apiLimiter, async (req, res) => {
-    const { tipo, rut, clave, mes, anio, mesDesde, anioDesde, mesHasta, anioHasta, empresaId } = req.body;
+    const { tipo, rut, clave, mes, anio, mesDesde, anioDesde, mesHasta, anioHasta, empresaId, sessionId } = req.body;
+
+    // 🔒 VALIDACIÓN: Solo administradores pueden sincronizar
+    try {
+        const userResult = await pool.query(
+            `SELECT u.rol FROM usuario u
+             JOIN sessions s ON s.usuario_id = u.id
+             WHERE s.session_id = $1 AND s.expires_at > NOW()`,
+            [sessionId]
+        );
+
+        if (userResult.rows.length === 0 || userResult.rows[0].rol !== 'Administrador') {
+            return res.status(403).json({
+                success: false,
+                message: '❌ Acceso denegado: Solo administradores pueden sincronizar datos del SII.'
+            });
+        }
+    } catch (error) {
+        return res.status(401).json({ success: false, message: 'Sesión inválida.' });
+    }
     
     // 1. MODO MANUAL: Extracción por rango de fechas para una empresa específica
     if (rut && clave && empresaId) {
@@ -202,42 +221,20 @@ app.post('/api/sincronizar-sii', apiLimiter, async (req, res) => {
 });
 
 // ============================================================================
-// ⏰ TAREAS PROGRAMADAS (PILOTO AUTOMÁTICO)
+// ⏰ TAREAS PROGRAMADAS (DESHABILITADAS - Solo Manual para Administradores)
 // ============================================================================
+// ❌ Las tareas automáticas están comentadas
+// ✅ Solo se ejecutan manualmente cuando un ADMINISTRADOR las solicita vía API
 
-// Sincronización Nocturna (02:00 AM)
-cron.schedule('0 2 * * *', async () => {
-    if (estadoRobot.activo) {
-        console.log('⏸️ [CRON NOCTURNO] Pospuesto: el Facturador Masivo está activo.');
-        return;
-    }
-    console.log('\n==================================================');
-    console.log('⏰ [CRON] INICIANDO RUTINA NOCTURNA DEL SII');
-    console.log('==================================================');
+// Sincronización Nocturna (02:00 AM) - DESHABILITADA
+// cron.schedule('0 2 * * *', async () => {
+//     console.log('⏸️ [CRON NOCTURNO] Deshabilitado - Solo se ejecuta manualmente');
+// });
 
-    const ventasOk = await ejecutarSincronizacion('VENTAS');
-    if (ventasOk) {
-        await ejecutarSincronizacion('COMPRAS');
-    }
-    console.log('🏁 [CRON] RUTINA NOCTURNA FINALIZADA.');
-});
-
-// Sincronización cada 4 horas
-cron.schedule('0 */4 * * *', async () => {
-    if (estadoRobot.activo) {
-        console.log('⏸️ [CRON 4H] Pospuesto: el Facturador Masivo está activo (no se toca el SII).');
-        return;
-    }
-    console.log('\n==================================================');
-    console.log('⏰ [CRON] INICIANDO RUTINA DE SINCRONIZACIÓN (CADA 4 HORAS)');
-    console.log('==================================================');
-
-    const ventasOk = await ejecutarSincronizacion('VENTAS');
-    if (ventasOk) {
-        await ejecutarSincronizacion('COMPRAS');
-    }
-    console.log('🏁 [CRON] RUTINA DE 4 HORAS FINALIZADA.');
-});
+// Sincronización cada 4 horas - DESHABILITADA
+// cron.schedule('0 */4 * * *', async () => {
+//     console.log('⏸️ [CRON 4H] Deshabilitado - Solo se ejecuta manualmente');
+// });
 
 // --- Archivos Estáticos ---
 app.use('/static', express.static(path.join(process.cwd(), 'tmp')));

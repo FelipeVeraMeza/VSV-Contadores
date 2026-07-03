@@ -13,6 +13,9 @@ import {
     reenviarCorreoController,
     reenviarCorreosMasivoController,
     getCorreosLogController,
+    previewRecordatoriosController,
+    enviarRecordatoriosController,
+    getProgresoRecordatoriosController,
     emitirExentaManualController,
     emitirExentaMasivaController,
     emitirNotaController, // <-- NUEVO CONTROLADOR INTEGRADO
@@ -32,6 +35,7 @@ import {
 // ==========================================
 import { estadoRobot, detenerRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
 import { estadoRobotExenta, detenerRobotExenta } from '../components/facturacion/scripts/exenta_masiva.mjs';
+import { requireSession } from '../middleware/auth.js';
 
 const dteRoutes = Router();
 
@@ -62,8 +66,13 @@ dteRoutes.post('/reenviar-correo', reenviarCorreoController);
 // 📧 Reenvío MASIVO de los correos seleccionados
 dteRoutes.post('/reenviar-correos-masivo', reenviarCorreosMasivoController);
 
-// 📒 Registro de correos enviados (desde la BD)
-dteRoutes.get('/correos-log', getCorreosLogController);
+// 📒 Registro de correos enviados (desde la BD) — requiere sesión
+dteRoutes.get('/correos-log', requireSession, getCorreosLogController);
+
+// 📢 Recordatorios de pago (módulo aparte)
+dteRoutes.get('/recordatorios/preview', previewRecordatoriosController);
+dteRoutes.post('/enviar-recordatorios', enviarRecordatoriosController);
+dteRoutes.get('/recordatorios/progreso', getProgresoRecordatoriosController);
 
 // ==========================================
 // 🌟 RUTAS DE PUPPETEER: DTE 34 (EXENTA)
@@ -72,7 +81,7 @@ dteRoutes.post('/emitir-exenta-manual', emitirExentaManualController);
 dteRoutes.post('/emitir-masivo-exenta', emitirExentaMasivaController);
 dteRoutes.get('/progreso-masivo-exenta', (req, res) => res.json(estadoRobotExenta));
 dteRoutes.post('/detener-robot-exenta', (req, res) => {
-    detenerRobotExenta(); 
+    detenerRobotExenta();
     res.json({ ok: true, message: "Orden de detención enviada (DTE 34)." });
 });
 

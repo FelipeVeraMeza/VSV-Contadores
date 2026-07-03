@@ -93,9 +93,18 @@ export const AuthProvider = ({ children }) => {
                 rut: cleanRut(userData.rut),
                 email: userData.email?.toLowerCase().trim()
             };
-            const res = await saveUserApi(cleanData, user?.sessionId);
+            const res = await saveUserApi(cleanData, user?.sessionId, user?.rol);
             const result = await handleResponse(res);
             if (result && !result.error) {
+                // Si es el perfil propio, actualizar el estado local
+                if (user?.id === userData.id) {
+                    setUser({
+                        ...user,
+                        nombre: cleanData.nombre,
+                        email: cleanData.email,
+                        rut: cleanData.rut
+                    });
+                }
                 queryClient.invalidateQueries({ queryKey: ['users'] });
                 return { success: true };
             }
@@ -103,7 +112,7 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             return { success: false, message: "Error al procesar usuario." };
         }
-    }, [user?.sessionId, queryClient, handleResponse]);
+    }, [user?.sessionId, user?.rol, user?.id, queryClient, handleResponse]);
 
     const deleteUser = async (usuarioId) => {
         const res = await deleteUserApi(usuarioId, user?.sessionId);
@@ -157,23 +166,23 @@ export const AuthProvider = ({ children }) => {
     }, [user, selectedCompany]);
 
     const value = useMemo(() => ({
-        user, 
-        isAuthenticated: !!user, 
+        user,
+        isAuthenticated: !!user,
         selectedCompany,
-        setSelectedCompany, 
+        setSelectedCompany,
         loading,
-        login, 
-        logout, 
+        login,
+        logout,
         saveUser,
-        deleteUser, 
-        saveCompany, 
+        deleteUser,
+        saveCompany,
         deleteCompany,
         selectCompany: (company) => {
             setSelectedCompany(company);
             localStorage.setItem('selectedCompany', JSON.stringify(company));
             queryClient.invalidateQueries({ queryKey: ['dashboard'] });
             queryClient.invalidateQueries({ queryKey: ['stats'] });
-            if (window.location.pathname !== '/dashboard') navigate('/dashboard'); 
+            if (window.location.pathname !== '/dashboard') navigate('/dashboard');
         }
     }), [user, selectedCompany, loading, login, logout, saveUser, saveCompany, navigate, queryClient]);
 
