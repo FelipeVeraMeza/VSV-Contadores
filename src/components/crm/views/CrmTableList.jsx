@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, ChevronDown, ChevronUp, Users, AlertTriangle, FileText, CheckCircle2, Building2, User, MessageSquare, SlidersHorizontal, Layers, Trash2, Download, X } from 'lucide-react';
+import { Search, Filter, ChevronDown, ChevronUp, Users, AlertTriangle, FileText, CheckCircle2, Building2, User, MessageSquare, SlidersHorizontal, Layers, Trash2, Download, X, CheckSquare } from 'lucide-react';
 import { FilterChip } from '../ui/CrmUI';
 import { exportClientsToExcel } from '../utils/exportClients';
 
@@ -7,13 +7,26 @@ const CrmTableList = ({
     filteredClients, stats, onClientSelect, selectedClientId,
     searchTerm, setSearchTerm, statusFilter, setStatusFilter, typeFilter, setTypeFilter,
     planFilter, setPlanFilter, planes = [],
-    vistaActivas, setVistaActivas, // RECIBE LOS PROPS
-    onBulkDelete, onBulkEstadoPago, onCrear
+    vista, setVista, // 'activos' | 'suspendidos' | 'completar' | 'baja' | 'usuarios'
+    creadorFilter, setCreadorFilter, creadores = [], // Filtro por creador (master)
+    onBulkDelete, onBulkEstadoPago, onCrear,
+    esAdminMaster = false, // Solo el Administrador master ve la columna "Creado por"
+    getCompletitud = () => 0 // Medidor de completitud de ficha (0-100)
 }) => {
+    // Pestañas por estado real del cliente
+    const ESTADOS_TABS = [
+        { id: 'activos',     label: 'Activos',       activo: 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' },
+        { id: 'suspendidos', label: 'Suspendidos',   activo: 'bg-orange-600/80 text-white shadow-lg shadow-orange-500/20' },
+        { id: 'completar',   label: 'Por completar', activo: 'bg-amber-600/80 text-white shadow-lg shadow-amber-500/20' },
+        { id: 'baja',        label: 'De baja',       activo: 'bg-red-600/80 text-white shadow-lg shadow-red-500/20' },
+    ];
     const [showFilters, setShowFilters] = React.useState(true);
     const [sortBy, setSortBy] = React.useState(null);
     const [sortDir, setSortDir] = React.useState('asc');
     const [selectedIds, setSelectedIds] = React.useState(new Set());
+    // Modo selección: los checkboxes solo aparecen al activarlo (look más limpio)
+    const [selectMode, setSelectMode] = React.useState(false);
+    const exitSelectMode = () => { setSelectMode(false); setSelectedIds(new Set()); };
 
     const toggleSort = (col) => {
         if (sortBy === col) {
@@ -133,27 +146,30 @@ const CrmTableList = ({
 
             {/* TOGGLE ACTIVOS/INACTIVOS + BÚSQUEDA + FILTRO (una sola fila compacta) */}
             <div className="flex flex-col lg:flex-row gap-2 lg:gap-3 flex-shrink-0 lg:items-center">
-                <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 w-fit flex-shrink-0">
-                    <button
-                        onClick={() => setVistaActivas(true)}
-                        className={`px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                            vistaActivas
-                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                            : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-                        }`}
-                    >
-                        Activos
-                    </button>
-                    <button
-                        onClick={() => setVistaActivas(false)}
-                        className={`px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                            !vistaActivas
-                            ? 'bg-red-600/80 text-white shadow-lg shadow-red-500/20'
-                            : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-                        }`}
-                    >
-                        Inactivos
-                    </button>
+                <div className="flex flex-wrap bg-black/40 p-1 rounded-xl border border-white/10 w-fit flex-shrink-0">
+                    {ESTADOS_TABS.map(t => (
+                        <button
+                            key={t.id}
+                            onClick={() => setVista(t.id)}
+                            className={`px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                                vista === t.id ? t.activo : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                            }`}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                    {esAdminMaster && (
+                        <button
+                            onClick={() => setVista('usuarios')}
+                            className={`px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                                vista === 'usuarios'
+                                ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20'
+                                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                            }`}
+                        >
+                            Creadas por usuarios
+                        </button>
+                    )}
                 </div>
 
                 <div className="flex flex-1 gap-2 bg-[#0f172a]/80 p-2 rounded-xl border border-white/10 backdrop-blur-xl">
@@ -195,14 +211,45 @@ const CrmTableList = ({
                         </select>
                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={14} />
                     </div>
+                    {esAdminMaster && vista === 'usuarios' && (
+                      <div className="relative shrink-0">
+                          <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
+                          <select
+                              value={creadorFilter}
+                              onChange={(e) => setCreadorFilter(e.target.value)}
+                              aria-label="Filtrar por creador"
+                              className="h-full bg-black/20 border border-white/10 rounded-lg pl-9 pr-8 py-2 text-xs text-white outline-none focus:border-purple-500 appearance-none cursor-pointer"
+                          >
+                              <option value="Todos">Todos los creadores</option>
+                              {creadores.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={14} />
+                      </div>
+                    )}
                 </div>
             </div>
 
             {/* Contador de resultados */}
             <div className="flex items-center justify-between flex-shrink-0 -mt-1">
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
-                    Mostrando <span className="text-white">{sortedClients.length}</span> {sortedClients.length === 1 ? 'cliente' : 'clientes'}
-                </span>
+                <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-500">
+                        Mostrando <span className="text-white">{sortedClients.length}</span> {sortedClients.length === 1 ? 'cliente' : 'clientes'}
+                    </span>
+                    {!selectMode ? (
+                        <button onClick={() => setSelectMode(true)} className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-gray-500 hover:text-white transition-colors">
+                            <CheckSquare size={12} /> Seleccionar
+                        </button>
+                    ) : (
+                        <>
+                            <button onClick={toggleAll} className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300 transition-colors">
+                                <CheckSquare size={12} /> {allVisibleSelected ? 'Quitar todos' : 'Seleccionar todos'}
+                            </button>
+                            <button onClick={exitSelectMode} className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-gray-500 hover:text-white transition-colors">
+                                <X size={12} /> Cancelar
+                            </button>
+                        </>
+                    )}
+                </div>
                 {sortBy && (
                     <button onClick={() => { setSortBy(null); setSortDir('asc'); }} className="text-[9px] font-black uppercase tracking-widest text-gray-500 hover:text-white transition-colors">
                         Quitar orden
@@ -239,9 +286,7 @@ const CrmTableList = ({
                 <table className="w-full min-w-[680px] text-left border-collapse">
                   <thead className="bg-[#0f172a] sticky top-0 z-10">
                     <tr className="border-b border-white/10 text-[10px] uppercase tracking-widest text-gray-500">
-                      <th className="pl-3 pr-1 py-2.5 w-8">
-                        <input type="checkbox" checked={allVisibleSelected} onChange={toggleAll} className="w-3.5 h-3.5 accent-blue-500 cursor-pointer" title="Seleccionar todos" />
-                      </th>
+                      {selectMode && <th className="pl-3 pr-1 py-2.5 w-8" />}
                       <th className="px-4 py-2.5 font-black">
                         <button onClick={() => toggleSort('cliente')} className="flex items-center gap-1 hover:text-white transition-colors uppercase tracking-widest">
                           Cliente <SortIcon col="cliente" />
@@ -256,6 +301,7 @@ const CrmTableList = ({
                       </th>
                       <th className="px-4 py-2.5 font-black">Contacto y Alertas</th>
                       <th className="px-4 py-2.5 font-black">Estados</th>
+                      {esAdminMaster && vista === 'usuarios' && <th className="px-4 py-2.5 font-black">Creado por</th>}
                       <th className="px-4 py-2.5 font-black text-right">
                         <button onClick={() => toggleSort('neto')} className="flex items-center gap-1 hover:text-white transition-colors uppercase tracking-widest ml-auto">
                           Impuesto a pagar <SortIcon col="neto" />
@@ -267,6 +313,7 @@ const CrmTableList = ({
                     {sortedClients.map((client) => {
                       const razonSocial = client.razon_social || client.razonSocial || 'Sin Nombre';
                       const rut = client.rut_encrypted || client.rut || '';
+                      const completitud = getCompletitud(client);
                       const tipoCliente = client.tipo_cliente || client.type || 'Empresa';
                       
                       const plan = client.plan || client.plan_nombre || 'FREE';
@@ -302,9 +349,11 @@ const CrmTableList = ({
                           onClick={() => onClientSelect(client)}
                           className={`border-b border-white/5 transition-colors cursor-pointer hover:bg-white/[0.04] ${selectedClientId === client.id ? 'bg-blue-500/10' : selectedIds.has(client.id) ? 'bg-blue-500/[0.06]' : ''}`}
                         >
-                          <td className="pl-3 pr-1 py-2.5" onClick={(e) => toggleRow(client.id, e)}>
-                            <input type="checkbox" checked={selectedIds.has(client.id)} onChange={(e) => toggleRow(client.id, e)} onClick={(e) => e.stopPropagation()} className="w-3.5 h-3.5 accent-blue-500 cursor-pointer" />
-                          </td>
+                          {selectMode && (
+                            <td className="pl-3 pr-1 py-2.5" onClick={(e) => toggleRow(client.id, e)}>
+                              <input type="checkbox" checked={selectedIds.has(client.id)} onChange={(e) => toggleRow(client.id, e)} onClick={(e) => e.stopPropagation()} className="w-3.5 h-3.5 accent-blue-500 cursor-pointer" />
+                            </td>
+                          )}
                           <td className="pl-2 pr-4 py-2.5">
                             <div className="flex items-center gap-2.5">
                               <span className={`w-1 self-stretch min-h-[34px] rounded-full ${accent}`} />
@@ -314,6 +363,15 @@ const CrmTableList = ({
                               <div className="flex flex-col min-w-0">
                                  <span className="font-bold text-white text-xs uppercase tracking-tight truncate max-w-[220px]" title={razonSocial}>{razonSocial}</span>
                                  <span className="text-[10px] text-gray-500 font-mono tracking-wider">{rut}</span>
+                                 <div className="flex items-center gap-1.5 mt-1" title={`Ficha ${completitud}% completa`}>
+                                    <div className="h-1 w-16 bg-white/10 rounded-full overflow-hidden">
+                                       <div
+                                          className={`h-full rounded-full ${completitud >= 80 ? 'bg-emerald-500' : completitud >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                          style={{ width: `${completitud}%` }}
+                                       />
+                                    </div>
+                                    <span className="text-[8px] font-black text-gray-500 tabular-nums">{completitud}%</span>
+                                 </div>
                               </div>
                             </div>
                           </td>
@@ -353,6 +411,18 @@ const CrmTableList = ({
                              </div>
                           </td>
 
+                          {esAdminMaster && vista === 'usuarios' && (
+                            <td className="px-4 py-2.5">
+                              {client.usuarioCreador && client.usuarioCreador !== 'Sin asignar' ? (
+                                <span className="flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-md border uppercase bg-purple-500/10 text-purple-300 border-purple-500/30 max-w-[140px] truncate" title={client.usuarioCreador}>
+                                  <User size={10} className="shrink-0" /> {client.usuarioCreador}
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-bold text-gray-600 uppercase tracking-widest">Sin asignar</span>
+                              )}
+                            </td>
+                          )}
+
                           <td className="px-4 py-2.5 text-right">
                              <div className="flex flex-col items-end gap-0.5">
                                  <span className="text-gray-500 text-[8px] font-black uppercase tracking-widest">Impuesto a pagar</span>
@@ -365,7 +435,7 @@ const CrmTableList = ({
                     
                     {sortedClients.length === 0 && (
                       <tr>
-                        <td colSpan="6" className="p-10 text-center">
+                        <td colSpan={5 + (selectMode ? 1 : 0) + (esAdminMaster && vista === 'usuarios' ? 1 : 0)} className="p-10 text-center">
                           <div className="flex flex-col items-center gap-3">
                             <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-gray-500">
                               <Users size={22} />
@@ -373,9 +443,13 @@ const CrmTableList = ({
                             <p className="text-gray-400 text-sm">
                               {searchTerm || statusFilter !== 'Todos' || typeFilter !== 'Todos' || planFilter !== 'Todos'
                                 ? 'Ningún cliente coincide con los filtros.'
-                                : (vistaActivas ? 'Aún no tienes clientes activos.' : 'No tienes empresas inactivas o sin registro.')}
+                                : vista === 'usuarios' ? 'Aún no hay empresas creadas por tus clientes.'
+                                : vista === 'suspendidos' ? 'No tienes clientes con servicio suspendido.'
+                                : vista === 'completar' ? 'No hay fichas pendientes por completar.'
+                                : vista === 'baja' ? 'No tienes clientes dados de baja.'
+                                : 'Aún no tienes clientes activos.'}
                             </p>
-                            {onCrear && vistaActivas && !searchTerm && (
+                            {onCrear && vista === 'activos' && !searchTerm && (
                               <button onClick={onCrear} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
                                 + Crear el primer cliente
                               </button>

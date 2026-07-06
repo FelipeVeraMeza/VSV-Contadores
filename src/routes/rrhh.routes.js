@@ -9,11 +9,12 @@ import {
     getRrhhConfig,
     updateRrhhConfig
 } from '../controllers/rrhh.controllers.js';
-import { requireSession } from "../middleware/auth.js";
+import { requireSession, requireAdmin } from "../middleware/auth.js";
 
 const router = Router();
 
 router.use(requireSession);
+router.use(requireAdmin);
 
 router.get('/metrics', getRrhhMetrics);
 

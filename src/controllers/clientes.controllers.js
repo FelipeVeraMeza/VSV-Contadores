@@ -33,17 +33,40 @@ const decryptData = (encryptedValue) => {
 
 export const getClientesCRM = async (req, res) => {
     try {
-        // Seguridad multi-tenant: los usuarios rol 'Cliente' solo ven las empresas
-        // que tengan asignadas en `audita`. El staff (Administrador/Consultor) ve todo.
+        // Multi-tenant por organización:
+        // - Todos: solo ven empresas de SU organización (aislamiento entre dueños)
+        // - Cliente: además, solo las que tiene asignadas en audita
+        // - Administrador: ve todas las de su organización + quién las creó
         const esCliente = req.user?.rol === 'Cliente';
+        const esAdmin = req.user?.rol === 'Administrador';
+        const organizacionId = req.user?.organizacionId || null;
+
         const empresaParams = [];
-        let auditaJoin = '';
-        if (esCliente && req.user?.usuarioId) {
-            auditaJoin = ' JOIN audita a ON a.empresa_id = e.id AND a.usuario_id = $1 ';
-            empresaParams.push(req.user.usuarioId);
+        const whereClauses = [];
+
+        // Filtro de organización — SIEMPRE (ningún dueño ve datos de otro)
+        if (organizacionId) {
+            empresaParams.push(organizacionId);
+            whereClauses.push(`e.organizacion_id = $${empresaParams.length}`);
         }
 
-        const clientesResult = await pool.query(`
+        // Cliente: solo sus empresas asignadas dentro de la organización
+        let auditaJoin = '';
+        if (esCliente && req.user?.usuarioId) {
+            empresaParams.push(req.user.usuarioId);
+            auditaJoin = ` JOIN audita a ON a.empresa_id = e.id AND a.usuario_id = $${empresaParams.length} `;
+        }
+
+        // Para el administrador: subconsulta con el creador (primer usuario en audita)
+        // y su rol, para poder distinguir empresas creadas por clientes.
+        const creadorSelect = esAdmin
+            ? `, (SELECT u.nombre FROM audita a JOIN usuario u ON a.usuario_id = u.id
+                  WHERE a.empresa_id = e.id ORDER BY a.fecha_asignacion ASC LIMIT 1) as usuario_creador,
+               (SELECT u.rol FROM audita a JOIN usuario u ON a.usuario_id = u.id
+                  WHERE a.empresa_id = e.id ORDER BY a.fecha_asignacion ASC LIMIT 1) as usuario_creador_rol`
+            : '';
+
+        const clientesQuery = `
             SELECT
                 e.*,
                 p.nombre as plan_nombre,
@@ -54,13 +77,17 @@ export const getClientesCRM = async (req, res) => {
                 s.direccion,
                 s.comuna,
                 s.ciudad
+                ${creadorSelect}
             FROM empresa e
             ${auditaJoin}
             LEFT JOIN plan p ON e.plan_id = p.id
             LEFT JOIN empresa_credenciales ec ON e.id = ec.empresa_id
             LEFT JOIN sucursal s ON e.id = s.empresa_id AND s.es_casa_matriz = TRUE
-            ORDER BY e.razon_social ASC
-        `, empresaParams);
+            ${whereClauses.length ? 'WHERE ' + whereClauses.join(' AND ') : ''}
+            ORDER BY ${esAdmin ? 'usuario_creador ASC NULLS LAST, e.razon_social ASC' : 'e.razon_social ASC'}
+        `;
+
+        const clientesResult = await pool.query(clientesQuery, empresaParams);
 
         // IDs visibles: se usan para acotar el resto de consultas (seguridad + rendimiento)
         const empresaIds = clientesResult.rows.map(r => r.id);
@@ -202,64 +229,74 @@ export const getClientesCRM = async (req, res) => {
             });
         });
 
-        const clients = clientesResult.rows.map((cliente) => ({
-            id: cliente.id,
-            razonSocial: cliente.razon_social,
-            razon_social: cliente.razon_social,
-            rut: decryptData(cliente.rut_encrypted),
-            rut_encrypted: cliente.rut_encrypted,
-            repRut: decryptData(cliente.rut_rep_encrypted),
-            repNombre: cliente.nombre_rep,
-            giro: cliente.giro,
-            regimen: cliente.regimen_tributario,
-            telefono: cliente.telefono_corporativo,
-            correo: cliente.email_corporativo,
-            logo: cliente.logo_url,
-            plan: cliente.plan_nombre || 'FREE',
-            
-            pagoServicio: cliente.estado_pago || 'AL DIA',
-            estadoFormulario: cliente.estado_f29 || 'PENDIENTE',
-            
-            impuestoPagar: parseFloat(cliente.impuesto_pagar) || 0,
-            neto: parseFloat(cliente.impuesto_pagar) || 0,
-            bruto: parseFloat(cliente.monto_bruto) || 0,
-            monto_bruto: parseFloat(cliente.monto_bruto) || 0,
-            ventas: parseFloat(cliente.ventas_mensuales) || 0,
-            compras: parseFloat(cliente.compras_mensuales) || 0,
-            facturacionTotal: parseFloat(cliente.facturacion_total) || 0,
-            numeroFactura: cliente.nro_factura || '',
-            nro_factura: cliente.nro_factura || '',
-            impuestoUnico: parseFloat(cliente.impuesto_unico) || 0,
-            
-            montoRenta: parseFloat(cliente.monto_renta) || 0,
-            contratoRenta: cliente.contrato_renta || false,
-            formularioRenta: cliente.estado_formulario_renta || '',
-            rentaMarzoNeto: parseFloat(cliente.renta_marzo_neto) || 0,
-            rentaMarzoBruto: parseFloat(cliente.renta_marzo_bruto) || 0,
-            
-            dts: parseInt(cliente.dts_mensuales) || 0,
-            dtAtrasados: parseInt(cliente.dts_mensuales) || 0,
-            dtPendientesFirma: parseInt(cliente.pendientes_firma) || 0,
-            
-            claveWeb: decryptData(cliente.web_password_encrypted),
-            claveSII: decryptData(cliente.sii_password_encrypted),
-            
-            score: parseInt(cliente.score) || 50,
-            direccion: cliente.direccion || '',
-            comuna: cliente.comuna || '',
-            ciudad: cliente.ciudad || '',
-            whatsapp: cliente.whatsapp || '',
-            importante: cliente.nota_urgente || '',
+        const clients = clientesResult.rows.map((cliente) => {
+            const clientObj = {
+                id: cliente.id,
+                razonSocial: cliente.razon_social,
+                razon_social: cliente.razon_social,
+                rut: decryptData(cliente.rut_encrypted),
+                rut_encrypted: cliente.rut_encrypted,
+                repRut: decryptData(cliente.rut_rep_encrypted),
+                repNombre: cliente.nombre_rep,
+                giro: cliente.giro,
+                regimen: cliente.regimen_tributario,
+                telefono: cliente.telefono_corporativo,
+                correo: cliente.email_corporativo,
+                logo: cliente.logo_url,
+                plan: cliente.plan_nombre || 'FREE',
 
-            planId: cliente.plan_id || null,
-            fechaCambioPlan: cliente.fecha_cambio_plan ? new Date(cliente.fecha_cambio_plan).toLocaleDateString('es-CL') : null,
-            planHistorial: planHistorialPorEmpresa[cliente.id] || [],
+                pagoServicio: cliente.estado_pago || 'AL DIA',
+                estadoFormulario: cliente.estado_f29 || 'PENDIENTE',
 
-            notas: notasPorEmpresa[cliente.id] || [],
-            servicios: serviciosPorEmpresa[cliente.id] || [],
-            type: cliente.tipo_cliente || 'Empresa',
-            ultimaModificacion: cliente.updated_at ? new Date(cliente.updated_at).toLocaleString('es-CL') : null
-        }));
+                impuestoPagar: parseFloat(cliente.impuesto_pagar) || 0,
+                neto: parseFloat(cliente.impuesto_pagar) || 0,
+                bruto: parseFloat(cliente.monto_bruto) || 0,
+                monto_bruto: parseFloat(cliente.monto_bruto) || 0,
+                ventas: parseFloat(cliente.ventas_mensuales) || 0,
+                compras: parseFloat(cliente.compras_mensuales) || 0,
+                facturacionTotal: parseFloat(cliente.facturacion_total) || 0,
+                numeroFactura: cliente.nro_factura || '',
+                nro_factura: cliente.nro_factura || '',
+                impuestoUnico: parseFloat(cliente.impuesto_unico) || 0,
+
+                montoRenta: parseFloat(cliente.monto_renta) || 0,
+                contratoRenta: cliente.contrato_renta || false,
+                formularioRenta: cliente.estado_formulario_renta || '',
+                rentaMarzoNeto: parseFloat(cliente.renta_marzo_neto) || 0,
+                rentaMarzoBruto: parseFloat(cliente.renta_marzo_bruto) || 0,
+
+                dts: parseInt(cliente.dts_mensuales) || 0,
+                dtAtrasados: parseInt(cliente.dts_mensuales) || 0,
+                dtPendientesFirma: parseInt(cliente.pendientes_firma) || 0,
+
+                claveWeb: decryptData(cliente.web_password_encrypted),
+                claveSII: decryptData(cliente.sii_password_encrypted),
+
+                score: parseInt(cliente.score) || 50,
+                activo: cliente.activo !== false, // estado real del cliente (de baja = false)
+                direccion: cliente.direccion || '',
+                comuna: cliente.comuna || '',
+                ciudad: cliente.ciudad || '',
+                whatsapp: cliente.whatsapp || '',
+                importante: cliente.nota_urgente || '',
+
+                planId: cliente.plan_id || null,
+                fechaCambioPlan: cliente.fecha_cambio_plan ? new Date(cliente.fecha_cambio_plan).toLocaleDateString('es-CL') : null,
+                planHistorial: planHistorialPorEmpresa[cliente.id] || [],
+
+                notas: notasPorEmpresa[cliente.id] || [],
+                servicios: serviciosPorEmpresa[cliente.id] || [],
+                type: cliente.tipo_cliente || 'Empresa',
+                ultimaModificacion: cliente.updated_at ? new Date(cliente.updated_at).toLocaleString('es-CL') : null
+            };
+
+            if (esAdmin) {
+                clientObj.usuarioCreador = cliente.usuario_creador || 'Sin asignar';
+                clientObj.usuarioCreadorRol = cliente.usuario_creador_rol || null;
+            }
+
+            return clientObj;
+        });
 
         const planes = planesResult.rows.map(p => ({
             id: p.id,
@@ -831,8 +868,8 @@ export const crearEmpresaCRM = async (req, res) => {
                 razon_social, rut_encrypted, rut_hash, giro, regimen_tributario,
                 telefono_corporativo, email_corporativo, whatsapp,
                 nombre_rep, rut_rep_encrypted, rut_rep_hash,
-                plan_id, tipo_cliente, nota_urgente
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+                plan_id, tipo_cliente, nota_urgente, organizacion_id
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
             RETURNING id, razon_social`,
             [
                 nombreFinal,
@@ -848,7 +885,8 @@ export const crearEmpresaCRM = async (req, res) => {
                 repRutLimpio ? generateHash(repRutLimpio) : null,
                 finalPlanId,
                 tipoCliente || 'Empresa',
-                importante?.trim() || null
+                importante?.trim() || null,
+                req.user?.organizacionId || null
             ]
         );
         const empresaId = ins.rows[0].id;

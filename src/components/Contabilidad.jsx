@@ -126,7 +126,7 @@ const Contabilidad = () => {
         <div>
           <h1 className="text-3xl font-bold text-white mb-1 tracking-tight">{TITULOS[sub] || 'Contabilidad'}</h1>
           <p className="text-gray-400 text-sm font-medium uppercase tracking-wider">
-            {selectedCompany?.razon_social || selectedCompany?.razonSocial || 'Bóveda Global'}
+            {selectedCompany?.razon_social || selectedCompany?.razonSocial || 'VOLLAIRE & OLIVOS SIMPLE PYME LTDA'}
           </p>
         </div>
         {usaRango && <SelectorRango rango={rango} setRango={setRango} />}

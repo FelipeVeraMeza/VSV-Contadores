@@ -4,14 +4,15 @@ import { Router } from 'express';
 import { getDashboardData } from '../controllers/dashboard.controllers.js';
 
 // Middlewares
-import { requireSession } from "../middleware/auth.js";
+import { requireSession, requireAdmin } from "../middleware/auth.js";
 import { apiLimiter } from '../config/security.js';
 
 const router = Router();
 
-router.get('/', 
-    apiLimiter, 
-    requireSession, 
+router.get('/',
+    apiLimiter,
+    requireSession,
+    requireAdmin,
     getDashboardData
 );
 

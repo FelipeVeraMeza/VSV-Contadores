@@ -5,15 +5,17 @@ import { cleanRut } from "../lib/rut.js";
 export const getAssignedCompanies = async (req, res) => {
     try {
         const usuarioId = req.user.usuarioId;
+        const organizacionId = req.user?.organizacionId || null;
 
         const result = await pool.query(
             `SELECT e.id, e.razon_social, e.rut_encrypted, s.ciudad
              FROM empresa e
-             JOIN audita a ON e.id = a.empresa_id 
+             JOIN audita a ON e.id = a.empresa_id
              JOIN sucursal s ON e.id = s.empresa_id
              AND s.es_casa_matriz = TRUE
-             WHERE a.usuario_id = $1`,
-            [usuarioId]
+             WHERE a.usuario_id = $1
+               AND ($2::uuid IS NULL OR e.organizacion_id = $2)`,
+            [usuarioId, organizacionId]
         );
 
         const companies = result.rows.map(co => ({
@@ -51,6 +53,13 @@ export const getCompanies = async (req, res) => {
             query += ` JOIN audita a ON a.empresa_id = e.id `;
             whereClauses.push(`a.usuario_id = $${queryParams.length + 1}`);
             queryParams.push(usuarioId);
+        }
+
+        // Filtro de organización (aislamiento entre dueños)
+        const organizacionId = req.user?.organizacionId || null;
+        if (organizacionId) {
+            whereClauses.push(`e.organizacion_id = $${queryParams.length + 1}`);
+            queryParams.push(organizacionId);
         }
 
         if (search && search.trim() !== '') {
@@ -191,24 +200,25 @@ export const createCompany = async (req, res) => {
 
         const companyQuery = `
             INSERT INTO empresa (
-                razon_social, rut_encrypted, rut_hash, giro, 
+                razon_social, rut_encrypted, rut_hash, giro,
                 regimen_tributario, telefono_corporativo, email_corporativo,
-                nombre_rep, rut_rep_encrypted, rut_rep_hash
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
+                nombre_rep, rut_rep_encrypted, rut_rep_hash, organizacion_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING id
         `;
-        
+
         const companyRes = await pool.query(companyQuery, [
-            razonSocial.trim(), 
-            rutEncrypted, 
-            rutHash, 
-            giro, 
-            regimenTributario, 
-            telefonoCorporativo, 
+            razonSocial.trim(),
+            rutEncrypted,
+            rutHash,
+            giro,
+            regimenTributario,
+            telefonoCorporativo,
             emailCorporativo,
             nombreRep ? nombreRep.trim() : null,
-            rutRepEnc,                            
-            rutRepHash                            
+            rutRepEnc,
+            rutRepHash,
+            req.user?.organizacionId || null
         ]);
         
         const newEmpresaId = companyRes.rows[0].id;

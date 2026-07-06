@@ -43,6 +43,57 @@ const isEmptyField = (val) => {
     return strVal === '' || strVal === 'SIN_DATO' || strVal === 'SIN REGISTRO';
 };
 
+// Una empresa fue "creada por un usuario" cuando su creador es un Cliente
+// (no el administrador de la organización). Se basa en el ROL del creador.
+const esCreadaPorUsuario = (c) => c.usuarioCreadorRol === 'Cliente';
+
+// ¿La ficha NO tiene ningún dato de contacto? (calidad de datos, no estado de negocio)
+const fichaIncompleta = (c) => {
+    const rep = c.nombre_rep || c.repNombre;
+    const rutRep = c.rut_rep_encrypted || c.repRut;
+    const correo = c.email_corporativo || c.correo;
+    const tel = c.whatsapp || c.telefono_corporativo || c.telefono;
+    return isEmptyField(rep) && isEmptyField(rutRep) && isEmptyField(correo) && isEmptyField(tel);
+};
+
+// Clasificación de negocio: una sola pestaña por cliente, con prioridad clara.
+// De baja > Por completar (onboarding) > Suspendido > Activo.
+const clasificarCliente = (c) => {
+    if (c.activo === false) return 'baja';
+    if (fichaIncompleta(c)) return 'completar';
+    const pago = String(c.estado_pago || c.pagoServicio || '').trim().toUpperCase();
+    if (pago === 'SERVICIO SUSPENDIDO') return 'suspendidos';
+    return 'activos';
+};
+
+// Medidor de completitud de la ficha (0-100). Placeholders del alta no cuentan.
+const CAMPOS_COMPLETITUD = [
+    (c) => c.razon_social || c.razonSocial,
+    (c) => c.giro,
+    (c) => c.regimen || c.regimen_tributario,
+    (c) => c.telefono || c.telefono_corporativo || c.whatsapp,
+    (c) => c.email_corporativo || c.correo,
+    (c) => c.nombre_rep || c.repNombre,
+    (c) => c.rut_rep_encrypted || c.repRut,
+    (c) => c.direccion,
+    (c) => c.comuna,
+    (c) => c.ciudad,
+];
+const PLACEHOLDERS_FICHA = ['SIN ESPECIFICAR', 'SIN DIRECCIÓN', 'SIN DIRECCION', 'SIN NOMBRE'];
+const tieneValorReal = (v) => !isEmptyField(v) && !PLACEHOLDERS_FICHA.includes(String(v).trim().toUpperCase());
+const completitudFicha = (c) => {
+    const llenos = CAMPOS_COMPLETITUD.filter(f => tieneValorReal(f(c))).length;
+    return Math.round((llenos / CAMPOS_COMPLETITUD.length) * 100);
+};
+
+// Vistas válidas y migración de valores antiguos guardados en localStorage
+const VISTAS_VALIDAS = ['activos', 'suspendidos', 'completar', 'baja', 'usuarios'];
+const normalizarVista = (v) => {
+    if (v === 'activas') return 'activos';
+    if (v === 'inactivas') return 'completar';
+    return VISTAS_VALIDAS.includes(v) ? v : 'activos';
+};
+
 // Persistencia de filtros del CRM (se recuerdan entre sesiones)
 const CRM_FILTERS_KEY = 'crm_filters_v1';
 const loadFilters = () => {
@@ -55,6 +106,10 @@ const CRM = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('sub') || 'dashboard';
   const setActiveTab = (id) => setSearchParams({ sub: id });
+
+  // El administrador de la organización ve quién creó cada empresa
+  const { user } = useAuth();
+  const esAdminMaster = user?.rol === 'Administrador';
   const { clients: dbClients, planes, serviciosDisponibles, preciosPlanTramo, cashFlow, services, compliance, risk, chartsSample, loading, refresh } = useBunkerData();
   const _saved = useMemo(loadFilters, []);
   const [clients, setClients] = useState([]);
@@ -63,12 +118,15 @@ const CRM = () => {
   const [typeFilter, setTypeFilter] = useState(_saved.typeFilter || 'Todos');
   const [planFilter, setPlanFilter] = useState(_saved.planFilter || 'Todos');
   const [selectedClient, setSelectedClient] = useState(null);
-  const [vistaActivas, setVistaActivas] = useState(_saved.vistaActivas ?? true);
+  // Vista de la lista: 'activos' | 'suspendidos' | 'completar' | 'baja' | 'usuarios'
+  const [vista, setVista] = useState(normalizarVista(_saved.vista));
+  // Filtro por creador (solo Administrador master)
+  const [creadorFilter, setCreadorFilter] = useState(_saved.creadorFilter || 'Todos');
 
   // Recuerda los filtros entre sesiones
   useEffect(() => {
-    localStorage.setItem(CRM_FILTERS_KEY, JSON.stringify({ searchTerm, statusFilter, typeFilter, planFilter, vistaActivas }));
-  }, [searchTerm, statusFilter, typeFilter, planFilter, vistaActivas]);
+    localStorage.setItem(CRM_FILTERS_KEY, JSON.stringify({ searchTerm, statusFilter, typeFilter, planFilter, vista, creadorFilter }));
+  }, [searchTerm, statusFilter, typeFilter, planFilter, vista, creadorFilter]);
   const [showCrearCliente, setShowCrearCliente] = useState(false);
   const [showCrearEmpresa, setShowCrearEmpresa] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -84,12 +142,10 @@ const CRM = () => {
   const stats = useMemo(() => {
       if (!clients) return { total: 0, criticos: 0, f29Pendientes: 0, alDia: 0 };
       const clientesEnVista = clients.filter(c => {
-          const rep = c.nombre_rep || c.repNombre;
-          const rutRep = c.rut_rep_encrypted || c.repRut;
-          const correo = c.email_corporativo || c.correo;
-          const tel = c.whatsapp || c.telefono_corporativo || c.telefono;
-          const esInactiva = isEmptyField(rep) && isEmptyField(rutRep) && isEmptyField(correo) && isEmptyField(tel);
-          return vistaActivas ? !esInactiva : esInactiva;
+          if (vista === 'usuarios') return esCreadaPorUsuario(c);
+          // Las creadas por clientes NO se mezclan en las pestañas de estado
+          if (esCreadaPorUsuario(c)) return false;
+          return clasificarCliente(c) === vista;
       });
       return {
           total: clientesEnVista.length,
@@ -108,7 +164,7 @@ const CRM = () => {
               return (pago === 'AL DIA' || pago === 'PAGADO') && (f29 === 'DECLARADO' || f29 === 'NO DECLARAR');
           }).length
       };
-  }, [clients, vistaActivas]);
+  }, [clients, vista]);
 
   const filteredClients = useMemo(() => {
       return clients.filter(c => {
@@ -126,8 +182,14 @@ const CRM = () => {
           const direccion = c.direccion || '';
           const comuna = c.comuna || '';
           const planNombre = c.plan || c.plan_nombre || '';
-          const esInactiva = isEmptyField(rep) && isEmptyField(rutRep) && isEmptyField(correo) && isEmptyField(tel);
-          const matchActividad = vistaActivas ? !esInactiva : esInactiva;
+          // Vista por estado real del cliente. Las creadas por clientes solo
+          // salen en su propia pestaña "usuarios".
+          const matchActividad =
+              vista === 'usuarios' ? esCreadaPorUsuario(c)
+            : esCreadaPorUsuario(c) ? false
+            : clasificarCliente(c) === vista;
+          // Filtro por creador: solo aplica dentro de la pestaña "Creadas por usuarios"
+          const matchCreador = vista !== 'usuarios' || creadorFilter === 'Todos' || c.usuarioCreador === creadorFilter;
 
           const term = searchTerm.trim().toLowerCase();
           const termClean = cleanStr(term);
@@ -155,9 +217,16 @@ const CRM = () => {
           } else if (statusFilter === 'Al Día') {
               matchStatus = (pago === 'AL DIA' || pago === 'PAGADO') && (f29 === 'DECLARADO' || f29 === 'NO DECLARAR');
           }
-          return matchSearch && matchType && matchPlan && matchStatus && matchActividad;
+          return matchSearch && matchType && matchPlan && matchStatus && matchActividad && matchCreador;
       });
-  }, [clients, searchTerm, statusFilter, typeFilter, planFilter, vistaActivas]);
+  }, [clients, searchTerm, statusFilter, typeFilter, planFilter, vista, creadorFilter]);
+
+  // Lista de creadores (para el filtro del Administrador master)
+  const creadores = useMemo(() => {
+      const set = new Set();
+      clients.forEach(c => { if (c.usuarioCreador) set.add(c.usuarioCreador); });
+      return Array.from(set).sort();
+  }, [clients]);
 
   const handleDeleteClient = async (clientToDelete) => {
     try {
@@ -278,12 +347,12 @@ const CRM = () => {
 
       {activeTab === 'list' && (
         <div className="flex gap-4 lg:gap-6 relative items-stretch flex-1 min-h-[600px]">
-            <CrmTableList 
-                filteredClients={filteredClients} 
-                stats={stats} 
-                onClientSelect={setSelectedClient} 
+            <CrmTableList
+                filteredClients={filteredClients}
+                stats={stats}
+                onClientSelect={setSelectedClient}
                 selectedClientId={selectedClient?.id}
-                searchTerm={searchTerm} 
+                searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
                 statusFilter={statusFilter}
                 setStatusFilter={setStatusFilter}
@@ -292,11 +361,16 @@ const CRM = () => {
                 planFilter={planFilter}
                 setPlanFilter={setPlanFilter}
                 planes={planes}
-                vistaActivas={vistaActivas}
-                setVistaActivas={setVistaActivas}
+                vista={vista}
+                setVista={setVista}
+                creadorFilter={creadorFilter}
+                setCreadorFilter={setCreadorFilter}
+                creadores={creadores}
                 onBulkDelete={handleBulkDelete}
                 onBulkEstadoPago={handleBulkEstadoPago}
                 onCrear={() => setShowCrearEmpresa(true)}
+                esAdminMaster={esAdminMaster}
+                getCompletitud={completitudFicha}
             />
 
             <AnimatePresence>

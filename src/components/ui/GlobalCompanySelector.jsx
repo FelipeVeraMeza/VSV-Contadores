@@ -4,14 +4,24 @@ import { useAuth } from '@/hooks/useAuth.jsx';
 import { useBunkerData } from '../crm/crmData'; 
 
 const GlobalCompanySelector = () => {
-    const { selectedCompany, setSelectedCompany } = useAuth();
+    const { user, selectedCompany, setSelectedCompany } = useAuth();
     const { clients } = useBunkerData();
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
 
-    const filtered = clients.filter(c => 
-        (c.razon_social || c.razonSocial || '').toLowerCase().includes(search.toLowerCase())
-    );
+    // Para el administrador, la "empresa principal" es VOLLAIRE & OLIVOS.
+    // Para el resto (clientes) se mantiene el rótulo genérico.
+    const esAdmin = user?.rol === 'Administrador';
+    const etiquetaPrincipal = esAdmin ? 'VOLLAIRE & OLIVOS SIMPLE PYME LTDA' : 'EMPRESA PRINCIPAL';
+
+    const filtered = clients.filter(c => {
+        const nombre = (c.razon_social || c.razonSocial || '');
+        const matchSearch = nombre.toLowerCase().includes(search.toLowerCase());
+        // Para el admin, la empresa principal ya está como opción fija arriba:
+        // evitamos que la misma empresa real aparezca duplicada en la lista.
+        const esPrincipalDuplicada = esAdmin && nombre.trim().toUpperCase() === etiquetaPrincipal.toUpperCase();
+        return matchSearch && !esPrincipalDuplicada;
+    });
 
     return (
         <div className="relative">
@@ -21,7 +31,7 @@ const GlobalCompanySelector = () => {
             >
                 <Building2 size={14} className={selectedCompany ? "text-emerald-400" : "text-gray-500"} />
                 <span className="truncate flex-1 text-left">
-                    {selectedCompany ? (selectedCompany.razon_social || selectedCompany.razonSocial) : 'EMPRESA PRINCIPAL'}
+                    {selectedCompany ? (selectedCompany.razon_social || selectedCompany.razonSocial) : etiquetaPrincipal}
                 </span>
                 <ChevronDown size={14} />
             </button>
@@ -50,7 +60,7 @@ const GlobalCompanySelector = () => {
                                 }}
                                 className="w-full text-left px-4 py-2 text-xs text-blue-400 hover:bg-white/5 rounded-lg border-b border-white/5 font-bold uppercase tracking-widest"
                             >
-                                EMPRESA PRINCIPAL
+                                {etiquetaPrincipal}
                             </button>
 
                             {/* LISTA DE CLIENTES */}

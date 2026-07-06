@@ -19,8 +19,8 @@ import { Link, useNavigate } from 'react-router-dom';
 const LoginPage = ({ onLogin }) => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    email: 'admin@vsv.cl',
-    clave: 'admin123'
+    email: '',
+    clave: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -116,7 +116,7 @@ const LoginPage = ({ onLogin }) => {
                     <Input
                       id="email"
                       type="email"
-                      placeholder="ejemplo@vsv.cl"
+                      placeholder="Correo"
                       value={formData.email}
                       onChange={handleChange}
                       className="pl-12 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-blue-500/50 focus:ring-blue-500/20 transition-all h-12 rounded-xl"

@@ -10,10 +10,10 @@ export async function requireSession(req, res, next) {
 
   try {
     const query = `
-      SELECT s.usuario_id, u.rol, u.nombre, s.expires_at
+      SELECT s.usuario_id, u.rol, u.nombre, u.organizacion_id, s.expires_at
       FROM sessions s
       JOIN usuario u ON s.usuario_id = u.id
-      WHERE s.session_id = $1 
+      WHERE s.session_id = $1
         AND s.expires_at > NOW()
         AND u.activo = true
     `;
@@ -41,6 +41,7 @@ export async function requireSession(req, res, next) {
       usuarioId: session.usuario_id,
       rol: session.rol,
       nombre: session.nombre,
+      organizacionId: session.organizacion_id || null,
       sessionId: sessionId,
       empresaId: empresaIdFromHeader || null
     };

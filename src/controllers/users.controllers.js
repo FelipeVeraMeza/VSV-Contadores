@@ -82,27 +82,29 @@ export const createUser = async (req, res) => {
 
         const userQuery = `
             INSERT INTO usuario (
-                nombre, 
-                rut_encrypted, 
-                rut_hash, 
-                email_encrypted, 
-                email_hash, 
-                clave, 
-                rol, 
-                activo
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+                nombre,
+                rut_encrypted,
+                rut_hash,
+                email_encrypted,
+                email_hash,
+                clave,
+                rol,
+                activo,
+                organizacion_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id, nombre, rol, activo
         `;
 
         const result = await pool.query(userQuery, [
-            nombre.trim(), 
-            rutEncrypted, 
-            rutHash, 
-            emailEncrypted, 
-            emailHash, 
-            hashedPassword, 
-            rol, 
-            activo ?? true
+            nombre.trim(),
+            rutEncrypted,
+            rutHash,
+            emailEncrypted,
+            emailHash,
+            hashedPassword,
+            rol,
+            activo ?? true,
+            req.user?.organizacionId || null
         ]);
 
         const newUser = result.rows[0];

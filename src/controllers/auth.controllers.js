@@ -10,7 +10,7 @@ export const loginUser = async (req, res) => {
         const emailHash = generateHash(email);
 
         const userResult = await pool.query(
-            'SELECT id, nombre, email_encrypted, rol, clave, activo FROM usuario WHERE email_hash = $1',
+            'SELECT id, nombre, email_encrypted, rol, clave, activo, organizacion_id FROM usuario WHERE email_hash = $1',
             [emailHash]
         );
 
@@ -34,11 +34,12 @@ export const loginUser = async (req, res) => {
         }
 
         const companyResult = await pool.query(
-            `SELECT e.id, e.razon_social, e.rut_encrypted 
-             FROM empresa e 
-             JOIN audita a ON a.empresa_id = e.id 
-             WHERE a.usuario_id = $1`,
-            [user.id]
+            `SELECT e.id, e.razon_social, e.rut_encrypted
+             FROM empresa e
+             JOIN audita a ON a.empresa_id = e.id
+             WHERE a.usuario_id = $1
+               AND ($2::uuid IS NULL OR e.organizacion_id = $2)`,
+            [user.id, user.organizacion_id || null]
         );
 
         const assignedCompanies = companyResult.rows.map(co => ({

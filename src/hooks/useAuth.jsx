@@ -72,7 +72,7 @@ export const AuthProvider = ({ children }) => {
                 setSelectedCompany(null);
                 localStorage.removeItem('selectedCompany');
                 localStorage.removeItem('empresaActivaCRM');
-                
+
                 setLoading(false);
                 navigate('/dashboard', { replace: true });
                 return { success: true };
