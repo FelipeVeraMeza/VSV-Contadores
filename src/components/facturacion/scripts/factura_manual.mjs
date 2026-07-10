@@ -354,12 +354,14 @@ export async function emitirFacturaPuppeteer(datos) {
                 const rutHash = crypto.createHash('sha256').update(rutOriginal).digest('hex');
                 const rutEncrypted = encrypt(rutOriginal);
 
+                // organizacion_id es obligatorio de facto: el CRM filtra por él,
+                // así que sin este valor la empresa quedaría creada pero invisible.
                 const insertEmpresaQuery = `
-                    INSERT INTO empresa (razon_social, rut_encrypted, rut_hash, giro, regimen_tributario, activo)
-                    VALUES ($1, $2, $3, 'Por definir', 'Por definir', true)
+                    INSERT INTO empresa (razon_social, rut_encrypted, rut_hash, giro, regimen_tributario, activo, organizacion_id)
+                    VALUES ($1, $2, $3, 'Por definir', 'Por definir', true, $4)
                     RETURNING id;
                 `;
-                const resultEmpresa = await client.query(insertEmpresaQuery, [razonSocialCapturadaDelSII, rutEncrypted, rutHash]);
+                const resultEmpresa = await client.query(insertEmpresaQuery, [razonSocialCapturadaDelSII, rutEncrypted, rutHash, datos.organizacion_id || null]);
                 empresaIdFinal = resultEmpresa.rows[0].id;
                 console.log(`✅ ¡Cliente nuevo creado con éxito! ID: ${empresaIdFinal}`);
             } catch (errCreacion) {

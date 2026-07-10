@@ -7,7 +7,7 @@
 
 ## 🟣 CRM
 
-- ⭐ **¿Qué define exactamente cada estado del cliente?** ¿"Suspendido" es por no pago, por decisión del cliente, o ambos? ¿Qué debe pasar automáticamente cuando alguien deja de pagar?
+- ⭐ **¿Qué define exactamente cada estado del cliente?** ¿"Suspendido" es por no pago, por decisión del cliente, o ambos? ¿Qué debe pasar automáticamente cuando alguien deja de pagar? 
 - **¿Quién puede crear/editar clientes?** ¿Solo el equipo, o el cliente puede auto-registrarse / completar su propia ficha?
 - ¿Qué datos son **obligatorios** para considerar una ficha "completa"? (hoy se mide sobre 10 campos)
 - ¿Manejan **prospectos/leads** antes de que sean clientes? ¿Con qué etapas?

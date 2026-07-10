@@ -8,6 +8,7 @@ import { useBunkerData } from './crm/crmData';
 import { updateClienteApi, eliminarEmpresaApi } from '@/services/crmService';
 import { exportClientsToExcel, exportClientsToCSV } from './crm/utils/exportClients';
 import CrmImportModal from './crm/modals/CrmImportModal';
+import CrmImportProspectosModal from './crm/modals/CrmImportProspectosModal';
 import CrmErrorBoundary from './crm/CrmErrorBoundary';
 import CrmTableList from './crm/views/CrmTableList';
 import CrmAnalytics from './crm/modals/CrmAnalytics';
@@ -130,6 +131,7 @@ const CRM = () => {
   const [showCrearCliente, setShowCrearCliente] = useState(false);
   const [showCrearEmpresa, setShowCrearEmpresa] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showImportProspectos, setShowImportProspectos] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [personasReload, setPersonasReload] = useState(0);
 
@@ -329,6 +331,14 @@ const CRM = () => {
                   </div>
                 </>
               )}
+              {activeTab === 'prospectos' && (
+                <button
+                    onClick={() => setShowImportProspectos(true)}
+                    className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                >
+                    <Upload size={14} /> Importar
+                </button>
+              )}
               <button
                   onClick={() => activeTab === 'prospectos' ? setShowCrearCliente(true) : setShowCrearEmpresa(true)}
                   className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 transition-colors"
@@ -449,6 +459,15 @@ const CRM = () => {
           <CrmImportModal
             onClose={() => setShowImport(false)}
             onImported={() => refresh()}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showImportProspectos && (
+          <CrmImportProspectosModal
+            onClose={() => setShowImportProspectos(false)}
+            onImported={() => setPersonasReload(n => n + 1)}
           />
         )}
       </AnimatePresence>

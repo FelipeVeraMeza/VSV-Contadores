@@ -287,6 +287,7 @@ export const getClientesCRM = async (req, res) => {
                 notas: notasPorEmpresa[cliente.id] || [],
                 servicios: serviciosPorEmpresa[cliente.id] || [],
                 type: cliente.tipo_cliente || 'Empresa',
+                activo: cliente.activo !== false, // null/undefined → se considera activo
                 ultimaModificacion: cliente.updated_at ? new Date(cliente.updated_at).toLocaleString('es-CL') : null
             };
 

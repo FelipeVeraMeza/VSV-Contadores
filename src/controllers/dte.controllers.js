@@ -36,7 +36,9 @@ export const emitirManualController = async (req, res) => {
         }
 
         console.log("🤖 Iniciando Robot para FACTURA AFECTA (33)...");
-        const result = await emitirFacturaPuppeteer(datosFactura);
+        // La organización del usuario viaja al robot: si crea un cliente externo,
+        // la empresa nueva debe quedar en la misma organización o el CRM no la mostrará.
+        const result = await emitirFacturaPuppeteer({ ...datosFactura, organizacion_id: req.user?.organizacionId || null });
         return res.status(200).json(result);
 
     } catch(error) {
@@ -230,7 +232,7 @@ export const emitirExentaManualController = async (req, res) => {
         }
 
         console.log("🤖 Iniciando Robot para FACTURA EXENTA (34)...");
-        const result = await emitirExentaPuppeteer(datosFactura);
+        const result = await emitirExentaPuppeteer({ ...datosFactura, organizacion_id: req.user?.organizacionId || null });
         return res.status(200).json(result);
 
     } catch(error) {

@@ -18,7 +18,7 @@ const ESTADO_STYLE = {
     activo: 'text-emerald-300 border-emerald-400/30 bg-emerald-400/10',
     inactivo: 'text-gray-300 border-gray-400/30 bg-gray-400/10',
 };
-const ESTADOS = ['prospecto', 'activo', 'inactivo'];
+const ESTADOS = ['prospecto', 'activo', 'inactivo', 'perdido'];
 
 const inputClass = "bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-blue-500 w-full";
 
@@ -83,7 +83,9 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
                     correos: (p.correos || []).map(c => c.correo).join(', '),
                     direccion: p.direccion || '', comuna: p.comuna || '', region: p.region || '',
                     rubro: p.rubro || '', observaciones: p.observaciones || '',
-                    ejecutivoId: p.ejecutivoId || '', etiquetasStr: (p.etiquetas || []).join(', ')
+                    ejecutivoId: p.ejecutivoId || '', etiquetasStr: (p.etiquetas || []).join(', '),
+                    proximoContacto: p.proximoContacto ? String(p.proximoContacto).slice(0, 10) : '',
+                    consentimiento: p.consentimiento !== false,
                 });
                 setServiciosSel((p.serviciosInteres || []).map(s => s.id));
             }
@@ -104,6 +106,8 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
                 ejecutivoId: form.ejecutivoId || null,
                 etiquetas: form.etiquetasStr.split(',').map(s => s.trim()).filter(Boolean),
                 serviciosInteres: serviciosSel,
+                proximoContacto: form.proximoContacto || null,
+                consentimiento: form.consentimiento !== false,
             });
             const payload = await res.json();
             if (!payload.success) throw new Error(payload.message);
@@ -147,8 +151,13 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
     const cambiarEstado = async (estado) => {
         setShowEstado(false);
         if (estado === data.estado) return;
+        // Al inactivar o perder, se pide el motivo (queda en el historial)
+        let motivo = '';
+        if (estado === 'inactivo' || estado === 'perdido') {
+            motivo = window.prompt(`Motivo de "${estado}" (opcional):`, '') ?? '';
+        }
         try {
-            const res = await cambiarEstadoPersonaApi(getSessionId(), personaId, estado);
+            const res = await cambiarEstadoPersonaApi(getSessionId(), personaId, estado, motivo);
             const payload = await res.json();
             if (!payload.success) throw new Error(payload.message);
             toast({ title: 'Estado actualizado', description: estado });
@@ -314,6 +323,14 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
                                             {catalogos.ejecutivos.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
                                         </select>
                                     </Field>
+                                    <Field label="Próxima acción"><input type="date" className={inputClass} value={form.proximoContacto || ''} onChange={set('proximoContacto')} /></Field>
+                                    <Field label="Contacto autorizado">
+                                        <button type="button" onClick={() => setForm(prev => ({ ...prev, consentimiento: !(prev.consentimiento !== false) }))}
+                                            className={`${inputClass} text-left cursor-pointer flex items-center justify-between ${form.consentimiento !== false ? 'text-emerald-300' : 'text-red-300'}`}>
+                                            {form.consentimiento !== false ? 'Sí — se puede contactar' : 'No contactar'}
+                                            <span>{form.consentimiento !== false ? '✓' : '⛔'}</span>
+                                        </button>
+                                    </Field>
                                     <div className="col-span-2"><Field label="Etiquetas (coma)"><input className={inputClass} value={form.etiquetasStr} onChange={set('etiquetasStr')} placeholder="VIP, referido..." /></Field></div>
                                     {catalogos.servicios.length > 0 && (
                                         <div className="col-span-2"><Field label="Servicios de interés">
@@ -333,6 +350,9 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
                                     <div><span className="text-[9px] text-gray-500 uppercase block">Dirección</span><span className="text-gray-200">{[data.direccion, data.comuna, data.region].filter(Boolean).join(', ') || '—'}</span></div>
                                     <div><span className="text-[9px] text-gray-500 uppercase block">Rubro</span><span className="text-gray-200">{data.rubro || '—'}</span></div>
                                     <div><span className="text-[9px] text-gray-500 uppercase block">Ejecutivo</span><span className="text-gray-200">{data.ejecutivoNombre || '—'}</span></div>
+                                    <div><span className="text-[9px] text-gray-500 uppercase block">Último contacto</span><span className="text-gray-200">{data.fechaUltimoContacto ? new Date(data.fechaUltimoContacto).toLocaleDateString('es-CL') : '—'}</span></div>
+                                    <div><span className="text-[9px] text-gray-500 uppercase block">Próxima acción</span><span className="text-gray-200">{data.proximoContacto ? new Date(data.proximoContacto).toLocaleDateString('es-CL') : '—'}</span></div>
+                                    <div><span className="text-[9px] text-gray-500 uppercase block">Contacto</span><span className={data.consentimiento !== false ? 'text-emerald-300' : 'text-red-300 font-bold'}>{data.consentimiento !== false ? 'Autorizado' : '⛔ No contactar'}</span></div>
                                     {(data.etiquetas || []).length > 0 && (
                                         <div className="col-span-2"><span className="text-[9px] text-gray-500 uppercase block mb-1">Etiquetas</span>
                                             <div className="flex flex-wrap gap-1">{data.etiquetas.map((e, i) => <span key={i} className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30">{e}</span>)}</div>

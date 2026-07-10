@@ -61,8 +61,11 @@ const setServiciosInteres = async (client, personaId, servicioIds) => {
 // ============================================================
 // DETECCIÓN DE DUPLICADOS
 // ============================================================
-const buscarCoincidencias = async ({ rut, correos = [], telefonos = [], nombre, apellidos }, excluirId = null) => {
+const buscarCoincidencias = async ({ rut, correos = [], telefonos = [], nombre, apellidos }, excluirId = null, organizacionId = null) => {
     const matches = new Map(); // persona_id -> { id, nombre, criterios:Set }
+    // Filtro de organización: la dedupe nunca cruza datos entre despachos.
+    const orgSql = organizacionId ? ' AND p.organizacion_id = $ORG ' : '';
+    const orgSqlSimple = organizacionId ? ' AND organizacion_id = $ORG ' : '';
 
     const agregar = (rows, criterio) => {
         for (const r of rows) {
@@ -74,30 +77,32 @@ const buscarCoincidencias = async ({ rut, correos = [], telefonos = [], nombre, 
 
     if (rut) {
         const hash = generateHash(cleanRut(rut));
-        const { rows } = await pool.query('SELECT id, nombre, apellidos, estado FROM persona WHERE rut_hash = $1 AND activo', [hash]);
+        const params = organizacionId ? [hash, organizacionId] : [hash];
+        const { rows } = await pool.query(
+            `SELECT id, nombre, apellidos, estado FROM persona WHERE rut_hash = $1 AND activo${orgSqlSimple.replace('$ORG', '$2')}`, params);
         agregar(rows, 'rut');
     }
     for (const c of correos.filter(Boolean)) {
+        const params = organizacionId ? [String(c).trim().toLowerCase(), organizacionId] : [String(c).trim().toLowerCase()];
         const { rows } = await pool.query(
-            'SELECT p.id, p.nombre, p.apellidos, p.estado FROM persona p JOIN persona_correo pc ON pc.persona_id = p.id WHERE pc.correo_norm = $1 AND p.activo',
-            [String(c).trim().toLowerCase()]
-        );
+            `SELECT p.id, p.nombre, p.apellidos, p.estado FROM persona p JOIN persona_correo pc ON pc.persona_id = p.id WHERE pc.correo_norm = $1 AND p.activo${orgSql.replace('$ORG', '$2')}`,
+            params);
         agregar(rows, 'correo');
     }
     for (const t of telefonos.filter(Boolean)) {
         const norm = normalizarTelefono(t);
         if (norm.length < 8) continue;
+        const params = organizacionId ? [norm, organizacionId] : [norm];
         const { rows } = await pool.query(
-            'SELECT p.id, p.nombre, p.apellidos, p.estado FROM persona p JOIN persona_telefono pt ON pt.persona_id = p.id WHERE pt.telefono_norm = $1 AND p.activo',
-            [norm]
-        );
+            `SELECT p.id, p.nombre, p.apellidos, p.estado FROM persona p JOIN persona_telefono pt ON pt.persona_id = p.id WHERE pt.telefono_norm = $1 AND p.activo${orgSql.replace('$ORG', '$2')}`,
+            params);
         agregar(rows, 'telefono');
     }
     if (nombre && apellidos) {
+        const params = organizacionId ? [nombre.trim(), apellidos.trim(), organizacionId] : [nombre.trim(), apellidos.trim()];
         const { rows } = await pool.query(
-            "SELECT id, nombre, apellidos, estado FROM persona WHERE activo AND lower(nombre) = lower($1) AND lower(coalesce(apellidos,'')) = lower($2)",
-            [nombre.trim(), apellidos.trim()]
-        );
+            `SELECT id, nombre, apellidos, estado FROM persona WHERE activo AND lower(nombre) = lower($1) AND lower(coalesce(apellidos,'')) = lower($2)${orgSqlSimple.replace('$ORG', '$3')}`,
+            params);
         agregar(rows, 'nombre');
     }
 
@@ -156,8 +161,10 @@ export const crearPersona = async (req, res) => {
             if (!validarTelefono(t)) return res.status(400).json({ success: false, message: `Teléfono inválido (mínimo 8 dígitos): ${t}` });
         }
 
-        // Detección de duplicados (salvo que el usuario fuerce)
-        const duplicados = await buscarCoincidencias({ rut, correos: mails, telefonos: tels, nombre, apellidos });
+        const organizacionId = req.user?.organizacionId || null;
+
+        // Detección de duplicados dentro de la organización (salvo que el usuario fuerce)
+        const duplicados = await buscarCoincidencias({ rut, correos: mails, telefonos: tels, nombre, apellidos }, null, organizacionId);
         if (duplicados.length > 0 && !forzar) {
             return res.status(409).json({ success: false, message: 'Posible cliente duplicado.', duplicados });
         }
@@ -170,15 +177,17 @@ export const crearPersona = async (req, res) => {
         const insertPersona = await client.query(
             `INSERT INTO persona
                 (nombre, segundo_nombre, apellidos, fecha_nacimiento, rut_encrypted, rut_hash,
-                 estado, origen, rubro, direccion, comuna, region, ejecutivo_id, observaciones)
-             VALUES ($1,$2,$3,$4,$5,$6,'prospecto',$7,$8,$9,$10,$11,$12,$13)
+                 estado, origen, rubro, direccion, comuna, region, ejecutivo_id, observaciones,
+                 organizacion_id, fecha_ultimo_contacto)
+             VALUES ($1,$2,$3,$4,$5,$6,'prospecto',$7,$8,$9,$10,$11,$12,$13,$14,NOW())
              RETURNING id, nombre, segundo_nombre, apellidos, estado, origen, created_at`,
             [
                 nombre?.trim() || null, segundoNombre?.trim() || null, apellidos?.trim() || null,
                 fechaNacimiento || null, rutEncrypted, rutHash,
                 ['manual','whatsapp','correo','web','import','integracion'].includes(origen) ? origen : 'manual',
                 rubro?.trim() || null, direccion?.trim() || null, comuna?.trim() || null, region?.trim() || null,
-                ejecutivoId || null, observaciones?.trim() || null
+                ejecutivoId || null, observaciones?.trim() || null,
+                organizacionId
             ]
         );
         const persona = insertPersona.rows[0];
@@ -241,23 +250,37 @@ export const crearPersona = async (req, res) => {
 // ============================================================
 export const listarPersonas = async (req, res) => {
     try {
-        const { estado, q } = req.query;
+        const { estado, q, ejecutivo } = req.query;
+        const organizacionId = req.user?.organizacionId || null;
         const where = ['p.activo'];
         const params = [];
-        if (estado && ['prospecto', 'activo', 'inactivo'].includes(estado)) {
+        // Aislamiento por organización (ningún despacho ve prospectos de otro).
+        if (organizacionId) {
+            params.push(organizacionId);
+            where.push(`p.organizacion_id = $${params.length}`);
+        }
+        if (estado && ['prospecto', 'activo', 'inactivo', 'perdido'].includes(estado)) {
             params.push(estado);
             where.push(`p.estado = $${params.length}`);
+        }
+        // "Mi cartera": filtra por el ejecutivo indicado
+        if (ejecutivo) {
+            params.push(ejecutivo);
+            where.push(`p.ejecutivo_id = $${params.length}`);
         }
         const result = await pool.query(
             `SELECT p.id, p.nombre, p.segundo_nombre, p.apellidos, p.estado, p.origen,
                     p.rubro, p.comuna, p.region, p.rut_encrypted, p.created_at,
+                    p.ejecutivo_id, p.proximo_contacto, p.fecha_ultimo_contacto,
+                    u.nombre AS ejecutivo_nombre,
                     COALESCE(json_agg(DISTINCT pt.telefono) FILTER (WHERE pt.id IS NOT NULL), '[]') AS telefonos,
                     COALESCE(json_agg(DISTINCT pc.correo) FILTER (WHERE pc.id IS NOT NULL), '[]') AS correos
              FROM persona p
              LEFT JOIN persona_telefono pt ON pt.persona_id = p.id
              LEFT JOIN persona_correo pc ON pc.persona_id = p.id
+             LEFT JOIN usuario u ON u.id = p.ejecutivo_id
              WHERE ${where.join(' AND ')}
-             GROUP BY p.id
+             GROUP BY p.id, u.nombre
              ORDER BY p.created_at DESC`,
             params
         );
@@ -279,6 +302,10 @@ export const listarPersonas = async (req, res) => {
                 rut: decryptSafe(r.rut_encrypted),
                 telefonos: r.telefonos || [],
                 correos: r.correos || [],
+                ejecutivoId: r.ejecutivo_id,
+                ejecutivoNombre: r.ejecutivo_nombre || null,
+                proximoContacto: r.proximo_contacto,
+                fechaUltimoContacto: r.fecha_ultimo_contacto,
                 createdAt: r.created_at
             };
         }).filter(p => {
@@ -332,6 +359,9 @@ export const obtenerPersona = async (req, res) => {
                 direccion: p.direccion, comuna: p.comuna, region: p.region,
                 observaciones: p.observaciones, ejecutivoId: p.ejecutivo_id,
                 ejecutivoNombre: ejec.rows[0]?.nombre || null,
+                proximoContacto: p.proximo_contacto,
+                fechaUltimoContacto: p.fecha_ultimo_contacto,
+                consentimiento: p.consentimiento_contacto !== false,
                 etiquetas: etiq.rows.map(e => e.nombre),
                 serviciosInteres: servInt.rows.map(s => ({ id: s.id, nombre: s.nombre })),
                 createdAt: p.created_at,
@@ -358,7 +388,7 @@ export const actualizarPersona = async (req, res) => {
         const {
             nombre, segundoNombre, apellidos, fechaNacimiento, rut,
             telefonos, correos, direccion, comuna, region, rubro, observaciones, ejecutivoId,
-            etiquetas, serviciosInteres
+            etiquetas, serviciosInteres, proximoContacto, consentimiento
         } = req.body;
 
         if (rut?.trim() && !validarRutDV(rut)) {
@@ -380,13 +410,17 @@ export const actualizarPersona = async (req, res) => {
                 rut_hash = COALESCE($6, rut_hash),
                 rubro = $7, direccion = $8, comuna = $9, region = $10,
                 observaciones = $11, ejecutivo_id = $12,
+                proximo_contacto = $14,
+                consentimiento_contacto = COALESCE($15, consentimiento_contacto),
                 updated_at = NOW()
              WHERE id = $13`,
             [
                 nombre?.trim() || null, segundoNombre?.trim() || null, apellidos?.trim() || null,
                 fechaNacimiento || null, rutEncrypted, rutHash,
                 rubro?.trim() || null, direccion?.trim() || null, comuna?.trim() || null, region?.trim() || null,
-                observaciones?.trim() || null, ejecutivoId || null, id
+                observaciones?.trim() || null, ejecutivoId || null, id,
+                proximoContacto || null,
+                (consentimiento === undefined ? null : !!consentimiento)
             ]
         );
 
@@ -435,6 +469,8 @@ export const agregarNotaPersona = async (req, res) => {
              VALUES ($1,$2,$3,$4,FALSE) RETURNING id, texto, usuario_nombre, created_at`,
             [id, texto.trim(), req.user?.usuarioId || null, req.user?.nombre || null]
         );
+        // Registrar una nota cuenta como contacto → actualiza la fecha de último contacto.
+        await pool.query(`UPDATE persona SET fecha_ultimo_contacto = NOW() WHERE id = $1`, [id]);
         const n = result.rows[0];
         return res.json({
             success: true,
@@ -469,7 +505,7 @@ export const cambiarEstadoPersona = async (req, res) => {
     try {
         const { id } = req.params;
         const { estado, motivo } = req.body;
-        if (!['prospecto', 'activo', 'inactivo'].includes(estado)) {
+        if (!['prospecto', 'activo', 'inactivo', 'perdido'].includes(estado)) {
             return res.status(400).json({ success: false, message: 'Estado inválido.' });
         }
         const cur = await client.query(`SELECT estado FROM persona WHERE id = $1`, [id]);
@@ -580,18 +616,71 @@ export const crearEmpresaParaPersona = async (req, res) => {
         const rutHash = generateHash(cleanRut(rut));
         await client.query('BEGIN');
 
-        // Reusar empresa existente por RUT, o crearla
-        let emp = await client.query('SELECT id, razon_social FROM empresa WHERE rut_hash = $1', [rutHash]);
+        // Datos de la persona: se traspasan a la empresa como contacto y representante legal.
+        // Sin esto la empresa nace "sin contacto" y la tabla de Clientes la clasifica como inactiva.
+        const perRes = await client.query(
+            `SELECT nombre, segundo_nombre, apellidos, rut_encrypted, direccion, comuna, region
+             FROM persona WHERE id = $1`, [id]
+        );
+        const per = perRes.rows[0] || {};
+        const nombreCompleto = [per.nombre, per.segundo_nombre, per.apellidos].filter(Boolean).join(' ') || null;
+        const rutPersona = decryptSafe(per.rut_encrypted);
+        const correoRes = await client.query('SELECT correo FROM persona_correo WHERE persona_id = $1 LIMIT 1', [id]);
+        const telRes = await client.query('SELECT telefono FROM persona_telefono WHERE persona_id = $1 LIMIT 1', [id]);
+        const correoPersona = correoRes.rows[0]?.correo || null;
+        const telPersona = telRes.rows[0]?.telefono || null;
+
+        // Multi-tenant: la empresa nace en la organización del usuario. Sin esto,
+        // getClientesCRM (que filtra por organizacion_id) nunca la mostraría.
+        const organizacionId = req.user?.organizacionId || null;
+
+        // Reusar empresa existente por RUT — solo dentro de la MISMA organización
+        let emp = await client.query(
+            `SELECT id, razon_social FROM empresa
+             WHERE rut_hash = $1 AND organizacion_id IS NOT DISTINCT FROM $2`,
+            [rutHash, organizacionId]
+        );
         let empresaId, razon, reusada = false;
         if (emp.rows.length) {
             empresaId = emp.rows[0].id; razon = emp.rows[0].razon_social; reusada = true;
         } else {
             const ins = await client.query(
-                `INSERT INTO empresa (razon_social, rut_encrypted, rut_hash, giro, regimen_tributario)
-                 VALUES ($1,$2,$3,$4,$5) RETURNING id, razon_social`,
-                [razonSocial.trim(), encrypt(cleanRut(rut)), rutHash, giro?.trim() || 'Sin especificar', regimen?.trim() || 'Sin especificar']
+                `INSERT INTO empresa (
+                    razon_social, rut_encrypted, rut_hash, giro, regimen_tributario,
+                    nombre_rep, rut_rep_encrypted, rut_rep_hash,
+                    email_corporativo, telefono_corporativo, organizacion_id
+                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, razon_social`,
+                [
+                    razonSocial.trim(), encrypt(cleanRut(rut)), rutHash,
+                    giro?.trim() || 'Sin especificar', regimen?.trim() || 'Sin especificar',
+                    nombreCompleto,
+                    rutPersona ? encrypt(cleanRut(rutPersona)) : null,
+                    rutPersona ? generateHash(cleanRut(rutPersona)) : null,
+                    correoPersona,
+                    telPersona,
+                    organizacionId
+                ]
             );
             empresaId = ins.rows[0].id; razon = ins.rows[0].razon_social;
+
+            // Filas necesarias para que luego se puedan editar claves y dirección desde la ficha
+            await client.query(
+                `INSERT INTO empresa_credenciales
+                    (empresa_id, sii_rut_encrypted, sii_email_encrypted, sii_password_encrypted, web_password_encrypted)
+                 VALUES ($1, '', '', '', '')`,
+                [empresaId]
+            );
+            await client.query(
+                `INSERT INTO sucursal (empresa_id, direccion, comuna, ciudad, es_casa_matriz)
+                 VALUES ($1, $2, $3, $4, TRUE)`,
+                [empresaId, per.direccion?.trim() || 'Sin dirección', per.comuna?.trim() || 'Sin especificar', per.region?.trim() || 'Sin especificar']
+            );
+            if (req.user?.usuarioId) {
+                await client.query(
+                    `INSERT INTO audita (usuario_id, empresa_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                    [req.user.usuarioId, empresaId]
+                );
+            }
         }
 
         const cnt = await client.query('SELECT COUNT(*)::int AS n FROM persona_empresa WHERE persona_id = $1', [id]);
@@ -600,8 +689,29 @@ export const crearEmpresaParaPersona = async (req, res) => {
              VALUES ($1,$2,$3) ON CONFLICT (persona_id, empresa_id) DO NOTHING`,
             [id, empresaId, cnt.rows[0].n === 0]
         );
+
+        // Si la persona tiene empresa, es cliente: la pasamos a 'activo' y dejamos rastro.
+        const cur = await client.query('SELECT estado FROM persona WHERE id = $1', [id]);
+        const anterior = cur.rows[0]?.estado;
+        let convertida = false;
+        if (anterior && anterior !== 'activo') {
+            await client.query(`UPDATE persona SET estado = 'activo', updated_at = NOW() WHERE id = $1`, [id]);
+            await client.query(
+                `INSERT INTO persona_estado_historial (persona_id, estado_anterior, estado_nuevo, motivo, usuario_id, usuario_nombre)
+                 VALUES ($1,$2,'activo',$3,$4,$5)`,
+                [id, anterior, `Convertido a cliente al ${reusada ? 'asociar' : 'crear'} la empresa ${razon}`,
+                 req.user?.usuarioId || null, req.user?.nombre || null]
+            );
+            convertida = true;
+        }
+
         await client.query('COMMIT');
-        return res.json({ success: true, empresa: { empresaId, razonSocial: razon, reusada } });
+        return res.json({
+            success: true,
+            empresa: { empresaId, razonSocial: razon, reusada },
+            estado: 'activo',
+            convertida
+        });
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('❌ Error creando empresa para persona:', error.message);

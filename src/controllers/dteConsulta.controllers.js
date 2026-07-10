@@ -1,4 +1,36 @@
 import { pool } from '../database/db.js';
+import { encrypt, generateHash } from '../utils/crypto.js';
+import { cleanRut } from '../lib/rut.js';
+
+/**
+ * Si el RUT no existe en `empresa`, lo crea como empresa nueva.
+ * Se usa al registrar un documento: un cliente/proveedor desconocido queda dado de alta.
+ * La búsqueda va por `rut_hash` (determinístico), no por `rut_encrypted` (IV aleatorio).
+ *
+ * IMPORTANTE: hay que setear `organizacion_id`. El CRM filtra por esa columna, así que
+ * una empresa creada sin ella queda invisible en el listado.
+ */
+async function asegurarEmpresa(client, rut, nombre, organizacionId) {
+    const rutLimpio = cleanRut(rut || '');
+    if (!rutLimpio || rutLimpio.length < 3) return null;
+
+    const rutHash = generateHash(rutLimpio);
+    const { rows: [existe] } = await client.query(
+        `SELECT id FROM empresa WHERE rut_hash = $1 LIMIT 1`, [rutHash]
+    );
+    if (existe) return existe.id;
+
+    const rutEnc = encrypt(rutLimpio);
+    if (!rutEnc) return null; // sin ENCRYPTION_KEY no damos de alta
+
+    const { rows: [nueva] } = await client.query(
+        `INSERT INTO empresa (id, razon_social, rut_encrypted, rut_hash, giro, regimen_tributario, tipo_cliente, organizacion_id)
+         VALUES (gen_random_uuid(), $1, $2, $3, 'Por definir', 'Por definir', 'Empresa', $4) RETURNING id`,
+        [(nombre || 'SIN RAZÓN SOCIAL').toUpperCase().slice(0, 255), rutEnc, rutHash, organizacionId || null]
+    );
+    console.log(`🆕 Empresa creada automáticamente: ${rutLimpio} — ${nombre || 'SIN RAZÓN SOCIAL'}`);
+    return nueva.id;
+}
 
 // ========================================================
 // 0. CREAR MOVIMIENTO MANUAL
@@ -32,6 +64,9 @@ export const crearMovimientoManual = async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+
+        // ── 0. Alta automática: si el RUT no existe en `empresa`, se crea ─────
+        await asegurarEmpresa(client, rut, nombre, usuario.organizacionId);
 
         // ── 1. Guardar el DOCUMENTO en la tabla que corresponde ──────────────
         //    Sin empresa (global) → documentos_emitidos / documentos_recibidos
