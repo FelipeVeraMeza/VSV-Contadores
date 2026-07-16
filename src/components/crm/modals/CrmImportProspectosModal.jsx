@@ -40,28 +40,45 @@ const parseFechaCL = (str) => {
     return isNaN(dt) ? null : dt;
 };
 
-// Mapea una fila del Excel al payload de persona
+// Convierte una fecha a formato yyyy-mm-dd (para el campo date)
+const aISO = (dt) => dt ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}` : null;
+
+// Mapea una fila del Excel al payload de persona.
+// Cada columna cae en un campo visible; el contexto comercial va a "observaciones".
 const mapRow = (row) => {
     const nombre = pick(row, ['nombre completo', 'nombre']);
     const tels = [pick(row, ['telefono', 'fono', 'celular']), pick(row, ['telefono 2', 'telefono2', 'fono 2'])]
         .map(soloTel).filter(t => t.length >= 8);
     const correoRaw = pick(row, ['mail', 'correo', 'email', 'e-mail']);
     const correos = correoValido(correoRaw) ? [correoRaw] : [];
-    const observaciones = [
-        pick(row, ['que necesita']),
-        pick(row, ['estado del cliente']),
-        pick(row, ['llamados']),
-    ].filter(Boolean).join(' · ');
-    const fecha = parseFechaCL(pick(row, ['cuando llego']));
+
+    const cuandoLlego = pick(row, ['cuando llego']);
+    const partes = [];
+    const necesita = pick(row, ['que necesita']);
+    const estadoCli = pick(row, ['estado del cliente']);
+    const llamados = pick(row, ['llamados']);
+    const accion = pick(row, ['accion']);
+    if (necesita) partes.push(`Necesita: ${necesita}`);
+    if (estadoCli) partes.push(`Estado: ${estadoCli}`);
+    if (llamados) partes.push(`Llamados: ${llamados}`);
+    if (accion) partes.push(`Acción: ${accion}`);
+    if (cuandoLlego) partes.push(`Llegó: ${cuandoLlego}`);
+    const observaciones = partes.join('\n');
+
+    // "contactar": si trae una fecha, se usa como Próxima acción
+    const contactarDate = parseFechaCL(pick(row, ['contactar']));
+
     return {
         nombre,
         telefonos: tels,
         correos,
         observaciones: observaciones || null,
+        proximoContacto: aISO(contactarDate),
         origen: 'import',
         forzar: true,
-        _fecha: fecha,
-        _fechaTxt: pick(row, ['cuando llego']),
+        _fecha: parseFechaCL(cuandoLlego),
+        _fechaTxt: cuandoLlego,
+        _necesita: necesita,
     };
 };
 
@@ -147,6 +164,7 @@ const CrmImportProspectosModal = ({ onClose, onImported }) => {
                 telefonos: m.telefonos,
                 correos: m.correos,
                 observaciones: m.observaciones,
+                proximoContacto: m.proximoContacto,
                 origen: m.origen,
                 forzar: m.forzar,
             };
@@ -242,14 +260,14 @@ const CrmImportProspectosModal = ({ onClose, onImported }) => {
                             <div className="overflow-x-auto">
                                 <table className="w-full text-[10px] text-left">
                                     <thead className="text-gray-500 uppercase">
-                                        <tr><th className="pr-3 py-1">Nombre</th><th className="pr-3 py-1">Teléfono</th><th className="pr-3 py-1">Correo</th><th className="pr-3 py-1">Llegó</th></tr>
+                                        <tr><th className="pr-3 py-1">Nombre</th><th className="pr-3 py-1">Teléfono</th><th className="pr-3 py-1">Qué necesita</th><th className="pr-3 py-1">Llegó</th></tr>
                                     </thead>
                                     <tbody className="text-gray-300">
                                         {enRango.slice(0, 5).map((m, i) => (
                                             <tr key={i} className="border-t border-white/5">
                                                 <td className="pr-3 py-1">{m.nombre || <span className="text-gray-600 italic">sin nombre</span>}</td>
                                                 <td className="pr-3 py-1 font-mono">{m.telefonos[0] || '—'}</td>
-                                                <td className="pr-3 py-1">{m.correos[0] || '—'}</td>
+                                                <td className="pr-3 py-1 max-w-[160px] truncate" title={m._necesita || ''}>{m._necesita || '—'}</td>
                                                 <td className="pr-3 py-1 font-mono">{m._fechaTxt}</td>
                                             </tr>
                                         ))}

@@ -221,7 +221,7 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                                 </th>
                                 <th className="px-4 py-2.5 font-black">Cliente</th>
                                 <th className="px-4 py-2.5 font-black">Contacto</th>
-                                <th className="px-4 py-2.5 font-black">Rubro</th>
+                                <th className="px-4 py-2.5 font-black">Qué necesita</th>
                                 <th className="px-4 py-2.5 font-black">Origen</th>
                                 <th className="px-4 py-2.5 font-black">Estado</th>
                                 <th className="px-4 py-2.5 font-black text-right">Acciones</th>
@@ -277,8 +277,16 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                                             })()}
                                         </div>
                                     </td>
-                                    <td className="px-4 py-2.5 text-xs text-gray-300">
-                                        {p.rubro || <span className="text-gray-600">—</span>}
+                                    <td className="px-4 py-2.5 text-xs text-gray-300 max-w-[260px]">
+                                        {(() => {
+                                            const obs = (p.observaciones || '').trim();
+                                            const linea = obs ? obs.split('\n')[0].replace(/^necesita:\s*/i, '') : '';
+                                            const texto = linea || p.rubro || '';
+                                            return texto
+                                                ? <span className="block truncate" title={obs || p.rubro}>{texto}</span>
+                                                : <span className="text-gray-600">—</span>;
+                                        })()}
+                                        {p.rubro && <span className="block text-[9px] text-gray-500 truncate">🏷️ {p.rubro}</span>}
                                         {p.ejecutivoNombre && <span className="block text-[9px] text-gray-500">👤 {p.ejecutivoNombre}</span>}
                                     </td>
                                     <td className="px-4 py-2.5"><span className="text-[9px] uppercase tracking-widest text-gray-400">{p.origen}</span></td>

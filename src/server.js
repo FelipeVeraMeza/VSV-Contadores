@@ -33,6 +33,7 @@ import bancoRoutes from './routes/bancos.routes.js';
 import dteConsultaRoutes from "./routes/dteConsulta.routes.js";
 import cajaRoutes from "./routes/caja.routes.js";
 import credencialesRoutes from "./routes/credenciales.routes.js";
+import whatsappRoutes from "./routes/whatsapp.routes.js";
 
 // Importación del Robot Manual
 import { ejecutarRobotSII } from './components/contabilidad/scripts/sincronizador_sii.mjs';
@@ -87,6 +88,7 @@ app.use('/api/dte', apiLimiter, dteRoutes);
 app.use("/api/dte-consulta", apiLimiter, dteConsultaRoutes);
 app.use("/api/caja", apiLimiter, cajaRoutes);
 app.use('/api/credenciales', apiLimiter, credencialesRoutes);
+app.use('/api/whatsapp', apiLimiter, whatsappRoutes);
 
 // ============================================================================
 // 🤖 MOTOR CENTRAL DE SINCRONIZACIÓN (Bóveda Global)

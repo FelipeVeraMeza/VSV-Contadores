@@ -3,3 +3,4 @@ dist
 AgregarDatosExcel/output/*
 perfil_temporal_robot
 .env
+whatsapp_auth
