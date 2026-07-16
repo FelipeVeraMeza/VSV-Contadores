@@ -1,15 +1,13 @@
 import { GoogleGenAI } from '@google/genai'
 import { CONOCIMIENTO, INSTRUCCIONES } from './conocimiento.js'
 
-const MAX_TURNOS = 20
-
-// Modelo de Gemini. Los flash-lite son gratis en la capa gratuita de
-// Google AI Studio y de sobra para un bot de FAQ.
-const MODELO = 'gemini-3.1-flash-lite'
+// Modelo por defecto. Se puede sobreescribir por organización desde
+// whatsapp_ia_config.modelo. Los flash-lite entran en la capa gratis.
+export const MODELO_POR_DEFECTO = 'gemini-3.1-flash-lite'
 
 // El cliente de Gemini se construye de forma perezosa (lazy): así el servidor
 // puede arrancar aunque no exista GEMINI_API_KEY. La key solo hace falta cuando
-// alguien conecta el bot y la IA tiene que responder.
+// la IA tiene que responder de verdad.
 let ia = null
 
 function cliente() {
@@ -24,24 +22,56 @@ export function iaDisponible() {
   return !!process.env.GEMINI_API_KEY
 }
 
-// Historial por chat. En memoria: se pierde al reiniciar el proceso.
-// Formato de mensajes de Gemini: { role: 'user' | 'model', parts: [{ text }] }.
-const historiales = new Map()
+// Arma el texto de conocimiento a partir de las filas de whatsapp_conocimiento.
+// Si la organización todavía no cargó nada, cae al archivo conocimiento.js para
+// no dejar a la IA sin contexto.
+export function construirConocimiento(filas = []) {
+  if (!filas.length) return CONOCIMIENTO
 
-function historialDe(jid) {
-  if (!historiales.has(jid)) historiales.set(jid, [])
-  return historiales.get(jid)
+  const porSeccion = new Map()
+  for (const f of filas) {
+    if (!porSeccion.has(f.seccion)) porSeccion.set(f.seccion, [])
+    porSeccion.get(f.seccion).push(f)
+  }
+
+  const partes = []
+  for (const [seccion, items] of porSeccion) {
+    partes.push(`## ${seccion}`)
+    for (const it of items) {
+      partes.push(it.titulo ? `- **${it.titulo}**: ${it.contenido}` : `- ${it.contenido}`)
+    }
+    partes.push('')
+  }
+  return partes.join('\n').trim()
 }
 
-export async function responder(jid, mensaje) {
-  const historial = historialDe(jid)
-  historial.push({ role: 'user', parts: [{ text: mensaje }] })
+/**
+ * Genera una respuesta. No guarda historial: se lo pasan ya armado (lo
+ * reconstruye whatsappRepo desde los mensajes de la BD), así sobrevive a
+ * reinicios y no hay dos fuentes de verdad.
+ *
+ * @param {object}   opts
+ * @param {Array}    opts.historial      turnos previos [{role:'user'|'model', parts:[{text}]}]
+ * @param {string}   opts.mensaje        mensaje nuevo del cliente
+ * @param {string}   [opts.conocimiento] contexto (de la BD o del archivo)
+ * @param {string}   [opts.instrucciones] cómo debe comportarse
+ * @param {string}   [opts.modelo]
+ * @returns {Promise<string>} texto de la respuesta
+ */
+export async function responder({
+  historial = [],
+  mensaje,
+  conocimiento = CONOCIMIENTO,
+  instrucciones = INSTRUCCIONES,
+  modelo = MODELO_POR_DEFECTO,
+}) {
+  const contents = [...historial, { role: 'user', parts: [{ text: mensaje }] }]
 
   const res = await cliente().models.generateContent({
-    model: MODELO,
-    contents: historial,
+    model: modelo,
+    contents,
     config: {
-      systemInstruction: `${INSTRUCCIONES}\n\n${CONOCIMIENTO}`,
+      systemInstruction: `${instrucciones}\n\n${conocimiento}`,
       maxOutputTokens: 1024,
       // Contestar con lo que ya está en el conocimiento no requiere razonar:
       // pensar solo suma latencia y costo por token.
@@ -52,20 +82,10 @@ export async function responder(jid, mensaje) {
   const texto = res.text?.trim()
 
   // Gemini puede no devolver texto: filtro de seguridad, o corte por tokens.
-  // Sin sacar el mensaje del usuario, el historial quedaría con dos turnos
-  // 'user' seguidos y la siguiente consulta fallaría.
   if (!texto) {
-    historial.pop()
     const razon = res.candidates?.[0]?.finishReason ?? 'desconocida'
     throw new Error(`Gemini no devolvió texto (finishReason: ${razon})`)
   }
 
-  historial.push({ role: 'model', parts: [{ text: texto }] })
-  if (historial.length > MAX_TURNOS) historial.splice(0, historial.length - MAX_TURNOS)
-
   return texto
-}
-
-export function olvidar(jid) {
-  historiales.delete(jid)
 }
