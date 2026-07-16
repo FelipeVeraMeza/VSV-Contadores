@@ -1,56 +1,69 @@
 // ===============================================================
-// MOTOR WHATSAPP — Baileys (conexión por QR, sin Chromium).
-// Singleton: una sola sesión de WhatsApp por proceso del servidor.
-// Mantiene conversaciones en memoria y responde con IA (Gemini) si el
-// toggle de auto-respuesta está activo. Basado en el bot de bot-whatsapp.
+// GESTOR MULTI-SESIÓN DE WHATSAPP — Baileys.
+// Mantiene N sockets en paralelo (uno por whatsapp_sesion) y persiste
+// conversaciones, mensajes y credenciales en Postgres.
+//
+// Este módulo solo maneja el "runtime" (sockets + QR en memoria); todo lo que
+// deba sobrevivir a un reinicio vive en la BD vía whatsappRepo.
 // ===============================================================
 import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
-  useMultiFileAuthState,
 } from '@whiskeysockets/baileys'
 import { Boom } from '@hapi/boom'
 import pino from 'pino'
 import QRCode from 'qrcode'
-import path from 'node:path'
 
-import { olvidar, responder, iaDisponible } from './ia.js'
+import { usePostgresAuthState, limpiarCredenciales } from './authStatePg.js'
+import { responder, iaDisponible, construirConocimiento, MODELO_POR_DEFECTO } from './ia.js'
+import * as repo from './whatsappRepo.js'
 
-const SIN_TEXTO =
-  'Por ahora solo puedo leer mensajes de texto. ¿Me lo puede escribir?'
+const SIN_TEXTO = 'Por ahora solo puedo leer mensajes de texto. ¿Me lo puede escribir?'
+const REINICIADO = 'Listo, empecemos de nuevo.'
 
-// La sesión de WhatsApp se persiste aquí (credenciales del dispositivo
-// vinculado). Está en .gitignore: nunca se sube al repo.
-const AUTH_DIR = path.join(process.cwd(), 'whatsapp_auth')
+// Códigos de estado de WhatsApp (proto.WebMessageInfo.Status) → nuestra columna
+// whatsapp_mensaje.estado. PLAYED (5, audio escuchado) lo tratamos como leído.
+const ESTADO_POR_STATUS = {
+  0: 'error',
+  1: 'pendiente',
+  2: 'enviado',
+  3: 'entregado',
+  4: 'leido',
+  5: 'leido',
+}
 
-// ----- Estado del módulo (singleton) -----
-let sock = null
-let estado = 'desconectado' // desconectado | conectando | qr | conectado
-let qrDataUrl = null // imagen del QR (data URL) para mostrar en el navegador
-let ultimoError = null
-let arrancando = false
-let autoIAGlobal = true // toggle global de respuesta automática
+// sesionId -> { sock, estado, qr, error, arrancando }
+const runtime = new Map()
 
-// jid -> { jid, nombre, telefono, noLeidos, autoIA, mensajes: [...] }
-const conversaciones = new Map()
-
-// Baileys no espera a que terminemos de responder un mensaje antes de
-// entregarnos el siguiente. Serializamos por jid para no corromper el orden.
+// `${sesionId}:${jid}` -> Promise (serializa las respuestas por contacto)
 const colas = new Map()
 
-const ahora = () =>
-  new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+function rt(sesionId) {
+  if (!runtime.has(sesionId)) {
+    runtime.set(sesionId, { sock: null, estado: 'desconectado', qr: null, error: null, arrancando: false })
+  }
+  return runtime.get(sesionId)
+}
 
-const telefonoDe = (jid) => (jid || '').split('@')[0]
+// Cambia el estado en memoria y lo refleja en la BD (para que el panel lo vea
+// aunque el socket viva en otro proceso).
+async function setEstado(sesionId, estado, telefono = null) {
+  rt(sesionId).estado = estado
+  try {
+    await repo.actualizarEstadoSesion(sesionId, estado, telefono)
+  } catch (e) {
+    console.error('[WA] No se pudo guardar el estado:', e.message)
+  }
+}
 
-function encolar(jid, tarea) {
-  const previa = colas.get(jid) ?? Promise.resolve()
+function encolar(clave, tarea) {
+  const previa = colas.get(clave) ?? Promise.resolve()
   const actual = previa
     .then(tarea)
-    .catch((err) => console.error(`[WA] Error atendiendo a ${jid}:`, err?.message || err))
-  colas.set(jid, actual)
+    .catch((err) => console.error(`[WA] Error atendiendo ${clave}:`, err?.message || err))
+  colas.set(clave, actual)
   actual.then(() => {
-    if (colas.get(jid) === actual) colas.delete(jid)
+    if (colas.get(clave) === actual) colas.delete(clave)
   })
 }
 
@@ -66,118 +79,80 @@ function esConversacion(jid) {
   return !/@(g\.us|newsletter|broadcast)$/.test(jid) && jid !== 'status@broadcast'
 }
 
-function obtenerConv(jid, nombre) {
-  if (!conversaciones.has(jid)) {
-    conversaciones.set(jid, {
-      jid,
-      nombre: nombre || telefonoDe(jid),
-      telefono: telefonoDe(jid),
-      noLeidos: 0,
-      autoIA: true, // por conversación; permite silenciar la IA en un chat puntual
-      mensajes: [],
-    })
-  }
-  const c = conversaciones.get(jid)
-  // Si llegó el nombre real (pushName) y antes solo teníamos el teléfono, lo actualizamos.
-  if (nombre && c.nombre === c.telefono) c.nombre = nombre
-  return c
-}
+// ----------------------------------------------------------------
+// API pública
+// ----------------------------------------------------------------
 
-function pushMensaje(jid, { direccion, cuerpo, estado: estadoMsg, esIA = false, nombre }) {
-  const c = obtenerConv(jid, nombre)
-  const m = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    direccion, // 'in' | 'out'
-    cuerpo,
-    hora: ahora(),
-    ts: Date.now(),
-    estado: estadoMsg,
-    esIA,
-  }
-  c.mensajes.push(m)
-  if (direccion === 'in') c.noLeidos += 1
-  return c
-}
-
-// ----- API pública del módulo -----
-
-export function estadoActual() {
+export function estadoDe(sesionId) {
+  const r = rt(sesionId)
   return {
-    estado,
-    qr: estado === 'qr' ? qrDataUrl : null,
-    autoIA: autoIAGlobal,
+    sesionId,
+    estado: r.estado,
+    qr: r.estado === 'qr' ? r.qr : null,
     iaDisponible: iaDisponible(),
-    error: ultimoError,
+    error: r.error,
   }
 }
 
-export function listarConversaciones() {
-  return Array.from(conversaciones.values())
-    .map((c) => {
-      const ultimo = c.mensajes[c.mensajes.length - 1] || null
-      return {
-        id: c.jid,
-        nombre: c.nombre,
-        telefono: c.telefono,
-        noLeidos: c.noLeidos,
-        autoIA: c.autoIA,
-        ultimo: ultimo && { cuerpo: ultimo.cuerpo, hora: ultimo.hora, direccion: ultimo.direccion },
-        ultimoTs: ultimo?.ts || 0,
-      }
-    })
-    .sort((a, b) => b.ultimoTs - a.ultimoTs)
-}
-
-export function obtenerMensajes(jid, marcarLeido = true) {
-  const c = conversaciones.get(jid)
-  if (!c) return null
-  if (marcarLeido) c.noLeidos = 0
-  return {
-    id: c.jid,
-    nombre: c.nombre,
-    telefono: c.telefono,
-    autoIA: c.autoIA,
-    mensajes: c.mensajes,
+export async function enviarTexto(sesionId, conversacion, texto, { esIA = false, enviadoPor = null } = {}) {
+  const r = rt(sesionId)
+  if (!r.sock || r.estado !== 'conectado') {
+    throw new Error('Esta sesión de WhatsApp no está conectada.')
   }
-}
-
-export function setAutoGlobal(valor) {
-  autoIAGlobal = !!valor
-  return autoIAGlobal
-}
-
-export function setAutoConversacion(jid, valor) {
-  const c = conversaciones.get(jid)
-  if (!c) return null
-  c.autoIA = !!valor
-  return c.autoIA
-}
-
-export async function enviarMensaje(jid, texto, { esIA = false } = {}) {
-  if (!sock || estado !== 'conectado') {
-    throw new Error('WhatsApp no está conectado.')
-  }
-  await sock.sendMessage(jid, { text: texto })
-  pushMensaje(jid, { direccion: 'out', cuerpo: texto, estado: 'enviado', esIA })
+  const res = await r.sock.sendMessage(conversacion.jid, { text: texto })
+  await repo.guardarMensaje({
+    conversacionId: conversacion.id,
+    direccion: 'out',
+    cuerpo: texto,
+    waMessageId: res?.key?.id ?? null,
+    estado: 'enviado',
+    esIA,
+    enviadoPor,
+  })
   return true
 }
 
-export function reiniciarConversacion(jid) {
-  olvidar(jid)
-  const c = conversaciones.get(jid)
-  if (c) c.mensajes = []
+export async function cerrar(sesionId) {
+  const r = rt(sesionId)
+  try {
+    await r.sock?.logout()
+  } catch {
+    /* si ya está caído, da igual */
+  }
+  r.sock = null
+  r.qr = null
+  await setEstado(sesionId, 'desconectado')
 }
 
-// Crea (o recrea) el socket de WhatsApp y engancha los eventos. NO se llama
-// directo desde el controlador: usa iniciar(), que no espera a que esto termine.
-async function arrancarSocket() {
-  if (arrancando) return
-  arrancando = true
+// Arranca la sesión. Responde al instante: el socket levanta en segundo plano
+// y el QR/estado se consultan aparte. Idempotente si ya hay socket vivo, pero
+// reintenta si quedó trabada sin socket.
+export async function iniciar(sesionId) {
+  const r = rt(sesionId)
+  if (r.estado === 'conectado' && r.sock) return estadoDe(sesionId)
+  if ((r.estado === 'conectando' || r.estado === 'qr') && r.sock) return estadoDe(sesionId)
+
+  r.qr = null
+  r.error = null
+  await setEstado(sesionId, 'conectando')
+  arrancarSocket(sesionId) // sin await
+  return estadoDe(sesionId)
+}
+
+// ----------------------------------------------------------------
+// Motor
+// ----------------------------------------------------------------
+
+async function arrancarSocket(sesionId) {
+  const r = rt(sesionId)
+  if (r.arrancando) return
+  r.arrancando = true
+
   try {
-    const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR)
+    const { state, saveCreds } = await usePostgresAuthState(sesionId)
     const { version } = await fetchLatestBaileysVersion()
 
-    sock = makeWASocket({
+    const sock = makeWASocket({
       version,
       auth: state,
       logger: pino({ level: 'silent' }),
@@ -185,106 +160,162 @@ async function arrancarSocket() {
       // Si el bot se marca en línea, el teléfono deja de notificar al dueño.
       markOnlineOnConnect: false,
     })
+    r.sock = sock
 
     sock.ev.on('creds.update', saveCreds)
 
     sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
       if (qr) {
-        estado = 'qr'
         try {
-          qrDataUrl = await QRCode.toDataURL(qr)
-          console.log('📱 [WA] QR generado, esperando escaneo…')
+          r.qr = await QRCode.toDataURL(qr)
+          await setEstado(sesionId, 'qr')
+          console.log(`📱 [WA:${sesionId.slice(0, 8)}] QR generado, esperando escaneo…`)
         } catch (e) {
           console.error('[WA] No se pudo generar el QR:', e.message)
         }
       }
 
       if (connection === 'open') {
-        estado = 'conectado'
-        qrDataUrl = null
-        console.log('✅ [WA] Conectado a WhatsApp.')
+        r.qr = null
+        // El JID propio trae el número con el que quedó vinculada la sesión.
+        const telefono = (sock.user?.id || '').split(':')[0].split('@')[0] || null
+        await setEstado(sesionId, 'conectado', telefono)
+        console.log(`✅ [WA:${sesionId.slice(0, 8)}] Conectado (${telefono || 's/n'}).`)
       }
 
       if (connection === 'close') {
         const codigo = new Boom(lastDisconnect?.error).output?.statusCode
-        sock = null
+        r.sock = null
 
         if (codigo === DisconnectReason.loggedOut) {
-          estado = 'desconectado'
-          ultimoError = 'Sesión cerrada desde el teléfono. Vuelve a conectar y escanea el QR.'
-          console.error('⚠️ [WA] Sesión cerrada desde el teléfono.')
+          // Sesión cerrada desde el teléfono: las credenciales ya no sirven,
+          // hay que borrarlas o reintentaría en bucle contra un vínculo muerto.
+          await limpiarCredenciales(sesionId)
+          r.error = 'Sesión cerrada desde el teléfono. Vuelve a conectar y escanea el QR.'
+          await setEstado(sesionId, 'desconectado')
+          console.error(`⚠️ [WA:${sesionId.slice(0, 8)}] Sesión cerrada desde el teléfono.`)
           return
         }
 
-        // Caída temporal (incluye el 515 'restartRequired' tras escanear el QR):
-        // reconectamos reusando las credenciales guardadas.
-        estado = 'conectando'
-        console.warn(`⚠️ [WA] Conexión cerrada (código ${codigo ?? '?'}), reconectando…`)
-        arrancarSocket().catch((e) => {
-          estado = 'desconectado'
-          ultimoError = e.message
-          console.error('❌ [WA] Falló la reconexión:', e.message)
+        // Caída temporal (incluye el 515 'restartRequired' tras escanear).
+        await setEstado(sesionId, 'conectando')
+        console.warn(`⚠️ [WA:${sesionId.slice(0, 8)}] Conexión cerrada (${codigo ?? '?'}), reconectando…`)
+        r.arrancando = false
+        arrancarSocket(sesionId).catch((e) => {
+          r.error = e.message
+          setEstado(sesionId, 'desconectado')
         })
       }
     })
 
     sock.ev.on('messages.upsert', ({ messages, type }) => {
       if (type !== 'notify') return
-
       for (const msg of messages) {
         const jid = msg.key.remoteJid
         if (msg.key.fromMe || !esConversacion(jid)) continue
+        encolar(`${sesionId}:${jid}`, () => procesarEntrante(sesionId, msg, jid))
+      }
+    })
 
-        const nombre = msg.pushName || null
-        const texto = textoDe(msg)
-
-        if (!texto) {
-          pushMensaje(jid, { direccion: 'in', cuerpo: '[mensaje no de texto]', nombre })
-          encolar(jid, () => enviarMensaje(jid, SIN_TEXTO).catch(() => {}))
-          continue
-        }
-
-        const conv = pushMensaje(jid, { direccion: 'in', cuerpo: texto, nombre })
-
-        if (texto.trim().toLowerCase() === '/reiniciar') {
-          reiniciarConversacion(jid)
-          encolar(jid, () =>
-            enviarMensaje(jid, 'Listo, empecemos de nuevo.').catch(() => {})
-          )
-          continue
-        }
-
-        // Auto-respuesta: solo si el toggle global y el de la conversación están
-        // activos, y hay key de IA configurada.
-        if (autoIAGlobal && conv.autoIA && iaDisponible()) {
-          encolar(jid, async () => {
-            await sock.sendPresenceUpdate('composing', jid)
-            const respuesta = await responder(jid, texto)
-            await enviarMensaje(jid, respuesta, { esIA: true })
-          })
-        }
+    // RF-06: recibos de entrega. WhatsApp avisa por aquí cuando un mensaje
+    // nuestro fue entregado o leído; sin esto el doble check nunca cambiaba.
+    sock.ev.on('messages.update', (updates) => {
+      for (const u of updates) {
+        const estado = ESTADO_POR_STATUS[u.update?.status]
+        if (!estado || !u.key?.id) continue
+        repo.actualizarEstadoMensaje(u.key.id, estado).catch((e) =>
+          console.error('[WA] No se pudo actualizar el estado del mensaje:', e.message)
+        )
       }
     })
   } catch (e) {
-    estado = 'desconectado'
-    ultimoError = e.message
-    console.error('❌ [WA] Error al arrancar el socket:', e.message)
+    r.error = e.message
+    await setEstado(sesionId, 'desconectado')
+    console.error(`❌ [WA:${sesionId.slice(0, 8)}] Error al arrancar:`, e.message)
   } finally {
-    arrancando = false
+    r.arrancando = false
   }
 }
 
-// Arranca la sesión de WhatsApp. Responde al instante (no espera a Baileys):
-// el QR llega por polling de estado. Idempotente si ya hay un socket vivo, pero
-// reintenta si quedó trabado en 'conectando' sin socket.
-export async function iniciar() {
-  if (estado === 'conectado') return estadoActual()
-  if ((estado === 'conectando' || estado === 'qr') && sock) return estadoActual()
+async function procesarEntrante(sesionId, msg, jid) {
+  const r = rt(sesionId)
+  const nombre = msg.pushName || null
+  const texto = textoDe(msg)
+  const conv = await repo.obtenerOCrearConversacion(sesionId, jid, nombre)
 
-  estado = 'conectando'
-  qrDataUrl = null
-  ultimoError = null
-  // Sin await: el socket arranca en segundo plano; el estado/QR se consultan aparte.
-  arrancarSocket()
-  return estadoActual()
+  if (!texto) {
+    await repo.guardarMensaje({
+      conversacionId: conv.id, direccion: 'in', cuerpo: '[mensaje no de texto]',
+      tipo: 'otro', waMessageId: msg.key.id,
+    })
+    await enviarTexto(sesionId, conv, SIN_TEXTO).catch(() => {})
+    return
+  }
+
+  const guardado = await repo.guardarMensaje({
+    conversacionId: conv.id, direccion: 'in', cuerpo: texto, waMessageId: msg.key.id,
+  })
+  // null = ya lo teníamos (mismo wa_message_id): no responder dos veces.
+  if (!guardado) return
+
+  // RF-14: el cliente puede reiniciar el hilo de la IA. No borra el chat (el
+  // humano necesita verlo): solo marca desde dónde vuelve a leer la IA.
+  if (texto.trim().toLowerCase() === '/reiniciar') {
+    await repo.reiniciarHilaIA(conv.id)
+    await enviarTexto(sesionId, conv, REINICIADO).catch(() => {})
+    return
+  }
+
+  const sesion = await repo.obtenerSesion(sesionId)
+  if (!sesion) return
+
+  // Auto-respuesta: requiere IA configurada + toggle de sesión + toggle del chat.
+  if (!iaDisponible() || !sesion.auto_ia || !conv.auto_ia) return
+
+  try {
+    await r.sock?.sendPresenceUpdate('composing', jid)
+
+    const [historial, filasConoc, cfg] = await Promise.all([
+      repo.historialParaIA(conv.id),
+      repo.obtenerConocimiento(sesion.organizacion_id, sesionId),
+      repo.obtenerIaConfig(sesion.organizacion_id),
+    ])
+
+    if (cfg && cfg.activo === false) return
+
+    // El historial ya incluye el mensaje recién guardado: lo sacamos para
+    // pasarlo aparte y no duplicar el último turno.
+    historial.pop()
+
+    const respuesta = await responder({
+      historial,
+      mensaje: texto,
+      conocimiento: construirConocimiento(filasConoc),
+      instrucciones: cfg?.instrucciones || undefined,
+      modelo: cfg?.modelo || MODELO_POR_DEFECTO,
+    })
+
+    await enviarTexto(sesionId, conv, respuesta, { esIA: true })
+  } catch (e) {
+    // Que falle la IA no puede romper el chat ni tumbar el proceso.
+    console.error(`[WA:${sesionId.slice(0, 8)}] IA falló:`, e.message)
+  }
+}
+
+// ----------------------------------------------------------------
+// Arranque del servidor: reconecta las sesiones que ya tienen credenciales.
+// Las que nunca se vincularon quedan esperando a que alguien pulse "Conectar".
+// ----------------------------------------------------------------
+export async function reconectarSesionesGuardadas() {
+  try {
+    const sesiones = await repo.listarSesionesActivas()
+    for (const s of sesiones) {
+      const { state } = await usePostgresAuthState(s.id)
+      if (!state.creds?.registered) continue // nunca se escaneó el QR
+      console.log(`🔄 [WA] Reconectando sesión "${s.nombre}"…`)
+      iniciar(s.id).catch((e) => console.error('[WA] Falló reconexión:', e.message))
+    }
+  } catch (e) {
+    console.error('[WA] No se pudieron reconectar sesiones:', e.message)
+  }
 }

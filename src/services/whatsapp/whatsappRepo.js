@@ -89,11 +89,15 @@ export async function crearSesion({ organizacionId, empresaId = null, nombre, cr
 }
 
 export async function actualizarEstadoSesion(sesionId, estado, telefono = null) {
+  // Los ::varchar son necesarios: sin ellos Postgres no logra deducir el tipo
+  // de $2 al usarse a la vez en la asignación y dentro del CASE
+  // ("inconsistent types deduced for parameter $2").
   const { rows } = await pool.query(
     `UPDATE whatsapp_sesion
-        SET estado = $2,
-            telefono = COALESCE($3, telefono),
-            ultimo_conectado_at = CASE WHEN $2 = 'conectado' THEN now() ELSE ultimo_conectado_at END,
+        SET estado = $2::varchar,
+            telefono = COALESCE($3::varchar, telefono),
+            ultimo_conectado_at = CASE WHEN $2::varchar = 'conectado'
+                                       THEN now() ELSE ultimo_conectado_at END,
             updated_at = now()
       WHERE id = $1 RETURNING *`,
     [sesionId, estado, telefono]
@@ -126,7 +130,6 @@ const telefonoDe = (jid) => (jid || '').split('@')[0]
 
 export async function obtenerOCrearConversacion(sesionId, jid, nombreContacto = null) {
   const telefono = telefonoDe(jid)
-  // Intenta vincular el contacto con una empresa del CRM por su teléfono.
   const { rows } = await pool.query(
     `INSERT INTO whatsapp_conversacion (sesion_id, jid, telefono, nombre_contacto)
      VALUES ($1, $2, $3, $4)
@@ -136,7 +139,66 @@ export async function obtenerOCrearConversacion(sesionId, jid, nombreContacto = 
      RETURNING *`,
     [sesionId, jid, telefono, nombreContacto]
   )
-  return rows[0]
+  const conv = rows[0]
+
+  // RF-25: si aún no sabemos de qué empresa es, intentamos identificarla.
+  if (!conv.empresa_id) {
+    const empresaId = await buscarEmpresaPorTelefono(telefono, sesionId)
+    if (empresaId) {
+      await pool.query('UPDATE whatsapp_conversacion SET empresa_id = $2 WHERE id = $1', [conv.id, empresaId])
+      conv.empresa_id = empresaId
+    }
+  }
+  return conv
+}
+
+// Cruza el teléfono del contacto contra las empresas de la organización dueña
+// de la sesión. Los números del CRM vienen como '56 9 5954 3856' y el JID como
+// '56959543856', así que comparamos solo dígitos.
+//
+// Se comparan los últimos 9 (el móvil chileno sin el código de país) para que
+// dé igual si el número está guardado con o sin '56'.
+//
+// IMPORTANTE: si hay más de una empresa con ese teléfono (pasa: mismo dueño con
+// dos sociedades) NO adivinamos — se deja sin vincular para no atribuir la
+// conversación a la empresa equivocada.
+export async function buscarEmpresaPorTelefono(telefono, sesionId) {
+  const digitos = (telefono || '').replace(/\D/g, '')
+  if (digitos.length < 8) return null
+
+  const { rows } = await pool.query(
+    `SELECT e.id
+       FROM empresa e
+       JOIN whatsapp_sesion s ON s.id = $2
+      WHERE e.organizacion_id = s.organizacion_id
+        AND e.activo = true
+        AND right(regexp_replace(
+              COALESCE(NULLIF(e.whatsapp, ''), e.telefono_corporativo, ''),
+              '[^0-9]', '', 'g'), 9) = right($1, 9)
+        AND length(regexp_replace(
+              COALESCE(NULLIF(e.whatsapp, ''), e.telefono_corporativo, ''),
+              '[^0-9]', '', 'g')) >= 8
+      LIMIT 2`,
+    [digitos, sesionId]
+  )
+  // 0 = desconocido, 2 = ambiguo -> en ambos casos, sin vincular.
+  return rows.length === 1 ? rows[0].id : null
+}
+
+// RF-14: /reiniciar — corta el historial que ve la IA sin borrar el chat.
+export async function reiniciarHilaIA(conversacionId) {
+  await pool.query(
+    'UPDATE whatsapp_conversacion SET ia_reset_at = now(), updated_at = now() WHERE id = $1',
+    [conversacionId]
+  )
+}
+
+// RF-06: recibos de entrega de WhatsApp.
+export async function actualizarEstadoMensaje(waMessageId, estado) {
+  await pool.query(
+    'UPDATE whatsapp_mensaje SET estado = $2 WHERE wa_message_id = $1',
+    [waMessageId, estado]
+  )
 }
 
 export async function listarConversaciones(sesionId) {
@@ -222,10 +284,17 @@ export async function listarMensajes(conversacionId, limite = 200) {
 // El historial de la IA se reconstruye desde los mensajes guardados: así
 // sobrevive a reinicios y no hay que mantener otra copia en memoria.
 export async function historialParaIA(conversacionId, maxTurnos = 20) {
+  // El JOIN aplica el corte de /reiniciar: si ia_reset_at está seteada, la IA
+  // ignora todo lo anterior (el chat completo se sigue viendo en el panel).
   const { rows } = await pool.query(
-    `SELECT direccion, cuerpo FROM whatsapp_mensaje
-      WHERE conversacion_id = $1 AND cuerpo IS NOT NULL AND tipo = 'text'
-      ORDER BY "timestamp" DESC
+    `SELECT m.direccion, m.cuerpo
+       FROM whatsapp_mensaje m
+       JOIN whatsapp_conversacion c ON c.id = m.conversacion_id
+      WHERE m.conversacion_id = $1
+        AND m.cuerpo IS NOT NULL
+        AND m.tipo = 'text'
+        AND (c.ia_reset_at IS NULL OR m."timestamp" > c.ia_reset_at)
+      ORDER BY m."timestamp" DESC
       LIMIT $2`,
     [conversacionId, maxTurnos]
   )
