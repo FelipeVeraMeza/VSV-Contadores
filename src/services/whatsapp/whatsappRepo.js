@@ -246,11 +246,15 @@ export async function guardarMensaje({
   conversacionId, direccion, cuerpo, tipo = 'text',
   waMessageId = null, estado = 'enviado', esIA = false, enviadoPor = null,
 }) {
+  // El índice único de wa_message_id es PARCIAL (WHERE wa_message_id IS NOT NULL),
+  // así que el ON CONFLICT debe repetir ese predicado; si no, Postgres lanza
+  // "no unique or exclusion constraint matching the ON CONFLICT specification"
+  // y el mensaje nunca se guarda.
   const { rows } = await pool.query(
     `INSERT INTO whatsapp_mensaje
        (conversacion_id, direccion, tipo, cuerpo, wa_message_id, estado, es_ia, enviado_por)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT (wa_message_id) DO NOTHING
+     ON CONFLICT (wa_message_id) WHERE wa_message_id IS NOT NULL DO NOTHING
      RETURNING *`,
     [conversacionId, direccion, tipo, cuerpo, waMessageId, estado, esIA, enviadoPor]
   )
