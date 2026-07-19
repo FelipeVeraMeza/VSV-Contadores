@@ -11,7 +11,13 @@ import { pool } from '../../database/db.js'
 
 // Baileys guarda Buffers dentro de las credenciales. BufferJSON los convierte
 // a/desde JSON plano para poder meterlos en una columna jsonb.
-const aJson = (valor) => JSON.parse(JSON.stringify(valor, BufferJSON.replacer))
+//
+// Guardamos SIEMPRE el texto JSON (con ::jsonb en el INSERT), no el objeto ya
+// parseado: si el valor es un string simple (algunas app-state keys lo son),
+// pasarlo parseado hace que node-pg lo mande sin comillas y Postgres lance
+// "invalid input syntax for type json". JSON.stringify garantiza JSON válido
+// para cualquier tipo (objeto, string, número).
+const aTexto = (valor) => JSON.stringify(valor, BufferJSON.replacer)
 const desdeJson = (valor) => JSON.parse(JSON.stringify(valor), BufferJSON.reviver)
 
 export async function usePostgresAuthState(sesionId) {
@@ -26,10 +32,10 @@ export async function usePostgresAuthState(sesionId) {
   const escribir = async (clave, valor) => {
     await pool.query(
       `INSERT INTO whatsapp_credencial (sesion_id, clave, valor, updated_at)
-       VALUES ($1, $2, $3, now())
+       VALUES ($1, $2, $3::jsonb, now())
        ON CONFLICT (sesion_id, clave)
        DO UPDATE SET valor = EXCLUDED.valor, updated_at = now()`,
-      [sesionId, clave, aJson(valor)]
+      [sesionId, clave, aTexto(valor)]
     )
   }
 

@@ -197,6 +197,18 @@ async function arrancarSocket(sesionId) {
           return
         }
 
+        // 440 = connectionReplaced: OTRA instancia tomó esta sesión (p. ej. el
+        // server de producción usando las mismas credenciales de la BD). NO
+        // reconectar: si lo hiciéramos, las dos instancias se botarían en bucle
+        // infinito. Nos rendimos y dejamos que la otra instancia se quede con la
+        // sesión. (Ver L-08: falta un lock multi-instancia.)
+        if (codigo === DisconnectReason.connectionReplaced) {
+          r.error = 'Otra instancia (¿producción?) tomó esta sesión. Usa un solo servidor a la vez.'
+          await setEstado(sesionId, 'desconectado')
+          console.error(`⛔ [WA:${sesionId.slice(0, 8)}] Conexión reemplazada (440): otra instancia tomó la sesión. No reconecto.`)
+          return
+        }
+
         // Caída temporal (incluye el 515 'restartRequired' tras escanear).
         await setEstado(sesionId, 'conectando')
         console.warn(`⚠️ [WA:${sesionId.slice(0, 8)}] Conexión cerrada (${codigo ?? '?'}), reconectando…`)
@@ -212,7 +224,9 @@ async function arrancarSocket(sesionId) {
       if (type !== 'notify') return
       for (const msg of messages) {
         const jid = msg.key.remoteJid
-        if (msg.key.fromMe || !esConversacion(jid)) continue
+        // Procesamos también los fromMe: son mensajes que el dueño escribió
+        // desde su propio teléfono; hay que reflejarlos en el panel.
+        if (!esConversacion(jid)) continue
         encolar(`${sesionId}:${jid}`, () => procesarEntrante(sesionId, msg, jid))
       }
     })
@@ -239,24 +253,48 @@ async function arrancarSocket(sesionId) {
 
 async function procesarEntrante(sesionId, msg, jid) {
   const r = rt(sesionId)
+  const fromMe = !!msg.key.fromMe
   const nombre = msg.pushName || null
   const texto = textoDe(msg)
-  const conv = await repo.obtenerOCrearConversacion(sesionId, jid, nombre)
+  // En un fromMe el pushName es el del dueño, no el del contacto: no lo usamos
+  // para nombrar la conversación.
+  const conv = await repo.obtenerOCrearConversacion(sesionId, jid, fromMe ? null : nombre)
 
-  if (!texto) {
-    await repo.guardarMensaje({
-      conversacionId: conv.id, direccion: 'in', cuerpo: '[mensaje no de texto]',
-      tipo: 'otro', waMessageId: msg.key.id,
-    })
-    await enviarTexto(sesionId, conv, SIN_TEXTO).catch(() => {})
+  // Mensaje escrito desde el propio teléfono (o eco de uno enviado por el CRM):
+  // se guarda como saliente para que el panel muestre la conversación completa.
+  // Es idempotente (mismo wa_message_id) y NUNCA dispara la IA.
+  if (fromMe) {
+    if (texto) {
+      await repo.guardarMensaje({
+        conversacionId: conv.id, direccion: 'out', cuerpo: texto, waMessageId: msg.key.id,
+      })
+    }
     return
   }
 
+  // Guardamos el entrante (sea texto o no) para que el panel muestre la
+  // conversación completa, INDEPENDIENTE de si la IA está activa.
   const guardado = await repo.guardarMensaje({
-    conversacionId: conv.id, direccion: 'in', cuerpo: texto, waMessageId: msg.key.id,
+    conversacionId: conv.id, direccion: 'in',
+    cuerpo: texto || '[mensaje no de texto]',
+    tipo: texto ? 'text' : 'otro',
+    waMessageId: msg.key.id,
   })
-  // null = ya lo teníamos (mismo wa_message_id): no responder dos veces.
+  // null = ya lo teníamos (mismo wa_message_id): no procesar dos veces.
   if (!guardado) return
+
+  // PUERTA ÚNICA para toda respuesta automática. Si la IA está apagada (a nivel
+  // de número o de este chat), el bot no envía NADA — ni el aviso de "solo
+  // texto" ni una respuesta de IA. Así, al desactivar la IA, el humano toma el
+  // control de verdad y el cliente no recibe mensajes automáticos inesperados.
+  const sesion = await repo.obtenerSesion(sesionId)
+  if (!sesion || !iaDisponible() || !sesion.auto_ia || !conv.auto_ia) return
+
+  // Mensaje que no es texto (sticker, audio, imagen): avisamos (solo con IA on).
+  if (!texto) {
+    await enviarTexto(sesionId, conv, SIN_TEXTO).catch(() => {})
+    return
+  }
 
   // RF-14: el cliente puede reiniciar el hilo de la IA. No borra el chat (el
   // humano necesita verlo): solo marca desde dónde vuelve a leer la IA.
@@ -265,12 +303,6 @@ async function procesarEntrante(sesionId, msg, jid) {
     await enviarTexto(sesionId, conv, REINICIADO).catch(() => {})
     return
   }
-
-  const sesion = await repo.obtenerSesion(sesionId)
-  if (!sesion) return
-
-  // Auto-respuesta: requiere IA configurada + toggle de sesión + toggle del chat.
-  if (!iaDisponible() || !sesion.auto_ia || !conv.auto_ia) return
 
   try {
     await r.sock?.sendPresenceUpdate('composing', jid)
@@ -311,7 +343,10 @@ export async function reconectarSesionesGuardadas() {
     const sesiones = await repo.listarSesionesActivas()
     for (const s of sesiones) {
       const { state } = await usePostgresAuthState(s.id)
-      if (!state.creds?.registered) continue // nunca se escaneó el QR
+      // La señal de que la sesión ya se vinculó es tener la cuenta (creds.me).
+      // OJO: no usar creds.registered — queda en false aunque el dispositivo
+      // esté perfectamente vinculado, y entonces nunca reconectaría.
+      if (!state.creds?.me?.id) continue // nunca se escaneó el QR
       console.log(`🔄 [WA] Reconectando sesión "${s.nombre}"…`)
       iniciar(s.id).catch((e) => console.error('[WA] Falló reconexión:', e.message))
     }
