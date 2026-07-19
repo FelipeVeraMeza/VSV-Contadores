@@ -16,8 +16,6 @@ const CrmTableList = ({
     // Pestañas por estado real del cliente
     const ESTADOS_TABS = [
         { id: 'activos',     label: 'Activos',       activo: 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' },
-        { id: 'suspendidos', label: 'Suspendidos',   activo: 'bg-orange-600/80 text-white shadow-lg shadow-orange-500/20' },
-        { id: 'completar',   label: 'Por completar', activo: 'bg-amber-600/80 text-white shadow-lg shadow-amber-500/20' },
         { id: 'baja',        label: 'De baja',       activo: 'bg-red-600/80 text-white shadow-lg shadow-red-500/20' },
     ];
     const [showFilters, setShowFilters] = React.useState(true);
@@ -42,7 +40,7 @@ const CrmTableList = ({
             case 'cliente': return String(c.razon_social || c.razonSocial || '').toLowerCase();
             case 'plan': return String(c.plan || c.plan_nombre || '').toLowerCase();
             case 'score': return Number(c.score ?? 0);
-            case 'neto': return Number(c.impuesto_pagar ?? c.neto ?? 0);
+            case 'neto': return Number(c.honorarioNeto ?? c.honorario_neto ?? 0);
             default: return '';
         }
     };
@@ -304,7 +302,7 @@ const CrmTableList = ({
                       {esAdminMaster && vista === 'usuarios' && <th className="px-4 py-2.5 font-black">Creado por</th>}
                       <th className="px-4 py-2.5 font-black text-right">
                         <button onClick={() => toggleSort('neto')} className="flex items-center gap-1 hover:text-white transition-colors uppercase tracking-widest ml-auto">
-                          Impuesto a pagar <SortIcon col="neto" />
+                          Neto mensual <SortIcon col="neto" />
                         </button>
                       </th>
                     </tr>
@@ -330,7 +328,7 @@ const CrmTableList = ({
                       
                       const pagoServicio = String(client.estado_pago || client.pagoServicio || 'AL DIA').trim().toUpperCase();
                       const estadoFormulario = String(client.estado_f29 || client.estadoFormulario || 'PENDIENTE').trim().toUpperCase();
-                      const neto = Number(client.impuesto_pagar ?? client.neto ?? 0);
+                      const neto = Number(client.honorarioNeto ?? client.honorario_neto ?? 0);
 
                       const isAlDiaPago = pagoServicio === 'AL DIA' || pagoServicio === 'PAGADO';
                       const isAlDiaF29 = estadoFormulario === 'DECLARADO' || estadoFormulario === 'NO DECLARAR';
@@ -425,8 +423,8 @@ const CrmTableList = ({
 
                           <td className="px-4 py-2.5 text-right">
                              <div className="flex flex-col items-end gap-0.5">
-                                 <span className="text-gray-500 text-[8px] font-black uppercase tracking-widest">Impuesto a pagar</span>
-                                 <span className={`font-mono font-bold text-sm ${neto > 0 ? 'text-white' : 'text-gray-600'}`}>${(isNaN(neto) ? 0 : neto).toLocaleString('es-CL')}</span>
+                                 <span className="text-gray-500 text-[8px] font-black uppercase tracking-widest">Neto mensual</span>
+                                 <span className={`font-mono font-bold text-sm ${neto > 0 ? 'text-emerald-300' : 'text-gray-600'}`}>${(isNaN(neto) ? 0 : neto).toLocaleString('es-CL')}</span>
                              </div>
                           </td>
                         </tr>
@@ -444,8 +442,6 @@ const CrmTableList = ({
                               {searchTerm || statusFilter !== 'Todos' || typeFilter !== 'Todos' || planFilter !== 'Todos'
                                 ? 'Ningún cliente coincide con los filtros.'
                                 : vista === 'usuarios' ? 'Aún no hay empresas creadas por tus clientes.'
-                                : vista === 'suspendidos' ? 'No tienes clientes con servicio suspendido.'
-                                : vista === 'completar' ? 'No hay fichas pendientes por completar.'
                                 : vista === 'baja' ? 'No tienes clientes dados de baja.'
                                 : 'Aún no tienes clientes activos.'}
                             </p>

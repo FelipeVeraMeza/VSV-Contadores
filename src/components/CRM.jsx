@@ -60,10 +60,8 @@ const fichaIncompleta = (c) => {
 // Clasificación de negocio: una sola pestaña por cliente, con prioridad clara.
 // De baja > Por completar (onboarding) > Suspendido > Activo.
 const clasificarCliente = (c) => {
+    // Estado del servicio: solo Activo o De baja (suspendido cuenta como de baja).
     if (c.activo === false) return 'baja';
-    if (fichaIncompleta(c)) return 'completar';
-    const pago = String(c.estado_pago || c.pagoServicio || '').trim().toUpperCase();
-    if (pago === 'SERVICIO SUSPENDIDO') return 'suspendidos';
     return 'activos';
 };
 
@@ -88,10 +86,10 @@ const completitudFicha = (c) => {
 };
 
 // Vistas válidas y migración de valores antiguos guardados en localStorage
-const VISTAS_VALIDAS = ['activos', 'suspendidos', 'completar', 'baja', 'usuarios'];
+const VISTAS_VALIDAS = ['activos', 'baja', 'usuarios'];
 const normalizarVista = (v) => {
-    if (v === 'activas') return 'activos';
-    if (v === 'inactivas') return 'completar';
+    if (v === 'suspendidos') return 'baja'; // suspendido ahora es de baja
+    if (['activas', 'inactivas', 'completar', 'todas', 'nuevos'].includes(v)) return 'activos';
     return VISTAS_VALIDAS.includes(v) ? v : 'activos';
 };
 
@@ -147,6 +145,7 @@ const CRM = () => {
           if (vista === 'usuarios') return esCreadaPorUsuario(c);
           // Las creadas por clientes NO se mezclan en las pestañas de estado
           if (esCreadaPorUsuario(c)) return false;
+          if (vista === 'todas') return true; // todas las empresas de la organización
           return clasificarCliente(c) === vista;
       });
       return {
@@ -189,6 +188,7 @@ const CRM = () => {
           const matchActividad =
               vista === 'usuarios' ? esCreadaPorUsuario(c)
             : esCreadaPorUsuario(c) ? false
+            : vista === 'todas' ? true
             : clasificarCliente(c) === vista;
           // Filtro por creador: solo aplica dentro de la pestaña "Creadas por usuarios"
           const matchCreador = vista !== 'usuarios' || creadorFilter === 'Todos' || c.usuarioCreador === creadorFilter;

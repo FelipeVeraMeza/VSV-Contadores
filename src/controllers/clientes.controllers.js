@@ -50,6 +50,10 @@ export const getClientesCRM = async (req, res) => {
             whereClauses.push(`e.organizacion_id = $${empresaParams.length}`);
         }
 
+        // Solo la cartera vigente (las empresas del Excel de trabajo). Las archivadas
+        // (que ya no están en la planilla) quedan ocultas del CRM, sin borrarlas.
+        whereClauses.push('e.en_cartera IS NOT FALSE');
+
         // Cliente: solo sus empresas asignadas dentro de la organización
         let auditaJoin = '';
         if (esCliente && req.user?.usuarioId) {
@@ -250,6 +254,7 @@ export const getClientesCRM = async (req, res) => {
 
                 impuestoPagar: parseFloat(cliente.impuesto_pagar) || 0,
                 neto: parseFloat(cliente.impuesto_pagar) || 0,
+                honorarioNeto: parseFloat(cliente.honorario_neto) || 0, // lo que paga mensual a la firma
                 bruto: parseFloat(cliente.monto_bruto) || 0,
                 monto_bruto: parseFloat(cliente.monto_bruto) || 0,
                 ventas: parseFloat(cliente.ventas_mensuales) || 0,
@@ -288,6 +293,7 @@ export const getClientesCRM = async (req, res) => {
                 servicios: serviciosPorEmpresa[cliente.id] || [],
                 type: cliente.tipo_cliente || 'Empresa',
                 activo: cliente.activo !== false, // null/undefined → se considera activo
+                esNuevo: cliente.es_nuevo === true, // onboarding (inicio de actividades / verificación)
                 ultimaModificacion: cliente.updated_at ? new Date(cliente.updated_at).toLocaleString('es-CL') : null
             };
 
@@ -390,7 +396,8 @@ export const updateClienteCRM = async (req, res) => {
         const numCols = {
             score: 'score', bruto: 'monto_bruto', neto: 'impuesto_pagar', ventas: 'ventas_mensuales',
             compras: 'compras_mensuales', impuestoUnico: 'impuesto_unico', montoRenta: 'monto_renta',
-            rentaMarzoNeto: 'renta_marzo_neto', rentaMarzoBruto: 'renta_marzo_bruto'
+            rentaMarzoNeto: 'renta_marzo_neto', rentaMarzoBruto: 'renta_marzo_bruto',
+            honorario: 'honorario_neto'
         };
 
         const sets = [];
@@ -421,6 +428,10 @@ export const updateClienteCRM = async (req, res) => {
         }
         if (b.contratoRenta !== undefined) {
             sets.push(`contrato_renta = $${i++}`); vals.push(b.contratoRenta === 'SÍ' || b.contratoRenta === true);
+        }
+        // Estado del servicio: Activo / De baja (lo controla el usuario desde la ficha)
+        if (b.activo !== undefined) {
+            sets.push(`activo = $${i++}`); vals.push(b.activo === true || b.activo === 'activo' || b.activo === 'Activo');
         }
         if (plan) {
             const planResult = await pool.query('SELECT id FROM plan WHERE nombre = $1', [plan]);
