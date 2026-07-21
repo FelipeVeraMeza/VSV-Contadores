@@ -18,12 +18,12 @@ import { fetchWithAuth } from '@/services/apiClient';
 import NuevoMovimientoModal from '@/components/contabilidad/modals/NuevoMovimientoModal';
 import AsientoDocumentoModal from '@/components/contabilidad/modals/AsientoDocumentoModal';
 import SyncSIIModal from '@/components/contabilidad/modals/SyncSIIModal';
+import {
+  TIPO_DTE_CORTO as TIPO_DTE_MAP, CUENTAS_NOMBRE,
+  generarLineasAsiento, construirGlosa, calcularMontos,
+  claveDeDocumento, claveDeComprobante, esNota, esNotaCredito,
+} from '@/lib/documento';
 import { API_BASE_URL } from '../../../config.js';
-
-const TIPO_DTE_MAP = {
-  33: 'FAC. ELECTRÓNICA', 34: 'FAC. EXENTA', 61: 'NOTA DE CRÉDITO',
-  56: 'NOTA DE DÉBITO', 52: 'GUÍA DE DESPACHO', 39: 'BOLETA', 110: 'FAC. EXPORTACIÓN'
-};
 const MESES = [
   { value: '01', label: 'ENERO' }, { value: '02', label: 'FEBRERO' },
   { value: '03', label: 'MARZO' }, { value: '04', label: 'ABRIL' },
@@ -35,11 +35,6 @@ const MESES = [
 const ANIOS = ['2024', '2025', '2026', '2027'];
 const ITEMS_PER_PAGE = 12;
 
-const CUENTAS_NOMBRE = {
-  '1104-01': 'DEUDORES CLIENTES', '5101-01': 'VENTAS', '2108-02': 'IVA DEBITO FISCAL',
-  '4201-08': 'GASTOS GENERALES',  '1108-02': 'IVA CREDITO FISCAL', '2116-01': 'FACTURAS POR PAGAR',
-};
-
 const formatText = (str) => str ? str.toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase() : '';
 const formatCLP = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(val || 0);
 
@@ -49,26 +44,10 @@ const COLOR_MAP = {
   honorarios:{ active: 'bg-amber-500/10 text-amber-400 border-b-2 border-amber-500',       badge: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',       total: 'text-amber-400',   row: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
 };
 
-// Genera el asiento por defecto para un documento
-const calcLineasDefault = (doc, tipo) => {
-  const neto  = Number(doc.monto_neto) || 0;
-  const iva   = Number(doc.monto_iva)  || Math.round(neto * 0.19);
-  const total = neto + iva;
-  const esNC  = doc.tipo_dte === 61;
-  const esND  = doc.tipo_dte === 56;
-
-  if (tipo === 'ventas') {
-    // NC emitida: reversa de la venta
-    if (esNC) return [{ cuenta: '1104-01', debe: 0, haber: total }, { cuenta: '5101-01', debe: neto, haber: 0 }, { cuenta: '2108-02', debe: iva, haber: 0 }];
-    return [{ cuenta: '1104-01', debe: total, haber: 0 }, { cuenta: '5101-01', debe: 0, haber: neto }, { cuenta: '2108-02', debe: 0, haber: iva }];
-  }
-  if (tipo === 'compras') {
-    // NC recibida: reversa de la compra
-    if (esNC) return [{ cuenta: '4201-08', debe: 0, haber: neto }, { cuenta: '1108-02', debe: 0, haber: iva }, { cuenta: '2116-01', debe: total, haber: 0 }];
-    return [{ cuenta: '4201-08', debe: neto, haber: 0 }, { cuenta: '1108-02', debe: iva, haber: 0 }, { cuenta: '2116-01', debe: 0, haber: total }];
-  }
-  return [{ cuenta: '4201-02', debe: total, haber: 0 }, { cuenta: '2105-04', debe: 0, haber: total }];
-};
+// El asiento por defecto lo genera `generarLineasAsiento` (src/lib/documento.js),
+// compartido con AsientoDocumentoModal para que un mismo documento no produzca
+// asientos distintos según desde dónde se contabilice.
+const calcLineasDefault = (doc, tipo) => generarLineasAsiento(doc, tipo);
 
 const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio: anioProp, setMes: setMesProp, setAnio: setAnioProp, tipoInicial, ocultarTabs, rango }) => {
   const { user, selectedCompany } = useAuth();
@@ -159,24 +138,34 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     enabled: !!user?.sessionId,
   });
 
-  // Mapa folio → comprobante contabilizado (número, responsable, líneas)
+  // Mapa documento → comprobante contabilizado (número, responsable, líneas).
+  // La clave es la identidad completa del documento, no el folio suelto: antes
+  // se indexaba por el número extraído de la glosa, así que una factura de este
+  // año aparecía como contabilizada porque existía otro documento con el mismo
+  // folio (una nota de crédito, otro proveedor o el año anterior).
   const folioMap = useMemo(() => {
     const map = {};
     (dataComp?.comprobantes || []).forEach(comp => {
-      const match = comp.glosa?.match(/#(\d+)/);
-      if (match) {
-        map[match[1]] = {
-          guardado: true,
-          estado: comp.estado,
-          numero: comp.numeroComprobante ?? comp.numero_comprobante,
-          contabilizadoPor: comp.contabilizadoPor ?? comp.contabilizado_por,
-          contabilizadoAt: comp.contabilizadoAt ?? comp.contabilizado_at,
-          lineas: comp.lineas || [],
-        };
-      }
+      if (comp.folio === null || comp.folio === undefined) return;
+      map[claveDeComprobante(comp)] = {
+        guardado: true,
+        estado: comp.estado,
+        numero: comp.numeroComprobante ?? comp.numero_comprobante,
+        contabilizadoPor: comp.contabilizadoPor ?? comp.contabilizado_por,
+        contabilizadoAt: comp.contabilizadoAt ?? comp.contabilizado_at,
+        lineas: comp.lineas || [],
+        refFolio: comp.ref_folio,
+        refTipoDte: comp.ref_tipo_dte,
+      };
     });
     return map;
   }, [dataComp]);
+
+  // Comprobante de un documento del listado (o undefined si está pendiente).
+  const comprobanteDe = useCallback(
+    (doc, clase = activeTab) => folioMap[claveDeDocumento(doc, clase)],
+    [folioMap, activeTab]
+  );
 
   const periodo = `${periodoAplicado.anio}-${periodoAplicado.mes}`;
   // Se filtra por el período APLICADO (al presionar "Buscar"), no por el seleccionado en vivo.
@@ -196,8 +185,8 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   // Filtro de estado (contabilizado/pendiente) + buscador unificado (folio + RUT + nombre)
   const docActivos = useMemo(() => {
     let docs = docPorTab;
-    if (filtroEstado === 'contabilizado') docs = docs.filter(d => folioMap[String(d.folio)]);
-    else if (filtroEstado === 'pendiente') docs = docs.filter(d => !folioMap[String(d.folio)]);
+    if (filtroEstado === 'contabilizado') docs = docs.filter(d => comprobanteDe(d));
+    else if (filtroEstado === 'pendiente') docs = docs.filter(d => !comprobanteDe(d));
     if (busqueda.trim()) {
       const q = busqueda.toLowerCase().replace(/[.\-\s]/g, '');
       docs = docs.filter(doc => {
@@ -208,7 +197,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
       });
     }
     return docs;
-  }, [docPorTab, busqueda, activeTab, filtroEstado, folioMap]);
+  }, [docPorTab, busqueda, activeTab, filtroEstado, comprobanteDe]);
 
   const totalPages = Math.ceil(docActivos.length / ITEMS_PER_PAGE) || 1;
   const currentData = docActivos.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -269,24 +258,21 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   }, [tipoPeriodoLibro, mes, anio, diaLibro, rawVentas, rawCompras, periodoAplicado]);
 
   // Contabilizado = tiene comprobante en la BD (coherente con la centralización)
-  const esGuardado = (doc) => !!folioMap[String(doc.folio)];
-
-  const libroVentasGuardadas  = useMemo(() => libroVentas.filter(esGuardado),  [libroVentas,  folioMap, rowEdits]);
-  const libroComprasGuardadas = useMemo(() => libroCompras.filter(esGuardado), [libroCompras, folioMap, rowEdits]);
+  const libroVentasGuardadas  = useMemo(() => libroVentas.filter(d => comprobanteDe(d, 'ventas')),   [libroVentas,  comprobanteDe]);
+  const libroComprasGuardadas = useMemo(() => libroCompras.filter(d => comprobanteDe(d, 'compras')), [libroCompras, comprobanteDe]);
   const libroVentasPendientes  = libroVentas.length  - libroVentasGuardadas.length;
   const libroComprasPendientes = libroCompras.length - libroComprasGuardadas.length;
   const libroPendientesTotal   = libroVentasPendientes + libroComprasPendientes;
 
   const libroAsientos = useMemo(() => {
     // Solo se centraliza lo que YA está contabilizado (tiene comprobante).
-    const contabilizado = (doc) => !!folioMap[String(doc.folio)];
-    const getLineasDoc = (doc) => {
-      const comp = folioMap[String(doc.folio)];
+    const getLineasDoc = (doc, clase) => {
+      const comp = comprobanteDe(doc, clase);
       return comp ? comp.lineas.map(l => ({ cuenta: l.cuentaCodigo || l.cuenta_codigo, debe: Number(l.debe)||0, haber: Number(l.haber)||0 })) : [];
     };
     const acumular = (docs, tipo) => {
       const mapa = {};
-      docs.forEach(doc => getLineasDoc(doc).forEach(l => {
+      docs.forEach(doc => getLineasDoc(doc, tipo).forEach(l => {
         if (!l.cuenta) return;
         if (!mapa[l.cuenta]) mapa[l.cuenta] = { descripcion: getNombre(l.cuenta), debe: 0, haber: 0, detalle: [] };
         mapa[l.cuenta].debe  += Number(l.debe)  || 0;
@@ -303,8 +289,8 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
       }));
       return mapa;
     };
-    const ventasC  = libroVentas.filter(contabilizado);
-    const comprasC = libroCompras.filter(contabilizado);
+    const ventasC  = libroVentas.filter(d => comprobanteDe(d, 'ventas'));
+    const comprasC = libroCompras.filter(d => comprobanteDe(d, 'compras'));
     const mapaV = acumular(ventasC,  'ventas');
     const mapaC = acumular(comprasC, 'compras');
     const lineas = [];
@@ -317,7 +303,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
       Object.entries(mapaC).forEach(([codigo, { descripcion, debe, haber, detalle }]) => { if (debe > 0 || haber > 0) lineas.push({ codigo, descripcion, debe, haber, detalle }); });
     }
     return lineas;
-  }, [libroVentas, libroCompras, libroPeriodo, folioMap, plan]);
+  }, [libroVentas, libroCompras, libroPeriodo, comprobanteDe, plan]);
 
   // ── Toggle fila expandida ─────────────────────────────────────
   const toggleRow = (rowId, doc) => {
@@ -329,7 +315,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
         next.add(rowId);
         // Inicializar edición con líneas guardadas o por defecto
         if (!rowEdits[rowId]) {
-          const comp = folioMap[String(doc.folio)];
+          const comp = comprobanteDe(doc);
           const lineas = comp
             ? comp.lineas.map(l => ({ cuenta: l.cuentaCodigo || l.cuenta_codigo, nombre: l.descripcion || l.cuentaCodigo || l.cuenta_codigo, debe: Number(l.debe)||0, haber: Number(l.haber)||0 }))
             : calcLineasDefault(doc, activeTab);
@@ -360,6 +346,50 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     setRowEdits(prev => ({ ...prev, [rowId]: prev[rowId].filter((_, i) => i !== idx) }));
   };
 
+  // Payload de contabilización de un documento. `clase` y `tipoDte` viajan
+  // separados: el tipo de DTE no se deduce de si es venta o compra.
+  const construirPayload = (doc, clase, lineas, referencia) => {
+    const isCompra = clase === 'compras' || clase === 'compra';
+    const rut = isCompra ? doc.rut_proveedor : doc.rut_cliente;
+    const razon = formatText(isCompra ? doc.razon_social_proveedor : doc.razon_social);
+    return {
+      empresaId: (!targetId || targetId === 'ALL') ? null : targetId,
+      clase,
+      tipoDte: doc.tipo_dte,
+      folio: doc.folio,
+      fecha: doc.fecha_emision,
+      glosa: construirGlosa({
+        clase, tipoDte: doc.tipo_dte, folio: doc.folio, razonSocial: razon, rut,
+        refTipoDte: referencia?.tipo_dte, refFolio: referencia?.folio,
+      }),
+      rutAsociado: rut,
+      lineas: lineas.map(l => ({ cuenta: l.cuenta, debe: l.debe, haber: l.haber })),
+      refFolio: referencia?.folio ?? null,
+      refTipoDte: referencia?.tipo_dte ?? null,
+      refRazon: referencia?.razon ?? null,
+    };
+  };
+
+  // Busca el documento que afecta una nota de crédito/débito. Solo se acepta
+  // automáticamente cuando hay UN candidato del mismo monto: adivinar entre
+  // varios sería inventar contabilidad.
+  const sugerirReferencia = useCallback(async (doc, clase) => {
+    const isCompra = clase === 'compras' || clase === 'compra';
+    const rut = isCompra ? doc.rut_proveedor : doc.rut_cliente;
+    try {
+      const res = await getDocumentosAfectablesApi(user.sessionId, {
+        empresaId: targetId, clase, rut, fecha: doc.fecha_emision,
+      });
+      if (!res.ok) return null;
+      const { documentos = [] } = await res.json();
+      const total = calcularMontos(doc).total;
+      const exactos = documentos.filter(d => Number(d.monto_total) === total);
+      return exactos.length === 1 ? exactos[0] : null;
+    } catch {
+      return null;
+    }
+  }, [user.sessionId, targetId]);
+
   const saveLineas = async (rowId, doc) => {
     const lineas = rowEdits[rowId] || [];
     const totalDebe  = lineas.reduce((s,l) => s+(Number(l.debe)||0), 0);
@@ -370,25 +400,33 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     }
     setSavingRows(prev => new Set(prev).add(rowId));
     try {
-      const isCompra = activeTab === 'compras';
-      const rut = isCompra ? doc.rut_proveedor : doc.rut_cliente;
-      const razon = formatText(isCompra ? doc.razon_social_proveedor : doc.razon_social);
-      const empresaIdPayload = (!targetId || targetId === 'ALL') ? null : targetId;
+      // Una nota necesita saber a qué documento pertenece. Si no se puede
+      // deducir sin ambigüedad, se manda al modal a elegirlo a mano.
+      let referencia = null;
+      if (esNota(doc.tipo_dte)) {
+        referencia = await sugerirReferencia(doc, activeTab);
+        if (!referencia) {
+          toast({
+            variant: 'destructive',
+            title: 'Falta el documento afectado',
+            description: `Abrí el detalle de la ${esNotaCredito(doc.tipo_dte) ? 'nota de crédito' : 'nota de débito'} #${doc.folio} para indicar a qué documento pertenece.`,
+          });
+          return;
+        }
+      }
       const res = await fetchWithAuth('/accounting/comprobantes', user.sessionId, {
         method: 'POST',
-        body: {
-          empresaId: empresaIdPayload,
-          tipo: doc.tipo_dte === 61 ? 'nota_credito' : doc.tipo_dte === 56 ? 'nota_debito' : activeTab,
-          fecha: doc.fecha_emision,
-          glosa: `${doc.tipo_dte === 61 ? 'Nota Crédito' : doc.tipo_dte === 56 ? 'Nota Débito' : activeTab === 'ventas' ? 'Venta' : 'Compra'} Folio #${doc.folio} — ${razon || rut}`,
-          folio: doc.folio, rutAsociado: rut,
-          lineas: lineas.map(l => ({ cuenta: l.cuenta, debe: l.debe, haber: l.haber })),
-        },
+        body: construirPayload(doc, activeTab, lineas, referencia),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
       const accion = data.accion === 'actualizado' ? 'Asiento actualizado' : 'Asiento guardado';
-      toast({ title:`✅ ${accion}`, description:`Comprobante N° ${data.numero} — folio #${doc.folio}` });
+      toast({
+        title:`✅ ${accion}`,
+        description: referencia
+          ? `Comprobante N° ${data.numero} — folio #${doc.folio}, afecta #${referencia.folio}`
+          : `Comprobante N° ${data.numero} — folio #${doc.folio}`,
+      });
       queryClient.invalidateQueries(['comprobantes', targetId]);
     } catch (err) {
       toast({ variant:'destructive', title:'Error', description: err.message });
@@ -413,7 +451,9 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     if (!confirm(`¿Eliminar el documento folio #${doc.folio}? Se borrará también su asiento contable.`)) return;
     setDeletingDocId(doc.id);
     try {
-      const params = new URLSearchParams({ tipo_movimiento: activeTab, empresa_id: String(targetId), folio: String(doc.folio) });
+      // El folio ya no viaja: el backend lee la identidad completa del
+      // documento antes de borrarlo, para no llevarse comprobantes ajenos.
+      const params = new URLSearchParams({ tipo_movimiento: activeTab, empresa_id: String(targetId) });
       const res = await fetchWithAuth(`/dte-consulta/movimiento/${doc.id}?${params}`, user.sessionId, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al eliminar');
@@ -432,34 +472,29 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   const [autoContabilizar, setAutoContabilizar] = useState(false);
 
   const contabilizarLote = async (docs, tipoMov) => {
-    let ok = 0, fail = 0;
-    const empresaIdPayload = (!targetId || targetId === 'ALL') ? null : targetId;
+    let ok = 0, fail = 0, sinReferencia = 0;
     for (const doc of docs) {
       try {
-        const rut   = tipoMov === 'compras' ? doc.rut_proveedor : doc.rut_cliente;
-        const razon = formatText(tipoMov === 'compras' ? doc.razon_social_proveedor : doc.razon_social);
-        const lineas = calcLineasDefault(doc, tipoMov);
+        // Las notas cuyo documento afectado no se puede determinar sin
+        // ambigüedad quedan fuera del lote: las asigna la persona en el modal.
+        let referencia = null;
+        if (esNota(doc.tipo_dte)) {
+          referencia = await sugerirReferencia(doc, tipoMov);
+          if (!referencia) { sinReferencia++; continue; }
+        }
         const res = await fetchWithAuth('/accounting/comprobantes', user.sessionId, {
           method: 'POST',
-          body: {
-            empresaId: empresaIdPayload,
-            tipo: doc.tipo_dte === 61 ? 'nota_credito' : doc.tipo_dte === 56 ? 'nota_debito' : tipoMov,
-            fecha: doc.fecha_emision,
-            glosa: `${doc.tipo_dte === 61 ? 'Nota Crédito' : doc.tipo_dte === 56 ? 'Nota Débito' : tipoMov === 'ventas' ? 'Venta' : 'Compra'} Folio #${doc.folio} — ${razon || rut}`,
-            folio: doc.folio, rutAsociado: rut,
-            lineas: lineas.map(l => ({ cuenta: l.cuenta, debe: l.debe, haber: l.haber })),
-          },
+          body: construirPayload(doc, tipoMov, calcLineasDefault(doc, tipoMov), referencia),
         });
         if (res.ok) ok++; else fail++;
       } catch { fail++; }
     }
-    return { ok, fail };
+    return { ok, fail, sinReferencia };
   };
 
   const handleContabilizarTodo = async (auto = false) => {
-    const pendiente = (d) => !folioMap[String(d.folio)];
-    const ventasPend  = ventas.filter(pendiente);
-    const comprasPend = compras.filter(pendiente);
+    const ventasPend  = ventas.filter(d => !comprobanteDe(d, 'ventas'));
+    const comprasPend = compras.filter(d => !comprobanteDe(d, 'compras'));
     const total = ventasPend.length + comprasPend.length;
     if (total === 0) {
       if (!auto) toast({ title: 'Todo contabilizado', description: 'No hay documentos pendientes en el período.' });
@@ -470,10 +505,17 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     try {
       const r1 = await contabilizarLote(ventasPend, 'ventas');
       const r2 = await contabilizarLote(comprasPend, 'compras');
-      const ok = r1.ok + r2.ok, fail = r1.fail + r2.fail;
+      const ok = r1.ok + r2.ok;
+      const fail = r1.fail + r2.fail;
+      const sinRef = r1.sinReferencia + r2.sinReferencia;
+      const notas = [];
+      if (fail) notas.push(`${fail} con error`);
+      if (sinRef) notas.push(`${sinRef} nota(s) esperan que indiques el documento afectado`);
       toast({
         title: `✅ ${ok} contabilizado${ok !== 1 ? 's' : ''}`,
-        description: fail ? `${fail} con error.` : (auto ? 'Auto-contabilizados tras sincronizar SII.' : 'Pendientes del período listos.'),
+        description: notas.length
+          ? `${notas.join(' · ')}.`
+          : (auto ? 'Auto-contabilizados tras sincronizar SII.' : 'Pendientes del período listos.'),
       });
       cargarDatos();
       queryClient.invalidateQueries(['comprobantes', targetId]);
@@ -712,7 +754,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                     const fecha = doc.fecha_emision ? new Date(doc.fecha_emision).toLocaleDateString('es-CL', { timeZone:'UTC' }) : 'N/A';
                     const per   = doc.fecha_emision ? doc.fecha_emision.substring(0, 7) : 'N/A';
                     const folio = String(doc.folio);
-                    const comp  = folioMap[folio];
+                    const comp  = comprobanteDe(doc);
                     const isExpanded = expandedRows.has(doc.id || idx);
 
                     // Líneas a mostrar: guardadas o por defecto

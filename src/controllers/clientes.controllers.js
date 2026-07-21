@@ -66,10 +66,37 @@ export const getClientesCRM = async (req, res) => {
                   WHERE a.empresa_id = e.id ORDER BY a.fecha_asignacion ASC LIMIT 1) as usuario_creador_rol`
             : '';
 
+        // Ciclo de cobro: estado del mes pasado (¿se le facturó?) y del mes en curso.
+        // Regla de negocio: si el mes pasado NO se emitió factura → el cliente suspendió el servicio.
+        const cobroSelect = `
+            , (SELECT cm.estado FROM cobro_mensual cm
+               WHERE cm.empresa_id = e.id
+                 AND cm.periodo = date_trunc('month', CURRENT_DATE - INTERVAL '1 month')::date
+               LIMIT 1) AS cobro_mes_pasado,
+              (SELECT cm.estado FROM cobro_mensual cm
+               WHERE cm.empresa_id = e.id
+                 AND cm.periodo = date_trunc('month', CURRENT_DATE)::date
+               LIMIT 1) AS cobro_actual,
+              (SELECT cm.monto_esperado FROM cobro_mensual cm
+               WHERE cm.empresa_id = e.id
+                 AND cm.periodo = date_trunc('month', CURRENT_DATE)::date
+               LIMIT 1) AS monto_esperado,
+              (SELECT cm.fecha_vencimiento FROM cobro_mensual cm
+               WHERE cm.empresa_id = e.id
+                 AND cm.periodo = date_trunc('month', CURRENT_DATE - INTERVAL '1 month')::date
+               LIMIT 1) AS vencimiento_mes_pasado,
+              -- Moroso REAL: tiene alguna factura emitida, vencida y sin pagar.
+              -- (No se usa empresa.estado_pago porque quedó desactualizado desde la importación.)
+              EXISTS (SELECT 1 FROM cobro_mensual cm
+                      WHERE cm.empresa_id = e.id
+                        AND cm.estado = 'PENDIENTE_PAGO'
+                        AND cm.fecha_vencimiento < CURRENT_DATE) AS tiene_cobro_vencido`;
+
         const clientesQuery = `
             SELECT
                 e.*,
                 p.nombre as plan_nombre,
+                p.precio_base as plan_precio_base,
                 ec.sii_rut_encrypted,
                 ec.sii_email_encrypted,
                 ec.sii_password_encrypted,
@@ -78,6 +105,7 @@ export const getClientesCRM = async (req, res) => {
                 s.comuna,
                 s.ciudad
                 ${creadorSelect}
+                ${cobroSelect}
             FROM empresa e
             ${auditaJoin}
             LEFT JOIN plan p ON e.plan_id = p.id
@@ -288,7 +316,23 @@ export const getClientesCRM = async (req, res) => {
                 servicios: serviciosPorEmpresa[cliente.id] || [],
                 type: cliente.tipo_cliente || 'Empresa',
                 activo: cliente.activo !== false, // null/undefined → se considera activo
-                ultimaModificacion: cliente.updated_at ? new Date(cliente.updated_at).toLocaleString('es-CL') : null
+                ultimaModificacion: cliente.updated_at ? new Date(cliente.updated_at).toLocaleString('es-CL') : null,
+
+                // --- Ciclo de cobro mensual ---
+                // facturadoMesPasado: hubo cobro del mes pasado y NO quedó en "por emitir"
+                facturadoMesPasado: !!cliente.cobro_mes_pasado && cliente.cobro_mes_pasado !== 'POR_EMITIR',
+                cobroMesPasado: cliente.cobro_mes_pasado || null,   // PENDIENTE_PAGO | PAGADA | PENDIENTE_RECIBO
+                cobroActual: cliente.cobro_actual || null,          // POR_EMITIR | PENDIENTE_PAGO | ...
+                montoEsperado: parseFloat(cliente.monto_esperado) || 0,
+                vencimientoMesPasado: cliente.vencimiento_mes_pasado || null,
+                // Moroso real: factura emitida, vencida y sin pagar
+                cobroVencido: cliente.tiene_cobro_vencido === true,
+                // Monto mensual: NETO negociado → precio del plan → 0.
+                // Ojo: precio_mensual puede venir NULL (cliente que no está en la planilla);
+                // en ese caso NO es gratis, se cae al precio de su plan.
+                precioMensual: parseFloat(
+                    cliente.precio_mensual ?? cliente.plan_precio_base ?? 0
+                ) || 0
             };
 
             if (esAdmin) {

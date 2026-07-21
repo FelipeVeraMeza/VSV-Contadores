@@ -1,13 +1,13 @@
 import React from 'react';
 import { Search, Filter, ChevronDown, ChevronUp, Users, AlertTriangle, FileText, CheckCircle2, Building2, User, MessageSquare, SlidersHorizontal, Layers, Trash2, Download, X, CheckSquare } from 'lucide-react';
 import { FilterChip } from '../ui/CrmUI';
-import { exportClientsToExcel } from '../utils/exportClients';
 
 const CrmTableList = ({
     filteredClients, stats, onClientSelect, selectedClientId,
     searchTerm, setSearchTerm, statusFilter, setStatusFilter, typeFilter, setTypeFilter,
     planFilter, setPlanFilter, planes = [],
     vista, setVista, // 'activos' | 'suspendidos' | 'completar' | 'baja' | 'usuarios'
+    conteos = {}, // KPI: cantidad de clientes por pestaña
     creadorFilter, setCreadorFilter, creadores = [], // Filtro por creador (master)
     onBulkDelete, onBulkEstadoPago, onCrear,
     esAdminMaster = false, // Solo el Administrador master ve la columna "Creado por"
@@ -85,7 +85,6 @@ const CrmTableList = ({
         clearSel();
     };
     const bulkEstado = (estado) => { onBulkEstadoPago?.(selectedClients, estado); clearSel(); };
-    const bulkExport = () => exportClientsToExcel(selectedClients);
 
     const getScoreColor = (score) => {
         if(score >= 80) return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
@@ -119,8 +118,34 @@ const CrmTableList = ({
         return { c: 'text-orange-300 bg-orange-500/10 border-orange-500/30', dot: 'bg-orange-400' }; // notificado, revisar, etc.
     };
 
+    // Estado del COBRO del mes pasado (¿se le facturó? ¿pagó?)
+    const cobroStyle = (client) => {
+        const estado = client.cobroMesPasado;
+        const vence = client.vencimientoMesPasado ? new Date(client.vencimientoMesPasado) : null;
+        const vencido = vence && vence < new Date();
+
+        if (!estado || estado === 'POR_EMITIR') {
+            return { label: 'Sin facturar', c: 'text-red-300 bg-red-500/10 border-red-500/30', dot: 'bg-red-400',
+                     title: 'El mes pasado no se le emitió factura' };
+        }
+        if (estado === 'PAGADA') {
+            return { label: 'Pagada', c: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30', dot: 'bg-emerald-400',
+                     title: 'Factura del mes pasado pagada' };
+        }
+        if (estado === 'PENDIENTE_RECIBO') {
+            return { label: 'Pend. recibo', c: 'text-sky-300 bg-sky-500/10 border-sky-500/30', dot: 'bg-sky-400',
+                     title: 'Pagada, falta emitir el recibo' };
+        }
+        // PENDIENTE_PAGO
+        return vencido
+            ? { label: 'Pago vencido', c: 'text-red-300 bg-red-500/10 border-red-500/30', dot: 'bg-red-400',
+                title: `Venció el ${vence.toLocaleDateString('es-CL')}` }
+            : { label: 'Pend. pago', c: 'text-amber-300 bg-amber-500/10 border-amber-500/30', dot: 'bg-amber-400',
+                title: vence ? `Vence el ${vence.toLocaleDateString('es-CL')}` : 'Factura emitida, pendiente de pago' };
+    };
+
     return (
-        <div className={`flex flex-col gap-3 lg:gap-4 transition-all duration-500 ease-in-out h-full min-h-0 ${selectedClientId ? 'lg:w-3/5' : 'w-full'}`}>
+        <div className="flex flex-col gap-3 lg:gap-4 h-full min-h-0 w-full">
             
             {/* FILTROS RÁPIDOS COMPACTOS (antes KPI CARDS) */}
             <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
@@ -151,23 +176,29 @@ const CrmTableList = ({
                         <button
                             key={t.id}
                             onClick={() => setVista(t.id)}
-                            className={`px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                            className={`flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                                 vista === t.id ? t.activo : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
                             }`}
                         >
                             {t.label}
+                            <span className={`text-[9px] tabular-nums px-1.5 py-0.5 rounded-full ${vista === t.id ? 'bg-black/25' : 'bg-white/10'}`}>
+                                {conteos[t.id] ?? 0}
+                            </span>
                         </button>
                     ))}
                     {esAdminMaster && (
                         <button
                             onClick={() => setVista('usuarios')}
-                            className={`px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                            className={`flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                                 vista === 'usuarios'
                                 ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/20'
                                 : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
                             }`}
                         >
                             Creadas por usuarios
+                            <span className={`text-[9px] tabular-nums px-1.5 py-0.5 rounded-full ${vista === 'usuarios' ? 'bg-black/25' : 'bg-white/10'}`}>
+                                {conteos.usuarios ?? 0}
+                            </span>
                         </button>
                     )}
                 </div>
@@ -262,9 +293,6 @@ const CrmTableList = ({
                 <div className="flex items-center flex-wrap gap-2 flex-shrink-0 bg-blue-600/15 border border-blue-500/30 rounded-xl px-3 py-2">
                     <span className="text-[10px] font-black uppercase tracking-widest text-blue-300">{selectedIds.size} seleccionado(s)</span>
                     <div className="h-4 w-px bg-white/10 mx-1" />
-                    <button onClick={bulkExport} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-gray-200 hover:text-white bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-lg transition-colors">
-                        <Download size={12} /> Exportar
-                    </button>
                     <button onClick={() => bulkEstado('AL DIA')} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-300 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg transition-colors">
                         <CheckCircle2 size={12} /> Marcar Al Día
                     </button>
@@ -337,6 +365,7 @@ const CrmTableList = ({
                       const tieneImportante = importante && importante !== 'SIN_DATO';
                       const pSt = pagoStyle(pagoServicio);
                       const fSt = f29Style(estadoFormulario);
+                      const cSt = cobroStyle(client);
 
                       // Semáforo lateral: rojo si hay alerta o impago, ámbar si F29 no al día, verde si todo ok
                       const accent = (tieneImportante || pagoServicio === 'NO PAGADO')
@@ -407,6 +436,10 @@ const CrmTableList = ({
                                 </span>
                                 <span className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${fSt.c}`}>
                                     <span className={`w-1.5 h-1.5 rounded-full ${fSt.dot}`} /> F29 {estadoFormulario}
+                                </span>
+                                {/* Cobro del mes pasado */}
+                                <span className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${cSt.c}`} title={cSt.title}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${cSt.dot}`} /> {cSt.label}
                                 </span>
                              </div>
                           </td>

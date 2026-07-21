@@ -6,7 +6,6 @@ import { toast } from '@/components/ui/use-toast';
 
 import { useBunkerData } from './crm/crmData';
 import { updateClienteApi, eliminarEmpresaApi } from '@/services/crmService';
-import { exportClientsToExcel, exportClientsToCSV } from './crm/utils/exportClients';
 import CrmImportModal from './crm/modals/CrmImportModal';
 import CrmImportProspectosModal from './crm/modals/CrmImportProspectosModal';
 import CrmErrorBoundary from './crm/CrmErrorBoundary';
@@ -48,22 +47,33 @@ const isEmptyField = (val) => {
 // (no el administrador de la organización). Se basa en el ROL del creador.
 const esCreadaPorUsuario = (c) => c.usuarioCreadorRol === 'Cliente';
 
-// ¿La ficha NO tiene ningún dato de contacto? (calidad de datos, no estado de negocio)
-const fichaIncompleta = (c) => {
-    const rep = c.nombre_rep || c.repNombre;
-    const rutRep = c.rut_rep_encrypted || c.repRut;
-    const correo = c.email_corporativo || c.correo;
-    const tel = c.whatsapp || c.telefono_corporativo || c.telefono;
-    return isEmptyField(rep) && isEmptyField(rutRep) && isEmptyField(correo) && isEmptyField(tel);
-};
+// --- Reglas de negocio definidas con jefatura ---
+// Requisito mínimo para ser ACTIVO: tener al menos un servicio contratado activo.
+const tieneServicioActivo = (c) =>
+    Array.isArray(c.servicios) && c.servicios.some(s => String(s.estado).toLowerCase() === 'activo');
+const tuvoServicios = (c) => Array.isArray(c.servicios) && c.servicios.length > 0;
 
-// Clasificación de negocio: una sola pestaña por cliente, con prioridad clara.
-// De baja > Por completar (onboarding) > Suspendido > Activo.
+// Moroso = tiene una factura emitida, VENCIDA y sin pagar (dato real del ciclo de cobro).
+// No se usa `estado_pago` porque ese campo quedó desactualizado desde la importación
+// y marcaba como morosos a clientes que ya habían pagado.
+const esMoroso = (c) => c.cobroVencido === true;
+
+// Un cliente sin monto acordado (plan FREE) no se factura: no se le exige factura.
+const noSeFactura = (c) => (Number(c.precioMensual) || 0) === 0;
+
+// Clasificación de negocio (definida con jefatura), con prioridad clara:
+//   De baja      → término de giro / de baja (o tuvo servicios y ninguno sigue activo)
+//   Por completar→ no tiene ningún servicio contratado (falta contratar / completar la ficha)
+//   Suspendidos  → moroso (deuda vencida), O tiene servicio pero el mes pasado NO se le emitió
+//                  factura (si no se facturó, es porque suspendió el servicio)
+//   Activos      → se le facturó el mes pasado, o es FREE (no se le factura)
 const clasificarCliente = (c) => {
     if (c.activo === false) return 'baja';
-    if (fichaIncompleta(c)) return 'completar';
-    const pago = String(c.estado_pago || c.pagoServicio || '').trim().toUpperCase();
-    if (pago === 'SERVICIO SUSPENDIDO') return 'suspendidos';
+    if (tuvoServicios(c) && !tieneServicioActivo(c)) return 'baja';
+    if (!tieneServicioActivo(c)) return 'completar';
+    if (esMoroso(c)) return 'suspendidos';
+    if (noSeFactura(c)) return 'activos';
+    if (!c.facturadoMesPasado) return 'suspendidos';
     return 'activos';
 };
 
@@ -132,7 +142,6 @@ const CRM = () => {
   const [showCrearEmpresa, setShowCrearEmpresa] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showImportProspectos, setShowImportProspectos] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
   const [personasReload, setPersonasReload] = useState(0);
 
   useEffect(() => {
@@ -230,6 +239,16 @@ const CRM = () => {
       return Array.from(set).sort();
   }, [clients]);
 
+  // KPI: cuántos clientes hay en cada pestaña (las creadas por usuarios se cuentan aparte)
+  const conteos = useMemo(() => {
+      const acc = { activos: 0, suspendidos: 0, completar: 0, baja: 0, usuarios: 0 };
+      clients.forEach(c => {
+          if (esCreadaPorUsuario(c)) { acc.usuarios++; return; }
+          acc[clasificarCliente(c)]++;
+      });
+      return acc;
+  }, [clients]);
+
   const handleDeleteClient = async (clientToDelete) => {
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -240,6 +259,7 @@ const CRM = () => {
       setClients(prev => prev.filter(c => c.id !== clientToDelete.id));
       setSelectedClient(null);
       toast({ title: "Cliente eliminado", description: payload.message });
+      refresh();
     } catch (error) {
       toast({ variant: "destructive", title: "No se pudo eliminar", description: error.message });
     }
@@ -260,6 +280,7 @@ const CRM = () => {
     setClients(prev => prev.filter(c => !ids.has(c.id)));
     setSelectedClient(null);
     toast({ title: "Eliminación masiva", description: `${ok} eliminados${fail ? `, ${fail} no se pudieron (tienen registros asociados)` : ''}.` });
+    refresh();
   };
 
   const handleBulkEstadoPago = async (clientsArr, estado) => {
@@ -285,6 +306,7 @@ const CRM = () => {
           setClients(clients.map(c => c.id === updatedClient.id ? updatedClient : c));
           if(selectedClient?.id === updatedClient.id) setSelectedClient(updatedClient);
           toast({ title: "Cliente actualizado", description: "Los cambios se guardaron correctamente." });
+          refresh(); // trae lo que recalculó el servidor (score, estados, servicios)
       }
     } catch (error) {
       toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el cliente." });
@@ -304,32 +326,12 @@ const CRM = () => {
 
           <div className="flex flex-wrap items-center gap-3 z-50">
               {activeTab === 'list' && (
-                <>
-                  <button
-                      onClick={() => setShowImport(true)}
-                      className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
-                  >
-                      <Upload size={14} /> Importar
-                  </button>
-                  <div className="relative">
-                    <button
-                        onClick={() => setShowExportMenu(v => !v)}
-                        className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
-                    >
-                        <Download size={14} /> Exportar <ChevronDown size={12} />
-                    </button>
-                    {showExportMenu && (
-                      <div className="absolute right-0 mt-1 w-44 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
-                        <button onClick={() => { exportClientsToExcel(filteredClients); setShowExportMenu(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-[11px] text-gray-200 hover:bg-white/5 transition-colors">
-                          <FileSpreadsheet size={13} className="text-emerald-400" /> Excel (.xlsx) · {filteredClients.length}
-                        </button>
-                        <button onClick={() => { exportClientsToCSV(filteredClients); setShowExportMenu(false); }} className="w-full flex items-center gap-2 px-3 py-2.5 text-[11px] text-gray-200 hover:bg-white/5 transition-colors border-t border-white/5">
-                          <Download size={13} className="text-blue-400" /> CSV
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
+                <button
+                    onClick={() => setShowImport(true)}
+                    className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                >
+                    <Upload size={14} /> Importar
+                </button>
               )}
               {activeTab === 'prospectos' && (
                 <button
@@ -373,6 +375,7 @@ const CRM = () => {
                 planes={planes}
                 vista={vista}
                 setVista={setVista}
+                conteos={conteos}
                 creadorFilter={creadorFilter}
                 setCreadorFilter={setCreadorFilter}
                 creadores={creadores}

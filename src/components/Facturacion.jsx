@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, FileText, Building2 } from 'lucide-react';
+import { Send, FileText, Building2, Wallet } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { useSii } from '@/contexts/SiiContext.jsx';
 import { useAuth } from '@/hooks/useAuth.jsx';
@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth.jsx';
 import SIILoginModal from '@/components/facturacion/modals/SIILoginModal';
 import EmisionDTE from '@/components/facturacion/tabs/EmisionDTE';
 import DocumentosDTE from '@/components/facturacion/tabs/DocumentosDTE';
+import CobrosMensuales from '@/components/facturacion/tabs/CobrosMensuales';
 
 import FacturaElectronicaModal from '@/components/facturacion/modals/dte/FacturaElectronicaModal';
 import ExentaElectronicaModal from '@/components/facturacion/modals/dte/ExentaElectronicaModal'; 
@@ -70,6 +71,8 @@ const Facturacion = () => {
   const tabs = [
     { id: 'emision', name: 'Emitir DTE', icon: Send },
     { id: 'documentos', name: 'Historial de Documentos', icon: FileText },
+    // Ciclo de cobro mensual a los clientes (solo el administrador factura)
+    ...(isAdmin ? [{ id: 'cobros', name: 'Cobros del Mes', icon: Wallet }] : []),
   ];
 
   return (
@@ -123,6 +126,7 @@ const Facturacion = () => {
                 />
               )}
               {activeTab === 'documentos' && <DocumentosDTE />}
+              {activeTab === 'cobros' && <CobrosMensuales />}
             </motion.div>
           </AnimatePresence>
         </div>

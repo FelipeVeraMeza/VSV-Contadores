@@ -1,4 +1,5 @@
 import { pool } from '../database/db.js';
+import { siguienteNumeroComprobante } from '../utils/comprobantes.js';
 
 const normEmp = (empresaId) =>
   (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
@@ -27,22 +28,20 @@ async function crearAsientoCaja(client, { empId, tipo, fecha, folio, rut, nombre
     : [ { cuenta: ctaContraparte, debe: monto, haber: 0     },
         { cuenta: ctaDinero,      debe: 0,     haber: monto } ];
 
-  // Glosa con "folio" en minúscula a propósito, para NO colisionar con el UPSERT
-  // de la contabilización del documento (que busca "Folio #<n>" con F mayúscula).
+  // Un movimiento de caja no es un documento tributario: se deja `folio` en NULL
+  // para que no entre en la deduplicación por documento (el índice único es
+  // parcial, sobre folio NOT NULL). El folio del documento cobrado o pagado va
+  // en la glosa como referencia legible.
   const glosa = `${esRecaudacion ? 'Cobro' : 'Pago'} folio #${folio || 's/f'}${nombre ? ` — ${nombre}` : ''}`;
   const tipoDb = esRecaudacion ? 'INGRESO' : 'EGRESO';
 
-  const empCond = empId === null ? 'empresa_id IS NULL' : 'empresa_id = $1';
-  const { rows: [{ max_num }] } = await client.query(
-    `SELECT COALESCE(MAX(numero_comprobante), 0) AS max_num FROM comprobantes WHERE ${empCond}`,
-    empId === null ? [] : [empId]
-  );
+  const numero = await siguienteNumeroComprobante(client, empId);
 
   const { rows: [comp] } = await client.query(
     `INSERT INTO comprobantes (id, empresa_id, numero_comprobante, fecha, tipo, glosa, estado,
-            contabilizado_por, contabilizado_por_id, contabilizado_at)
-     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'Contabilizado', $6, $7, NOW()) RETURNING id`,
-    [empId, max_num + 1, fecha, tipoDb, glosa, usuario?.nombre || null, usuario?.usuarioId || null]
+            clase, contabilizado_por, contabilizado_por_id, contabilizado_at)
+     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'Contabilizado', 'caja', $6, $7, NOW()) RETURNING id`,
+    [empId, numero, fecha, tipoDb, glosa, usuario?.nombre || null, usuario?.usuarioId || null]
   );
 
   for (const l of lineas) {

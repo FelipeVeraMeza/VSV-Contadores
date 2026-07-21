@@ -439,11 +439,21 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
     };
 
     return (
-        <motion.div 
-            initial={{ opacity: 0, x: 50 }} 
-            animate={{ opacity: 1, x: 0 }} 
-            exit={{ opacity: 0, x: 50 }} 
-            className="w-full lg:w-2/5 bg-[#0f172a]/95 backdrop-blur-3xl border border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-2xl h-full"
+        <>
+        {/* Fondo: cierra al hacer clic fuera. La ventana flota, así la tabla no se deforma. */}
+        <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+        />
+        {/* Ventana centrada */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+        <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 12 }}
+            transition={{ type: 'tween', duration: 0.2 }}
+            className="pointer-events-auto w-full max-w-3xl max-h-[88vh] bg-[#0f172a]/95 backdrop-blur-3xl border border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-2xl"
         >
             {/* CABECERA (Con Atajos Dinámicos) */}
             <div className="p-5 border-b border-white/10 flex flex-col gap-4 bg-gradient-to-r from-blue-900/30 to-transparent shrink-0">
@@ -1157,6 +1167,8 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                 </div>
             )}
         </motion.div>
+        </div>
+        </>
     );
 };
 

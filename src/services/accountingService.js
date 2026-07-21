@@ -38,6 +38,15 @@ export const getBalanceApi = (sessionId, empresaId, mes, anio, desde, hasta) => 
 export const runBankReconciliationApi = (sessionId, empresaId, cartolaId) => {
     return fetchWithAuth(`/accounting/reconcile-ia`, sessionId, {
         method: 'POST',
-        body: { empresaId, cartolaId } 
+        body: { empresaId, cartolaId }
     });
+};
+
+// Documentos que una nota de crédito/débito puede afectar: mismo RUT, tipo
+// afectable y emitidos hasta la fecha de la nota.
+export const getDocumentosAfectablesApi = (sessionId, { empresaId, clase, rut, fecha }) => {
+    const params = new URLSearchParams({ empresaId: empresaId ?? 'ALL', clase: clase ?? '' });
+    if (rut) params.set('rut', rut);
+    if (fecha) params.set('fecha', fecha);
+    return fetchWithAuth(`/accounting/documentos-afectables?${params.toString()}`, sessionId);
 };

@@ -1,6 +1,10 @@
 import { pool } from '../database/db.js';
 import { encrypt, generateHash } from '../utils/crypto.js';
 import { cleanRut } from '../lib/rut.js';
+import {
+    upsertComprobante, eliminarComprobanteDeDocumento, construirGlosa,
+    normalizarClase, normalizarRut, normalizarFolio, tipoLibro, esNota, TIPO_DTE_LABEL,
+} from '../utils/comprobantes.js';
 
 /**
  * Si el RUT no existe en `empresa`, lo crea como empresa nueva.
@@ -36,7 +40,8 @@ async function asegurarEmpresa(client, rut, nombre, organizacionId) {
 // 0. CREAR MOVIMIENTO MANUAL
 // ========================================================
 export const crearMovimientoManual = async (req, res) => {
-    const { empresa_id, tipo_movimiento, rut, nombre, tipo_documento, folio, fecha, descripcion, lineas = [] } = req.body;
+    const { empresa_id, tipo_movimiento, rut, nombre, tipo_documento, folio, fecha, descripcion,
+            lineas = [], ref_folio, ref_tipo_dte, ref_razon } = req.body;
     const usuario = req.user || {};
 
     if (!folio || !lineas.length) {
@@ -46,6 +51,14 @@ export const crearMovimientoManual = async (req, res) => {
     const tipoDteMap = { '33':33, '34':34, '61':61, '56':56, '39':39, 'HON':39, 'OTRO':99 };
     const tipo_dte   = tipoDteMap[tipo_documento] ?? 33;
     const exenta     = tipo_dte === 34 || tipo_dte === 39;
+
+    // Una nota de crédito/débito debe declarar qué documento afecta.
+    if (esNota(tipo_dte) && !normalizarFolio(ref_folio)) {
+        return res.status(400).json({
+            ok: false,
+            error: `Falta indicar a qué documento afecta esta ${TIPO_DTE_LABEL[tipo_dte].toLowerCase()}.`,
+        });
+    }
 
     // Calcular montos desde las líneas
     const totalDebe  = lineas.reduce((s, l) => s + (Number(l.debe) || 0), 0);
@@ -106,49 +119,17 @@ export const crearMovimientoManual = async (req, res) => {
         }
 
         // ── 2. Guardar el ASIENTO como comprobante (→ Libro Diario / reportes) ─
-        const TIPO_MAP = { ventas: 'INGRESO', honorarios: 'INGRESO', compras: 'EGRESO' };
-        const tipoDb = (tipo_dte === 61 || tipo_dte === 56) ? 'TRASPASO' : (TIPO_MAP[tipo_movimiento] || 'INGRESO');
-        const tipoLabel = tipo_movimiento === 'ventas' ? 'Venta' : tipo_movimiento === 'compras' ? 'Compra' : 'Honorario';
-        const razon = (nombre || '').toUpperCase();
-        const glosa = descripcion?.trim()
-            ? `${descripcion.trim()} — Folio #${folio}`
-            : `${tipoLabel} Folio #${folio}${razon || rut ? ` — ${razon || rut}` : ''}`;
+        const clase = normalizarClase(tipo_movimiento);
+        const glosa = construirGlosa({
+            clase, tipoDte: tipo_dte, folio, razonSocial: nombre, rut,
+            refTipoDte: ref_tipo_dte, refFolio: ref_folio, descripcion,
+        });
 
-        const empCond = empId === null ? 'empresa_id IS NULL' : 'empresa_id = $1';
-        const { rows: [existing] } = await client.query(
-            `SELECT id FROM comprobantes WHERE ${empCond} AND glosa ~ $${empId === null ? 1 : 2} LIMIT 1`,
-            empId === null ? [`Folio #${folio}([^0-9]|$)`] : [empId, `Folio #${folio}([^0-9]|$)`]
-        );
-
-        let compId;
-        if (existing) {
-            await client.query(`DELETE FROM comprobantes_detalle WHERE comprobante_id = $1`, [existing.id]);
-            await client.query(
-                `UPDATE comprobantes SET fecha=$1, glosa=$2, tipo=$3, estado='Contabilizado',
-                        contabilizado_por=$4, contabilizado_por_id=$5, contabilizado_at=NOW() WHERE id=$6`,
-                [fecha_emision, glosa, tipoDb, usuario.nombre || null, usuario.usuarioId || null, existing.id]);
-            compId = existing.id;
-        } else {
-            const { rows: [{ max_num }] } = await client.query(
-                `SELECT COALESCE(MAX(numero_comprobante), 0) AS max_num FROM comprobantes WHERE ${empCond}`,
-                empId === null ? [] : [empId]
-            );
-            const { rows: [comp] } = await client.query(
-                `INSERT INTO comprobantes (id, empresa_id, numero_comprobante, fecha, tipo, glosa, estado,
-                        contabilizado_por, contabilizado_por_id, contabilizado_at)
-                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'Contabilizado', $6, $7, NOW()) RETURNING id`,
-                [empId, max_num + 1, fecha_emision, tipoDb, glosa, usuario.nombre || null, usuario.usuarioId || null]
-            );
-            compId = comp.id;
-        }
-
-        for (const l of lineas) {
-            await client.query(
-                `INSERT INTO comprobantes_detalle (id, comprobante_id, cuenta_codigo, rut_asociado, debe, haber)
-                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)`,
-                [compId, l.numero_cuenta, rut || null, Number(l.debe) || 0, Number(l.haber) || 0]
-            );
-        }
+        await upsertComprobante(client, {
+            empresaId: empId, clase, tipoDte: tipo_dte, folio, rutContraparte: rut,
+            fecha: fecha_emision, glosa, lineas, usuario,
+            refFolio: ref_folio, refTipoDte: ref_tipo_dte, refRazon: ref_razon,
+        });
 
         await client.query('COMMIT');
         return res.json({ ok: true, message: 'Movimiento y asiento registrados correctamente.' });
@@ -166,30 +147,38 @@ export const crearMovimientoManual = async (req, res) => {
 // ========================================================
 export const eliminarMovimiento = async (req, res) => {
     const { id } = req.params;
-    const { tipo_movimiento, empresa_id, folio } = req.query;
+    const { tipo_movimiento, empresa_id } = req.query;
     const empId = (!empresa_id || empresa_id === 'ALL' || empresa_id === 'null') ? null : empresa_id;
 
-    const tabla = tipo_movimiento === 'ventas'
+    const esVenta = tipo_movimiento === 'ventas';
+    const tabla = esVenta
         ? (empId === null ? 'documentos_emitidos'  : 'documentos_emitidos_empresa')
         : (empId === null ? 'documentos_recibidos' : 'documentos_recibidos_empresa');
+    const colRut = esVenta ? 'rut_cliente' : 'rut_proveedor';
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
+        // Se lee la identidad completa ANTES de borrar: el comprobante se
+        // localiza por (empresa, clase, tipo_dte, folio, rut), no por el texto
+        // de la glosa. Antes se borraban todos los comprobantes cuyo folio
+        // coincidiera, así que eliminar una compra se llevaba también la venta
+        // del mismo folio y la del año anterior.
+        const { rows: [doc] } = await client.query(
+            `SELECT folio, tipo_dte, ${colRut} AS rut FROM ${tabla} WHERE id = $1`, [id]
+        );
+
         const { rowCount } = await client.query(`DELETE FROM ${tabla} WHERE id = $1`, [id]);
 
-        // Borrar también el comprobante asociado (por folio) y su detalle
-        if (folio) {
-            const empCond = empId === null ? 'empresa_id IS NULL' : 'empresa_id = $2';
-            const { rows } = await client.query(
-                `SELECT id FROM comprobantes WHERE glosa ~ $1 AND ${empCond}`,
-                empId === null ? [`Folio #${folio}([^0-9]|$)`] : [`Folio #${folio}([^0-9]|$)`, empId]
-            );
-            for (const r of rows) {
-                await client.query(`DELETE FROM comprobantes_detalle WHERE comprobante_id = $1`, [r.id]);
-                await client.query(`DELETE FROM comprobantes WHERE id = $1`, [r.id]);
-            }
+        if (doc) {
+            await eliminarComprobanteDeDocumento(client, {
+                empresaId: empId,
+                clase: tipo_movimiento,
+                tipoDte: doc.tipo_dte,
+                folio: doc.folio,
+                rutContraparte: doc.rut,
+            });
         }
 
         await client.query('COMMIT');
@@ -231,13 +220,15 @@ export const editarMovimiento = async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // Folio anterior para reubicar el comprobante asociado
-        const { rows: [old] } = await client.query(`SELECT folio FROM ${tabla} WHERE id = $1`, [id]);
+        // Identidad anterior completa: si cambia el folio, el tipo o el RUT, hay
+        // que reubicar el comprobante por la clave entera, no solo por el folio.
+        const { rows: [old] } = await client.query(
+            `SELECT folio, tipo_dte, ${colRut} AS rut FROM ${tabla} WHERE id = $1`, [id]
+        );
         if (!old) {
             await client.query('ROLLBACK');
             return res.status(404).json({ ok: false, error: 'Documento no encontrado.' });
         }
-        const folioViejo = old.folio;
 
         // UPDATE del documento (todas las tablas tienen razón social y montos)
         await client.query(
@@ -246,21 +237,22 @@ export const editarMovimiento = async (req, res) => {
             [rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, fecha_emision, neto, iva, total, id]
         );
 
-        // Actualizar el comprobante asociado (glosa con nuevo folio/razón y fecha)
-        const tipoLabel = esVenta ? 'Venta' : (tipo_movimiento === 'compras' ? 'Compra' : 'Honorario');
-        const sufijo = (nombre || '').toUpperCase() || rut || '';
-        const glosa = `${tipoLabel} Folio #${folio}${sufijo ? ` — ${sufijo}` : ''}`;
-        const empCond = empId === null ? 'empresa_id IS NULL' : 'empresa_id = $2';
-        const { rows: comps } = await client.query(
-            `SELECT id FROM comprobantes WHERE glosa ~ $1 AND ${empCond}`,
-            empId === null ? [`Folio #${folioViejo}([^0-9]|$)`] : [`Folio #${folioViejo}([^0-9]|$)`, empId]
+        // Reapuntar el comprobante asociado a la nueva identidad del documento.
+        const clase = normalizarClase(tipo_movimiento);
+        const glosa = construirGlosa({ clase, tipoDte: tipo_dte, folio, razonSocial: nombre, rut });
+        await client.query(
+            `UPDATE comprobantes
+                SET glosa = $1, fecha = COALESCE($2, fecha),
+                    tipo_dte = $3, folio = $4, rut_contraparte = $5, tipo = $6
+              WHERE empresa_id      IS NOT DISTINCT FROM $7
+                AND clase           IS NOT DISTINCT FROM $8
+                AND tipo_dte        IS NOT DISTINCT FROM $9
+                AND folio           IS NOT DISTINCT FROM $10
+                AND rut_contraparte IS NOT DISTINCT FROM $11`,
+            [glosa, fecha_emision,
+             tipo_dte, normalizarFolio(folio), normalizarRut(rut), tipoLibro(clase, tipo_dte),
+             empId, clase, old.tipo_dte, normalizarFolio(old.folio), normalizarRut(old.rut)]
         );
-        for (const c of comps) {
-            await client.query(
-                `UPDATE comprobantes SET glosa = $1, fecha = COALESCE($2, fecha) WHERE id = $3`,
-                [glosa, fecha_emision, c.id]
-            );
-        }
 
         await client.query('COMMIT');
         return res.json({ ok: true, message: 'Documento actualizado correctamente.' });

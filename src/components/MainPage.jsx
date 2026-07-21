@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/useAuth.jsx';
 import { SiiProvider } from '@/contexts/SiiContext.jsx';
 import DelayedLoader from './ui/DelayedLoader';
 import GlobalCompanySelector from '@/components/ui/GlobalCompanySelector'; // Importación del nuevo selector
+import AvisoFacturacion from '@/components/ui/AvisoFacturacion';
 
 function MainPage() {
   const { user, logout, selectedCompany } = useAuth(); 
@@ -186,6 +187,7 @@ function MainPage() {
             <GlobalCompanySelector />
             
             <div className="flex items-center space-x-4">
+              <AvisoFacturacion />
               <div className="hidden md:block text-right mr-2">
                 <p className="text-white text-sm font-bold italic uppercase">{user?.nombre}</p>
                 <p className="text-[9px] font-black uppercase text-amber-400 tracking-widest">{user?.rol}</p>

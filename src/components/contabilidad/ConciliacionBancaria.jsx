@@ -86,9 +86,14 @@ const ConciliacionBancaria = ({ empresaId }) => {
         body: {
           empresaId: empresaIdPayload,
           tipo: 'traspaso',
+          clase: 'conciliacion',
           fecha,
-          glosa: `Conciliación Bancaria (${matches.length} pagos) — Folio #CONCBANCO`,
-          folio: 'CONCBANCO',
+          glosa: `Conciliación Bancaria ${fecha} (${matches.length} pagos)`,
+          // La conciliación no tiene folio de documento. Se usa la fecha como
+          // identidad (AAAAMMDD) para que rehacer la del mismo día reemplace la
+          // anterior en vez de acumular comprobantes duplicados, pero la de otro
+          // día siga siendo un asiento propio.
+          folio: String(fecha).slice(0, 10).replace(/\D/g, ''),
           lineas: [
             { cuenta: '1101-02', debe: totalConciliado, haber: 0 }, // Banco
             { cuenta: '1104-01', debe: 0, haber: totalConciliado }, // Deudores Clientes

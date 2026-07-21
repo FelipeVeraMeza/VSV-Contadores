@@ -3,6 +3,10 @@ import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
 import { decrypt } from '../utils/crypto.js';
 import { clienteSinEmpresa } from '../utils/scope.js';
+import {
+    upsertComprobante, construirGlosa, buscarDocumentosAfectables,
+    normalizarClase, normalizarTipoDte, normalizarFolio, esNota, TIPO_DTE_LABEL,
+} from '../utils/comprobantes.js';
 
 export const getAccountingMetrics = async (req, res) => {
     const { empresaId } = req.query;
@@ -122,7 +126,10 @@ export const eliminarComprobante = async (req, res) => {
 };
 
 export const guardarComprobante = async (req, res) => {
-    const { empresaId, tipo, fecha, glosa, lineas, folio, rutAsociado } = req.body;
+    const {
+        empresaId, tipo, clase, tipoDte, fecha, glosa, lineas, folio, rutAsociado,
+        refFolio, refTipoDte, refRazon,
+    } = req.body;
     const usuario = req.user || {};
     const empId = (empresaId === 'ALL' || empresaId === 'undefined') ? null : (empresaId || null);
     if (!lineas?.length) {
@@ -133,75 +140,66 @@ export const guardarComprobante = async (req, res) => {
     if (Math.abs(totalDebe - totalHaber) > 1) {
         return res.status(400).json({ message: `Asiento descuadrado: Debe ${totalDebe} ≠ Haber ${totalHaber}` });
     }
-    const TIPO_MAP = {
-      ventas: 'INGRESO', honorarios: 'INGRESO', ingreso: 'INGRESO',
-      compras: 'EGRESO',  egreso: 'EGRESO',
-      nota_credito: 'TRASPASO', nota_debito: 'TRASPASO',
-      traspaso: 'TRASPASO'
-    };
-    const tipoDb = TIPO_MAP[tipo?.toLowerCase()] || 'INGRESO';
-    const gloseFinal = glosa || (folio ? `Folio #${folio}` : `Comprobante ${tipo}`);
-    const fechaFinal = fecha ? new Date(fecha) : new Date();
+
+    // `clase` (venta/compra/honorario) y `tipoDte` (33/61/…) son datos distintos:
+    // el tipo no se deduce de la clase ni al revés. Se acepta `tipo` como alias
+    // heredado de la clase para no romper llamadas antiguas.
+    const claseFinal = normalizarClase(clase ?? tipo);
+    const tipoDteFinal = normalizarTipoDte(tipoDte ?? tipo);
+    const folioFinal = normalizarFolio(folio);
+
+    // Una nota de crédito o débito sin documento afectado no se puede
+    // contabilizar: es el dato que permite saber a qué factura pertenece.
+    if (esNota(tipoDteFinal) && !normalizarFolio(refFolio)) {
+        return res.status(400).json({
+            message: `Falta indicar a qué documento afecta esta ${TIPO_DTE_LABEL[tipoDteFinal].toLowerCase()}.`,
+        });
+    }
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
-        // ── UPSERT: buscar comprobante existente por folio + empresa ──────────
-        const empCond = empId === null ? 'empresa_id IS NULL' : 'empresa_id = $1';
-        const { rows: [existing] } = folio
-            ? await client.query(
-                `SELECT id, numero_comprobante FROM comprobantes
-                 WHERE ${empCond} AND glosa LIKE $${empId === null ? 1 : 2} LIMIT 1`,
-                empId === null ? [`%Folio #${folio}%`] : [empId, `%Folio #${folio}%`]
-              )
-            : { rows: [] };
-
-        let compId, numero, accion;
-
-        if (existing) {
-            await client.query(`DELETE FROM comprobantes_detalle WHERE comprobante_id = $1`, [existing.id]);
-            await client.query(
-                `UPDATE comprobantes SET fecha=$1, glosa=$2, tipo=$3, estado='Contabilizado',
-                        contabilizado_por=$4, contabilizado_por_id=$5, contabilizado_at=NOW() WHERE id=$6`,
-                [fechaFinal, gloseFinal, tipoDb, usuario.nombre || null, usuario.usuarioId || null, existing.id]
-            );
-            compId = existing.id;
-            numero = existing.numero_comprobante;
-            accion = 'actualizado';
-        } else {
-            const { rows: [{ max_num }] } = await client.query(
-                `SELECT COALESCE(MAX(numero_comprobante), 0) AS max_num FROM comprobantes WHERE ${empCond}`,
-                empId === null ? [] : [empId]
-            );
-            const { rows: [comp] } = await client.query(
-                `INSERT INTO comprobantes (id, empresa_id, numero_comprobante, fecha, tipo, glosa, estado,
-                        contabilizado_por, contabilizado_por_id, contabilizado_at)
-                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'Contabilizado', $6, $7, NOW()) RETURNING id`,
-                [empId, max_num + 1, fechaFinal, tipoDb, gloseFinal, usuario.nombre || null, usuario.usuarioId || null]
-            );
-            compId = comp.id;
-            numero = max_num + 1;
-            accion = 'creado';
-        }
-
-        // Insertar líneas nuevas
-        for (const linea of lineas) {
-            await client.query(
-                `INSERT INTO comprobantes_detalle (id, comprobante_id, cuenta_codigo, rut_asociado, debe, haber)
-                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)`,
-                [compId, linea.cuenta, rutAsociado || null, Number(linea.debe) || 0, Number(linea.haber) || 0]
-            );
-        }
-
+        const resultado = await upsertComprobante(client, {
+            empresaId: empId,
+            clase: claseFinal,
+            tipoDte: tipoDteFinal,
+            folio: folioFinal,
+            rutContraparte: rutAsociado,
+            // Los asientos manuales eligen el tipo a mano (ingreso/egreso/traspaso);
+            // los documentos lo deducen de la clase y el tipo de DTE.
+            tipoExplicito: tipo,
+            fecha,
+            glosa: glosa || construirGlosa({
+                clase: claseFinal, tipoDte: tipoDteFinal, folio: folioFinal,
+                rut: rutAsociado, refTipoDte, refFolio,
+            }),
+            lineas,
+            usuario,
+            refFolio, refTipoDte, refRazon,
+        });
         await client.query('COMMIT');
-        res.json({ success: true, comprobanteId: compId, numero, accion });
+        res.json({ success: true, comprobanteId: resultado.id, numero: resultado.numero, accion: resultado.accion });
     } catch (err) {
         await client.query('ROLLBACK');
         console.error("❌ Error guardando comprobante:", err.message);
         res.status(500).json({ message: "Error al guardar el comprobante" });
     } finally {
         client.release();
+    }
+};
+
+// Documentos que una nota de crédito/débito puede afectar (para el selector).
+export const getDocumentosAfectables = async (req, res) => {
+    const { empresaId, clase, rut, fecha } = req.query;
+    const empId = (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null')
+        ? null : empresaId;
+    if (clienteSinEmpresa(req, empresaId)) return res.json({ documentos: [] });
+    try {
+        const documentos = await buscarDocumentosAfectables({ empresaId: empId, clase, rut, fecha });
+        res.json({ documentos });
+    } catch (error) {
+        console.error("❌ Error buscando documentos afectables:", error.message);
+        res.status(500).json({ message: "Error al buscar los documentos" });
     }
 };
 
@@ -216,6 +214,8 @@ export const getComprobantes = async (req, res) => {
         const { rows } = await pool.query(
             `SELECT c.id, c.numero_comprobante, c.fecha, c.tipo, c.glosa, c.estado, c.created_at,
                     c.contabilizado_por, c.contabilizado_at,
+                    c.clase, c.tipo_dte, c.folio, c.rut_contraparte,
+                    c.ref_folio, c.ref_tipo_dte, c.ref_razon,
                     json_agg(json_build_object(
                         'id', cd.id, 'cuenta_codigo', cd.cuenta_codigo,
                         'descripcion', COALESCE(pc.descripcion, cd.cuenta_codigo),

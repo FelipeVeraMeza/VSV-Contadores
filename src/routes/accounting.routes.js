@@ -10,6 +10,7 @@ import {
     uploadAccountingExcel,
     guardarComprobante,
     getComprobantes,
+    getDocumentosAfectables,
     eliminarComprobante,
     crearCuenta,
     editarCuenta,
@@ -31,6 +32,7 @@ router.post('/reconcile-ia',     runBankReconciliationIA);
 router.post('/importar-excel',   upload.single('archivo'), uploadAccountingExcel);
 router.post('/comprobantes',        guardarComprobante);
 router.get('/comprobantes',         getComprobantes);
+router.get('/documentos-afectables', getDocumentosAfectables);
 router.delete('/comprobantes/:id',  eliminarComprobante);
 
 // Plan de Cuentas CRUD

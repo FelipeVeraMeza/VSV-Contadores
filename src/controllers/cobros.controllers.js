@@ -1,0 +1,303 @@
+import { pool } from '../database/db.js';
+
+// ============================================================================
+// CICLO DE COBRO MENSUAL (honorarios del despacho a sus clientes)
+//
+//   · Fin de mes (26) → se emiten las facturas de las empresas con servicio activo.
+//   · El pago vence el día 5 del mes siguiente.
+//   · Estados: POR_EMITIR → PENDIENTE_PAGO → PAGADA | PENDIENTE_RECIBO
+//     ("vencido" se DERIVA de PENDIENTE_PAGO + fecha_vencimiento pasada, no se almacena)
+//
+// Todo va filtrado por organizacion_id (aislamiento multi-tenant).
+// ============================================================================
+
+const DIA_AVISO_FACTURACION = 26; // desde este día se avisa que hay que facturar
+
+// Precio mensual del cliente, en orden de prioridad:
+//   1. empresa.precio_mensual → el NETO negociado de la planilla (ej. ROVIRA $220.000)
+//   2. plan.precio_base       → el precio del plan, si no hay negociado
+//   3. 0                      → plan FREE o sin plan
+// Se usa como SQL escalar; las tablas se referencian como `e` (empresa) y `p` (plan).
+const SQL_PRECIO_MENSUAL = `COALESCE(e.precio_mensual, p.precio_base, 0)`;
+
+// periodo: 'YYYY-MM' → primer día del mes. Sin parámetro, el mes en curso.
+const periodoSql = (periodo) => (periodo ? `${periodo}-01` : null);
+
+// Lista los cobros de un periodo, con datos de la empresa
+export const listarCobros = async (req, res) => {
+    try {
+        const organizacionId = req.user?.organizacionId || null;
+        const { periodo, estado } = req.query;
+
+        const params = [];
+        const where = [];
+
+        if (organizacionId) { params.push(organizacionId); where.push(`cm.organizacion_id = $${params.length}`); }
+
+        const per = periodoSql(periodo);
+        if (per) { params.push(per); where.push(`cm.periodo = $${params.length}::date`); }
+        else where.push(`cm.periodo = date_trunc('month', CURRENT_DATE)::date`);
+
+        if (estado) { params.push(estado); where.push(`cm.estado = $${params.length}`); }
+
+        const { rows } = await pool.query(
+            `SELECT cm.id, cm.empresa_id, cm.periodo, cm.monto_esperado, cm.monto_facturado,
+                    cm.folio, cm.tipo_dte, cm.estado, cm.fecha_emision, cm.fecha_vencimiento, cm.fecha_pago,
+                    e.razon_social, p.nombre AS plan
+             FROM cobro_mensual cm
+             JOIN empresa e ON e.id = cm.empresa_id
+             LEFT JOIN plan p ON p.id = e.plan_id
+             ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+             ORDER BY e.razon_social ASC`,
+            params
+        );
+
+        const hoy = new Date();
+        const cobros = rows.map(r => {
+            const vence = r.fecha_vencimiento ? new Date(r.fecha_vencimiento) : null;
+            return {
+                id: r.id,
+                empresaId: r.empresa_id,
+                razonSocial: r.razon_social,
+                plan: r.plan || 'Sin plan',
+                periodo: r.periodo,
+                montoEsperado: parseFloat(r.monto_esperado) || 0,
+                montoFacturado: r.monto_facturado === null ? null : parseFloat(r.monto_facturado),
+                folio: r.folio,
+                tipoDte: r.tipo_dte,
+                estado: r.estado,
+                fechaEmision: r.fecha_emision,
+                fechaVencimiento: r.fecha_vencimiento,
+                fechaPago: r.fecha_pago,
+                // Derivado: pendiente de pago y ya pasó el vencimiento
+                vencido: r.estado === 'PENDIENTE_PAGO' && !!vence && vence < hoy,
+                // El monto emitido coincide con el esperado
+                montoCoincide: r.monto_facturado !== null &&
+                               parseFloat(r.monto_facturado) === parseFloat(r.monto_esperado)
+            };
+        });
+
+        return res.json({ success: true, cobros, total: cobros.length });
+    } catch (err) {
+        console.error('❌ Error listando cobros:', err.message);
+        return res.status(500).json({ success: false, message: 'Error al obtener los cobros.' });
+    }
+};
+
+// Resumen (KPIs) del periodo + si toca avisar que hay que facturar
+export const resumenCobros = async (req, res) => {
+    try {
+        const organizacionId = req.user?.organizacionId || null;
+        const { periodo } = req.query;
+        const per = periodoSql(periodo);
+
+        const params = [];
+        const where = [];
+        if (organizacionId) { params.push(organizacionId); where.push(`organizacion_id = $${params.length}`); }
+        if (per) { params.push(per); where.push(`periodo = $${params.length}::date`); }
+        else where.push(`periodo = date_trunc('month', CURRENT_DATE)::date`);
+
+        const { rows } = await pool.query(
+            `SELECT
+                COUNT(*)                                                   AS total,
+                COUNT(*) FILTER (WHERE estado = 'POR_EMITIR')              AS por_emitir,
+                COUNT(*) FILTER (WHERE estado = 'PENDIENTE_PAGO')          AS pendiente_pago,
+                COUNT(*) FILTER (WHERE estado = 'PAGADA')                  AS pagada,
+                COUNT(*) FILTER (WHERE estado = 'PENDIENTE_RECIBO')        AS pendiente_recibo,
+                COUNT(*) FILTER (WHERE estado = 'PENDIENTE_PAGO'
+                                   AND fecha_vencimiento < CURRENT_DATE)   AS vencidos,
+                COALESCE(SUM(monto_esperado), 0)                           AS monto_esperado,
+                COALESCE(SUM(monto_esperado) FILTER (WHERE estado = 'POR_EMITIR'), 0) AS monto_por_emitir
+             FROM cobro_mensual
+             ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`,
+            params
+        );
+        const r = rows[0];
+
+        const hoy = new Date();
+        const diaDelMes = hoy.getDate();
+        const porEmitir = parseInt(r.por_emitir) || 0;
+        // Cuántos días faltan para la fecha de facturación (0 = ya toca)
+        const diasParaFacturar = diaDelMes >= DIA_AVISO_FACTURACION ? 0 : DIA_AVISO_FACTURACION - diaDelMes;
+
+        return res.json({
+            success: true,
+            periodo: per || new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0, 10),
+            total: parseInt(r.total) || 0,
+            porEmitir,
+            pendientePago: parseInt(r.pendiente_pago) || 0,
+            pagada: parseInt(r.pagada) || 0,
+            pendienteRecibo: parseInt(r.pendiente_recibo) || 0,
+            vencidos: parseInt(r.vencidos) || 0,
+            montoEsperado: parseFloat(r.monto_esperado) || 0,
+            montoPorEmitir: parseFloat(r.monto_por_emitir) || 0,
+            // Aviso: desde el día 26 y mientras queden facturas por emitir
+            avisoFacturacion: diaDelMes >= DIA_AVISO_FACTURACION && porEmitir > 0,
+            diaFacturacion: DIA_AVISO_FACTURACION,  // día del mes en que toca facturar
+            diasParaFacturar                        // cuenta regresiva
+        });
+    } catch (err) {
+        console.error('❌ Error en resumen de cobros:', err.message);
+        return res.status(500).json({ success: false, message: 'Error al obtener el resumen.' });
+    }
+};
+
+// Genera los cobros POR_EMITIR del periodo en curso (idempotente).
+// El monto sale de plan_precio_tramo (plan × tramo según ventas del cliente).
+export const generarCobros = async (req, res) => {
+    try {
+        const organizacionId = req.user?.organizacionId || null;
+        const { rowCount } = await pool.query(
+            `INSERT INTO cobro_mensual
+                (organizacion_id, empresa_id, periodo, monto_esperado, estado, fecha_vencimiento)
+             SELECT DISTINCT
+                e.organizacion_id, e.id,
+                date_trunc('month', CURRENT_DATE)::date,
+                ${SQL_PRECIO_MENSUAL},
+                'POR_EMITIR',
+                (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month' + INTERVAL '4 days')::date
+             FROM empresa e
+             JOIN empresa_servicio es ON es.empresa_id = e.id AND es.estado = 'Activo'
+             LEFT JOIN plan p ON p.id = e.plan_id
+             WHERE ($1::uuid IS NULL OR e.organizacion_id = $1)
+             ON CONFLICT (empresa_id, periodo) DO NOTHING`,
+            [organizacionId]
+        );
+        return res.json({ success: true, generados: rowCount, message: `${rowCount} cobros generados.` });
+    } catch (err) {
+        console.error('❌ Error generando cobros:', err.message);
+        return res.status(500).json({ success: false, message: 'Error al generar los cobros.' });
+    }
+};
+
+// Recalcula el monto esperado de los cobros aún no emitidos, según plan × tramo.
+// Útil cuando se corrigen planes o precios.
+export const recalcularMontos = async (req, res) => {
+    try {
+        const organizacionId = req.user?.organizacionId || null;
+        const { periodo } = req.body || {};
+        const per = periodo ? `${periodo}-01` : null;
+
+        const { rowCount } = await pool.query(
+            `UPDATE cobro_mensual cm
+             SET monto_esperado = sub.precio, updated_at = NOW()
+             FROM (
+                SELECT e.id AS empresa_id, ${SQL_PRECIO_MENSUAL} AS precio
+                FROM empresa e LEFT JOIN plan p ON p.id = e.plan_id
+             ) sub
+             WHERE cm.empresa_id = sub.empresa_id
+               AND cm.estado = 'POR_EMITIR'
+               AND cm.periodo = COALESCE($1::date, date_trunc('month', CURRENT_DATE)::date)
+               AND ($2::uuid IS NULL OR cm.organizacion_id = $2)`,
+            [per, organizacionId]
+        );
+        // Las empresas dadas de baja no se facturan
+        await pool.query(
+            `DELETE FROM cobro_mensual cm USING empresa e
+             WHERE cm.empresa_id = e.id AND e.activo = FALSE
+               AND cm.estado = 'POR_EMITIR'
+               AND cm.periodo = COALESCE($1::date, date_trunc('month', CURRENT_DATE)::date)`,
+            [per]
+        );
+        return res.json({ success: true, actualizados: rowCount, message: `${rowCount} montos recalculados.` });
+    } catch (err) {
+        console.error('❌ Error recalculando montos:', err.message);
+        return res.status(500).json({ success: false, message: 'Error al recalcular los montos.' });
+    }
+};
+
+// Corrige a mano el monto esperado de un cobro (casos negociados / excepciones)
+export const editarMontoCobro = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { montoEsperado } = req.body;
+        const organizacionId = req.user?.organizacionId || null;
+
+        const monto = Number(montoEsperado);
+        if (!Number.isFinite(monto) || monto < 0) {
+            return res.status(400).json({ success: false, message: 'Monto no válido.' });
+        }
+
+        const { rows } = await pool.query(
+            `UPDATE cobro_mensual
+             SET monto_esperado = $2, updated_at = NOW()
+             WHERE id = $1 AND ($3::uuid IS NULL OR organizacion_id = $3)
+             RETURNING id`,
+            [id, monto, organizacionId]
+        );
+        if (!rows.length) return res.status(404).json({ success: false, message: 'Cobro no encontrado.' });
+        return res.json({ success: true, message: 'Monto actualizado.' });
+    } catch (err) {
+        console.error('❌ Error editando monto:', err.message);
+        return res.status(500).json({ success: false, message: 'Error al actualizar el monto.' });
+    }
+};
+
+// Registra la emisión de la factura: guarda folio + monto y pasa a PENDIENTE_PAGO
+export const emitirCobro = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { folio, montoFacturado, tipoDte } = req.body;
+        const organizacionId = req.user?.organizacionId || null;
+
+        const { rows } = await pool.query(
+            `UPDATE cobro_mensual
+             SET folio = COALESCE($2, folio),
+                 monto_facturado = COALESCE($3, monto_facturado),
+                 tipo_dte = COALESCE($4, tipo_dte),
+                 estado = 'PENDIENTE_PAGO',
+                 fecha_emision = NOW(),
+                 updated_at = NOW()
+             WHERE id = $1
+               AND ($5::uuid IS NULL OR organizacion_id = $5)
+             RETURNING id, monto_esperado, monto_facturado`,
+            [id, folio || null, montoFacturado ?? null, tipoDte || null, organizacionId]
+        );
+        if (!rows.length) return res.status(404).json({ success: false, message: 'Cobro no encontrado.' });
+
+        const r = rows[0];
+        const coincide = r.monto_facturado !== null &&
+                         parseFloat(r.monto_facturado) === parseFloat(r.monto_esperado);
+        return res.json({
+            success: true,
+            montoCoincide: coincide,
+            message: coincide
+                ? 'Factura emitida. El monto coincide con el esperado.'
+                : 'Factura emitida. ⚠️ El monto NO coincide con el esperado.'
+        });
+    } catch (err) {
+        console.error('❌ Error emitiendo cobro:', err.message);
+        return res.status(500).json({ success: false, message: 'Error al registrar la emisión.' });
+    }
+};
+
+// Cambia el estado del cobro (marcar pagada, pendiente de recibo, revertir a pendiente de pago)
+const ESTADOS_MANUALES = ['PENDIENTE_PAGO', 'PAGADA', 'PENDIENTE_RECIBO'];
+
+export const cambiarEstadoCobro = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { estado } = req.body;
+        const organizacionId = req.user?.organizacionId || null;
+
+        if (!ESTADOS_MANUALES.includes(estado)) {
+            return res.status(400).json({ success: false, message: 'Estado no válido.' });
+        }
+
+        const { rows } = await pool.query(
+            `UPDATE cobro_mensual
+             SET estado = $2,
+                 fecha_pago = CASE WHEN $2 IN ('PAGADA','PENDIENTE_RECIBO') THEN COALESCE(fecha_pago, NOW()) ELSE NULL END,
+                 updated_at = NOW()
+             WHERE id = $1
+               AND ($3::uuid IS NULL OR organizacion_id = $3)
+             RETURNING id`,
+            [id, estado, organizacionId]
+        );
+        if (!rows.length) return res.status(404).json({ success: false, message: 'Cobro no encontrado.' });
+        return res.json({ success: true, message: 'Estado actualizado.' });
+    } catch (err) {
+        console.error('❌ Error cambiando estado del cobro:', err.message);
+        return res.status(500).json({ success: false, message: 'Error al actualizar el estado.' });
+    }
+};

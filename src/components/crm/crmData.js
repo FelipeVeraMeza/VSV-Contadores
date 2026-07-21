@@ -1,6 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../hooks/useAuth.jsx';
 import { getCrmDataApi } from '../../services/crmService.js';
+
+// Bus de refresco: el hook se usa en varios lugares a la vez (CRM y el selector de
+// empresa del header) y cada uno tiene su propia copia de los datos. Al notificar por
+// este evento, TODAS las vistas recargan; si no, los cambios no se ven hasta cerrar sesión.
+const CRM_REFRESH_EVENT = 'crm:refresh';
+export const notifyCrmChanged = () => window.dispatchEvent(new Event(CRM_REFRESH_EVENT));
 
 // ==============================================================
 // DATOS DE RESPALDO (MOCKS)
@@ -51,7 +57,7 @@ export const useBunkerData = () => {
   const [chartsSample, setChartsSample] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const loadAll = async () => {
+  const loadAll = useCallback(async () => {
     if (!user?.sessionId) {
       setClients([]);
       setCashFlow(FALLBACK_CASH_FLOW);
@@ -100,11 +106,20 @@ export const useBunkerData = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => { 
-    loadAll(); 
   }, [user?.sessionId, selectedCompany?.id, selectedCompany?.empresaId]);
 
-  return { clients, planes, serviciosDisponibles, preciosPlanTramo, cashFlow, services, compliance, risk, chartsSample, loading, refresh: loadAll };
+  // Carga inicial y cuando cambia la sesión o la empresa seleccionada
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
+
+  // Recarga cuando cualquier vista avisa que hubo cambios (crear/editar/eliminar)
+  useEffect(() => {
+    const handler = () => loadAll();
+    window.addEventListener(CRM_REFRESH_EVENT, handler);
+    return () => window.removeEventListener(CRM_REFRESH_EVENT, handler);
+  }, [loadAll]);
+
+  // refresh() notifica a TODAS las vistas, no solo a la que llama
+  return { clients, planes, serviciosDisponibles, preciosPlanTramo, cashFlow, services, compliance, risk, chartsSample, loading, refresh: notifyCrmChanged };
 };

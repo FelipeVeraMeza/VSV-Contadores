@@ -2,66 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FileText, CheckCircle, AlertCircle, Plus, Trash2, Loader2, Pencil, Save, X } from 'lucide-react';
+import { FileText, CheckCircle, AlertCircle, Plus, Trash2, Loader2, Pencil, Save, X, Link2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { getChartOfAccountsApi } from '@/services/accountingService';
+import { getChartOfAccountsApi, getDocumentosAfectablesApi } from '@/services/accountingService';
 import { fetchWithAuth } from '@/services/apiClient';
+import {
+  TIPO_DTE_LABEL as TIPO_DTE_MAP, generarLineasAsiento, construirGlosa,
+  calcularMontos, esNota, esNotaCredito,
+} from '@/lib/documento';
+import { cleanRut } from '@/lib/rut';
 import { API_BASE_URL } from '../../../../config.js';
-
-const TIPO_DTE_MAP = {
-  33: 'Factura Electrónica', 34: 'Factura Exenta', 61: 'Nota de Crédito',
-  56: 'Nota de Débito', 52: 'Guía de Despacho', 39: 'Boleta Electrónica', 110: 'Factura Exportación'
-};
 
 const formatCLP = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(val || 0);
 const formatText = (str) => str ? str.toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase() : '';
-const formatRut = (rut) => {
-  if (!rut) return '';
-  const clean = String(rut).replace(/[.\-]/g, '');
-  if (clean.length < 2) return rut;
-  return `${clean.slice(0, -1)}-${clean.slice(-1).toUpperCase()}`;
-};
+const formatRut = (rut) => cleanRut(rut || '');
 
-const CUENTAS_DEFAULT = {
-  ventas: [
-    { cuenta: '1104-01', nombre: 'DEUDORES CLIENTES' },
-    { cuenta: '5101-01', nombre: 'VENTAS' },
-    { cuenta: '2108-02', nombre: 'IVA DEBITO FISCAL' },
-  ],
-  compras: [
-    { cuenta: '4201-08', nombre: 'GASTOS GENERALES' },
-    { cuenta: '1108-02', nombre: 'IVA CREDITO FISCAL' },
-    { cuenta: '2116-01', nombre: 'FACTURAS POR PAGAR' },
-  ],
-  honorarios: [
-    { cuenta: '4201-02', nombre: 'HONORARIOS PROFESIONALES' },
-    { cuenta: '2105-04', nombre: 'HONORARIOS POR PAGAR' },
-  ],
-};
-
-const generarLineas = (netoVal, tipo) => {
-  const neto = Number(netoVal) || 0;
-  const iva = Math.round(neto * 0.19);
-  const total = neto + iva; // Siempre calculado para garantizar cuadre
-  const base = CUENTAS_DEFAULT[tipo] || CUENTAS_DEFAULT.ventas;
-
-  if (tipo === 'ventas') return [
-    { ...base[0], debe: total, haber: 0 },
-    { ...base[1], debe: 0, haber: neto },
-    { ...base[2], debe: 0, haber: iva },
-  ];
-  if (tipo === 'compras') return [
-    { ...base[0], debe: neto, haber: 0 },
-    { ...base[1], debe: iva, haber: 0 },
-    { ...base[2], debe: 0, haber: total },
-  ];
-  return [
-    { ...base[0], debe: total, haber: 0 },
-    { ...base[1], debe: 0, haber: total },
-  ];
-};
+// El asiento sale de `generarLineasAsiento`, compartido con MovimientosContables.
+// Antes este modal tenía su propia versión que ignoraba el tipo de DTE: una nota
+// de crédito se contabilizaba igual que una factura, sumando ventas e IVA débito
+// en vez de rebajarlos.
+const generarLineas = (neto, tipo, tipoDte, ivaDeclarado) =>
+  generarLineasAsiento({ monto_neto: neto, monto_iva: ivaDeclarado, tipo_dte: tipoDte }, tipo);
 
 const COLOR_MAP = {
   ventas:    { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/30' },
@@ -85,6 +48,9 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
   const [dFecha, setDFecha]     = useState(''); // YYYY-MM-DD
   const [dNeto, setDNeto]       = useState('');
 
+  // Documento afectado por una nota de crédito/débito
+  const [refDocId, setRefDocId] = useState('');
+
   const tipo = documento?.tipoMovimiento || 'ventas';
   const isCompra = tipo === 'compras';
   const colors = COLOR_MAP[tipo] || COLOR_MAP.ventas;
@@ -101,24 +67,57 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
   });
   const plan = planData || [];
 
+  const esNotaDoc = esNota(dTipoDte);
+
+  // Candidatos a documento afectado: mismo RUT, tipo afectable y emitidos hasta
+  // la fecha de la nota.
+  const { data: afectablesData, isFetching: cargandoAfectables } = useQuery({
+    queryKey: ['documentos-afectables', empresaId, tipo, dRut, dFecha],
+    queryFn: async () => {
+      const res = await getDocumentosAfectablesApi(user.sessionId, {
+        empresaId, clase: tipo, rut: dRut, fecha: dFecha,
+      });
+      if (!res.ok) return [];
+      return (await res.json()).documentos || [];
+    },
+    enabled: isOpen && esNotaDoc && !!user?.sessionId,
+  });
+  const afectables = afectablesData || [];
+  const refDoc = afectables.find(d => String(d.id) === String(refDocId)) || null;
+
   useEffect(() => {
     if (documento && isOpen) {
-      setLineas(generarLineas(documento.monto_neto, tipo));
+      setLineas(generarLineas(documento.monto_neto, tipo, documento.tipo_dte, documento.monto_iva));
       setDRut(isCompra ? (documento.rut_proveedor || '') : (documento.rut_cliente || ''));
       setDNombre(isCompra ? (documento.razon_social_proveedor || '') : (documento.razon_social || ''));
       setDTipoDte(documento.tipo_dte || 33);
       setDFolio(String(documento.folio ?? ''));
       setDFecha(documento.fecha_emision ? String(documento.fecha_emision).substring(0, 10) : '');
       setDNeto(String(documento.monto_neto ?? ''));
+      setRefDocId('');
       setIsEditingDatos(false);
     }
   }, [documento, isOpen, tipo, isCompra]);
 
+  // Preselecciona el documento afectado cuando hay uno solo del mismo monto.
+  // Con varios candidatos no se elige: adivinar sería inventar contabilidad.
+  useEffect(() => {
+    if (!esNotaDoc || refDocId || afectables.length === 0) return;
+    const totalNota = calcularMontos({ monto_neto: dNeto, monto_iva: documento?.monto_iva, tipo_dte: dTipoDte }).total;
+    const exactos = afectables.filter(d => Number(d.monto_total) === totalNota);
+    if (exactos.length === 1) setRefDocId(String(exactos[0].id));
+  }, [esNotaDoc, afectables, refDocId, dNeto, dTipoDte, documento]);
+
   if (!documento) return null;
 
-  const neto = Number(dNeto) || 0;
-  const iva = Math.round(neto * 0.19);
-  const total = neto + iva;
+  // Mientras el neto no se edite se respeta el IVA que trae el documento; al
+  // editarlo se recalcula al 19% (salvo exentas, que no llevan IVA).
+  const netoEditado = Number(dNeto) !== Number(documento.monto_neto);
+  const { neto, iva, total } = calcularMontos({
+    monto_neto: dNeto,
+    monto_iva: netoEditado ? null : documento.monto_iva,
+    tipo_dte: dTipoDte,
+  });
 
   const rut = formatRut(dRut);
   const razon = formatText(dNombre);
@@ -145,7 +144,15 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
   // Al cambiar el neto, recalcula IVA/total y regenera el asiento
   const onChangeNeto = (val) => {
     setDNeto(val);
-    setLineas(generarLineas(val, tipo));
+    setLineas(generarLineas(val, tipo, dTipoDte, null));
+  };
+
+  // Cambiar el tipo de documento cambia el asiento: una nota de crédito
+  // revierte el movimiento en vez de sumarlo.
+  const onChangeTipoDte = (val) => {
+    setDTipoDte(val);
+    setRefDocId('');
+    setLineas(generarLineas(dNeto, tipo, val, netoEditado ? null : documento.monto_iva));
   };
 
   const cancelarEdicion = () => {
@@ -155,7 +162,7 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
     setDFolio(String(documento.folio ?? ''));
     setDFecha(documento.fecha_emision ? String(documento.fecha_emision).substring(0, 10) : '');
     setDNeto(String(documento.monto_neto ?? ''));
-    setLineas(generarLineas(documento.monto_neto, tipo));
+    setLineas(generarLineas(documento.monto_neto, tipo, documento.tipo_dte, documento.monto_iva));
     setIsEditingDatos(false);
   };
 
@@ -196,24 +203,44 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
       toast({ variant: 'destructive', title: 'Asiento Descuadrado', description: `Diferencia: ${formatCLP(Math.abs(totalDebe - totalHaber))}` });
       return;
     }
+    if (esNotaDoc && !refDoc) {
+      toast({
+        variant: 'destructive',
+        title: 'Falta el documento afectado',
+        description: `Indicá a qué documento pertenece esta ${esNotaCredito(dTipoDte) ? 'nota de crédito' : 'nota de débito'}.`,
+      });
+      return;
+    }
     setIsSaving(true);
     try {
       const res = await fetchWithAuth('/accounting/comprobantes', user.sessionId, {
         method: 'POST',
         body: {
           empresaId,
-          tipo,
+          clase: tipo,
+          tipoDte: dTipoDte,
           fecha: dFecha || documento.fecha_emision,
-          glosa: `${tipoLabel} Folio #${dFolio} — ${razon || rut}`,
+          glosa: construirGlosa({
+            clase: tipo, tipoDte: dTipoDte, folio: dFolio, razonSocial: razon, rut,
+            refTipoDte: refDoc?.tipo_dte, refFolio: refDoc?.folio,
+          }),
           folio: dFolio,
           rutAsociado: rut,
           lineas: lineas.map(l => ({ cuenta: l.cuenta, debe: l.debe, haber: l.haber })),
+          refFolio: refDoc?.folio ?? null,
+          refTipoDte: refDoc?.tipo_dte ?? null,
+          refRazon: refDoc?.razon_social ?? null,
         },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Error al guardar');
       const accion = data.accion === 'actualizado' ? 'Asiento Actualizado' : 'Asiento Guardado';
-      toast({ title: `✅ ${accion}`, description: `N° ${data.numero} — ${tipoLabel} folio #${documento.folio}` });
+      toast({
+        title: `✅ ${accion}`,
+        description: refDoc
+          ? `N° ${data.numero} — ${tipoDocLabel} #${dFolio}, afecta a #${refDoc.folio}`
+          : `N° ${data.numero} — ${tipoLabel} folio #${dFolio}`,
+      });
       queryClient.invalidateQueries(['comprobantes', empresaId]);
       onGuardado?.();
       setIsOpen(false);
@@ -282,7 +309,7 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
             <div>
               <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Tipo Documento</p>
               {isEditingDatos ? (
-                <select value={dTipoDte} onChange={e => setDTipoDte(Number(e.target.value))}
+                <select value={dTipoDte} onChange={e => onChangeTipoDte(Number(e.target.value))}
                   className="w-full mt-1 bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500">
                   {Object.entries(TIPO_DTE_MAP).map(([k, v]) => (
                     <option key={k} value={k} className="bg-slate-900">{v}</option>
@@ -342,6 +369,59 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
               <p className={`text-lg font-mono font-black mt-0.5 ${colors.text}`}>{formatCLP(total)}</p>
             </div>
           </div>
+
+          {/* DOCUMENTO AFECTADO — obligatorio en notas de crédito/débito */}
+          {esNotaDoc && (
+            <div className={`mt-4 pt-4 border-t border-white/5`}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">
+                  ¿A qué documento pertenece esta {esNotaCredito(dTipoDte) ? 'nota de crédito' : 'nota de débito'}?
+                </p>
+                {refDoc ? (
+                  <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                    <Link2 className="h-3 w-3" /> Vinculada
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-amber-400">
+                    <AlertCircle className="h-3 w-3" /> Requerido
+                  </span>
+                )}
+              </div>
+              <select
+                value={refDocId}
+                onChange={e => setRefDocId(e.target.value)}
+                disabled={cargandoAfectables}
+                className={`w-full bg-slate-900 border rounded px-2 py-2 text-xs text-white focus:outline-none disabled:opacity-50 ${
+                  refDoc ? 'border-emerald-500/40 focus:border-emerald-500' : 'border-amber-500/40 focus:border-amber-500'
+                }`}
+              >
+                <option value="" className="bg-slate-900">
+                  {cargandoAfectables ? 'Buscando documentos…' : 'Seleccionar el documento afectado…'}
+                </option>
+                {afectables.map(d => (
+                  <option key={d.id} value={d.id} className="bg-slate-900">
+                    {(TIPO_DTE_MAP[d.tipo_dte] || `Tipo ${d.tipo_dte}`)} #{d.folio}
+                    {' · '}{formatCLP(Number(d.monto_total))}
+                    {d.fecha_emision ? ` · ${String(d.fecha_emision).substring(0, 10)}` : ''}
+                  </option>
+                ))}
+              </select>
+              {!cargandoAfectables && afectables.length === 0 && (
+                <p className="text-[10px] text-amber-400/80 mt-1.5">
+                  No se encontraron documentos de {rut || 'este RUT'} anteriores a esta nota.
+                </p>
+              )}
+              {refDoc && (
+                <p className="text-[10px] text-gray-400 mt-1.5">
+                  Rebaja {(TIPO_DTE_MAP[refDoc.tipo_dte] || 'documento').toLowerCase()} #{refDoc.folio}
+                  {' de '}{formatCLP(Number(refDoc.monto_total))}
+                  {Number(refDoc.monto_total) !== total && (
+                    <span className="text-amber-400"> — el monto no calza con el de la nota ({formatCLP(total)})</span>
+                  )}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ASIENTO CONTABLE EDITABLE */}
@@ -432,7 +512,7 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
             className="text-gray-400 hover:text-white font-bold uppercase text-xs tracking-widest">
             Cerrar
           </Button>
-          <Button onClick={handleGuardar} disabled={!cuadrado || lineas.length < 2 || isSaving}
+          <Button onClick={handleGuardar} disabled={!cuadrado || lineas.length < 2 || isSaving || (esNotaDoc && !refDoc)}
             className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black uppercase text-xs tracking-widest disabled:opacity-40">
             {isSaving ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />Contabilizando...</> : 'Contabilizar'}
           </Button>
