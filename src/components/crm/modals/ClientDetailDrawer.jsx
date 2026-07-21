@@ -348,6 +348,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
 
     const giro = formData.giro || 'Sin Registro';
     const regimen = formData.regimen || formData.regimen_tributario || 'Sin Registro';
+    const honorario = Number(formData.honorarioNeto ?? formData.honorario_neto ?? 0);
     const direccion = formData.direccion || 'Sin Registro';
     const comuna = formData.comuna || 'Sin Registro';
     const ciudad = formData.ciudad || 'Sin Registro';
@@ -397,16 +398,17 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
     const serviciosParaAgregar = (serviciosDisponibles || []).filter(s => !idsContratados.has(s.nombre));
 
     // --- Honorarios: plan actual + servicios contratados ---
-    const precioPlanActual = precioDePlan(plan);              // plan que tiene HOY la empresa
+    const precioPlanActual = precioDePlan(plan);              // precio sugerido por tramo (referencia)
     const totalServicios = serviciosActivos.reduce((acc, s) => acc + (Number(s.precioPactado) || 0), 0);
-    const netoPlan = precioPlanActual?.neto || 0;
+    // El honorario REAL es el neto del Excel (lo que efectivamente paga), no el sugerido por tramo.
+    const netoPlan = honorario;
     const totalHonorariosNeto = netoPlan + totalServicios;
     const totalHonorariosConIva = Math.round(totalHonorariosNeto * 1.19);
 
     // --- Precio sugerido (plan según tramo) vs. lo configurado en servicios ---
     // Útil para detectar clientes mal cobrados respecto de la matriz de precios.
     const sugeridoVsCobrado = precioPlanActual
-        ? { sugerido: precioPlanActual.neto, cobrado: totalServicios, dif: totalServicios - precioPlanActual.neto }
+        ? { sugerido: precioPlanActual.neto, cobrado: honorario, dif: honorario - precioPlanActual.neto }
         : null;
 
     // --- Bitácora por tipo ---
@@ -478,6 +480,11 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                             <span className="text-[10px] font-black px-2 py-0.5 rounded border border-blue-500/30 text-blue-400 bg-blue-500/10 uppercase shrink-0">
                                 Plan: {plan}
                             </span>
+                            {honorario > 0 && (
+                                <span className="text-[10px] font-black px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-300 bg-emerald-500/10 shrink-0">
+                                    {fmt(honorario)}/mes
+                                </span>
+                            )}
                         </div>
 
                         {/* Acciones rápidas de contacto */}
@@ -625,6 +632,19 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                             </>
                         )}
                     </div>
+
+                    {/* Estado del servicio: Activo / De baja (controla en qué pestaña aparece) */}
+                    <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between gap-3">
+                        <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Estado del servicio</span>
+                        {isEditing ? (
+                            <div className="flex bg-black/40 p-1 rounded-lg border border-white/10">
+                                <button type="button" onClick={() => setFormData(prev => ({ ...prev, activo: true }))} className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest transition-colors ${formData.activo !== false ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'}`}>Activo</button>
+                                <button type="button" onClick={() => setFormData(prev => ({ ...prev, activo: false }))} className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest transition-colors ${formData.activo === false ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>De baja</button>
+                            </div>
+                        ) : (
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border uppercase ${formData.activo === false ? 'text-red-300 bg-red-500/10 border-red-500/30' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'}`}>{formData.activo === false ? 'De baja' : 'Activo'}</span>
+                        )}
+                    </div>
                 </div>
 
                 {/* 1. INFO GENERAL */}
@@ -633,6 +653,8 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                         <User size={14} /> Contacto y Representante
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
+                        <EditableField label="RUT Empresa" name="rut" value={isEditing ? (formData.rut || '') : rut} isEditing={isEditing} onChange={handleInputChange} isMono />
+                        <EditableField label="Neto mensual (honorario)" name="honorario" value={isEditing ? (formData.honorario ?? honorario) : fmt(honorario)} isEditing={isEditing} onChange={handleInputChange} />
                         <EditableField label="Representante Legal" name="repNombre" value={isEditing ? formData.repNombre : repNombre} isEditing={isEditing} onChange={handleInputChange} />
                         <EditableField label="RUT Representante" name="repRut" value={isEditing ? formData.repRut : repRut} isEditing={isEditing} onChange={handleInputChange} />
                         <EditableField label="Correo Electrónico" name="correo" value={isEditing ? formData.correo : correo} isEditing={isEditing} onChange={handleInputChange} />
@@ -867,7 +889,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                     {/* Total de honorarios (plan + servicios) */}
                     <div className="mt-3 bg-black/30 border border-emerald-500/20 rounded-xl p-3">
                         <div className="flex items-center justify-between text-[10px] text-gray-400 mb-1">
-                            <span>Plan ({plan})</span>
+                            <span>Honorario plan ({plan})</span>
                             <span className="font-bold text-gray-200">{fmt(netoPlan)}</span>
                         </div>
                         <div className="flex items-center justify-between text-[10px] text-gray-400 mb-1.5">
@@ -893,7 +915,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                                     <span className="font-bold text-indigo-300">{fmt(sugeridoVsCobrado.sugerido)}</span>
                                 </div>
                                 <div className="flex flex-col text-center">
-                                    <span className="text-gray-500 text-[9px]">Configurado (servicios)</span>
+                                    <span className="text-gray-500 text-[9px]">Cobrado (honorario)</span>
                                     <span className="font-bold text-gray-200">{fmt(sugeridoVsCobrado.cobrado)}</span>
                                 </div>
                                 <div className="flex flex-col text-right">
@@ -931,16 +953,15 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                 {/* 4. RENTA ANUAL */}
                 <div className="bg-purple-500/5 border border-purple-500/10 rounded-2xl p-4">
                     <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <FileSpreadsheet size={14} /> Renta Anual (AT 2024/2025)
+                        <FileSpreadsheet size={14} /> Renta Anual (AT 2026)
                     </h3>
                     <div className="grid grid-cols-2 gap-3 mb-3">
                         <EditableField label="¿Contrató Renta?" name="contratoRenta" value={isEditing ? formData.contratoRenta : contratoRenta} isEditing={isEditing} onChange={handleInputChange} />
                         <EditableField label="Monto Renta" name="montoRenta" value={isEditing ? formData.montoRenta : fmt(montoRenta)} isEditing={isEditing} onChange={handleInputChange} />
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                         <EditableField label="Estado Formulario" name="formularioRenta" value={isEditing ? formData.formularioRenta : formularioRenta} isEditing={isEditing} onChange={handleInputChange} />
-                        <EditableField label="Renta Marzo Neto" name="rentaMarzoNeto" value={isEditing ? formData.rentaMarzoNeto : fmt(rentaMarzoNeto)} isEditing={isEditing} onChange={handleInputChange} />
-                        <EditableField label="Renta Marzo Bruto" name="rentaMarzoBruto" value={isEditing ? formData.rentaMarzoBruto : fmt(rentaMarzoBruto)} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="Renta del mes" name="rentaMarzoNeto" value={isEditing ? formData.rentaMarzoNeto : fmt(rentaMarzoNeto)} isEditing={isEditing} onChange={handleInputChange} />
                     </div>
                 </div>
 

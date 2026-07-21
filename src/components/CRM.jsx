@@ -68,6 +68,7 @@ const noSeFactura = (c) => (Number(c.precioMensual) || 0) === 0;
 //                  factura (si no se facturó, es porque suspendió el servicio)
 //   Activos      → se le facturó el mes pasado, o es FREE (no se le factura)
 const clasificarCliente = (c) => {
+    // Estado del servicio: solo Activo o De baja (suspendido cuenta como de baja).
     if (c.activo === false) return 'baja';
     if (tuvoServicios(c) && !tieneServicioActivo(c)) return 'baja';
     if (!tieneServicioActivo(c)) return 'completar';
@@ -98,10 +99,10 @@ const completitudFicha = (c) => {
 };
 
 // Vistas válidas y migración de valores antiguos guardados en localStorage
-const VISTAS_VALIDAS = ['activos', 'suspendidos', 'completar', 'baja', 'usuarios'];
+const VISTAS_VALIDAS = ['activos', 'baja', 'usuarios'];
 const normalizarVista = (v) => {
-    if (v === 'activas') return 'activos';
-    if (v === 'inactivas') return 'completar';
+    if (v === 'suspendidos') return 'baja'; // suspendido ahora es de baja
+    if (['activas', 'inactivas', 'completar', 'todas', 'nuevos'].includes(v)) return 'activos';
     return VISTAS_VALIDAS.includes(v) ? v : 'activos';
 };
 
@@ -156,6 +157,7 @@ const CRM = () => {
           if (vista === 'usuarios') return esCreadaPorUsuario(c);
           // Las creadas por clientes NO se mezclan en las pestañas de estado
           if (esCreadaPorUsuario(c)) return false;
+          if (vista === 'todas') return true; // todas las empresas de la organización
           return clasificarCliente(c) === vista;
       });
       return {
@@ -198,6 +200,7 @@ const CRM = () => {
           const matchActividad =
               vista === 'usuarios' ? esCreadaPorUsuario(c)
             : esCreadaPorUsuario(c) ? false
+            : vista === 'todas' ? true
             : clasificarCliente(c) === vista;
           // Filtro por creador: solo aplica dentro de la pestaña "Creadas por usuarios"
           const matchCreador = vista !== 'usuarios' || creadorFilter === 'Todos' || c.usuarioCreador === creadorFilter;

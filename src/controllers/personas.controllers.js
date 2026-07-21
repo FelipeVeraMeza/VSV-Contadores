@@ -138,6 +138,7 @@ export const crearPersona = async (req, res) => {
             direccion, comuna, region, rubro, observaciones,
             origen = 'manual', ejecutivoId, empresaId,
             etiquetas = [], serviciosInteres = [],
+            proximoContacto,
             forzar = false
         } = req.body;
 
@@ -178,8 +179,8 @@ export const crearPersona = async (req, res) => {
             `INSERT INTO persona
                 (nombre, segundo_nombre, apellidos, fecha_nacimiento, rut_encrypted, rut_hash,
                  estado, origen, rubro, direccion, comuna, region, ejecutivo_id, observaciones,
-                 organizacion_id, fecha_ultimo_contacto)
-             VALUES ($1,$2,$3,$4,$5,$6,'prospecto',$7,$8,$9,$10,$11,$12,$13,$14,NOW())
+                 organizacion_id, proximo_contacto, fecha_ultimo_contacto)
+             VALUES ($1,$2,$3,$4,$5,$6,'prospecto',$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())
              RETURNING id, nombre, segundo_nombre, apellidos, estado, origen, created_at`,
             [
                 nombre?.trim() || null, segundoNombre?.trim() || null, apellidos?.trim() || null,
@@ -187,7 +188,8 @@ export const crearPersona = async (req, res) => {
                 ['manual','whatsapp','correo','web','import','integracion'].includes(origen) ? origen : 'manual',
                 rubro?.trim() || null, direccion?.trim() || null, comuna?.trim() || null, region?.trim() || null,
                 ejecutivoId || null, observaciones?.trim() || null,
-                organizacionId
+                organizacionId,
+                proximoContacto || null
             ]
         );
         const persona = insertPersona.rows[0];
@@ -270,7 +272,7 @@ export const listarPersonas = async (req, res) => {
         }
         const result = await pool.query(
             `SELECT p.id, p.nombre, p.segundo_nombre, p.apellidos, p.estado, p.origen,
-                    p.rubro, p.comuna, p.region, p.rut_encrypted, p.created_at,
+                    p.rubro, p.comuna, p.region, p.rut_encrypted, p.created_at, p.observaciones,
                     p.ejecutivo_id, p.proximo_contacto, p.fecha_ultimo_contacto,
                     u.nombre AS ejecutivo_nombre,
                     COALESCE(json_agg(DISTINCT pt.telefono) FILTER (WHERE pt.id IS NOT NULL), '[]') AS telefonos,
@@ -297,6 +299,7 @@ export const listarPersonas = async (req, res) => {
                 estado: r.estado,
                 origen: r.origen,
                 rubro: r.rubro,
+                observaciones: r.observaciones,
                 comuna: r.comuna,
                 region: r.region,
                 rut: decryptSafe(r.rut_encrypted),
@@ -313,6 +316,8 @@ export const listarPersonas = async (req, res) => {
             return (
                 p.nombreCompleto.toLowerCase().includes(term) ||
                 (p.rut || '').toLowerCase().includes(term) ||
+                (p.observaciones || '').toLowerCase().includes(term) ||
+                (p.rubro || '').toLowerCase().includes(term) ||
                 p.correos.some(c => c.toLowerCase().includes(term)) ||
                 p.telefonos.some(t => t.replace(/\D/g, '').includes(term.replace(/\D/g, '')))
             );
