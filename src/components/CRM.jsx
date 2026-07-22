@@ -53,28 +53,20 @@ const tieneServicioActivo = (c) =>
     Array.isArray(c.servicios) && c.servicios.some(s => String(s.estado).toLowerCase() === 'activo');
 const tuvoServicios = (c) => Array.isArray(c.servicios) && c.servicios.length > 0;
 
-// Moroso = tiene una factura emitida, VENCIDA y sin pagar (dato real del ciclo de cobro).
-// No se usa `estado_pago` porque ese campo quedó desactualizado desde la importación
-// y marcaba como morosos a clientes que ya habían pagado.
-const esMoroso = (c) => c.cobroVencido === true;
-
-// Un cliente sin monto acordado (plan FREE) no se factura: no se le exige factura.
-const noSeFactura = (c) => (Number(c.precioMensual) || 0) === 0;
-
-// Clasificación de negocio (definida con jefatura), con prioridad clara:
-//   De baja      → término de giro / de baja (o tuvo servicios y ninguno sigue activo)
-//   Por completar→ no tiene ningún servicio contratado (falta contratar / completar la ficha)
-//   Suspendidos  → moroso (deuda vencida), O tiene servicio pero el mes pasado NO se le emitió
-//                  factura (si no se facturó, es porque suspendió el servicio)
-//   Activos      → se le facturó el mes pasado, o es FREE (no se le factura)
+// Clasificación de negocio. La tabla solo tiene DOS pestañas ("Activos" y
+// "De baja"), así que este resultado solo puede ser uno de esos dos valores:
+// cualquier otro deja al cliente sin pestaña donde aparecer y lo vuelve
+// invisible en el CRM. Así se perdieron de vista los clientes con una factura
+// impaga — caían en un "Suspendidos" que no existe como pestaña.
+//
+// La vigencia del servicio y la deuda son cosas distintas: un cliente que debe
+// una factura sigue estando en servicio y sigue en Activos. La cobranza se
+// gestiona en Recaudaciones, no ocultando al cliente.
+//   De baja → dado de baja en su ficha, o tuvo servicios y ninguno sigue activo
+//   Activos → el resto de la cartera vigente
 const clasificarCliente = (c) => {
-    // Estado del servicio: solo Activo o De baja (suspendido cuenta como de baja).
     if (c.activo === false) return 'baja';
     if (tuvoServicios(c) && !tieneServicioActivo(c)) return 'baja';
-    if (!tieneServicioActivo(c)) return 'completar';
-    if (esMoroso(c)) return 'suspendidos';
-    if (noSeFactura(c)) return 'activos';
-    if (!c.facturadoMesPasado) return 'suspendidos';
     return 'activos';
 };
 

@@ -302,6 +302,70 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
 
                     {/* Contenido */}
                     <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
+                        {/* Notas — lo primero de la ficha: es el trabajo del día a día */}
+                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Clock size={14} /> Notas</h3>
+                            <div className="flex gap-2 mb-4">
+                                <input value={newNote} onChange={(e) => setNewNote(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addNota()} placeholder="Escribe una nota..." className="flex-1 bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-white outline-none focus:border-blue-500 placeholder:text-gray-600" />
+                                <Button onClick={addNota} disabled={savingNote || !newNote.trim()} className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 h-auto"><Send size={16} /></Button>
+                            </div>
+                            {(data.notas || []).length > 0 && (
+                                <div className="relative mb-3">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={13} />
+                                    <input value={notaSearch} onChange={(e) => setNotaSearch(e.target.value)} placeholder="Buscar en notas..." className="w-full bg-black/30 border border-white/10 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white outline-none focus:border-blue-500 placeholder:text-gray-600" />
+                                </div>
+                            )}
+                            {(() => {
+                                const filtradas = (data.notas || []).filter(n => !notaSearch.trim() || n.texto.toLowerCase().includes(notaSearch.trim().toLowerCase()));
+                                if (filtradas.length === 0) return <p className="text-xs text-gray-500 italic text-center py-2">{notaSearch ? 'Sin coincidencias.' : 'Sin notas aún.'}</p>;
+                                return (
+                                    <div className="space-y-3 max-h-60 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
+                                        {filtradas.map((n) => (
+                                            <div key={n.id} className="border-b border-white/5 pb-2 last:border-0">
+                                                <div className="flex items-center gap-1.5 mb-1 text-gray-500">
+                                                    <Clock size={10} /> <span className="text-[9px] font-black tracking-widest">{n.fecha}</span>
+                                                    <span className="text-[9px] text-gray-600">· {n.autor}</span>
+                                                    {n.esIa && <span className="text-[8px] text-purple-400 font-black">IA</span>}
+                                                    {editNotaId !== n.id && (
+                                                        <button onClick={() => { setEditNotaId(n.id); setEditNotaTxt(n.texto); }} className="ml-auto text-gray-500 hover:text-blue-400"><Pencil size={11} /></button>
+                                                    )}
+                                                </div>
+                                                {editNotaId === n.id ? (
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <textarea rows={2} value={editNotaTxt} onChange={(e) => setEditNotaTxt(e.target.value)} className="bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-blue-500 resize-none" />
+                                                        <div className="flex gap-2">
+                                                            <button onClick={() => setEditNotaId(null)} className="flex-1 text-[10px] font-bold text-gray-400 bg-white/5 rounded py-1">Cancelar</button>
+                                                            <button onClick={() => guardarNotaEdit(n.id)} className="flex-1 text-[10px] font-bold text-white bg-blue-600 rounded py-1">Guardar</button>
+                                                        </div>
+                                                    </div>
+                                                ) : <p className="text-xs text-gray-200">{n.texto}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {/* Historial de estado */}
+                        {(data.historialEstado || []).length > 0 && (
+                            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+                                <button onClick={() => setShowHist(!showHist)} className="w-full flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                    <span className="flex items-center gap-2"><History size={14} /> Historial de estado ({data.historialEstado.length})</span>
+                                    <ChevronDown size={14} className={showHist ? 'rotate-180' : ''} />
+                                </button>
+                                {showHist && (
+                                    <div className="space-y-1.5 mt-3">
+                                        {data.historialEstado.map((h, i) => (
+                                            <div key={i} className="text-[10px] border-b border-white/5 pb-1 last:border-0">
+                                                <span className="text-gray-300">{h.anterior || '—'} → <span className="text-blue-300">{h.nuevo}</span></span>
+                                                <span className="text-gray-600"> · {h.fecha} · {h.autor}{h.motivo ? ` · ${h.motivo}` : ''}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Datos */}
                         <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
                             <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><User size={14} /> Información</h3>
@@ -418,70 +482,6 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
                                     </Button>
                                 </div>
                             )}
-                        </div>
-
-                        {/* Historial de estado */}
-                        {(data.historialEstado || []).length > 0 && (
-                            <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                                <button onClick={() => setShowHist(!showHist)} className="w-full flex items-center justify-between text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                                    <span className="flex items-center gap-2"><History size={14} /> Historial de estado ({data.historialEstado.length})</span>
-                                    <ChevronDown size={14} className={showHist ? 'rotate-180' : ''} />
-                                </button>
-                                {showHist && (
-                                    <div className="space-y-1.5 mt-3">
-                                        {data.historialEstado.map((h, i) => (
-                                            <div key={i} className="text-[10px] border-b border-white/5 pb-1 last:border-0">
-                                                <span className="text-gray-300">{h.anterior || '—'} → <span className="text-blue-300">{h.nuevo}</span></span>
-                                                <span className="text-gray-600"> · {h.fecha} · {h.autor}{h.motivo ? ` · ${h.motivo}` : ''}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Notas */}
-                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                            <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Clock size={14} /> Notas</h3>
-                            <div className="flex gap-2 mb-4">
-                                <input value={newNote} onChange={(e) => setNewNote(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addNota()} placeholder="Escribe una nota..." className="flex-1 bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-white outline-none focus:border-blue-500 placeholder:text-gray-600" />
-                                <Button onClick={addNota} disabled={savingNote || !newNote.trim()} className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 h-auto"><Send size={16} /></Button>
-                            </div>
-                            {(data.notas || []).length > 0 && (
-                                <div className="relative mb-3">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={13} />
-                                    <input value={notaSearch} onChange={(e) => setNotaSearch(e.target.value)} placeholder="Buscar en notas..." className="w-full bg-black/30 border border-white/10 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white outline-none focus:border-blue-500 placeholder:text-gray-600" />
-                                </div>
-                            )}
-                            {(() => {
-                                const filtradas = (data.notas || []).filter(n => !notaSearch.trim() || n.texto.toLowerCase().includes(notaSearch.trim().toLowerCase()));
-                                if (filtradas.length === 0) return <p className="text-xs text-gray-500 italic text-center py-2">{notaSearch ? 'Sin coincidencias.' : 'Sin notas aún.'}</p>;
-                                return (
-                                    <div className="space-y-3 max-h-60 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
-                                        {filtradas.map((n) => (
-                                            <div key={n.id} className="border-b border-white/5 pb-2 last:border-0">
-                                                <div className="flex items-center gap-1.5 mb-1 text-gray-500">
-                                                    <Clock size={10} /> <span className="text-[9px] font-black tracking-widest">{n.fecha}</span>
-                                                    <span className="text-[9px] text-gray-600">· {n.autor}</span>
-                                                    {n.esIa && <span className="text-[8px] text-purple-400 font-black">IA</span>}
-                                                    {editNotaId !== n.id && (
-                                                        <button onClick={() => { setEditNotaId(n.id); setEditNotaTxt(n.texto); }} className="ml-auto text-gray-500 hover:text-blue-400"><Pencil size={11} /></button>
-                                                    )}
-                                                </div>
-                                                {editNotaId === n.id ? (
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <textarea rows={2} value={editNotaTxt} onChange={(e) => setEditNotaTxt(e.target.value)} className="bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-blue-500 resize-none" />
-                                                        <div className="flex gap-2">
-                                                            <button onClick={() => setEditNotaId(null)} className="flex-1 text-[10px] font-bold text-gray-400 bg-white/5 rounded py-1">Cancelar</button>
-                                                            <button onClick={() => guardarNotaEdit(n.id)} className="flex-1 text-[10px] font-bold text-white bg-blue-600 rounded py-1">Guardar</button>
-                                                        </div>
-                                                    </div>
-                                                ) : <p className="text-xs text-gray-200">{n.texto}</p>}
-                                            </div>
-                                        ))}
-                                    </div>
-                                );
-                            })()}
                         </div>
 
                         {/* Fusionar duplicado */}

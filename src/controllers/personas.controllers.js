@@ -31,6 +31,33 @@ const decryptSafe = (val) => {
     try { return decrypt(val) || null; } catch { return null; }
 };
 
+// ============================================================
+// ALCANCE DE VISIBILIDAD ("cuaderno propio")
+// Cada usuario trabaja su propia cartera: ve los prospectos que creó y los
+// que le asignaron como ejecutivo. El Administrador ve los de toda su
+// organización. Ninguna cuenta cruza el límite de su organización.
+// ============================================================
+const esAdmin = (req) => req.user?.rol === 'Administrador';
+
+// Verifica que la ficha pertenezca al usuario antes de leerla o tocarla.
+// Devuelve la persona, o null si no existe o no es suya (mismo trato: 404,
+// para no delatar la existencia de fichas ajenas).
+const cargarPersonaPermitida = async (req, personaId, ejecutor = pool) => {
+    const { rows } = await ejecutor.query(
+        `SELECT id, estado, organizacion_id, creado_por, ejecutivo_id FROM persona WHERE id = $1`,
+        [personaId]
+    );
+    const p = rows[0];
+    if (!p) return null;
+    if ((p.organizacion_id || null) !== (req.user?.organizacionId || null)) return null;
+    if (esAdmin(req)) return p;
+    const usuarioId = req.user?.usuarioId || null;
+    if (p.creado_por === usuarioId || p.ejecutivo_id === usuarioId) return p;
+    return null;
+};
+
+const NO_ENCONTRADO = { success: false, message: 'Cliente no encontrado.' };
+
 // Upsert de etiquetas (por nombre) y vínculo con la persona
 const setEtiquetas = async (client, personaId, etiquetas) => {
     if (!Array.isArray(etiquetas)) return;
@@ -64,8 +91,10 @@ const setServiciosInteres = async (client, personaId, servicioIds) => {
 const buscarCoincidencias = async ({ rut, correos = [], telefonos = [], nombre, apellidos }, excluirId = null, organizacionId = null) => {
     const matches = new Map(); // persona_id -> { id, nombre, criterios:Set }
     // Filtro de organización: la dedupe nunca cruza datos entre despachos.
-    const orgSql = organizacionId ? ' AND p.organizacion_id = $ORG ' : '';
-    const orgSqlSimple = organizacionId ? ' AND organizacion_id = $ORG ' : '';
+    // Se aplica siempre — también cuando la organización es NULL, porque si no
+    // esas cuentas verían coincidencias de todos los despachos.
+    const orgSql = ' AND p.organizacion_id IS NOT DISTINCT FROM $ORG::uuid ';
+    const orgSqlSimple = ' AND organizacion_id IS NOT DISTINCT FROM $ORG::uuid ';
 
     const agregar = (rows, criterio) => {
         for (const r of rows) {
@@ -75,34 +104,33 @@ const buscarCoincidencias = async ({ rut, correos = [], telefonos = [], nombre, 
         }
     };
 
+    const org = organizacionId || null;
+
     if (rut) {
         const hash = generateHash(cleanRut(rut));
-        const params = organizacionId ? [hash, organizacionId] : [hash];
         const { rows } = await pool.query(
-            `SELECT id, nombre, apellidos, estado FROM persona WHERE rut_hash = $1 AND activo${orgSqlSimple.replace('$ORG', '$2')}`, params);
+            `SELECT id, nombre, apellidos, estado FROM persona WHERE rut_hash = $1 AND activo${orgSqlSimple.replace('$ORG', '$2')}`,
+            [hash, org]);
         agregar(rows, 'rut');
     }
     for (const c of correos.filter(Boolean)) {
-        const params = organizacionId ? [String(c).trim().toLowerCase(), organizacionId] : [String(c).trim().toLowerCase()];
         const { rows } = await pool.query(
             `SELECT p.id, p.nombre, p.apellidos, p.estado FROM persona p JOIN persona_correo pc ON pc.persona_id = p.id WHERE pc.correo_norm = $1 AND p.activo${orgSql.replace('$ORG', '$2')}`,
-            params);
+            [String(c).trim().toLowerCase(), org]);
         agregar(rows, 'correo');
     }
     for (const t of telefonos.filter(Boolean)) {
         const norm = normalizarTelefono(t);
         if (norm.length < 8) continue;
-        const params = organizacionId ? [norm, organizacionId] : [norm];
         const { rows } = await pool.query(
             `SELECT p.id, p.nombre, p.apellidos, p.estado FROM persona p JOIN persona_telefono pt ON pt.persona_id = p.id WHERE pt.telefono_norm = $1 AND p.activo${orgSql.replace('$ORG', '$2')}`,
-            params);
+            [norm, org]);
         agregar(rows, 'telefono');
     }
     if (nombre && apellidos) {
-        const params = organizacionId ? [nombre.trim(), apellidos.trim(), organizacionId] : [nombre.trim(), apellidos.trim()];
         const { rows } = await pool.query(
             `SELECT id, nombre, apellidos, estado FROM persona WHERE activo AND lower(nombre) = lower($1) AND lower(coalesce(apellidos,'')) = lower($2)${orgSqlSimple.replace('$ORG', '$3')}`,
-            params);
+            [nombre.trim(), apellidos.trim(), org]);
         agregar(rows, 'nombre');
     }
 
@@ -113,12 +141,13 @@ const buscarCoincidencias = async ({ rut, correos = [], telefonos = [], nombre, 
 export const buscarDuplicadosCRM = async (req, res) => {
     try {
         const { rut, correo, telefono, nombre, apellidos } = req.query;
+        // Nunca se buscan coincidencias fuera de la organización del usuario.
         const matches = await buscarCoincidencias({
             rut,
             correos: correo ? [correo] : [],
             telefonos: telefono ? [telefono] : [],
             nombre, apellidos
-        });
+        }, null, req.user?.organizacionId || null);
         return res.json({ success: true, duplicados: matches });
     } catch (error) {
         console.error('❌ Error buscando duplicados:', error.message);
@@ -179,8 +208,8 @@ export const crearPersona = async (req, res) => {
             `INSERT INTO persona
                 (nombre, segundo_nombre, apellidos, fecha_nacimiento, rut_encrypted, rut_hash,
                  estado, origen, rubro, direccion, comuna, region, ejecutivo_id, observaciones,
-                 organizacion_id, proximo_contacto, fecha_ultimo_contacto)
-             VALUES ($1,$2,$3,$4,$5,$6,'prospecto',$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW())
+                 organizacion_id, proximo_contacto, creado_por, fecha_ultimo_contacto)
+             VALUES ($1,$2,$3,$4,$5,$6,'prospecto',$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
              RETURNING id, nombre, segundo_nombre, apellidos, estado, origen, created_at`,
             [
                 nombre?.trim() || null, segundoNombre?.trim() || null, apellidos?.trim() || null,
@@ -189,7 +218,9 @@ export const crearPersona = async (req, res) => {
                 rubro?.trim() || null, direccion?.trim() || null, comuna?.trim() || null, region?.trim() || null,
                 ejecutivoId || null, observaciones?.trim() || null,
                 organizacionId,
-                proximoContacto || null
+                proximoContacto || null,
+                // Dueño del prospecto: solo él (y el Administrador) lo verá.
+                req.user?.usuarioId || null
             ]
         );
         const persona = insertPersona.rows[0];
@@ -240,6 +271,14 @@ export const crearPersona = async (req, res) => {
         return res.status(201).json({ success: true, persona });
     } catch (error) {
         await client.query('ROLLBACK');
+        // El RUT es único dentro de la organización: si otro usuario del mismo
+        // despacho ya lo registró, el prospecto puede no estar a la vista.
+        if (error.code === '23505') {
+            return res.status(409).json({
+                success: false,
+                message: 'Ese RUT ya está registrado en tu organización (puede pertenecer a la cartera de otro usuario).'
+            });
+        }
         console.error('❌ Error creando persona:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo crear el cliente.' });
     } finally {
@@ -257,9 +296,15 @@ export const listarPersonas = async (req, res) => {
         const where = ['p.activo'];
         const params = [];
         // Aislamiento por organización (ningún despacho ve prospectos de otro).
-        if (organizacionId) {
-            params.push(organizacionId);
-            where.push(`p.organizacion_id = $${params.length}`);
+        // Se aplica siempre: con organizacion_id NULL la cuenta solo ve las
+        // fichas que también son NULL, nunca las del resto.
+        params.push(organizacionId);
+        where.push(`p.organizacion_id IS NOT DISTINCT FROM $${params.length}::uuid`);
+        // Cuaderno propio: el usuario ve lo que creó y lo que le asignaron.
+        // El Administrador ve la cartera completa de su organización.
+        if (!esAdmin(req)) {
+            params.push(req.user?.usuarioId || null);
+            where.push(`(p.creado_por = $${params.length} OR p.ejecutivo_id = $${params.length})`);
         }
         if (estado && ['prospecto', 'activo', 'inactivo', 'perdido'].includes(estado)) {
             params.push(estado);
@@ -336,8 +381,9 @@ export const listarPersonas = async (req, res) => {
 export const obtenerPersona = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!await cargarPersonaPermitida(req, id)) return res.status(404).json(NO_ENCONTRADO);
         const pRes = await pool.query(`SELECT * FROM persona WHERE id = $1`, [id]);
-        if (pRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Cliente no encontrado.' });
+        if (pRes.rows.length === 0) return res.status(404).json(NO_ENCONTRADO);
         const p = pRes.rows[0];
 
         const [tels, mails, emps, notas, hist, etiq, servInt, ejec] = await Promise.all([
@@ -395,6 +441,8 @@ export const actualizarPersona = async (req, res) => {
             telefonos, correos, direccion, comuna, region, rubro, observaciones, ejecutivoId,
             etiquetas, serviciosInteres, proximoContacto, consentimiento
         } = req.body;
+
+        if (!await cargarPersonaPermitida(req, id)) return res.status(404).json(NO_ENCONTRADO);
 
         if (rut?.trim() && !validarRutDV(rut)) {
             return res.status(400).json({ success: false, message: 'El RUT no es válido (dígito verificador).' });
@@ -469,6 +517,7 @@ export const agregarNotaPersona = async (req, res) => {
         const { id } = req.params;
         const { texto } = req.body;
         if (!texto || !texto.trim()) return res.status(400).json({ success: false, message: 'La nota no puede estar vacía.' });
+        if (!await cargarPersonaPermitida(req, id)) return res.status(404).json(NO_ENCONTRADO);
         const result = await pool.query(
             `INSERT INTO nota (persona_id, texto, usuario_id, usuario_nombre, es_ia)
              VALUES ($1,$2,$3,$4,FALSE) RETURNING id, texto, usuario_nombre, created_at`,
@@ -493,8 +542,9 @@ export const agregarNotaPersona = async (req, res) => {
 export const eliminarPersona = async (req, res) => {
     try {
         const { id } = req.params;
+        if (!await cargarPersonaPermitida(req, id)) return res.status(404).json(NO_ENCONTRADO);
         const result = await pool.query(`DELETE FROM persona WHERE id = $1 RETURNING id`, [id]);
-        if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Cliente no encontrado.' });
+        if (result.rows.length === 0) return res.status(404).json(NO_ENCONTRADO);
         return res.json({ success: true, message: 'Cliente eliminado definitivamente.' });
     } catch (error) {
         console.error('❌ Error eliminando persona:', error.message);
@@ -513,9 +563,9 @@ export const cambiarEstadoPersona = async (req, res) => {
         if (!['prospecto', 'activo', 'inactivo', 'perdido'].includes(estado)) {
             return res.status(400).json({ success: false, message: 'Estado inválido.' });
         }
-        const cur = await client.query(`SELECT estado FROM persona WHERE id = $1`, [id]);
-        if (cur.rows.length === 0) return res.status(404).json({ success: false, message: 'Cliente no encontrado.' });
-        const anterior = cur.rows[0].estado;
+        const permitida = await cargarPersonaPermitida(req, id, client);
+        if (!permitida) return res.status(404).json(NO_ENCONTRADO);
+        const anterior = permitida.estado;
         if (anterior === estado) return res.status(400).json({ success: false, message: 'El cliente ya está en ese estado.' });
 
         await client.query('BEGIN');
@@ -541,9 +591,14 @@ export const cambiarEstadoPersona = async (req, res) => {
 // ============================================================
 export const catalogosCRM = async (req, res) => {
     try {
+        // Los ejecutivos asignables son los de la propia organización.
+        const org = req.user?.organizacionId || null;
         const [etiq, ejec, serv] = await Promise.all([
             pool.query(`SELECT id, nombre, color FROM etiqueta ORDER BY nombre`),
-            pool.query(`SELECT id, nombre FROM usuario WHERE activo = true ORDER BY nombre`),
+            pool.query(
+                `SELECT id, nombre FROM usuario
+                 WHERE activo = true AND organizacion_id IS NOT DISTINCT FROM $1::uuid
+                 ORDER BY nombre`, [org]),
             pool.query(`SELECT id, nombre, categoria FROM servicio WHERE activo = true ORDER BY nombre`),
         ]);
         return res.json({
@@ -562,7 +617,13 @@ export const catalogosCRM = async (req, res) => {
 export const empresasLista = async (req, res) => {
     try {
         const q = (req.query.q || '').trim().toLowerCase();
-        const { rows } = await pool.query(`SELECT id, razon_social FROM empresa ORDER BY razon_social`);
+        // Solo empresas de la organización del usuario.
+        const { rows } = await pool.query(
+            `SELECT id, razon_social FROM empresa
+             WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid
+             ORDER BY razon_social`,
+            [req.user?.organizacionId || null]
+        );
         let empresas = rows.map(e => ({ id: e.id, razonSocial: e.razon_social }));
         if (q) empresas = empresas.filter(e => (e.razonSocial || '').toLowerCase().includes(q));
         return res.json({ success: true, empresas: empresas.slice(0, 50) });
@@ -578,6 +639,13 @@ export const editarNotaPersona = async (req, res) => {
         const { notaId } = req.params;
         const { texto } = req.body;
         if (!texto || !texto.trim()) return res.status(400).json({ success: false, message: 'La nota no puede estar vacía.' });
+        // La nota se identifica sola: hay que subir hasta su persona para
+        // comprobar que la ficha es del usuario.
+        const duenio = await pool.query(`SELECT persona_id FROM nota WHERE id = $1`, [notaId]);
+        const personaId = duenio.rows[0]?.persona_id;
+        if (!personaId || !await cargarPersonaPermitida(req, personaId)) {
+            return res.status(404).json({ success: false, message: 'Nota no encontrada.' });
+        }
         const result = await pool.query(
             `UPDATE nota SET texto = $1, updated_at = NOW() WHERE id = $2 RETURNING id`,
             [texto.trim(), notaId]
@@ -596,6 +664,13 @@ export const asociarEmpresa = async (req, res) => {
         const { id } = req.params;
         const { empresaId, cargo, principal } = req.body;
         if (!empresaId) return res.status(400).json({ success: false, message: 'Debe indicar la empresa.' });
+        if (!await cargarPersonaPermitida(req, id)) return res.status(404).json(NO_ENCONTRADO);
+        // La empresa también debe ser de la organización del usuario.
+        const emp = await pool.query(
+            `SELECT id FROM empresa WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`,
+            [empresaId, req.user?.organizacionId || null]
+        );
+        if (emp.rows.length === 0) return res.status(404).json({ success: false, message: 'Empresa no encontrada.' });
         await pool.query(
             `INSERT INTO persona_empresa (persona_id, empresa_id, cargo, principal)
              VALUES ($1,$2,$3,$4)
@@ -617,6 +692,7 @@ export const crearEmpresaParaPersona = async (req, res) => {
         const { razonSocial, rut, giro, regimen } = req.body;
         if (!razonSocial?.trim()) return res.status(400).json({ success: false, message: 'La razón social es obligatoria.' });
         if (!rut?.trim() || !validarRutDV(rut)) return res.status(400).json({ success: false, message: 'El RUT de la empresa no es válido.' });
+        if (!await cargarPersonaPermitida(req, id)) return res.status(404).json(NO_ENCONTRADO);
 
         const rutHash = generateHash(cleanRut(rut));
         await client.query('BEGIN');
@@ -729,6 +805,7 @@ export const crearEmpresaParaPersona = async (req, res) => {
 export const desasociarEmpresa = async (req, res) => {
     try {
         const { id, empresaId } = req.params;
+        if (!await cargarPersonaPermitida(req, id)) return res.status(404).json(NO_ENCONTRADO);
         await pool.query(`DELETE FROM persona_empresa WHERE persona_id = $1 AND empresa_id = $2`, [id, empresaId]);
         return res.json({ success: true });
     } catch (error) {
@@ -746,8 +823,9 @@ export const fusionarPersona = async (req, res) => {
         if (!duplicadoId || duplicadoId === id) {
             return res.status(400).json({ success: false, message: 'Indica un duplicado distinto para fusionar.' });
         }
-        const chk = await client.query(`SELECT id FROM persona WHERE id IN ($1,$2)`, [id, duplicadoId]);
-        if (chk.rows.length < 2) return res.status(404).json({ success: false, message: 'Cliente(s) no encontrado(s).' });
+        // Ambas fichas deben ser del usuario: no se absorbe la cartera ajena.
+        if (!await cargarPersonaPermitida(req, id, client)) return res.status(404).json(NO_ENCONTRADO);
+        if (!await cargarPersonaPermitida(req, duplicadoId, client)) return res.status(404).json(NO_ENCONTRADO);
 
         await client.query('BEGIN');
         // Mover datos relacionados al objetivo

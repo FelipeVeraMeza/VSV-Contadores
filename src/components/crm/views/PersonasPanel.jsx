@@ -43,6 +43,9 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [miCartera, setMiCartera] = useState(false);
     const userId = getUser().id || null;
+    // Un usuario normal ya recibe solo su propia cartera desde el servidor;
+    // el filtro solo tiene sentido para el Administrador, que ve la del equipo.
+    const esAdmin = getUser().rol === 'Administrador';
 
     const cargar = useCallback(async () => {
         setLoading(true);
@@ -169,10 +172,12 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                             {e === 'Todos' ? 'Todos' : e} <span className="ml-1 px-1.5 rounded bg-black/30">{conteos[e] || 0}</span>
                         </button>
                     ))}
-                    <button onClick={() => setMiCartera(v => !v)} title="Ver solo mis prospectos"
-                        className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all ${miCartera ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/[0.03] border-white/5 text-gray-400 hover:text-white'}`}>
-                        Mi cartera
-                    </button>
+                    {esAdmin && (
+                        <button onClick={() => setMiCartera(v => !v)} title="Ver solo mis prospectos"
+                            className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all ${miCartera ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/[0.03] border-white/5 text-gray-400 hover:text-white'}`}>
+                            Mi cartera
+                        </button>
+                    )}
                     <button onClick={cargar} title="Recargar" className="p-2 rounded-lg border border-white/10 bg-black/40 text-gray-400 hover:text-white">
                         <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
                     </button>
