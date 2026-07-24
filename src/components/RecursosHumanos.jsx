@@ -1,166 +1,163 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, DollarSign, FileText, TrendingUp, UserPlus, Calculator, Settings, Clock, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { toast } from '@/components/ui/use-toast';
-import RrhhStats from '@/components/rrhh/RrhhStats';
+import { useSearchParams } from 'react-router-dom';
+import { Loader2, FileWarning, Users, Building2, ArrowUp, Search, ChevronRight } from 'lucide-react';
+import { useBunkerData } from '@/components/crm/crmData';
+import RrhhDashboard from '@/components/rrhh/RrhhDashboard';
 import GestionEmpleados from '@/components/rrhh/GestionEmpleados';
 import GestionLiquidaciones from '@/components/rrhh/GestionLiquidaciones';
-import GestionContratos from '@/components/rrhh/GestionContratos';
+import CentralizacionRrhh from '@/components/rrhh/CentralizacionRrhh';
 import ReportesRrhh from '@/components/rrhh/ReportesRrhh';
+import ConfiguracionRrhh from '@/components/rrhh/ConfiguracionRrhh';
 import NuevoEmpleadoModal from '@/components/rrhh/modals/NuevoEmpleadoModal';
 import NuevaLiquidacionModal from '@/components/rrhh/modals/NuevaLiquidacionModal';
-import ConfiguracionRrhh from '@/components/rrhh/ConfiguracionRrhh';
-import ControlAsistencia from '@/components/rrhh/ControlAsistencia';
 import { useAuth } from '@/hooks/useAuth';
-import { useQuery } from '@tanstack/react-query';
-import { getRrhhConfigApi } from '@/services/rrhhService'; 
+
+const SUBPAGINAS = {
+  dashboard:     { titulo: 'Dashboard',              subtitulo: 'Resumen del período y accesos rápidos' },
+  trabajadores:  { titulo: 'Trabajadores',           subtitulo: 'Fichas del personal' },
+  liquidaciones: { titulo: 'Liquidaciones',          subtitulo: 'Cálculo y aprobación de sueldos' },
+  centralizacion:{ titulo: 'Centralización',         subtitulo: 'Asiento contable de la nómina del período' },
+  documentos:    { titulo: 'Documentos',             subtitulo: 'Contratos, certificados y finiquitos' },
+  asistencia:    { titulo: 'Control de Asistencia',  subtitulo: 'Registro de jornada' },
+  configuracion: { titulo: 'Configuración',          subtitulo: 'Indicadores previsionales y comisiones AFP' },
+  reportes:      { titulo: 'Reportes',               subtitulo: 'Libro de remuneraciones' },
+};
+
+const Proximamente = ({ titulo }) => (
+  <div className="flex flex-col items-center justify-center py-24 text-gray-500">
+    <FileWarning className="h-14 w-14 mb-4 opacity-20" />
+    <h3 className="text-lg font-semibold text-white">{titulo}</h3>
+    <p className="text-sm">Este módulo estará disponible próximamente.</p>
+  </div>
+);
+
+// Esta sub-página es por empresa: si no hay una elegida, muestra un buscador
+// para seleccionarla ahí mismo (fija la empresa global de todo el sistema).
+const LABEL_PRINCIPAL = 'VOLLAIRE & OLIVOS SIMPLE PYME LTDA';
+
+const RequiereEmpresa = ({ seccion }) => {
+  const { user, setSelectedCompany } = useAuth();
+  const { clients, loading } = useBunkerData();
+  const [q, setQ] = useState('');
+  const nombre = (c) => c.razon_social || c.razonSocial || '';
+  const query = q.trim().toLowerCase();
+  const esAdmin = user?.rol === 'Administrador';
+  const principal = esAdmin ? (clients || []).find(c => nombre(c).trim().toUpperCase() === LABEL_PRINCIPAL) : null;
+  const lista = (clients || []).filter(c => c !== principal && nombre(c).toLowerCase().includes(query)).slice(0, 100);
+  const mostrarPrincipal = principal && nombre(principal).toLowerCase().includes(query);
+  const elegir = (c) => {
+    setSelectedCompany(c);
+    try { localStorage.setItem('selectedCompany', JSON.stringify(c)); } catch { /* ignore */ }
+  };
+  return (
+    <div className="max-w-xl mx-auto py-10">
+      <div className="flex flex-col items-center text-center gap-3 mb-6">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-violet-500/10 border border-purple-500/30 flex items-center justify-center">
+          <Building2 className="h-7 w-7 text-purple-400" />
+        </div>
+        <h2 className="text-xl font-bold text-white">Elige una empresa</h2>
+        <p className="text-gray-400 text-sm max-w-md">
+          {seccion || 'Esta sección'} se gestiona por empresa. Selecciona la empresa para continuar.
+        </p>
+      </div>
+      <div className="relative mb-3">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+        <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar empresa…"
+          className="w-full bg-white/[0.04] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50" />
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-purple-500" /></div>
+      ) : (
+        <>
+          {/* Empresa principal (el propio estudio) fijada arriba */}
+          {mostrarPrincipal && (
+            <button onClick={() => elegir(principal)} className="w-full flex items-center gap-3 px-4 py-3 mb-2 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/15 transition-colors text-left group">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center flex-shrink-0"><Building2 className="h-4 w-4 text-white" /></div>
+              <div className="flex-1 min-w-0">
+                <span className="text-sm text-white font-semibold truncate block">{nombre(principal)}</span>
+                <span className="text-[10px] uppercase tracking-widest text-purple-300">Empresa principal · tu estudio</span>
+              </div>
+              <ChevronRight className="h-4 w-4 text-purple-400/70 group-hover:text-purple-300 transition-colors" />
+            </button>
+          )}
+          <div className="flex items-center justify-between px-1 mb-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Empresas cliente</span>
+            <span className="text-[10px] text-gray-600">{lista.length}{query ? '' : (clients?.length ? ` de ${clients.length - (principal ? 1 : 0)}` : '')}</span>
+          </div>
+          <div className="max-h-[24rem] overflow-y-auto rounded-xl border border-white/10 bg-white/[0.02] divide-y divide-white/[0.05]">
+            {lista.length ? lista.map(c => (
+              <button key={c.id} onClick={() => elegir(c)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.05] transition-colors group">
+                <div className="w-8 h-8 rounded-lg bg-white/[0.05] border border-white/10 flex items-center justify-center flex-shrink-0"><Building2 className="h-4 w-4 text-gray-400" /></div>
+                <span className="flex-1 text-sm text-gray-200 truncate">{nombre(c)}</span>
+                <ChevronRight className="h-4 w-4 text-gray-600 group-hover:text-purple-400 transition-colors" />
+              </button>
+            )) : <div className="px-4 py-10 text-center text-gray-500 text-sm">Sin resultados para “{q}”.</div>}
+          </div>
+        </>
+      )}
+      <p className="text-gray-600 text-[11px] text-center mt-3">También puedes usar el selector de empresa de arriba a la derecha.</p>
+    </div>
+  );
+};
 
 const RecursosHumanos = () => {
   const { selectedCompany, user } = useAuth();
   const isAdmin = user?.rol === 'Administrador';
   const empresaId = selectedCompany?.id;
-  const [activeTab, setActiveTab] = useState('empleados');
+  const [searchParams] = useSearchParams();
+  const sub = searchParams.get('sub') || 'dashboard';
   const [isEmpleadoModalOpen, setIsEmpleadoModalOpen] = useState(false);
   const [isLiquidacionModalOpen, setIsLiquidacionModalOpen] = useState(false);
 
-  const [parametros, setParametros] = useState({
-    sueldoMinimo: 560000,
-    uf: 38750,
-    utm: 69200,
-    tasaSeguroCesantia: 0.006,
-    tasaSIS: 1.78,
-    afpComisiones: {
-        'Capital': 1.44, 'Cuprum': 1.44, 'Habitat': 1.27,
-        'Modelo': 0.58, 'Planvital': 1.16, 'Provida': 1.45, 'Uno': 0.69,
-    },
-  });
+  const meta = SUBPAGINAS[sub] || SUBPAGINAS.dashboard;
 
-  const { isLoading: loadingConfig } = useQuery({
-    queryKey: ['rrhh-config', empresaId],
-    queryFn: async () => {
-        if (!empresaId) return null;
-        const res = await getRrhhConfigApi(user?.sessionId, empresaId);
-        if (res.ok) {
-            const data = await res.json();
-            setParametros(data);
-        }
-        return res;
-    },
-    enabled: Boolean(empresaId) && !!user?.sessionId,
-  });
-
-  const tabs = useMemo(() => [
-    { id: 'empleados', name: 'Empleados', icon: Users, component: <GestionEmpleados empresaId={empresaId} onAddEmployee={() => setIsEmpleadoModalOpen(true)} /> },
-    { id: 'liquidaciones', name: 'Liquidaciones', icon: DollarSign, component: <GestionLiquidaciones empresaId={empresaId} onAddLiquidation={() => setIsLiquidacionModalOpen(true)} /> },
-    { id: 'contratos', name: 'Documentos', icon: FileText, component: <GestionContratos empresaId={empresaId} /> },
-    { id: 'asistencia', name: 'Control Asistencia', icon: Clock, component: <ControlAsistencia empresaId={empresaId} /> },
-    { id: 'reportes', name: 'Reportes RRHH', icon: TrendingUp, component: <ReportesRrhh empresaId={empresaId} /> },
-    { id: 'configuracion', name: 'Configuración', icon: Settings, component: <ConfiguracionRrhh parametros={parametros} setParametros={setParametros} empresaId={empresaId} /> }
-  ], [empresaId, parametros]);
-
-  const handleAddEmpleado = (empleado) => {
-    toast({ title: "Empleado Registrado", description: `${empleado.nombre} ha sido agregado al búnker.` });
-    setIsEmpleadoModalOpen(false);
+  // Dashboard, Trabajadores, Liquidaciones y Reportes funcionan consolidados (todas
+  // las empresas) cuando no hay una elegida. Centralización y Configuración se operan
+  // de a una empresa, así que muestran el buscador.
+  const conEmpresa = (comp) => (empresaId ? comp : <RequiereEmpresa seccion={meta.titulo} />);
+  const renderSub = () => {
+    switch (sub) {
+      case 'trabajadores':  return <GestionEmpleados empresaId={empresaId} onNew={empresaId ? () => setIsEmpleadoModalOpen(true) : null} />;
+      case 'liquidaciones': return <GestionLiquidaciones empresaId={empresaId} onAddLiquidation={empresaId ? () => setIsLiquidacionModalOpen(true) : null} />;
+      case 'centralizacion': return conEmpresa(<CentralizacionRrhh empresaId={empresaId} />);
+      case 'documentos':    return <Proximamente titulo="Documentos" />;
+      case 'asistencia':    return <Proximamente titulo="Control de Asistencia" />;
+      case 'configuracion': return conEmpresa(<ConfiguracionRrhh empresaId={empresaId} />);
+      case 'reportes':      return <ReportesRrhh empresaId={empresaId} />;
+      case 'dashboard':
+      default:              return <RrhhDashboard empresaId={empresaId} />;
+    }
   };
-  
-  const handleAddLiquidacion = (liquidacion) => {
-    toast({ title: "Liquidación Generada", description: `Periodo ${liquidacion.periodo} procesado correctamente.` });
-    setIsLiquidacionModalOpen(false);
-  };
-
-  // GOD MODE
-  if (!empresaId && !isAdmin) {
-    return (
-        <div className="flex flex-col items-center justify-center h-[60vh] text-gray-400">
-            <Loader2 className="h-10 w-10 animate-spin mb-4 text-purple-500" />
-            <p className="font-bold uppercase tracking-widest text-[10px]">Esperando selección de búnker empresarial...</p>
-        </div>
-    );
-  }
 
   return (
-    <div className="space-y-8">
-      <NuevoEmpleadoModal 
-        isOpen={isEmpleadoModalOpen} 
-        setIsOpen={setIsEmpleadoModalOpen} 
-        onAddEmpleado={handleAddEmpleado}
-        empresaId={empresaId}
-        afpList={Object.keys(parametros.afpComisiones)}
-      />
-      <NuevaLiquidacionModal 
-        isOpen={isLiquidacionModalOpen} 
-        setIsOpen={setIsLiquidacionModalOpen} 
-        onAddLiquidacion={handleAddLiquidacion}
-        empresaId={empresaId}
-        parametros={parametros}
-      />
+    <div className="space-y-6">
+      <NuevoEmpleadoModal isOpen={isEmpleadoModalOpen} setIsOpen={setIsEmpleadoModalOpen} onAddEmpleado={() => {}} empresaId={empresaId} />
+      <NuevaLiquidacionModal isOpen={isLiquidacionModalOpen} setIsOpen={setIsLiquidacionModalOpen} empresaId={empresaId} />
 
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+      {/* Encabezado contextual */}
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center shadow-lg shadow-purple-900/30 flex-shrink-0">
+          <Users className="h-6 w-6 text-white" />
+        </div>
         <div>
-          <h1 className="text-4xl font-black text-white mb-2 italic uppercase tracking-tighter">
-            Recursos Humanos
-          </h1>
-          <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.3em]">
-            Gestión integral de personal y remuneraciones
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
-          <Button 
-            onClick={() => setIsEmpleadoModalOpen(true)}
-            className="bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white h-11 px-4 font-bold shadow-lg shadow-purple-900/20"
-          >
-            <UserPlus className="h-4 w-4 mr-2" />
-            Nuevo Empleado
-          </Button>
-
-          <Button 
-            onClick={() => setIsLiquidacionModalOpen(true)}
-            className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white h-11 px-4 font-bold shadow-lg shadow-green-900/20"
-          >
-            <Calculator className="h-4 w-4 mr-2" />
-            Liquidar Sueldos
-          </Button>
+          <p className="text-purple-400/80 text-[10px] font-semibold uppercase tracking-[0.25em]">Recursos Humanos</p>
+          <h1 className="text-2xl font-bold text-white tracking-tight leading-tight">{meta.titulo}</h1>
+          <p className="text-gray-500 text-xs mt-0.5">{meta.subtitulo}</p>
         </div>
       </div>
 
-      <RrhhStats empresaId={empresaId} />
-
-      <div className="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden">
-        <div className="flex border-b border-white/10 overflow-x-auto no-scrollbar">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-shrink-0 flex items-center space-x-2 px-6 py-4 text-[10px] font-black uppercase tracking-widest transition-all ${
-                  isActive
-                    ? 'bg-gradient-to-r from-purple-500/20 to-violet-500/20 text-white border-b-2 border-purple-500'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <Icon className={`h-4 w-4 ${isActive ? 'text-purple-400' : 'text-gray-500'}`} />
-                <span>{tab.name}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div className="p-6">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              {tabs.find(t => t.id === activeTab)?.component}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </div>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={sub}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+        >
+          {renderSub()}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 };

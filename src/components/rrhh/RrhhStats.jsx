@@ -6,7 +6,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { getRrhhMetricsApi } from '@/services/rrhhService';
 
 const RrhhStats = ({ empresaId }) => {
-
     const { user, logout } = useAuth();
 
     const { data, isLoading, isError } = useQuery({
@@ -18,56 +17,26 @@ const RrhhStats = ({ empresaId }) => {
             return res.json();
         },
         enabled: Boolean(empresaId) && empresaId !== 'undefined' && !!user?.sessionId,
-        staleTime: 1000 * 60 * 5, // 5 minutos de caché
+        staleTime: 1000 * 60 * 2,
     });
 
-    const formatCurrency = (val) => {
-        return new Intl.NumberFormat('es-CL', {
-            style: 'currency',
-            currency: 'CLP',
-            minimumFractionDigits: 0
-        }).format(val || 0);
-    };
+    const formatCurrency = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(val || 0);
 
     const stats = useMemo(() => [
-        { 
-            title: 'Total Empleados', 
-            value: data?.totalEmpleados ?? '0', 
-            change: data?.variacionEmpleados ?? '+0', 
-            icon: Users, 
-            color: 'from-blue-500 to-cyan-600' 
-        },
-        { 
-            title: 'Masa Salarial', 
-            value: formatCurrency(data?.masaSalarial), 
-            change: data?.variacionMasa ?? '+0.0%', 
-            icon: DollarSign, 
-            color: 'from-green-500 to-emerald-600' 
-        },
-        { 
-            title: 'Nuevos Contratos', 
-            value: data?.nuevosContratos ?? '0', 
-            change: 'este mes', 
-            icon: UserPlus, 
-            color: 'from-purple-500 to-violet-600' 
-        },
-        { 
-            title: 'Finiquitos', 
-            value: data?.finiquitos ?? '0', 
-            change: 'este mes', 
-            icon: UserMinus, 
-            color: 'from-red-500 to-pink-600' 
-        }
+        { title: 'Trabajadores activos', value: data?.totalEmpleados ?? 0, hint: data?.variacionEmpleados ?? '+0', icon: Users, color: 'from-blue-500 to-cyan-500', ring: 'bg-blue-500/10' },
+        { title: 'Masa salarial', value: formatCurrency(data?.masaSalarial), hint: 'sueldos base', icon: DollarSign, color: 'from-emerald-500 to-green-500', ring: 'bg-emerald-500/10' },
+        { title: 'Nuevos contratos', value: data?.nuevosContratos ?? 0, hint: 'este mes', icon: UserPlus, color: 'from-violet-500 to-purple-500', ring: 'bg-violet-500/10' },
+        { title: 'Finiquitos', value: data?.finiquitos ?? 0, hint: 'este mes', icon: UserMinus, color: 'from-rose-500 to-pink-500', ring: 'bg-rose-500/10' },
     ], [data]);
 
-    if (isError) return <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs">Error al sincronizar métricas.</div>;
+    if (isError) return <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs">No se pudieron cargar las métricas.</div>;
 
     if (isLoading) {
         return (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="h-32 bg-white/5 animate-pulse rounded-2xl border border-white/10 flex items-center justify-center">
-                        <Loader2 className="h-6 w-6 text-blue-500/20 animate-spin" />
+                    <div key={i} className="h-28 bg-white/[0.03] animate-pulse rounded-2xl border border-white/10 flex items-center justify-center">
+                        <Loader2 className="h-5 w-5 text-white/10 animate-spin" />
                     </div>
                 ))}
             </div>
@@ -75,31 +44,28 @@ const RrhhStats = ({ empresaId }) => {
     }
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {stats.map((stat, index) => {
                 const Icon = stat.icon;
                 return (
                     <motion.div
                         key={stat.title}
-                        initial={{ opacity: 0, y: 20 }}
+                        initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: index * 0.1 }}
-                        className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-xl group hover:bg-white/[0.12] transition-all"
+                        transition={{ duration: 0.35, delay: index * 0.06 }}
+                        className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-5 hover:border-white/20 hover:bg-white/[0.06] transition-all"
                     >
-                        <div className="flex items-center justify-between mb-4">
-                            <div className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
-                                <Icon className="h-6 w-6 text-white" />
+                        <div className="flex items-start justify-between">
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-500">{stat.title}</p>
+                                <p className="text-[26px] leading-none font-bold text-white mt-3 tracking-tight truncate">{stat.value}</p>
+                                <p className="text-[11px] text-gray-500 mt-2">{stat.hint}</p>
                             </div>
-                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-white transition-colors">
-                                {stat.change}
-                            </span>
+                            <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg shadow-black/20 flex-shrink-0`}>
+                                <Icon className="h-[18px] w-[18px] text-white" />
+                            </div>
                         </div>
-                        <h3 className="text-2xl font-black text-white mb-1 tracking-tighter">
-                            {stat.value}
-                        </h3>
-                        <p className="text-gray-400 text-[11px] font-bold uppercase tracking-wider">
-                            {stat.title}
-                        </p>
+                        <div className={`absolute -right-6 -bottom-6 w-24 h-24 rounded-full ${stat.ring} blur-xl`} />
                     </motion.div>
                 );
             })}
