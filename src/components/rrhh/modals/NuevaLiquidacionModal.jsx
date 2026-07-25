@@ -33,7 +33,7 @@ const NuevaLiquidacionModal = ({ isOpen, setIsOpen, empresaId }) => {
     const { data: trabajadores = [] } = useQuery({
         queryKey: ['trabajadores', empresaId],
         queryFn: async () => { const r = await getTrabajadoresApi(sid, empresaId); return r.ok ? r.json() : []; },
-        enabled: isOpen && !!sid && !!empresaId,
+        enabled: isOpen && !!sid,
     });
     const { data: catalogos } = useQuery({
         queryKey: ['rem-catalogos'],
@@ -82,7 +82,7 @@ const NuevaLiquidacionModal = ({ isOpen, setIsOpen, empresaId }) => {
             const data = await r.json();
             if (!r.ok) { toast({ title: 'No se pudo guardar', description: data?.message, variant: 'destructive' }); return; }
             toast({ title: 'Liquidación guardada', description: `Líquido: ${clp(data?.totales?.liquido_pagar)}` });
-            queryClient.invalidateQueries({ queryKey: ['liquidaciones', empresaId] });
+            queryClient.invalidateQueries({ queryKey: ['liquidaciones'] });
             cerrar();
         } finally { setGuardando(false); }
     };
@@ -165,6 +165,9 @@ const NuevaLiquidacionModal = ({ isOpen, setIsOpen, empresaId }) => {
                                 <div className="text-center">
                                     <p className="font-bold text-white">{preview.trabajador?.nombre}</p>
                                     <p className="text-[10px] uppercase tracking-widest text-gray-400">{periodo}</p>
+                                    {preview.diasLicencia > 0 && (
+                                        <p className="text-[11px] text-amber-400 mt-1">− {preview.diasLicencia} día(s) por licencia médica · {preview.diasTrabajados} días trabajados</p>
+                                    )}
                                 </div>
                                 <Seccion titulo="Haberes" items={haberes} color="text-green-400" />
                                 <Seccion titulo="Descuentos" items={descuentos} color="text-red-400" signo="-" />

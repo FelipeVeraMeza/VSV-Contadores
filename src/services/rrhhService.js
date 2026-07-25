@@ -233,3 +233,99 @@ export const centralizarApi = (sessionId, data) => {
 export const reversarCentralizacionApi = (sessionId, data) => {
     return fetchWithAuth(`/rrhh/centralizacion/reversar`, sessionId, { method: 'POST', body: JSON.stringify(data) });
 };
+
+// ============================================================================
+// REMUNERACIONES — Vacaciones y Finiquitos (Fase 6)
+// ============================================================================
+
+export const getVacacionesApi = (sessionId, empresaId) => {
+    const params = new URLSearchParams();
+    if (empresaId) params.append('empresaId', empresaId);
+    const qs = params.toString();
+    return fetchWithAuth(`/rrhh/vacaciones${qs ? `?${qs}` : ''}`, sessionId);
+};
+
+export const registrarVacacionesApi = (sessionId, data) => {
+    return fetchWithAuth(`/rrhh/vacaciones`, sessionId, { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const getCausalesApi = (sessionId) => fetchWithAuth(`/rrhh/causales`, sessionId);
+
+export const previewFiniquitoApi = (sessionId, data) => {
+    return fetchWithAuth(`/rrhh/finiquitos/preview`, sessionId, { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const guardarFiniquitoApi = (sessionId, data) => {
+    return fetchWithAuth(`/rrhh/finiquitos`, sessionId, { method: 'POST', body: JSON.stringify(data) });
+};
+
+export const listFiniquitosApi = (sessionId, empresaId) => {
+    const params = new URLSearchParams();
+    if (empresaId) params.append('empresaId', empresaId);
+    const qs = params.toString();
+    return fetchWithAuth(`/rrhh/finiquitos${qs ? `?${qs}` : ''}`, sessionId);
+};
+
+export const getFiniquitoApi = (sessionId, id) => fetchWithAuth(`/rrhh/finiquitos/${id}`, sessionId);
+
+// ============================================================================
+// REMUNERACIONES — Fase 7: fijos, licencias, masivo, descarga y envío
+// ============================================================================
+
+// Generación masiva de liquidaciones (uno, una selección o todos los activos).
+export const generarMasivoApi = (sessionId, data) =>
+    fetchWithAuth(`/rrhh/liquidaciones/masivo`, sessionId, { method: 'POST', body: JSON.stringify(data) });
+
+// HTML imprimible de una liquidación (para descargar / imprimir a PDF).
+export const getPayslipApi = (sessionId, id) =>
+    fetchWithAuth(`/rrhh/liquidaciones/${id}/payslip`, sessionId);
+
+// Enviar la liquidación por correo al trabajador (o a un email indicado).
+export const enviarLiquidacionApi = (sessionId, id, email) =>
+    fetchWithAuth(`/rrhh/liquidaciones/${id}/enviar`, sessionId, { method: 'POST', body: JSON.stringify(email ? { email } : {}) });
+
+// Haberes / descuentos FIJOS (recurrentes) de un trabajador
+export const getFijosApi = (sessionId, trabajadorId) =>
+    fetchWithAuth(`/rrhh/haberes-fijos?trabajadorId=${trabajadorId}`, sessionId);
+
+export const createFijoApi = (sessionId, data) =>
+    fetchWithAuth(`/rrhh/haberes-fijos`, sessionId, { method: 'POST', body: JSON.stringify(data) });
+
+export const deleteFijoApi = (sessionId, id) =>
+    fetchWithAuth(`/rrhh/haberes-fijos/${id}`, sessionId, { method: 'DELETE' });
+
+// Licencias médicas — por trabajador, o consolidado (empresa/período)
+export const getLicenciasApi = (sessionId, { trabajadorId, empresaId, periodo } = {}) => {
+    const params = new URLSearchParams();
+    if (trabajadorId) params.append('trabajadorId', trabajadorId);
+    if (empresaId) params.append('empresaId', empresaId);
+    if (periodo) params.append('periodo', periodo);
+    const qs = params.toString();
+    return fetchWithAuth(`/rrhh/licencias${qs ? `?${qs}` : ''}`, sessionId);
+};
+
+export const createLicenciaApi = (sessionId, data) =>
+    fetchWithAuth(`/rrhh/licencias`, sessionId, { method: 'POST', body: JSON.stringify(data) });
+
+export const deleteLicenciaApi = (sessionId, id) =>
+    fetchWithAuth(`/rrhh/licencias/${id}`, sessionId, { method: 'DELETE' });
+
+// Certificados (antigüedad / renta) → HTML imprimible
+export const getCertificadoApi = (sessionId, trabajadorId, tipo) =>
+    fetchWithAuth(`/rrhh/certificado/${trabajadorId}?tipo=${tipo}`, sessionId);
+
+// Asistencia (registro de jornada por período)
+export const getAsistenciaRealApi = (sessionId, { trabajadorId, empresaId, periodo } = {}) => {
+    const params = new URLSearchParams();
+    if (trabajadorId) params.append('trabajadorId', trabajadorId);
+    if (empresaId) params.append('empresaId', empresaId);
+    if (periodo) params.append('periodo', periodo);
+    const qs = params.toString();
+    return fetchWithAuth(`/rrhh/asistencia${qs ? `?${qs}` : ''}`, sessionId);
+};
+
+export const saveAsistenciaApi = (sessionId, data) =>
+    fetchWithAuth(`/rrhh/asistencia`, sessionId, { method: 'POST', body: JSON.stringify(data) });
+
+export const deleteAsistenciaApi = (sessionId, id) =>
+    fetchWithAuth(`/rrhh/asistencia/${id}`, sessionId, { method: 'DELETE' });

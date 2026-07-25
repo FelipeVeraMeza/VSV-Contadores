@@ -8,7 +8,9 @@ import {
   ChevronDown, ShoppingCart, TrendingUp, Cloud, UserCheck,
   Wallet, CreditCard, BookCopy, ArrowRightLeft,
   Building2, UserPlus, MessageCircle, Mail, Activity, PieChart, UserCircle,
-  Clock, Settings, DollarSign, Book
+  Clock, Settings, DollarSign, Book, Umbrella, Receipt, Coins, Stethoscope,
+  CalendarDays, Download, Percent, HeartPulse, ListChecks, FileSpreadsheet,
+  BadgeCheck, Send, PanelLeftClose, PanelLeftOpen, Network, FolderOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth.jsx';
@@ -16,6 +18,7 @@ import { SiiProvider } from '@/contexts/SiiContext.jsx';
 import DelayedLoader from './ui/DelayedLoader';
 import GlobalCompanySelector from '@/components/ui/GlobalCompanySelector'; // Importación del nuevo selector
 import AvisoFacturacion from '@/components/ui/AvisoFacturacion';
+import { subRRHH } from '@/config/rrhhNav';
 
 function MainPage() {
   const { user, logout, selectedCompany } = useAuth(); 
@@ -25,6 +28,8 @@ function MainPage() {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedModule, setExpandedModule] = useState(null);
+  const [railCollapsed, setRailCollapsed] = useState(() => { try { return localStorage.getItem('sidebarRail') === '1'; } catch { return false; } });
+  const toggleRail = () => setRailCollapsed(v => { const n = !v; try { localStorage.setItem('sidebarRail', n ? '1' : '0'); } catch { /* ignore */ } return n; });
 
   // Submódulos del menú de Contabilidad
   const subContabilidad = [
@@ -50,16 +55,8 @@ function MainPage() {
   ];
 
   // Submódulos del menú de Recursos Humanos (Remuneraciones)
-  const subRRHH = [
-    { id: 'dashboard',      name: 'Dashboard',     icon: LayoutDashboard },
-    { id: 'trabajadores',   name: 'Trabajadores',  icon: Users },
-    { id: 'liquidaciones',  name: 'Liquidaciones', icon: DollarSign },
-    { id: 'centralizacion', name: 'Centralización', icon: BookCopy },
-    { id: 'documentos',     name: 'Documentos',    icon: FileText },
-    { id: 'asistencia',     name: 'Asistencia',    icon: Clock },
-    { id: 'configuracion',  name: 'Configuración', icon: Settings },
-    { id: 'reportes',       name: 'Reportes',      icon: Book },
-  ];
+  // subRRHH viene de src/config/rrhhNav.js (7 secciones planas y uniformes;
+  // las sub-páginas de cada sección se muestran como pestañas DENTRO de la página).
 
   // Auto-expandir Contabilidad cuando estás dentro de esa ruta
   useEffect(() => {
@@ -107,6 +104,9 @@ function MainPage() {
     }
   }
 
+  // El modo "rail" (solo íconos) aplica únicamente en escritorio.
+  const rail = railCollapsed && windowWidth >= 1024;
+
   return (
     <>
       <Helmet><title>VSV Pro | Sistema Contable</title></Helmet>
@@ -115,64 +115,75 @@ function MainPage() {
         <AnimatePresence>
           {(sidebarOpen || windowWidth >= 1024) && (
             <motion.aside
-              initial={{ x: -300, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: -300, opacity: 0 }}
-              className="fixed lg:relative inset-y-0 left-0 z-50 w-60 h-full bg-black/40 backdrop-blur-xl border-r border-white/10"
+              initial={{ x: -300, opacity: 0, width: rail ? 76 : 240 }}
+              animate={{ x: 0, opacity: 1, width: rail ? 76 : 240 }}
+              exit={{ x: -300, opacity: 0 }}
+              transition={{ x: { type: 'tween', duration: 0.25 }, width: { type: 'tween', duration: 0.2 } }}
+              className="fixed lg:relative inset-y-0 left-0 z-50 h-full bg-black/40 backdrop-blur-xl border-r border-white/10 flex flex-col overflow-hidden"
             >
-              <div className="p-6 border-b border-white/10">
-                <h1 className="text-white font-black text-xl flex items-center gap-2 italic uppercase tracking-tighter">
-                  <ShieldCheck className="text-purple-400 h-6 w-6" /> VSV Pro
-                </h1>
+              {/* Encabezado: logo + botón para colapsar el panel */}
+              <div className={`flex items-center ${rail ? 'justify-center' : 'justify-between'} gap-2 h-[68px] px-4 border-b border-white/10 flex-shrink-0`}>
+                {!rail && (
+                  <h1 className="text-white font-black text-lg flex items-center gap-2 italic uppercase tracking-tighter min-w-0">
+                    <ShieldCheck className="text-purple-400 h-6 w-6 flex-shrink-0" /><span className="truncate">VSV Pro</span>
+                  </h1>
+                )}
+                <button onClick={toggleRail} title={rail ? 'Expandir panel' : 'Colapsar panel'}
+                  className="hidden lg:inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0">
+                  {rail ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+                </button>
               </div>
-              <nav className="p-4 space-y-2">
+
+              {/* Navegación (con scroll propio) */}
+              <nav className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-3 space-y-1.5">
                 {modules.map((m) => {
                   const Icon = m.icon;
                   const isActive = location.pathname.startsWith(m.path);
                   const tieneSub = Array.isArray(m.sub) && m.sub.length > 0;
-                  const expandido = expandedModule === m.id;
+                  const expandido = expandedModule === m.id && !rail;
 
                   return (
                     <div key={m.id}>
                       <button
                         onClick={() => {
-                          if (tieneSub) {
-                            setExpandedModule(expandido ? null : m.id);
-                            if (!isActive) navigate(m.path);
-                          } else {
-                            navigate(m.path); setSidebarOpen(false);
+                          if (rail) {
+                            toggleRail();
+                            if (tieneSub) { setExpandedModule(m.id); if (!isActive) navigate(m.path); }
+                            else { navigate(m.path); }
+                            return;
                           }
+                          if (tieneSub) { setExpandedModule(expandido ? null : m.id); if (!isActive) navigate(m.path); }
+                          else { navigate(m.path); if (windowWidth < 1024) setSidebarOpen(false); }
                         }}
-                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all ${
+                        title={rail ? m.name : undefined}
+                        className={`w-full flex items-center ${rail ? 'justify-center' : 'justify-between'} px-3 py-3 rounded-xl transition-all ${
                           isActive ? `bg-gradient-to-r ${m.color} text-white shadow-lg shadow-purple-500/25` : 'text-gray-400 hover:bg-white/5 hover:text-white'
                         }`}
                       >
-                        <span className="flex items-center space-x-3 min-w-0">
+                        <span className={`flex items-center min-w-0 ${rail ? '' : 'space-x-3'}`}>
                           <Icon className="h-5 w-5 flex-shrink-0" />
-                          <span className="font-bold uppercase text-[11px] tracking-wider leading-tight text-left">{m.name}</span>
+                          {!rail && <span className="font-bold uppercase text-[11px] tracking-wider leading-tight text-left truncate">{m.name}</span>}
                         </span>
-                        {tieneSub && <ChevronDown className={`h-4 w-4 transition-transform ${expandido ? 'rotate-180' : ''}`} />}
+                        {!rail && tieneSub && <ChevronDown className={`h-4 w-4 flex-shrink-0 transition-transform ${expandido ? 'rotate-180' : ''}`} />}
                       </button>
 
-                      {/* Submódulos */}
-                      {tieneSub && (
+                      {/* Sub-páginas (planas y uniformes; sus secciones internas van como pestañas dentro de la página) */}
+                      {!rail && tieneSub && (
                         <AnimatePresence initial={false}>
                           {expandido && (
                             <motion.div
                               initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden ml-3 mt-1 border-l border-white/10 pl-2 space-y-1"
+                              className="overflow-hidden ml-3 mt-1 border-l border-white/10 pl-2 space-y-0.5"
                             >
                               {m.sub.map((s) => {
                                 const SubIcon = s.icon;
-                                const subIsActive = isActive && subActivo === s.id;
+                                const subActive = isActive && (Array.isArray(s.match) ? s.match.includes(subActivo) : subActivo === s.id);
                                 return (
-                                  <button
-                                    key={s.id}
-                                    onClick={() => { navigate(`${m.path}?sub=${s.id}`); setSidebarOpen(false); }}
-                                    className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg transition-all text-left ${
-                                      subIsActive ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-white hover:bg-white/5'
-                                    }`}
-                                  >
+                                  <button key={s.id}
+                                    onClick={() => { navigate(`${m.path}?sub=${s.id}`); if (windowWidth < 1024) setSidebarOpen(false); }}
+                                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all text-left ${subActive ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
                                     <SubIcon className="h-4 w-4 flex-shrink-0" />
-                                    <span className="font-bold uppercase text-[10px] tracking-wider">{s.name}</span>
+                                    <span className="font-bold uppercase text-[10px] tracking-wider truncate">{s.name}</span>
                                   </button>
                                 );
                               })}

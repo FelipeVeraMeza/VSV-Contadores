@@ -1,132 +1,129 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2, FileWarning, Users, Building2, ArrowUp, Search, ChevronRight } from 'lucide-react';
-import { useBunkerData } from '@/components/crm/crmData';
+import { Users, FileWarning } from 'lucide-react';
 import RrhhDashboard from '@/components/rrhh/RrhhDashboard';
 import GestionEmpleados from '@/components/rrhh/GestionEmpleados';
 import GestionLiquidaciones from '@/components/rrhh/GestionLiquidaciones';
 import CentralizacionRrhh from '@/components/rrhh/CentralizacionRrhh';
+import HaberesDescuentosRrhh from '@/components/rrhh/HaberesDescuentosRrhh';
+import LicenciasMedicasRrhh from '@/components/rrhh/LicenciasMedicasRrhh';
+import VacacionesRrhh from '@/components/rrhh/VacacionesRrhh';
+import FiniquitosRrhh from '@/components/rrhh/FiniquitosRrhh';
+import AsistenciaRrhh from '@/components/rrhh/AsistenciaRrhh';
+import DocumentosRrhh from '@/components/rrhh/DocumentosRrhh';
+import CertificadosRrhh from '@/components/rrhh/CertificadosRrhh';
 import ReportesRrhh from '@/components/rrhh/ReportesRrhh';
 import ConfiguracionRrhh from '@/components/rrhh/ConfiguracionRrhh';
 import NuevoEmpleadoModal from '@/components/rrhh/modals/NuevoEmpleadoModal';
 import NuevaLiquidacionModal from '@/components/rrhh/modals/NuevaLiquidacionModal';
 import { useAuth } from '@/hooks/useAuth';
+import { seccionDeSub } from '@/config/rrhhNav';
 
 const SUBPAGINAS = {
-  dashboard:     { titulo: 'Dashboard',              subtitulo: 'Resumen del período y accesos rápidos' },
-  trabajadores:  { titulo: 'Trabajadores',           subtitulo: 'Fichas del personal' },
-  liquidaciones: { titulo: 'Liquidaciones',          subtitulo: 'Cálculo y aprobación de sueldos' },
-  centralizacion:{ titulo: 'Centralización',         subtitulo: 'Asiento contable de la nómina del período' },
-  documentos:    { titulo: 'Documentos',             subtitulo: 'Contratos, certificados y finiquitos' },
-  asistencia:    { titulo: 'Control de Asistencia',  subtitulo: 'Registro de jornada' },
-  configuracion: { titulo: 'Configuración',          subtitulo: 'Indicadores previsionales y comisiones AFP' },
-  reportes:      { titulo: 'Reportes',               subtitulo: 'Libro de remuneraciones' },
+  dashboard:      { titulo: 'Dashboard',             subtitulo: 'Resumen del período y accesos rápidos' },
+  // Trabajadores
+  trabajadores:   { titulo: 'Trabajadores',          subtitulo: 'Fichas del personal' },
+  cargas:         { titulo: 'Cargas familiares',     subtitulo: 'Cargas declaradas por trabajador' },
+  contratos:      { titulo: 'Contratos',             subtitulo: 'Contratos y anexos del personal' },
+  cargos:         { titulo: 'Cargos y Departamentos',subtitulo: 'Estructura organizacional' },
+  'doc-trabajador':{ titulo: 'Documentos del trabajador', subtitulo: 'Archivos de la ficha' },
+  historial:      { titulo: 'Historial',             subtitulo: 'Auditoría de cambios de ficha' },
+  // Remuneraciones
+  haberes:        { titulo: 'Haberes y Descuentos',  subtitulo: 'Conceptos fijos (recurrentes) por trabajador' },
+  novedades:      { titulo: 'Novedades del período', subtitulo: 'Haberes y descuentos variables del mes' },
+  liquidaciones:  { titulo: 'Liquidaciones',         subtitulo: 'Cálculo y aprobación de sueldos' },
+  centralizacion: { titulo: 'Centralización',        subtitulo: 'Asiento contable de la nómina del período' },
+  // Gestión laboral
+  vacaciones:     { titulo: 'Vacaciones',            subtitulo: 'Saldo y registro de días de feriado legal' },
+  licencias:      { titulo: 'Licencias Médicas',     subtitulo: 'Días no trabajados que ajustan la liquidación' },
+  finiquitos:     { titulo: 'Finiquitos',            subtitulo: 'Cálculo de término de la relación laboral' },
+  asistencia:     { titulo: 'Control de Asistencia', subtitulo: 'Registro de jornada por período' },
+  // Documentos
+  'doc-laborales':   { titulo: 'Documentos laborales',   subtitulo: 'Contratos, anexos y comunicaciones' },
+  'doc-libro':       { titulo: 'Libro de Remuneraciones',subtitulo: 'Detalle del período por trabajador' },
+  'doc-previred':    { titulo: 'PREVIRED',               subtitulo: 'Archivo de cotizaciones previsionales' },
+  'doc-lre':         { titulo: 'Libro DT (LRE)',         subtitulo: 'Libro de Remuneraciones Electrónico' },
+  'doc-nomina':      { titulo: 'Nómina Bancaria',        subtitulo: 'Archivo de pago para el banco' },
+  'doc-certificados':{ titulo: 'Certificados',           subtitulo: 'Antigüedad laboral y renta' },
+  'doc-envios':      { titulo: 'Envíos',                 subtitulo: 'Envío de documentos por correo' },
+  // Reportes
+  reportes:       { titulo: 'Reportes',              subtitulo: 'Libro de remuneraciones y archivos' },
+  estadisticas:   { titulo: 'Estadísticas',          subtitulo: 'Indicadores y tendencias de nómina' },
+  exportaciones:  { titulo: 'Exportaciones',         subtitulo: 'Descargas masivas de datos' },
+  // Configuración
+  'cfg-empresa':     { titulo: 'Empresa',                 subtitulo: 'Parámetros de nómina por empresa' },
+  'cfg-parametros':  { titulo: 'Parámetros previsionales',subtitulo: 'Indicadores del período (UF, UTM, topes, tasas)' },
+  'cfg-afp':         { titulo: 'AFP',                     subtitulo: 'Comisiones de administración por AFP' },
+  'cfg-salud':       { titulo: 'Salud',                   subtitulo: 'Catálogo de isapres' },
+  'cfg-mutual':      { titulo: 'Mutual',                  subtitulo: 'Organismo y tasa del seguro de accidentes' },
+  'cfg-conceptos':   { titulo: 'Conceptos',               subtitulo: 'Catálogo de haberes y descuentos' },
+  'cfg-contabilidad':{ titulo: 'Contabilidad',            subtitulo: 'Mapeo de cuentas para la centralización' },
+  'cfg-plantillas':  { titulo: 'Plantillas',              subtitulo: 'Plantillas de documentos y correos' },
 };
 
 const Proximamente = ({ titulo }) => (
   <div className="flex flex-col items-center justify-center py-24 text-gray-500">
     <FileWarning className="h-14 w-14 mb-4 opacity-20" />
     <h3 className="text-lg font-semibold text-white">{titulo}</h3>
-    <p className="text-sm">Este módulo estará disponible próximamente.</p>
+    <p className="text-sm">Esta sección estará disponible próximamente.</p>
   </div>
 );
 
-// Esta sub-página es por empresa: si no hay una elegida, muestra un buscador
-// para seleccionarla ahí mismo (fija la empresa global de todo el sistema).
-const LABEL_PRINCIPAL = 'VOLLAIRE & OLIVOS SIMPLE PYME LTDA';
-
-const RequiereEmpresa = ({ seccion }) => {
-  const { user, setSelectedCompany } = useAuth();
-  const { clients, loading } = useBunkerData();
-  const [q, setQ] = useState('');
-  const nombre = (c) => c.razon_social || c.razonSocial || '';
-  const query = q.trim().toLowerCase();
-  const esAdmin = user?.rol === 'Administrador';
-  const principal = esAdmin ? (clients || []).find(c => nombre(c).trim().toUpperCase() === LABEL_PRINCIPAL) : null;
-  const lista = (clients || []).filter(c => c !== principal && nombre(c).toLowerCase().includes(query)).slice(0, 100);
-  const mostrarPrincipal = principal && nombre(principal).toLowerCase().includes(query);
-  const elegir = (c) => {
-    setSelectedCompany(c);
-    try { localStorage.setItem('selectedCompany', JSON.stringify(c)); } catch { /* ignore */ }
-  };
-  return (
-    <div className="max-w-xl mx-auto py-10">
-      <div className="flex flex-col items-center text-center gap-3 mb-6">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-violet-500/10 border border-purple-500/30 flex items-center justify-center">
-          <Building2 className="h-7 w-7 text-purple-400" />
-        </div>
-        <h2 className="text-xl font-bold text-white">Elige una empresa</h2>
-        <p className="text-gray-400 text-sm max-w-md">
-          {seccion || 'Esta sección'} se gestiona por empresa. Selecciona la empresa para continuar.
-        </p>
-      </div>
-      <div className="relative mb-3">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-        <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar empresa…"
-          className="w-full bg-white/[0.04] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50" />
-      </div>
-      {loading ? (
-        <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-purple-500" /></div>
-      ) : (
-        <>
-          {/* Empresa principal (el propio estudio) fijada arriba */}
-          {mostrarPrincipal && (
-            <button onClick={() => elegir(principal)} className="w-full flex items-center gap-3 px-4 py-3 mb-2 rounded-xl border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/15 transition-colors text-left group">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center flex-shrink-0"><Building2 className="h-4 w-4 text-white" /></div>
-              <div className="flex-1 min-w-0">
-                <span className="text-sm text-white font-semibold truncate block">{nombre(principal)}</span>
-                <span className="text-[10px] uppercase tracking-widest text-purple-300">Empresa principal · tu estudio</span>
-              </div>
-              <ChevronRight className="h-4 w-4 text-purple-400/70 group-hover:text-purple-300 transition-colors" />
-            </button>
-          )}
-          <div className="flex items-center justify-between px-1 mb-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Empresas cliente</span>
-            <span className="text-[10px] text-gray-600">{lista.length}{query ? '' : (clients?.length ? ` de ${clients.length - (principal ? 1 : 0)}` : '')}</span>
-          </div>
-          <div className="max-h-[24rem] overflow-y-auto rounded-xl border border-white/10 bg-white/[0.02] divide-y divide-white/[0.05]">
-            {lista.length ? lista.map(c => (
-              <button key={c.id} onClick={() => elegir(c)} className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.05] transition-colors group">
-                <div className="w-8 h-8 rounded-lg bg-white/[0.05] border border-white/10 flex items-center justify-center flex-shrink-0"><Building2 className="h-4 w-4 text-gray-400" /></div>
-                <span className="flex-1 text-sm text-gray-200 truncate">{nombre(c)}</span>
-                <ChevronRight className="h-4 w-4 text-gray-600 group-hover:text-purple-400 transition-colors" />
-              </button>
-            )) : <div className="px-4 py-10 text-center text-gray-500 text-sm">Sin resultados para “{q}”.</div>}
-          </div>
-        </>
-      )}
-      <p className="text-gray-600 text-[11px] text-center mt-3">También puedes usar el selector de empresa de arriba a la derecha.</p>
-    </div>
-  );
-};
-
 const RecursosHumanos = () => {
-  const { selectedCompany, user } = useAuth();
-  const isAdmin = user?.rol === 'Administrador';
+  const { selectedCompany } = useAuth();
   const empresaId = selectedCompany?.id;
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const sub = searchParams.get('sub') || 'dashboard';
   const [isEmpleadoModalOpen, setIsEmpleadoModalOpen] = useState(false);
   const [isLiquidacionModalOpen, setIsLiquidacionModalOpen] = useState(false);
 
   const meta = SUBPAGINAS[sub] || SUBPAGINAS.dashboard;
+  const seccion = seccionDeSub(sub);
+  const conPestanas = seccion.items.length > 1;
 
-  // Dashboard, Trabajadores, Liquidaciones y Reportes funcionan consolidados (todas
-  // las empresas) cuando no hay una elegida. Centralización y Configuración se operan
-  // de a una empresa, así que muestran el buscador.
-  const conEmpresa = (comp) => (empresaId ? comp : <RequiereEmpresa seccion={meta.titulo} />);
   const renderSub = () => {
     switch (sub) {
-      case 'trabajadores':  return <GestionEmpleados empresaId={empresaId} onNew={empresaId ? () => setIsEmpleadoModalOpen(true) : null} />;
-      case 'liquidaciones': return <GestionLiquidaciones empresaId={empresaId} onAddLiquidation={empresaId ? () => setIsLiquidacionModalOpen(true) : null} />;
-      case 'centralizacion': return conEmpresa(<CentralizacionRrhh empresaId={empresaId} />);
-      case 'documentos':    return <Proximamente titulo="Documentos" />;
-      case 'asistencia':    return <Proximamente titulo="Control de Asistencia" />;
-      case 'configuracion': return conEmpresa(<ConfiguracionRrhh empresaId={empresaId} />);
-      case 'reportes':      return <ReportesRrhh empresaId={empresaId} />;
+      // Trabajadores
+      case 'trabajadores':   return <GestionEmpleados empresaId={empresaId} onNew={() => setIsEmpleadoModalOpen(true)} />;
+      case 'cargas':         return <Proximamente titulo="Cargas familiares" />;
+      case 'contratos':      return <Proximamente titulo="Contratos" />;
+      case 'cargos':         return <Proximamente titulo="Cargos y Departamentos" />;
+      case 'doc-trabajador': return <Proximamente titulo="Documentos del trabajador" />;
+      case 'historial':      return <Proximamente titulo="Historial de cambios" />;
+      // Remuneraciones
+      case 'haberes':        return <HaberesDescuentosRrhh empresaId={empresaId} modo="fijos" />;
+      case 'novedades':      return <HaberesDescuentosRrhh empresaId={empresaId} modo="mes" />;
+      case 'liquidaciones':  return <GestionLiquidaciones empresaId={empresaId} onAddLiquidation={() => setIsLiquidacionModalOpen(true)} />;
+      case 'centralizacion': return <CentralizacionRrhh empresaId={empresaId} />;
+      // Gestión laboral
+      case 'vacaciones':     return <VacacionesRrhh empresaId={empresaId} />;
+      case 'licencias':      return <LicenciasMedicasRrhh empresaId={empresaId} />;
+      case 'finiquitos':     return <FiniquitosRrhh empresaId={empresaId} />;
+      case 'asistencia':     return <AsistenciaRrhh empresaId={empresaId} />;
+      // Documentos
+      case 'doc-laborales':   return <Proximamente titulo="Documentos laborales" />;
+      case 'doc-libro':       return <DocumentosRrhh empresaId={empresaId} tipo="libro" />;
+      case 'doc-previred':    return <DocumentosRrhh empresaId={empresaId} tipo="previred" />;
+      case 'doc-lre':         return <DocumentosRrhh empresaId={empresaId} tipo="lre" />;
+      case 'doc-nomina':      return <DocumentosRrhh empresaId={empresaId} tipo="nomina" />;
+      case 'doc-certificados':return <CertificadosRrhh empresaId={empresaId} />;
+      case 'doc-envios':      return <Proximamente titulo="Envíos de documentos" />;
+      // Reportes
+      case 'reportes':       return <ReportesRrhh empresaId={empresaId} />;
+      case 'estadisticas':   return <Proximamente titulo="Estadísticas" />;
+      case 'exportaciones':  return <Proximamente titulo="Exportaciones" />;
+      // Configuración (una sección por ítem)
+      case 'cfg-empresa':      return <ConfiguracionRrhh empresaId={empresaId} seccion="empresa" />;
+      case 'cfg-parametros':   return <ConfiguracionRrhh empresaId={empresaId} seccion="parametros" />;
+      case 'cfg-afp':          return <ConfiguracionRrhh empresaId={empresaId} seccion="afp" />;
+      case 'cfg-salud':        return <ConfiguracionRrhh empresaId={empresaId} seccion="isapres" />;
+      case 'cfg-mutual':       return <ConfiguracionRrhh empresaId={empresaId} seccion="mutual" />;
+      case 'cfg-conceptos':    return <ConfiguracionRrhh empresaId={empresaId} seccion="conceptos" />;
+      case 'cfg-contabilidad': return <ConfiguracionRrhh empresaId={empresaId} seccion="mapeo" />;
+      case 'cfg-plantillas':   return <Proximamente titulo="Plantillas" />;
       case 'dashboard':
-      default:              return <RrhhDashboard empresaId={empresaId} />;
+      default:               return <RrhhDashboard empresaId={empresaId} />;
     }
   };
 
@@ -142,10 +139,25 @@ const RecursosHumanos = () => {
         </div>
         <div>
           <p className="text-purple-400/80 text-[10px] font-semibold uppercase tracking-[0.25em]">Recursos Humanos</p>
-          <h1 className="text-2xl font-bold text-white tracking-tight leading-tight">{meta.titulo}</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight leading-tight">{seccion.label}</h1>
           <p className="text-gray-500 text-xs mt-0.5">{meta.subtitulo}</p>
         </div>
       </div>
+
+      {/* Pestañas de la sección (sus sub-páginas van aquí, no en el menú) */}
+      {conPestanas && (
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.03] border border-white/10 overflow-x-auto custom-scrollbar">
+          {seccion.items.map(it => {
+            const activo = it.id === sub;
+            return (
+              <button key={it.id} onClick={() => setSearchParams({ sub: it.id })}
+                className={`px-3.5 h-9 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${activo ? 'bg-gradient-to-r from-purple-500 to-violet-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
+                {it.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <AnimatePresence mode="wait">
         <motion.div

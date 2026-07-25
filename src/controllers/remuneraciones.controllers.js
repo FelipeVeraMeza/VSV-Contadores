@@ -54,12 +54,17 @@ const rutLegible = (rutEncrypted) => {
 };
 
 // Resumen para el listado (columnas de la tabla del frontend).
+const CONTRATO_LABEL = { indefinido: 'Indefinido', plazo_fijo: 'Plazo Fijo', por_obra: 'Obra o Faena' };
 const aResumen = (t) => ({
   id: t.id,
   nombre: nombreCompleto(t),
   rut: rutLegible(t.rut_encrypted),
+  email: t.email || '',
   cargo: t.cargo || '—',
   departamento: t.departamento || '—',
+  tipoContrato: t.tipo_contrato || null,
+  tipoContratoLabel: CONTRATO_LABEL[t.tipo_contrato] || '—',
+  fechaIngreso: t.fecha_ingreso || null,
   estado: t.estado_contrato === 'activo' ? 'Activo' : 'Inactivo',
 });
 
@@ -319,6 +324,29 @@ export const updateConfigEmpresa = async (req, res) => {
     const { empresaId } = { empresaId: b.empresaId || req.query.empresaId };
     const empresa = await empresaPermitida(req, empresaId);
     if (!empresa) return res.status(404).json({ message: 'Empresa no encontrada en tu organización' });
+
+    // Merge parcial: se guarda por secciones (Mutual, Mapeo, Empresa…), así que
+    // solo se pisan los campos ENVIADOS; el resto conserva su valor actual.
+    const prev = (await pool.query('SELECT * FROM rem_config_empresa WHERE empresa_id = $1', [empresaId])).rows[0] || {};
+    const pick = (bodyKey, col, fallback = null) => (b[bodyKey] !== undefined ? b[bodyKey] : (prev[col] ?? fallback));
+    const pickNum = (bodyKey, col) => (b[bodyKey] !== undefined ? (numOrNull(b[bodyKey]) || 0) : (prev[col] ?? 0));
+
+    const v = {
+      mutual: pick('mutual', 'mutual'),
+      tasa_mutual: pickNum('tasaMutual', 'tasa_mutual'),
+      moneda: pick('moneda', 'moneda', 'CLP') || 'CLP',
+      gratificacion_default: pick('gratificacionDefault', 'gratificacion_default', 'tope_475') || 'tope_475',
+      cuenta_sueldos: pick('cuentaSueldos', 'cuenta_sueldos'),
+      cuenta_aportes: pick('cuentaAportes', 'cuenta_aportes'),
+      cuenta_liquido_pagar: pick('cuentaLiquidoPagar', 'cuenta_liquido_pagar'),
+      cuenta_afp: pick('cuentaAfp', 'cuenta_afp'),
+      cuenta_salud: pick('cuentaSalud', 'cuenta_salud'),
+      cuenta_cesantia: pick('cuentaCesantia', 'cuenta_cesantia'),
+      cuenta_impuesto: pick('cuentaImpuesto', 'cuenta_impuesto'),
+      cuenta_mutual: pick('cuentaMutual', 'cuenta_mutual'),
+      cuenta_otros_desc: pick('cuentaOtrosDesc', 'cuenta_otros_desc'),
+    };
+
     const { rows } = await pool.query(
       `INSERT INTO rem_config_empresa
          (empresa_id, organizacion_id, mutual, tasa_mutual, moneda, gratificacion_default,
@@ -334,10 +362,9 @@ export const updateConfigEmpresa = async (req, res) => {
          cuenta_impuesto = EXCLUDED.cuenta_impuesto, cuenta_mutual = EXCLUDED.cuenta_mutual,
          cuenta_otros_desc = EXCLUDED.cuenta_otros_desc, updated_at = CURRENT_TIMESTAMP
        RETURNING *`,
-      [empresaId, empresa.organizacion_id, b.mutual || null, numOrNull(b.tasaMutual) || 0,
-       b.moneda || 'CLP', b.gratificacionDefault || 'tope_475',
-       b.cuentaSueldos || null, b.cuentaAportes || null, b.cuentaLiquidoPagar || null, b.cuentaAfp || null,
-       b.cuentaSalud || null, b.cuentaCesantia || null, b.cuentaImpuesto || null, b.cuentaMutual || null, b.cuentaOtrosDesc || null]
+      [empresaId, empresa.organizacion_id, v.mutual, v.tasa_mutual, v.moneda, v.gratificacion_default,
+       v.cuenta_sueldos, v.cuenta_aportes, v.cuenta_liquido_pagar, v.cuenta_afp, v.cuenta_salud,
+       v.cuenta_cesantia, v.cuenta_impuesto, v.cuenta_mutual, v.cuenta_otros_desc]
     );
     return res.status(200).json({ success: true, config: rows[0] });
   } catch (e) {

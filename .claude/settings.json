@@ -50,7 +50,24 @@
       "Bash(node tmp/_test_dashboard.mjs)",
       "Bash(rm -f tmp/_test_dashboard.mjs)",
       "Bash(node tmp/_test_listas.mjs)",
-      "Bash(rm -f tmp/_test_listas.mjs)"
+      "Bash(rm -f tmp/_test_listas.mjs)",
+      "Bash(node src/DatabaseThings/migrations/aplicar_migracion.mjs src/DatabaseThings/migrations/2026-07-24_remuneraciones_fase6.sql)",
+      "Bash(node --check src/services/finiquito.service.js)",
+      "Bash(node --check src/controllers/finiquitos.controllers.js)",
+      "Bash(node tmp/_test_fase6.mjs)",
+      "Bash(rm -f tmp/_test_fase6.mjs)",
+      "Bash(node src/DatabaseThings/migrations/aplicar_migracion.mjs 2026-07-24_remuneraciones_fase7.sql)",
+      "Bash(node src/DatabaseThings/migrations/aplicar_migracion.mjs src/DatabaseThings/migrations/2026-07-24_remuneraciones_fase7.sql)",
+      "Bash(node --check src/utils/mailer.js)",
+      "Bash(node tmp/test_fase7.mjs)",
+      "Bash(rm -f tmp/test_fase7.mjs)",
+      "Bash(node -e \"import\\('./src/database/db.js'\\).then\\(async \\({pool}\\)=>{const a=await pool.query\\('SELECT count\\(*\\) FROM rem_trabajador'\\);const b=await pool.query\\('SELECT count\\(*\\) FROM rem_haber_descuento_fijo'\\);const c=await pool.query\\('SELECT count\\(*\\) FROM rem_licencia_medica'\\);console.log\\('trabajadores:',a.rows[0].count,'| fijos:',b.rows[0].count,'| licencias:',c.rows[0].count\\);await pool.end\\(\\);}\\)\")",
+      "Bash(node src/DatabaseThings/migrations/aplicar_migracion.mjs src/DatabaseThings/migrations/2026-07-25_remuneraciones_fase8_asistencia.sql)",
+      "Bash(node --check src/controllers/asistencia.controllers.js)",
+      "Bash(node tmp/test_fase8.mjs)",
+      "Bash(node -e \"import\\('./src/database/db.js'\\).then\\(async \\({pool}\\)=>{const r=await pool.query\\(\\\\\"SELECT column_name FROM information_schema.columns WHERE table_name='empresa' AND \\(column_name ILIKE '%rut%' OR column_name ILIKE '%razon%'\\)\\\\\"\\);console.log\\(r.rows\\);await pool.end\\(\\);}\\)\")",
+      "Bash(rm -f tmp/test_fase8.mjs tmp/test_payslip.mjs)",
+      "Bash(node -e \"import\\('./src/database/db.js'\\).then\\(async \\({pool}\\)=>{const q=async\\(t\\)=>{const r=await pool.query\\('SELECT count\\(*\\) FROM '+t\\);return r.rows[0].count;};console.log\\('trabajadores:',await q\\('rem_trabajador'\\),'| asistencia:',await q\\('rem_asistencia_periodo'\\),'| config:',await q\\('rem_config_empresa'\\),'| liquidaciones:',await q\\('rem_liquidacion'\\)\\);await pool.end\\(\\);}\\)\")"
     ]
   }
 }

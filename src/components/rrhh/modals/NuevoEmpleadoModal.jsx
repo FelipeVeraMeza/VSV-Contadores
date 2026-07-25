@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCatalogosApi, createTrabajadorApi } from '@/services/rrhhService';
 import { ThemedSelect } from '@/components/ui/ThemedSelect';
+import { useBunkerData } from '@/components/crm/crmData';
+
+const LABEL_PRINCIPAL = 'VOLLAIRE & OLIVOS SIMPLE PYME LTDA';
 
 const ESTADO_INICIAL = {
     nombre: '', rut: '', fechaNacimiento: '', direccion: '', comuna: '', telefono: '', email: '',
@@ -21,8 +24,22 @@ const ESTADO_INICIAL = {
 const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => {
     const { user } = useAuth();
     const queryClient = useQueryClient();
+    const { clients } = useBunkerData();
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState(ESTADO_INICIAL);
+    // La empresa se elige en el modal: SimplePyme es una empresa más. Arranca con
+    // la empresa global si hay una seleccionada, pero se puede cambiar aquí.
+    const [empresaSel, setEmpresaSel] = useState(empresaId || '');
+    useEffect(() => { setEmpresaSel(empresaId || ''); }, [empresaId]);
+
+    const nombreEmp = (c) => c.razon_social || c.razonSocial || '';
+    const opcionesEmpresa = useMemo(() => {
+        const lista = clients || [];
+        const principal = lista.find(c => nombreEmp(c).trim().toUpperCase() === LABEL_PRINCIPAL);
+        const resto = lista.filter(c => c !== principal).sort((a, b) => nombreEmp(a).localeCompare(nombreEmp(b)));
+        const orden = principal ? [principal, ...resto] : resto;
+        return orden.map(c => ({ value: c.id, label: nombreEmp(c) + (c === principal ? ' — principal' : '') }));
+    }, [clients]);
 
     // Catálogos reales (AFP + isapres) desde la BD.
     const { data: catalogos } = useQuery({
@@ -46,13 +63,13 @@ const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => 
     };
     const handleRadioChange = (name, value) => setFormData(prev => ({ ...prev, [name]: value }));
 
-    const reset = () => { setFormData(ESTADO_INICIAL); setStep(1); };
+    const reset = () => { setFormData(ESTADO_INICIAL); setStep(1); setEmpresaSel(empresaId || ''); };
 
     const crear = useMutation({
         mutationFn: async () => {
             const saludId = formData.previsionSalud === 'isapre' ? (formData.isapreId || null) : (fonasa?.id || null);
             const payload = {
-                empresaId,
+                empresaId: empresaSel,
                 nombres: formData.nombre,
                 rut: formData.rut,
                 fechaNacimiento: formData.fechaNacimiento || null,
@@ -78,7 +95,8 @@ const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => 
         },
         onSuccess: (data) => {
             toast({ title: "Trabajador registrado", description: `${formData.nombre} fue agregado.` });
-            queryClient.invalidateQueries({ queryKey: ['trabajadores', empresaId] });
+            // Refresca tanto la vista consolidada como la de la empresa elegida.
+            queryClient.invalidateQueries({ queryKey: ['trabajadores'] });
             onAddEmpleado?.(data?.trabajador);
             reset();
             setIsOpen(false);
@@ -90,6 +108,7 @@ const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => 
         e.preventDefault();
         if (!formData.nombre.trim()) { toast({ title: "Falta el nombre", variant: "destructive" }); setStep(1); return; }
         if (!formData.rut.trim()) { toast({ title: "Falta el RUT", variant: "destructive" }); setStep(1); return; }
+        if (!empresaSel) { toast({ title: "Selecciona la empresa", description: "Elige a qué empresa pertenece el trabajador.", variant: "destructive" }); setStep(2); return; }
         crear.mutate();
     };
 
@@ -121,6 +140,9 @@ const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => 
                 return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <h3 className="col-span-full text-lg font-semibold text-white flex items-center"><Briefcase className="mr-2 h-5 w-5 text-purple-400" />Datos Laborales</h3>
+                        <div className="space-y-1 col-span-full"><Label>Empresa</Label>
+                            <ThemedSelect value={empresaSel} onChange={setEmpresaSel} placeholder="Selecciona la empresa…" options={opcionesEmpresa} />
+                        </div>
                         <div className="space-y-1"><Label>Fecha Inicio Contrato</Label><Input name="fechaInicio" type="date" value={formData.fechaInicio} onChange={handleChange} /></div>
                         <div className="space-y-1"><Label>Cargo</Label><Input name="cargo" value={formData.cargo} onChange={handleChange} /></div>
                         <div className="space-y-1"><Label>Tipo de Contrato</Label>

@@ -6,20 +6,10 @@ import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getLibroRemuneracionesApi, marcarPeriodoPagadoApi } from '@/services/rrhhService';
+import { exportLibro, exportNominaBancaria, exportPrevired, exportLre } from '@/services/rrhhReportes';
 
 const clp = (v) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(Number(v) || 0);
 const mesActual = () => new Date().toISOString().slice(0, 7);
-
-// Descarga un CSV con separador ';' y BOM (para Excel en español).
-const descargarCsv = (nombre, cols, filas) => {
-    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [cols.map(esc).join(';'), ...filas.map(f => f.map(esc).join(';'))].join('\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = nombre; a.click();
-    URL.revokeObjectURL(url);
-};
 
 const ReportesRrhh = ({ empresaId }) => {
     const { user } = useAuth();
@@ -31,7 +21,7 @@ const ReportesRrhh = ({ empresaId }) => {
     const { data: libro, isLoading } = useQuery({
         queryKey: ['libro-remuneraciones', empresaId, periodo],
         queryFn: async () => { const r = await getLibroRemuneracionesApi(sid, empresaId, periodo); return r.ok ? r.json() : null; },
-        enabled: Boolean(empresaId) && !!sid,
+        enabled: !!sid,   // consolidado o por empresa
     });
 
     const marcarPagado = useMutation({
@@ -49,34 +39,15 @@ const ReportesRrhh = ({ empresaId }) => {
     const pagables = filas.filter(f => f.estado === 'aprobada' || f.estado === 'pagada');
     const hayAprobadas = filas.some(f => f.estado === 'aprobada');
 
-    // ── Generadores de archivos ─────────────────────────────────────────────
-    const expLibro = () => descargarCsv(`libro_remuneraciones_${periodo}.csv`,
-        ['Empresa', 'Empleado', 'RUT', 'Cargo', 'Días', 'Imponible', 'No imponible', 'Haberes', 'Base tributable', 'Descuentos', 'Líquido', 'Aportes patronales', 'Estado'],
-        filas.map(f => [f.empresa, f.empleado, f.rut, f.cargo, f.dias, f.imponible, f.noImponible, f.haberes, f.tributable, f.descuentos, f.liquido, f.aportes, f.estado]));
-
-    const expBanco = () => {
-        if (!pagables.length) return toast({ title: 'Sin liquidaciones aprobadas', description: 'Aprueba liquidaciones para generar la nómina.', variant: 'destructive' });
-        descargarCsv(`nomina_bancaria_${periodo}.csv`,
-            ['Empresa', 'RUT', 'Nombre', 'Banco', 'Tipo de cuenta', 'N° de cuenta', 'Forma de pago', 'Monto'],
-            pagables.map(f => [f.empresa, f.rut, f.empleado, f.banco, f.tipoCuenta, f.numeroCuenta, f.tipoPago, f.liquido]));
-    };
-
-    const expPrevired = () => {
-        if (!pagables.length) return toast({ title: 'Sin liquidaciones aprobadas', variant: 'destructive' });
-        descargarCsv(`previred_${periodo}.csv`,
-            ['Empresa', 'RUT', 'Nombre', 'AFP', 'Días trab.', 'Renta imponible', 'Cotización AFP', 'SIS (empleador)', 'Salud', 'Cesantía trabajador', 'Cesantía empleador', 'Mutual', 'Impuesto único'],
-            pagables.map(f => [f.empresa, f.rut, f.empleado, f.afp, f.dias, f.imponible, f.descAfp, f.aporteSis, f.descSalud, f.descCesantia, f.aporteAfc, f.aporteMutual, f.impuesto]));
-    };
-
-    const expLre = () => {
-        if (!filas.length) return;
-        descargarCsv(`libro_electronico_LRE_${periodo}.csv`,
-            ['Empresa', 'RUT', 'Nombre', 'Cargo', 'Días', 'Sueldo base', 'Gratificación', 'Asignación familiar', 'Total haberes', 'Imponible', 'Base tributable', 'AFP', 'Salud', 'Cesantía', 'Impuesto único', 'Otros descuentos', 'Total descuentos', 'Líquido'],
-            filas.map(f => {
-                const otros = f.descuentos - f.descAfp - f.descSalud - f.descCesantia - f.impuesto;
-                return [f.empresa, f.rut, f.empleado, f.cargo, f.dias, f.sueldoBase, f.gratificacion, f.asignacionFamiliar, f.haberes, f.imponible, f.tributable, f.descAfp, f.descSalud, f.descCesantia, f.impuesto, otros, f.descuentos, f.liquido];
-            }));
-    };
+    // ── Generadores de archivos (helpers compartidos) ───────────────────────
+    const expLibro = () => filas.length && exportLibro(filas, periodo);
+    const expBanco = () => pagables.length
+        ? exportNominaBancaria(pagables, periodo)
+        : toast({ title: 'Sin liquidaciones aprobadas', description: 'Aprueba liquidaciones para generar la nómina.', variant: 'destructive' });
+    const expPrevired = () => pagables.length
+        ? exportPrevired(pagables, periodo)
+        : toast({ title: 'Sin liquidaciones aprobadas', variant: 'destructive' });
+    const expLre = () => filas.length && exportLre(filas, periodo);
 
     const archivos = [
         { label: 'Libro (CSV)', icon: Book, onClick: expLibro, disabled: !filas.length },

@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
-import { Loader2, CheckCircle2, AlertTriangle, RotateCcw, BookCopy, FileWarning } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertTriangle, RotateCcw, BookCopy, FileWarning, Building2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { previewCentralizacionApi, centralizarApi, reversarCentralizacionApi } from '@/services/rrhhService';
+import EmpresaPicker from '@/components/rrhh/EmpresaPicker';
 
 const clp = (v) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(Number(v) || 0);
 const mesActual = () => new Date().toISOString().slice(0, 7);
@@ -43,12 +44,11 @@ const CentralizacionRrhh = ({ empresaId }) => {
         <div className="space-y-5">
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-center gap-3">
-                    <BookCopy className="h-5 w-5 text-indigo-400" />
-                    <h3 className="text-lg font-black text-white tracking-tight">Centralización contable</h3>
+                <div className="flex flex-wrap items-center gap-3">
+                    <EmpresaPicker />
                     <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-44 bg-white/[0.04] border-white/10" />
                 </div>
-                {ya ? (
+                {empresaId && (ya ? (
                     <Button onClick={() => { if (window.confirm('¿Reversar la centralización? Se eliminará el comprobante contable.')) reversar.mutate(); }} disabled={reversar.isPending} variant="outline" className="border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10 h-10">
                         {reversar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-2" />}Reversar
                     </Button>
@@ -56,10 +56,16 @@ const CentralizacionRrhh = ({ empresaId }) => {
                     <Button onClick={() => centralizar.mutate()} disabled={!puedeCentralizar || centralizar.isPending} className="bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-semibold h-10 shadow-lg shadow-indigo-900/20">
                         {centralizar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <BookCopy className="h-4 w-4 mr-2" />}Centralizar período
                     </Button>
-                )}
+                ))}
             </div>
 
-            {isLoading ? (
+            {!empresaId ? (
+                <div className="flex flex-col items-center text-gray-500 py-20">
+                    <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center mb-4"><Building2 className="h-6 w-6 text-purple-400/60" /></div>
+                    <h3 className="text-base font-semibold text-white">Elige una empresa</h3>
+                    <p className="text-sm mt-1">Selecciona una empresa arriba para ver y generar su asiento de centralización.</p>
+                </div>
+            ) : isLoading ? (
                 <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-indigo-500" /></div>
             ) : !data || data.cantidad === 0 ? (
                 <div className="flex flex-col items-center text-gray-500 py-20">
