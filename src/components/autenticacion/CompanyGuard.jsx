@@ -29,7 +29,7 @@ const CompanyGuard = () => {
     if (loading) {
         return (
             <div className="h-full w-full flex items-center justify-center p-20">
-                <Loader2 className="h-8 w-8 text-blue-500 animate-spin opacity-20" />
+                <Loader2 className="h-8 w-8 text-emerald-500 animate-spin opacity-20" />
             </div>
         );
     }
@@ -38,8 +38,8 @@ const CompanyGuard = () => {
         return (
             <div className="h-screen w-full flex items-center justify-center bg-slate-950">
                 <div className="text-center">
-                    <Loader2 className="h-10 w-10 text-blue-500 animate-spin mx-auto mb-4" />
-                    <p className="text-[10px] font-black text-blue-500/50 uppercase tracking-[0.3em] animate-pulse">
+                    <Loader2 className="h-10 w-10 text-emerald-500 animate-spin mx-auto mb-4" />
+                    <p className="text-[10px] font-black text-emerald-500/50 uppercase tracking-[0.3em] animate-pulse">
                         Sincronizando Entidad...
                     </p>
                 </div>

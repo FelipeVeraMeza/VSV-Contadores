@@ -40,9 +40,9 @@ const CAMPOS = [
 
 // Card contenedora
 const Card = ({ icon: Icon, color, titulo, desc, children }) => (
-    <div className="bg-white/[0.02] rounded-2xl border border-white/10 p-6">
+    <div className="bg-white rounded-2xl border border-[#efe8dd] p-6">
         <h3 className={`text-sm font-bold ${color} mb-1 flex items-center`}><Icon className="h-4 w-4 mr-2" />{titulo}</h3>
-        {desc && <p className="text-xs text-gray-500 mb-4">{desc}</p>}
+        {desc && <p className="text-xs text-slate-400 mb-4">{desc}</p>}
         {children}
     </div>
 );
@@ -51,7 +51,7 @@ const Card = ({ icon: Icon, color, titulo, desc, children }) => (
 const PideEmpresa = ({ texto }) => (
     <div className="flex flex-col items-center gap-3 py-10">
         <EmpresaPicker />
-        <p className="text-xs text-gray-500">{texto}</p>
+        <p className="text-xs text-slate-400">{texto}</p>
     </div>
 );
 
@@ -154,9 +154,9 @@ const SeccionConfig = ({ empresaId, seccion = 'parametros' }) => {
         return (
             <div className="space-y-5">
                 <div className="flex items-center gap-3">
-                    <Calendar className="h-5 w-5 text-purple-400" />
-                    <Label className="text-white">Período</Label>
-                    <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-44 bg-white/[0.04] border-white/10" />
+                    <Calendar className="h-5 w-5 text-purple-600" />
+                    <Label className="text-slate-700">Período</Label>
+                    <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-44 bg-slate-50 border-[#efe8dd]" />
                 </div>
                 {paramData && !paramData.esDelPeriodo && (
                     <div className="flex items-start gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-300 text-sm">
@@ -164,16 +164,16 @@ const SeccionConfig = ({ empresaId, seccion = 'parametros' }) => {
                         <span>Este período aún no tiene indicadores propios; se muestran los del anterior como base. Ajusta y guarda para fijarlos en <b>{periodo}</b>.</span>
                     </div>
                 )}
-                <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-blue-300 text-xs">
+                <div className="flex items-start gap-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-blue-700 text-xs">
                     <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                     <span>Estos valores alimentan el cálculo de liquidaciones. Cárgalos con los valores oficiales del período antes de aprobar sueldos.</span>
                 </div>
                 {loadingParam ? <div className="flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-purple-500" /></div> : (
-                    <Card icon={Calendar} color="text-cyan-400" titulo={`Indicadores previsionales — ${periodo}`}>
+                    <Card icon={Calendar} color="text-cyan-600" titulo={`Indicadores previsionales — ${periodo}`}>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {CAMPOS.map(({ k, label, step }) => (
                                 <div key={k}><Label className="text-xs">{label}</Label>
-                                    <Input type="number" step={step} value={form[k] ?? ''} onChange={e => setField(k, e.target.value)} className="bg-white/[0.04] border-white/10" /></div>
+                                    <Input type="number" step={step} value={form[k] ?? ''} onChange={e => setField(k, e.target.value)} className="bg-slate-50 border-[#efe8dd]" /></div>
                             ))}
                         </div>
                         <div className="flex justify-end mt-5">
@@ -194,8 +194,8 @@ const SeccionConfig = ({ empresaId, seccion = 'parametros' }) => {
                     {(catalogos?.afp || []).map(a => (
                         <div key={a.id}><Label className="text-xs">{a.nombre}</Label>
                             <div className="flex items-center gap-1">
-                                <Input type="number" step="0.01" value={afpEdits[a.id] ?? ''} onChange={e => setAfpEdits(prev => ({ ...prev, [a.id]: e.target.value }))} className="bg-white/[0.04] border-white/10" />
-                                <span className="text-gray-500 text-sm">%</span>
+                                <Input type="number" step="0.01" value={afpEdits[a.id] ?? ''} onChange={e => setAfpEdits(prev => ({ ...prev, [a.id]: e.target.value }))} className="bg-slate-50 border-[#efe8dd]" />
+                                <span className="text-slate-400 text-sm">%</span>
                             </div>
                         </div>
                     ))}
@@ -214,12 +214,12 @@ const SeccionConfig = ({ empresaId, seccion = 'parametros' }) => {
             <Card icon={HeartPulse} color="text-pink-400" titulo="Isapres" desc="Catálogo de instituciones de salud disponibles al crear un trabajador.">
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                     {isapres.map(s => (
-                        <div key={s.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/10 text-sm text-gray-200">
+                        <div key={s.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-[#efe8dd] text-sm text-slate-700">
                             <HeartPulse className="h-3.5 w-3.5 text-pink-400 flex-shrink-0" />{s.nombre}
                         </div>
                     ))}
                 </div>
-                <p className="text-[11px] text-gray-600 mt-4">La edición del catálogo de isapres estará disponible próximamente.</p>
+                <p className="text-[11px] text-slate-400 mt-4">La edición del catálogo de isapres estará disponible próximamente.</p>
             </Card>
         );
     }
@@ -229,20 +229,20 @@ const SeccionConfig = ({ empresaId, seccion = 'parametros' }) => {
             <Card icon={ListChecks} color="text-violet-400" titulo="Conceptos (Haberes y Descuentos)" desc="Catálogo de conceptos con su tratamiento tributario (imponible / tributable / gratificación).">
                 <div className="flex flex-col sm:flex-row gap-2 mb-4">
                     <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <input value={qConcepto} onChange={e => setQConcepto(e.target.value)} placeholder="Buscar por código o descripción…"
-                            className="w-full bg-white/[0.04] border border-white/10 rounded-xl pl-9 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40" />
+                            className="w-full bg-slate-50 border border-[#efe8dd] rounded-xl pl-9 pr-4 py-2 text-sm text-slate-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40" />
                     </div>
                     <div className="w-full sm:w-44">
                         <ThemedSelect value={natFiltro} onChange={(v) => setNatFiltro(v === '__all__' ? '' : v)} placeholder="Naturaleza"
                             options={[{ value: '__all__', label: 'Todos' }, { value: 'HABER', label: 'Haberes' }, { value: 'DESCUENTO', label: 'Descuentos' }]} />
                     </div>
                 </div>
-                <div className="rounded-xl border border-white/10 overflow-hidden">
+                <div className="rounded-xl border border-[#efe8dd] overflow-hidden">
                     <div className="overflow-x-auto max-h-[28rem] overflow-y-auto">
                         <table className="w-full text-sm">
                             <thead className="sticky top-0">
-                                <tr className="bg-[#161425] text-gray-500">
+                                <tr className="bg-white text-slate-400">
                                     <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider">Código</th>
                                     <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider">Descripción</th>
                                     <th className="px-4 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wider">Naturaleza</th>
@@ -252,10 +252,10 @@ const SeccionConfig = ({ empresaId, seccion = 'parametros' }) => {
                             </thead>
                             <tbody className="divide-y divide-white/[0.06]">
                                 {conceptos.map(c => (
-                                    <tr key={c.id} className="hover:bg-white/[0.03]">
-                                        <td className="px-4 py-2 font-mono text-xs text-gray-400">{c.codigo}</td>
-                                        <td className="px-4 py-2 text-gray-200">{c.descripcion}{c.obsoleto && <span className="ml-2 text-[9px] uppercase text-amber-500/70">obsoleto</span>}</td>
-                                        <td className="px-4 py-2"><span className={`inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-md ${c.naturaleza === 'DESCUENTO' ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'}`}>{c.naturaleza === 'DESCUENTO' ? 'Descuento' : 'Haber'}</span></td>
+                                    <tr key={c.id} className="hover:bg-white">
+                                        <td className="px-4 py-2 font-mono text-xs text-slate-500">{c.codigo}</td>
+                                        <td className="px-4 py-2 text-slate-700">{c.descripcion}{c.obsoleto && <span className="ml-2 text-[9px] uppercase text-amber-500/70">obsoleto</span>}</td>
+                                        <td className="px-4 py-2"><span className={`inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-md ${c.naturaleza === 'DESCUENTO' ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-600'}`}>{c.naturaleza === 'DESCUENTO' ? 'Descuento' : 'Haber'}</span></td>
                                         <td className="px-4 py-2 text-center">{c.imponible ? '✓' : '—'}</td>
                                         <td className="px-4 py-2 text-center">{c.tributable ? '✓' : '—'}</td>
                                     </tr>
@@ -264,7 +264,7 @@ const SeccionConfig = ({ empresaId, seccion = 'parametros' }) => {
                         </table>
                     </div>
                 </div>
-                <p className="text-[11px] text-gray-600 mt-4">La edición de flags y la creación de conceptos personalizados estarán disponibles próximamente.</p>
+                <p className="text-[11px] text-slate-400 mt-4">La edición de flags y la creación de conceptos personalizados estarán disponibles próximamente.</p>
             </Card>
         );
     }
@@ -276,12 +276,12 @@ const SeccionConfig = ({ empresaId, seccion = 'parametros' }) => {
 
     if (seccion === 'mutual') {
         return (
-            <Card icon={ShieldCheck} color="text-amber-400" titulo="Mutual / Seguro de accidentes" desc="Organismo administrador y tasa de cotización (base + adicional) del seguro de la Ley 16.744.">
+            <Card icon={ShieldCheck} color="text-amber-600" titulo="Mutual / Seguro de accidentes" desc="Organismo administrador y tasa de cotización (base + adicional) del seguro de la Ley 16.744.">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div><Label className="text-xs">Mutual / organismo</Label>
-                        <Input value={cfgForm.mutual ?? ''} onChange={e => setCfg('mutual', e.target.value)} placeholder="Ej: ACHS, Mutual de Seguridad, IST…" className="bg-white/[0.04] border-white/10" /></div>
+                        <Input value={cfgForm.mutual ?? ''} onChange={e => setCfg('mutual', e.target.value)} placeholder="Ej: ACHS, Mutual de Seguridad, IST…" className="bg-slate-50 border-[#efe8dd]" /></div>
                     <div><Label className="text-xs">Tasa mutual (%)</Label>
-                        <Input type="number" step="0.01" value={cfgForm.tasaMutual ?? ''} onChange={e => setCfg('tasaMutual', e.target.value)} className="bg-white/[0.04] border-white/10" /></div>
+                        <Input type="number" step="0.01" value={cfgForm.tasaMutual ?? ''} onChange={e => setCfg('tasaMutual', e.target.value)} className="bg-slate-50 border-[#efe8dd]" /></div>
                 </div>
                 <div className="flex justify-end mt-5">
                     <Button onClick={() => guardarConfig.mutate(['mutual', 'tasaMutual'])} disabled={guardarConfig.isPending} className="bg-gradient-to-r from-amber-500 to-orange-600 text-white">
@@ -294,7 +294,7 @@ const SeccionConfig = ({ empresaId, seccion = 'parametros' }) => {
 
     if (seccion === 'empresa') {
         return (
-            <Card icon={Building2} color="text-cyan-400" titulo="Configuración de la empresa" desc="Parámetros de nómina por defecto para esta empresa.">
+            <Card icon={Building2} color="text-cyan-600" titulo="Configuración de la empresa" desc="Parámetros de nómina por defecto para esta empresa.">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div><Label className="text-xs">Moneda</Label>
                         <ThemedSelect value={cfgForm.moneda ?? 'CLP'} onChange={(v) => setCfg('moneda', v)} options={[{ value: 'CLP', label: 'Peso chileno (CLP)' }, { value: 'USD', label: 'Dólar (USD)' }, { value: 'UF', label: 'UF' }]} /></div>
@@ -314,13 +314,13 @@ const SeccionConfig = ({ empresaId, seccion = 'parametros' }) => {
     // seccion === 'mapeo'
     return (
         <Card icon={BookCopy} color="text-indigo-400" titulo="Mapeo contable (centralización)" desc="Cuentas del plan a las que se imputa el asiento de la nómina de esta empresa.">
-            <p className="text-xs text-gray-500 mb-3">{planCuentas.length ? `${planCuentas.length} cuentas disponibles en el plan.` : 'Esta empresa no tiene plan de cuentas cargado; ingresa los códigos manualmente.'}</p>
+            <p className="text-xs text-slate-400 mb-3">{planCuentas.length ? `${planCuentas.length} cuentas disponibles en el plan.` : 'Esta empresa no tiene plan de cuentas cargado; ingresa los códigos manualmente.'}</p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {CUENTAS.map(({ k, label }) => (
                     <div key={k}><Label className="text-xs">{label}</Label>
                         {cuentaOptions.length
                             ? <ThemedSelect value={cfgForm[k]} onChange={(v) => setCfg(k, v)} options={cuentaOptions} placeholder="Cuenta…" />
-                            : <Input value={cfgForm[k] ?? ''} onChange={e => setCfg(k, e.target.value)} placeholder="Código de cuenta" className="bg-white/[0.04] border-white/10" />}
+                            : <Input value={cfgForm[k] ?? ''} onChange={e => setCfg(k, e.target.value)} placeholder="Código de cuenta" className="bg-slate-50 border-[#efe8dd]" />}
                     </div>
                 ))}
             </div>
@@ -351,13 +351,13 @@ const ConfiguracionRrhh = ({ empresaId, seccion }) => {
     if (seccion) return <SeccionConfig empresaId={empresaId} seccion={seccion} />;
     return (
         <div className="space-y-5">
-            <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-white/[0.03] border border-white/10 w-fit max-w-full overflow-x-auto">
+            <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-white border border-[#efe8dd] w-fit max-w-full overflow-x-auto">
                 {TABS.map(t => {
                     const Icon = t.icon;
                     const activo = tab === t.id;
                     return (
                         <button key={t.id} onClick={() => setTab(t.id)}
-                            className={`inline-flex items-center gap-2 px-3.5 h-9 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${activo ? 'bg-gradient-to-r from-purple-500 to-violet-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
+                            className={`inline-flex items-center gap-2 px-3.5 h-9 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${activo ? 'bg-gradient-to-r from-purple-500 to-violet-600 text-white shadow' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}>
                             <Icon className="h-4 w-4" />{t.label}
                         </button>
                     );

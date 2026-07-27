@@ -27,13 +27,13 @@ const validarRutDV = (rut) => {
     return dv === esperado;
 };
 
-const inputCls = "bg-black/40 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none focus:border-emerald-500 transition-colors placeholder:text-gray-600 w-full";
+const inputCls = "bg-slate-50 border border-[#efe8dd] rounded-lg p-2.5 text-xs text-slate-900 outline-none focus:border-emerald-500 transition-colors placeholder:text-slate-400 w-full";
 
 const Campo = ({ label, children, hint }) => (
     <label className="flex flex-col gap-1">
-        <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{label}</span>
+        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
         {children}
-        {hint && <span className="text-[9px] text-gray-600">{hint}</span>}
+        {hint && <span className="text-[9px] text-slate-400">{hint}</span>}
     </label>
 );
 
@@ -85,32 +85,32 @@ const ConvertirClienteModal = ({ persona, onClose, onConverted }) => {
         >
             <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-full max-w-lg bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl flex flex-col"
+                className="w-full max-w-lg bg-white border border-[#efe8dd] rounded-2xl shadow-2xl flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="p-5 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-emerald-900/30 to-transparent">
+                <div className="p-5 border-b border-[#efe8dd] flex items-center justify-between bg-gradient-to-r from-emerald-900/30 to-transparent">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-600">
                             <ArrowRightCircle size={20} />
                         </div>
                         <div>
-                            <h2 className="text-sm font-black text-white uppercase tracking-tight">Convertir a Cliente</h2>
-                            <p className="text-[10px] text-gray-500">Se creará su empresa y pasará a Clientes</p>
+                            <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight">Convertir a Cliente</h2>
+                            <p className="text-[10px] text-slate-400">Se creará su empresa y pasará a Clientes</p>
                         </div>
                     </div>
-                    <button onClick={onClose} aria-label="Cerrar" className="p-2 rounded-xl bg-white/5 text-gray-400 hover:text-red-400 transition-colors">
+                    <button onClick={onClose} aria-label="Cerrar" className="p-2 rounded-xl bg-slate-50 text-slate-500 hover:text-red-500 transition-colors">
                         <X size={18} />
                     </button>
                 </div>
 
                 {/* Body */}
                 <div className="p-5 space-y-4">
-                    <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3 flex items-center gap-3">
-                        <Building2 size={16} className="text-gray-500 shrink-0" />
-                        <p className="text-[11px] text-gray-400 leading-relaxed">
-                            Convertirás a <span className="text-white font-bold">{persona?.nombreCompleto || 'este prospecto'}</span> en cliente.
-                            Si el RUT ya existe, se <span className="text-emerald-400">reutiliza</span> esa empresa en vez de duplicarla.
+                    <div className="bg-white border border-[#efe8dd] rounded-xl p-3 flex items-center gap-3">
+                        <Building2 size={16} className="text-slate-400 shrink-0" />
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                            Convertirás a <span className="text-slate-900 font-bold">{persona?.nombreCompleto || 'este prospecto'}</span> en cliente.
+                            Si el RUT ya existe, se <span className="text-emerald-600">reutiliza</span> esa empresa en vez de duplicarla.
                         </p>
                     </div>
 
@@ -127,10 +127,10 @@ const ConvertirClienteModal = ({ persona, onClose, onConverted }) => {
                                 onBlur={() => rutValido && setRut(formatRut(rut))}
                                 placeholder="76.123.456-7"
                             />
-                            {rutValido === true && <CheckCircle2 size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-emerald-400" />}
-                            {rutValido === false && <AlertTriangle size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-red-400" />}
+                            {rutValido === true && <CheckCircle2 size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-emerald-600" />}
+                            {rutValido === false && <AlertTriangle size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-red-500" />}
                         </div>
-                        {rutValido === false && <span className="text-[9px] text-red-400">Dígito verificador incorrecto.</span>}
+                        {rutValido === false && <span className="text-[9px] text-red-500">Dígito verificador incorrecto.</span>}
                     </Campo>
 
                     <div className="grid grid-cols-2 gap-3">
@@ -144,8 +144,8 @@ const ConvertirClienteModal = ({ persona, onClose, onConverted }) => {
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-white/10 flex gap-3">
-                    <Button variant="ghost" onClick={onClose} className="flex-1 uppercase font-black text-[10px] tracking-widest text-gray-400 h-10 rounded-xl bg-white/5 hover:bg-white/10">
+                <div className="p-4 border-t border-[#efe8dd] flex gap-3">
+                    <Button variant="ghost" onClick={onClose} className="flex-1 uppercase font-black text-[10px] tracking-widest text-slate-500 h-10 rounded-xl bg-slate-50 hover:bg-slate-100">
                         Cancelar
                     </Button>
                     <Button

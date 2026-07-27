@@ -14,10 +14,10 @@ const getUser = () => {
 const getSessionId = () => getUser().sessionId;
 
 const ESTADO_STYLE = {
-    prospecto: 'text-amber-400 border-amber-400/30 bg-amber-400/10',
-    activo: 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10',
-    inactivo: 'text-gray-400 border-gray-400/30 bg-gray-400/10',
-    perdido: 'text-red-400 border-red-400/30 bg-red-400/10',
+    prospecto: 'text-amber-600 border-amber-400/30 bg-amber-400/10',
+    activo: 'text-emerald-600 border-emerald-400/30 bg-emerald-400/10',
+    inactivo: 'text-slate-500 border-gray-400/30 bg-gray-400/10',
+    perdido: 'text-red-500 border-red-400/30 bg-red-400/10',
 };
 
 const ESTADOS = ['Todos', 'prospecto', 'activo', 'inactivo', 'perdido'];
@@ -168,25 +168,25 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                 <div className="flex items-center gap-2 flex-wrap flex-1">
                     {ESTADOS.map(e => (
                         <button key={e} onClick={() => setEstado(e)}
-                            className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all ${estado === e ? 'bg-white/10 border-blue-500/50 text-white' : 'bg-white/[0.03] border-white/5 text-gray-400 hover:text-white'}`}>
-                            {e === 'Todos' ? 'Todos' : e} <span className="ml-1 px-1.5 rounded bg-black/30">{conteos[e] || 0}</span>
+                            className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all ${estado === e ? 'bg-emerald-50 border-[#199b4d]/40 text-[#199b4d]' : 'bg-white border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
+                            {e === 'Todos' ? 'Todos' : e} <span className="ml-1 px-1.5 rounded bg-slate-50">{conteos[e] || 0}</span>
                         </button>
                     ))}
                     {esAdmin && (
                         <button onClick={() => setMiCartera(v => !v)} title="Ver solo mis prospectos"
-                            className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all ${miCartera ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/[0.03] border-white/5 text-gray-400 hover:text-white'}`}>
+                            className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all ${miCartera ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
                             Mi cartera
                         </button>
                     )}
-                    <button onClick={cargar} title="Recargar" className="p-2 rounded-lg border border-white/10 bg-black/40 text-gray-400 hover:text-white">
+                    <button onClick={cargar} title="Recargar" className="p-2 rounded-lg border border-[#efe8dd] bg-slate-50 text-slate-500 hover:text-slate-900">
                         <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
                     </button>
                 </div>
                 <div className="flex gap-2">
                     <div className="relative flex-1 lg:w-72">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
                         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, RUT, correo o teléfono..."
-                            className="w-full bg-black/30 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white outline-none focus:border-blue-500 placeholder:text-gray-600" />
+                            className="w-full bg-slate-50 border border-[#efe8dd] rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-500" />
                     </div>
                 </div>
             </div>
@@ -194,21 +194,21 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
             {/* Barra de acciones en lote */}
             {selectedIds.size > 0 && (
                 <div className="flex items-center flex-wrap gap-2 flex-shrink-0 bg-blue-600/15 border border-blue-500/30 rounded-xl px-3 py-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-300">{selectedIds.size} seleccionado(s)</span>
-                    <div className="h-4 w-px bg-white/10 mx-1" />
-                    <button onClick={() => bulkEstado('activo')} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-300 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg transition-colors">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-700">{selectedIds.size} seleccionado(s)</span>
+                    <div className="h-4 w-px bg-slate-100 mx-1" />
+                    <button onClick={() => bulkEstado('activo')} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg transition-colors">
                         <CheckCircle2 size={12} /> Activar
                     </button>
-                    <button onClick={() => bulkEstado('inactivo')} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg transition-colors">
+                    <button onClick={() => bulkEstado('inactivo')} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-amber-700 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg transition-colors">
                         <RotateCcw size={12} /> Inactivar
                     </button>
-                    <button onClick={() => bulkEstado('perdido')} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-red-300 hover:text-red-200 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded-lg transition-colors">
+                    <button onClick={() => bulkEstado('perdido')} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-red-600 hover:text-red-200 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1 rounded-lg transition-colors">
                         <UserMinus size={12} /> Perder
                     </button>
-                    <button onClick={bulkEliminar} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-red-300 hover:text-white bg-red-600/20 hover:bg-red-600 px-2.5 py-1 rounded-lg transition-colors">
+                    <button onClick={bulkEliminar} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-red-600 hover:text-slate-900 bg-red-600/20 hover:bg-red-600 px-2.5 py-1 rounded-lg transition-colors">
                         <Trash2 size={12} /> Eliminar
                     </button>
-                    <button onClick={clearSel} className="ml-auto flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors">
+                    <button onClick={clearSel} className="ml-auto flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-colors">
                         <X size={12} /> Limpiar
                     </button>
                 </div>
@@ -216,11 +216,11 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
 
             {/* Tabla + Ficha */}
             <div className="flex-1 min-h-0 flex gap-4 items-stretch">
-            <div className={`min-h-[420px] overflow-hidden rounded-2xl border border-white/10 bg-[#0f172a]/50 flex flex-col transition-all ${selectedId ? 'lg:w-3/5' : 'w-full'}`}>
+            <div className={`min-h-[420px] overflow-hidden rounded-2xl border border-[#efe8dd] bg-white flex flex-col transition-all ${selectedId ? 'lg:w-3/5' : 'w-full'}`}>
                 <div className="overflow-auto flex-1 scrollbar-hide">
                     <table className="w-full min-w-[640px] text-left border-collapse">
-                        <thead className="bg-[#0f172a] sticky top-0 z-10">
-                            <tr className="border-b border-white/10 text-[10px] uppercase tracking-widest text-gray-500">
+                        <thead className="bg-white sticky top-0 z-10">
+                            <tr className="border-b border-[#efe8dd] text-[10px] uppercase tracking-widest text-slate-500">
                                 <th className="pl-3 pr-1 py-2.5 w-8">
                                     <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Seleccionar todos" className="w-3.5 h-3.5 accent-blue-500 cursor-pointer" />
                                 </th>
@@ -234,35 +234,35 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan="7" className="p-8 text-center text-gray-500"><Loader2 size={20} className="animate-spin inline" /></td></tr>
+                                <tr><td colSpan="7" className="p-8 text-center text-slate-500"><Loader2 size={20} className="animate-spin inline" /></td></tr>
                             ) : lista.length === 0 ? (
-                                <tr><td colSpan="7" className="p-8 text-center text-gray-500 text-sm">No hay registros para este filtro. Usa <span className="text-blue-400 font-bold">+ Crear Prospecto</span>.</td></tr>
+                                <tr><td colSpan="7" className="p-8 text-center text-slate-500 text-sm">No hay registros para este filtro. Usa <span className="text-blue-600 font-bold">+ Crear Prospecto</span>.</td></tr>
                             ) : lista.map(p => (
-                                <tr key={p.id} onClick={() => setSelectedId(p.id)} className={`border-b border-white/5 hover:bg-white/[0.04] transition-colors cursor-pointer ${selectedId === p.id ? 'bg-blue-500/10' : selectedIds.has(p.id) ? 'bg-blue-500/[0.06]' : ''}`}>
+                                <tr key={p.id} onClick={() => setSelectedId(p.id)} className={`border-b border-[#efe8dd] hover:bg-white/[0.04] transition-colors cursor-pointer ${selectedId === p.id ? 'bg-blue-500/10' : selectedIds.has(p.id) ? 'bg-blue-500/[0.06]' : ''}`}>
                                     <td className="pl-3 pr-1 py-2.5" onClick={(e) => toggleRow(p.id, e)}>
                                         <input type="checkbox" checked={selectedIds.has(p.id)} onChange={(e) => toggleRow(p.id, e)} onClick={(e) => e.stopPropagation()} aria-label="Seleccionar" className="w-3.5 h-3.5 accent-blue-500 cursor-pointer" />
                                     </td>
                                     <td className="px-4 py-2.5">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center text-blue-400 shrink-0">
+                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-[#efe8dd] flex items-center justify-center text-blue-600 shrink-0">
                                                 <User size={15} />
                                             </div>
                                             <div className="flex flex-col">
-                                                <span className="font-bold text-white text-xs">{p.nombreCompleto || <span className="text-gray-500 italic">(sin nombre)</span>}</span>
-                                                {p.rut && <span className="text-[10px] text-gray-500 font-mono">{p.rut}</span>}
+                                                <span className="font-bold text-slate-900 text-xs">{p.nombreCompleto || <span className="text-slate-500 italic">(sin nombre)</span>}</span>
+                                                {p.rut && <span className="text-[10px] text-slate-500 font-mono">{p.rut}</span>}
                                             </div>
                                         </div>
                                     </td>
                                     <td className="px-4 py-2.5">
                                         <div className="flex flex-col gap-0.5">
                                             {(p.telefonos || []).slice(0, 1).map((t, i) => (
-                                                <span key={i} className="flex items-center gap-1 text-[10px] text-emerald-400"><Phone size={10} /> {t}</span>
+                                                <span key={i} className="flex items-center gap-1 text-[10px] text-emerald-600"><Phone size={10} /> {t}</span>
                                             ))}
                                             {(p.correos || []).slice(0, 1).map((c, i) => (
-                                                <span key={i} className="flex items-center gap-1 text-[10px] text-gray-400 truncate max-w-[180px]"><Mail size={10} /> {c}</span>
+                                                <span key={i} className="flex items-center gap-1 text-[10px] text-slate-500 truncate max-w-[180px]"><Mail size={10} /> {c}</span>
                                             ))}
                                     {(p.telefonos || []).length === 0 && (p.correos || []).length === 0 && (
-                                                <span className="text-[10px] text-gray-600 italic">Sin contacto</span>
+                                                <span className="text-[10px] text-slate-500 italic">Sin contacto</span>
                                             )}
                                             {/* Indicadores de seguimiento */}
                                             {(() => {
@@ -272,49 +272,52 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                                                 return (
                                                     <>
                                                         {dProx !== null && dProx >= 0 && activoParaSeguir && (
-                                                            <span className="flex items-center gap-1 text-[9px] font-bold text-red-300"><Clock size={9} /> Seguir (vencido)</span>
+                                                            <span className="flex items-center gap-1 text-[9px] font-bold text-red-600"><Clock size={9} /> Seguir (vencido)</span>
                                                         )}
                                                         {activoParaSeguir && (dProx === null) && dUlt !== null && dUlt >= DIAS_ESTANCADO && (
-                                                            <span className="flex items-center gap-1 text-[9px] font-bold text-amber-300"><AlertTriangle size={9} /> {dUlt}d sin contacto</span>
+                                                            <span className="flex items-center gap-1 text-[9px] font-bold text-amber-700"><AlertTriangle size={9} /> {dUlt}d sin contacto</span>
                                                         )}
                                                     </>
                                                 );
                                             })()}
                                         </div>
                                     </td>
-                                    <td className="px-4 py-2.5 text-xs text-gray-300 max-w-[260px]">
+                                    <td className="px-4 py-2.5 text-xs text-slate-600 max-w-[260px]">
                                         {(() => {
+                                            // Campo propio "qué necesita"; si está vacío, cae al respaldo antiguo
+                                            // (primera línea de observaciones) para prospectos previos a la columna.
+                                            const nec = (p.necesidad || '').trim();
                                             const obs = (p.observaciones || '').trim();
                                             const linea = obs ? obs.split('\n')[0].replace(/^necesita:\s*/i, '') : '';
-                                            const texto = linea || p.rubro || '';
+                                            const texto = nec || linea || p.rubro || '';
                                             return texto
-                                                ? <span className="block truncate" title={obs || p.rubro}>{texto}</span>
-                                                : <span className="text-gray-600">—</span>;
+                                                ? <span className="block truncate" title={nec || obs || p.rubro}>{texto}</span>
+                                                : <span className="text-slate-500">—</span>;
                                         })()}
-                                        {p.rubro && <span className="block text-[9px] text-gray-500 truncate">🏷️ {p.rubro}</span>}
-                                        {p.ejecutivoNombre && <span className="block text-[9px] text-gray-500">👤 {p.ejecutivoNombre}</span>}
+                                        {p.rubro && <span className="block text-[9px] text-slate-500 truncate">🏷️ {p.rubro}</span>}
+                                        {p.ejecutivoNombre && <span className="block text-[9px] text-slate-500">👤 {p.ejecutivoNombre}</span>}
                                     </td>
-                                    <td className="px-4 py-2.5"><span className="text-[9px] uppercase tracking-widest text-gray-400">{p.origen}</span></td>
+                                    <td className="px-4 py-2.5"><span className="text-[9px] uppercase tracking-widest text-slate-500">{p.origen}</span></td>
                                     <td className="px-4 py-2.5">
                                         <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase ${ESTADO_STYLE[p.estado] || ESTADO_STYLE.inactivo}`}>{p.estado}</span>
                                     </td>
                                     <td className="px-4 py-2.5">
                                         <div className="flex items-center justify-end gap-1.5">
                                             {p.estado === 'prospecto' && (
-                                                <button onClick={(e) => { e.stopPropagation(); setPersonaAConvertir(p); }} title="Convertir a Cliente (crea su empresa)" className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 px-2 py-1 rounded-lg">
+                                                <button onClick={(e) => { e.stopPropagation(); setPersonaAConvertir(p); }} title="Convertir a Cliente (crea su empresa)" className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 px-2 py-1 rounded-lg">
                                                     <ArrowRightCircle size={12} /> Convertir
                                                 </button>
                                             )}
                                             {(p.estado === 'prospecto' || p.estado === 'activo') && (
-                                                <button onClick={(e) => convertir(e, p, 'perdido')} title="Marcar como perdido (con motivo)" className="text-gray-400 hover:text-red-400 p-1.5 rounded-lg"><UserMinus size={13} /></button>
+                                                <button onClick={(e) => convertir(e, p, 'perdido')} title="Marcar como perdido (con motivo)" className="text-slate-500 hover:text-red-500 p-1.5 rounded-lg"><UserMinus size={13} /></button>
                                             )}
                                             {p.estado === 'activo' && (
-                                                <button onClick={(e) => convertir(e, p, 'inactivo')} title="Marcar Inactivo" className="text-gray-400 hover:text-orange-400 p-1.5 rounded-lg"><RotateCcw size={13} /></button>
+                                                <button onClick={(e) => convertir(e, p, 'inactivo')} title="Marcar Inactivo" className="text-slate-500 hover:text-orange-400 p-1.5 rounded-lg"><RotateCcw size={13} /></button>
                                             )}
                                             {(p.estado === 'inactivo' || p.estado === 'perdido') && (
-                                                <button onClick={(e) => convertir(e, p, 'prospecto')} title="Reactivar como prospecto" className="text-gray-400 hover:text-emerald-400 p-1.5 rounded-lg"><ArrowRightCircle size={13} /></button>
+                                                <button onClick={(e) => convertir(e, p, 'prospecto')} title="Reactivar como prospecto" className="text-slate-500 hover:text-emerald-600 p-1.5 rounded-lg"><ArrowRightCircle size={13} /></button>
                                             )}
-                                            <button onClick={(e) => eliminar(e, p)} title="Eliminar" className="text-gray-500 hover:text-red-400 p-1.5 rounded-lg"><Trash2 size={13} /></button>
+                                            <button onClick={(e) => eliminar(e, p)} title="Eliminar" className="text-slate-500 hover:text-red-500 p-1.5 rounded-lg"><Trash2 size={13} /></button>
                                         </div>
                                     </td>
                                 </tr>

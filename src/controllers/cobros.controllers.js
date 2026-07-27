@@ -1,4 +1,8 @@
 import { pool } from '../database/db.js';
+import { decrypt } from '../utils/crypto.js';
+import { cleanRut } from '../lib/rut.js';
+// Robot masivo del SII (el mismo de Emisión de DTE → Factura Electrónica).
+import { emitirLotePuppeteer, estadoRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
 
 // ============================================================================
 // CICLO DE COBRO MENSUAL (honorarios del despacho a sus clientes)
@@ -19,6 +23,29 @@ const DIA_AVISO_FACTURACION = 26; // desde este día se avisa que hay que factur
 //   3. 0                      → plan FREE o sin plan
 // Se usa como SQL escalar; las tablas se referencian como `e` (empresa) y `p` (plan).
 const SQL_PRECIO_MENSUAL = `COALESCE(e.precio_mensual, p.precio_base, 0)`;
+
+// EMPRESA FACTURABLE — el CRM manda.
+// Reproduce en SQL, tal cual, lo que el CRM muestra como cliente ACTIVO en su
+// control de clientes (clasificarCliente + exclusión de empresas creadas por
+// clientes). Así el "Cobro del Mes" factura exactamente a los mismos clientes
+// que el CRM marca como activos, ni uno más:
+//   · en_cartera IS NOT FALSE  → sigue en la planilla de trabajo (no archivada)
+//   · activo    IS NOT FALSE   → no está dada de baja en su ficha
+//   · su creador NO es un usuario Cliente (esas empresas van a la pestaña
+//     "usuarios" del CRM; no son clientes del despacho y no se facturan)
+//   · NO tuvo servicios y todos inactivos (si tuvo y ninguno sigue activo → baja)
+// La tabla empresa se referencia siempre como `e`.
+const SQL_EMPRESA_FACTURABLE = `
+    e.en_cartera IS NOT FALSE
+    AND e.activo IS NOT FALSE
+    AND (
+        SELECT u.rol::text FROM audita a JOIN usuario u ON a.usuario_id = u.id
+        WHERE a.empresa_id = e.id ORDER BY a.fecha_asignacion ASC LIMIT 1
+    ) IS DISTINCT FROM 'Cliente'
+    AND NOT (
+        EXISTS (SELECT 1 FROM empresa_servicio es WHERE es.empresa_id = e.id)
+        AND NOT EXISTS (SELECT 1 FROM empresa_servicio es WHERE es.empresa_id = e.id AND es.estado = 'Activo')
+    )`;
 
 // periodo: 'YYYY-MM' → primer día del mes. Sin parámetro, el mes en curso.
 const periodoSql = (periodo) => (periodo ? `${periodo}-01` : null);
@@ -142,31 +169,65 @@ export const resumenCobros = async (req, res) => {
     }
 };
 
-// Genera los cobros POR_EMITIR del periodo en curso (idempotente).
-// El monto sale de plan_precio_tramo (plan × tramo según ventas del cliente).
+// Genera los cobros POR_EMITIR del periodo en curso y los reconcilia con el CRM.
+// Es idempotente y actúa como "sincronizar con el CRM":
+//   1. Da de alta un cobro POR_EMITIR por cada cliente facturable (= activos del CRM).
+//   2. Da de baja los cobros AÚN NO EMITIDOS de empresas que ya no son facturables
+//      (archivadas, dadas de baja, creadas por clientes o con el servicio suspendido).
+//      Nunca se tocan las facturas ya emitidas o pagadas.
 export const generarCobros = async (req, res) => {
+    const client = await pool.connect();
     try {
         const organizacionId = req.user?.organizacionId || null;
-        const { rowCount } = await pool.query(
+        await client.query('BEGIN');
+
+        // 1. ALTA: un cobro por cada cliente que el CRM muestra como activo
+        const ins = await client.query(
             `INSERT INTO cobro_mensual
                 (organizacion_id, empresa_id, periodo, monto_esperado, estado, fecha_vencimiento)
-             SELECT DISTINCT
+             SELECT
                 e.organizacion_id, e.id,
                 date_trunc('month', CURRENT_DATE)::date,
                 ${SQL_PRECIO_MENSUAL},
                 'POR_EMITIR',
                 (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month' + INTERVAL '4 days')::date
              FROM empresa e
-             JOIN empresa_servicio es ON es.empresa_id = e.id AND es.estado = 'Activo'
              LEFT JOIN plan p ON p.id = e.plan_id
              WHERE ($1::uuid IS NULL OR e.organizacion_id = $1)
+               AND ${SQL_EMPRESA_FACTURABLE}
              ON CONFLICT (empresa_id, periodo) DO NOTHING`,
             [organizacionId]
         );
-        return res.json({ success: true, generados: rowCount, message: `${rowCount} cobros generados.` });
+
+        // 2. BAJA: depura los cobros sin emitir de empresas que el CRM ya no
+        //    considera clientes activos. Solo POR_EMITIR (las facturas emitidas
+        //    o pagadas se conservan: corresponden a un documento real).
+        const del = await client.query(
+            `DELETE FROM cobro_mensual cm
+             WHERE cm.periodo = date_trunc('month', CURRENT_DATE)::date
+               AND cm.estado = 'POR_EMITIR'
+               AND ($1::uuid IS NULL OR cm.organizacion_id = $1)
+               AND NOT EXISTS (
+                   SELECT 1 FROM empresa e
+                   WHERE e.id = cm.empresa_id AND ${SQL_EMPRESA_FACTURABLE}
+               )`,
+            [organizacionId]
+        );
+
+        await client.query('COMMIT');
+        return res.json({
+            success: true,
+            generados: ins.rowCount,
+            removidos: del.rowCount,
+            message: `${ins.rowCount} cobros generados` +
+                     (del.rowCount ? `, ${del.rowCount} depurados (ya no son clientes activos)` : '') + '.'
+        });
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('❌ Error generando cobros:', err.message);
         return res.status(500).json({ success: false, message: 'Error al generar los cobros.' });
+    } finally {
+        client.release();
     }
 };
 
@@ -286,8 +347,8 @@ export const cambiarEstadoCobro = async (req, res) => {
 
         const { rows } = await pool.query(
             `UPDATE cobro_mensual
-             SET estado = $2,
-                 fecha_pago = CASE WHEN $2 IN ('PAGADA','PENDIENTE_RECIBO') THEN COALESCE(fecha_pago, NOW()) ELSE NULL END,
+             SET estado = $2::text,
+                 fecha_pago = CASE WHEN $2::text IN ('PAGADA','PENDIENTE_RECIBO') THEN COALESCE(fecha_pago, NOW()) ELSE NULL END,
                  updated_at = NOW()
              WHERE id = $1
                AND ($3::uuid IS NULL OR organizacion_id = $3)
@@ -299,5 +360,176 @@ export const cambiarEstadoCobro = async (req, res) => {
     } catch (err) {
         console.error('❌ Error cambiando estado del cobro:', err.message);
         return res.status(500).json({ success: false, message: 'Error al actualizar el estado.' });
+    }
+};
+
+// ============================================================================
+// FACTURACIÓN MASIVA — emite en lote las facturas de honorarios de los cobros
+// POR_EMITIR del mes, reutilizando el robot del SII (factura afecta 33).
+// Flujo: previsualizar (revisar/editar/quitar/incluir) → facturar la lista final.
+// El robot inicia sesión solo y corre en segundo plano; el progreso se sigue con
+// GET /cobros/progreso y al terminar se vinculan los folios con /cobros/vincular-folios.
+// ============================================================================
+
+// Arma el objeto que espera el robot a partir de un cliente + monto.
+const construirFacturaRobot = ({ empresaId, rut, razonSocial, plan, monto, correo }, mesNombre) => {
+    const rutLimpio = cleanRut(String(rut || ''));
+    const [rutFull, dv] = rutLimpio.includes('-') ? rutLimpio.split('-') : [rutLimpio, ''];
+    if (!rutFull) return null;                       // sin RUT no se puede facturar
+    const precio = Math.round(Number(monto) || 0);
+    if (precio <= 0) return null;                    // no se emiten facturas en $0
+    return {
+        empresa_id: empresaId || 'EXTERNO',          // receptor = el cliente que se factura
+        tipo_documento: '33',
+        rutReceptor: rutFull,
+        dvReceptor: dv,
+        ciudadEmisor: 'Santiago',
+        telefonoEmisor: '56978278733',
+        ciudadReceptor: 'Santiago',
+        contactoReceptor: correo || '',
+        producto: {
+            nombre: plan || 'Servicios Contables',
+            cantidad: '1', unidad: '1',
+            precio: String(precio),
+            descripcion: `Servicios contables ${mesNombre}`,
+        },
+        datosCorreo: { razonSocial: razonSocial || '', planContable: plan || '', neto: String(precio) },
+    };
+};
+
+// Trae los cobros POR_EMITIR del mes con datos del cliente (RUT desencriptado).
+const cobrosDelMesParaFacturar = async (organizacionId) => {
+    const { rows } = await pool.query(
+        `SELECT cm.id AS cobro_id, cm.monto_esperado,
+                e.id AS empresa_id, e.razon_social, e.rut_encrypted, e.email_corporativo,
+                p.nombre AS plan
+         FROM cobro_mensual cm
+         JOIN empresa e ON e.id = cm.empresa_id
+         LEFT JOIN plan p ON p.id = e.plan_id
+         WHERE cm.periodo = date_trunc('month', CURRENT_DATE)::date
+           AND cm.estado = 'POR_EMITIR'
+           AND ($1::uuid IS NULL OR cm.organizacion_id = $1)
+         ORDER BY e.razon_social`,
+        [organizacionId]
+    );
+    return rows.map(r => {
+        let rut = '';
+        try { rut = cleanRut(decrypt(r.rut_encrypted) || ''); } catch { /* rut inválido */ }
+        return {
+            cobroId: r.cobro_id,
+            empresaId: r.empresa_id,
+            razonSocial: r.razon_social,
+            rut,
+            plan: r.plan || 'Sin plan',
+            monto: Math.round(parseFloat(r.monto_esperado) || 0),
+            correo: r.email_corporativo || '',
+        };
+    });
+};
+
+// PREVISUALIZACIÓN: devuelve lo que se facturaría para revisarlo antes de emitir.
+//   facturar → listos (monto > 0 y RUT válido)   ·   omitidas → por incluir a mano
+export const previsualizarFacturacion = async (req, res) => {
+    try {
+        const organizacionId = req.user?.organizacionId || null;
+        const items = await cobrosDelMesParaFacturar(organizacionId);
+        const facturar = [], omitidas = [];
+        for (const it of items) {
+            if (it.rut && it.monto > 0) facturar.push(it);
+            else omitidas.push({ ...it, motivo: !it.rut ? 'Sin RUT' : 'Monto $0' });
+        }
+        return res.json({ success: true, facturar, omitidas });
+    } catch (err) {
+        console.error('❌ Error previsualizando facturación:', err.message);
+        return res.status(500).json({ success: false, message: 'Error al previsualizar la facturación.' });
+    }
+};
+
+export const facturarCobrosMasivo = async (req, res) => {
+    try {
+        if (estadoRobot.activo) {
+            return res.status(409).json({ success: false, message: 'El facturador masivo ya está en ejecución. Espera a que termine.' });
+        }
+        const organizacionId = req.user?.organizacionId || null;
+        const mesNombre = new Date().toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+
+        // Lista revisada desde el frontend (preview editable); si no viene, se arma
+        // sola desde la BD (compatibilidad).
+        const revisadas = Array.isArray(req.body?.facturas) ? req.body.facturas : null;
+        const origen = revisadas || await cobrosDelMesParaFacturar(organizacionId);
+
+        const facturas = [];
+        let omitidas = 0;
+        for (const it of origen) {
+            const factura = construirFacturaRobot(it, mesNombre);
+            if (!factura) { omitidas++; continue; }
+            // Si el usuario ajustó el monto en la revisión, lo persistimos al cobro
+            // para que quede consistente con lo que se emite.
+            if (it.cobroId) {
+                try {
+                    await pool.query(
+                        `UPDATE cobro_mensual SET monto_esperado = $2, updated_at = NOW()
+                         WHERE id = $1 AND estado = 'POR_EMITIR' AND ($3::uuid IS NULL OR organizacion_id = $3)`,
+                        [it.cobroId, Math.round(Number(it.monto) || 0), organizacionId]
+                    );
+                } catch { /* no bloquea la emisión */ }
+            }
+            facturas.push(factura);
+        }
+
+        if (facturas.length === 0) {
+            return res.status(400).json({ success: false, message: `No hay facturas válidas para emitir (${omitidas} omitida(s) por monto $0 o RUT inválido).` });
+        }
+
+        // Respondemos de inmediato y disparamos el robot en segundo plano.
+        res.json({
+            success: true,
+            total: facturas.length,
+            omitidas,
+            message: `Emisión iniciada para ${facturas.length} factura(s).` + (omitidas ? ` ${omitidas} omitida(s).` : '')
+        });
+
+        emitirLotePuppeteer(facturas).catch(err => {
+            console.error('❌ Error en facturación masiva de cobros:', err);
+            estadoRobot.activo = false;
+        });
+    } catch (err) {
+        console.error('❌ Error en facturarCobrosMasivo:', err.message);
+        if (!res.headersSent) res.status(500).json({ success: false, message: 'Error al iniciar la facturación masiva.' });
+    }
+};
+
+// Progreso en vivo del robot masivo (para la barra en Cobro del Mes).
+export const progresoFacturacion = (req, res) => res.status(200).json(estadoRobot);
+
+// Vincula los folios recién emitidos (documentos_emitidos de este mes) con sus
+// cobros POR_EMITIR, pasándolos a PENDIENTE_PAGO. Se llama al terminar el robot.
+export const vincularFolios = async (req, res) => {
+    try {
+        const organizacionId = req.user?.organizacionId || null;
+        const { rowCount } = await pool.query(
+            `UPDATE cobro_mensual cm
+             SET folio = de.folio,
+                 monto_facturado = de.monto_neto,
+                 tipo_dte = '33',
+                 estado = 'PENDIENTE_PAGO',
+                 fecha_emision = de.fecha_emision,
+                 updated_at = NOW()
+             FROM (
+                SELECT DISTINCT ON (empresa_id) empresa_id, folio, monto_neto, fecha_emision
+                FROM documentos_emitidos
+                WHERE tipo_dte = 33 AND fecha_emision >= date_trunc('month', CURRENT_DATE)
+                ORDER BY empresa_id, fecha_emision DESC
+             ) de
+             WHERE cm.empresa_id = de.empresa_id
+               AND cm.periodo = date_trunc('month', CURRENT_DATE)::date
+               AND cm.estado = 'POR_EMITIR'
+               AND ($1::uuid IS NULL OR cm.organizacion_id = $1)`,
+            [organizacionId]
+        );
+        return res.json({ success: true, vinculados: rowCount, message: `${rowCount} cobro(s) pasaron a Pendiente de pago.` });
+    } catch (err) {
+        console.error('❌ Error vinculando folios:', err.message);
+        return res.status(500).json({ success: false, message: 'Error al vincular los folios emitidos.' });
     }
 };

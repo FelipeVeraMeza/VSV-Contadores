@@ -557,6 +557,23 @@ export const updateClienteCRM = async (req, res) => {
 const TIPOS_BITACORA = ['conversacion', 'ticket', 'cambio_plan', 'servicio', 'sistema'];
 
 const PRIORIDADES = ['Alta', 'Media', 'Baja'];
+
+// Aislamiento multi-tenant de la bitácora: la empresa / nota debe pertenecer
+// a la organización del usuario. Si no, se responde 404 (no se delata su existencia).
+const empresaEnOrg = async (empresaId, org) => {
+    const { rows } = await pool.query(
+        `SELECT id FROM empresa WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`,
+        [empresaId, org]);
+    return rows.length > 0;
+};
+const notaEnOrg = async (notaId, org) => {
+    const { rows } = await pool.query(
+        `SELECT b.id FROM bitacora_gestion b JOIN empresa e ON e.id = b.empresa_id
+         WHERE b.id = $1 AND e.organizacion_id IS NOT DISTINCT FROM $2::uuid`,
+        [notaId, org]);
+    return rows.length > 0;
+};
+
 const mapNota = (nota) => ({
     id: nota.id,
     empresaId: nota.empresa_id,
@@ -576,6 +593,9 @@ export const addNotaCRM = async (req, res) => {
         const { empresaId } = req.params;
         const { texto, tipo, prioridad, responsable, fechaVencimiento } = req.body;
         if (!texto || !texto.trim()) return res.status(400).json({ success: false, message: 'La nota no puede estar vacía.' });
+        if (!await empresaEnOrg(empresaId, req.user?.organizacionId || null)) {
+            return res.status(404).json({ success: false, message: 'Cliente no encontrado.' });
+        }
 
         const tipoMensaje = TIPOS_BITACORA.includes(tipo) ? tipo : 'conversacion';
         const esTicket = tipoMensaje === 'ticket';
@@ -618,6 +638,9 @@ export const editarNotaCRM = async (req, res) => {
         const { notaId } = req.params;
         const { texto, prioridad, responsable, fechaVencimiento } = req.body;
         if (!texto || !texto.trim()) return res.status(400).json({ success: false, message: 'La nota no puede estar vacía.' });
+        if (!await notaEnOrg(notaId, req.user?.organizacionId || null)) {
+            return res.status(404).json({ success: false, message: 'Nota no encontrada.' });
+        }
 
         const sets = ['texto = $1'];
         const vals = [texto.trim()];
@@ -655,6 +678,9 @@ export const editarNotaCRM = async (req, res) => {
 export const eliminarNotaCRM = async (req, res) => {
     try {
         const { notaId } = req.params;
+        if (!await notaEnOrg(notaId, req.user?.organizacionId || null)) {
+            return res.status(404).json({ success: false, message: 'Nota no encontrada.' });
+        }
         const result = await pool.query(`DELETE FROM bitacora_gestion WHERE id = $1 RETURNING id`, [notaId]);
         if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Nota no encontrada.' });
         return res.json({ success: true });
@@ -669,6 +695,9 @@ export const toggleTicketCRM = async (req, res) => {
     try {
         const { notaId } = req.params;
         const { resuelto } = req.body;
+        if (!await notaEnOrg(notaId, req.user?.organizacionId || null)) {
+            return res.status(404).json({ success: false, message: 'Ticket no encontrado.' });
+        }
         const result = await pool.query(
             `UPDATE bitacora_gestion SET leido = $1 WHERE id = $2 RETURNING id`,
             [resuelto === true, notaId]

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import {
     crearPersona, listarPersonas, buscarDuplicadosCRM,
     obtenerPersona, actualizarPersona, agregarNotaPersona, cambiarEstadoPersona, eliminarPersona,
-    catalogosCRM, empresasLista, editarNotaPersona, asociarEmpresa, desasociarEmpresa, fusionarPersona, crearEmpresaParaPersona
+    catalogosCRM, empresasLista, editarNotaPersona, eliminarNotaPersona, asociarEmpresa, desasociarEmpresa, fusionarPersona, crearEmpresaParaPersona
 } from '../controllers/personas.controllers.js';
 import { requireSession } from '../middleware/auth.js';
 
@@ -15,6 +15,7 @@ router.get('/catalogos', requireSession, catalogosCRM);
 router.get('/empresas-lista', requireSession, empresasLista);
 
 router.patch('/notas/:notaId', requireSession, editarNotaPersona);
+router.delete('/notas/:notaId', requireSession, eliminarNotaPersona);
 
 router.get('/:id', requireSession, obtenerPersona);
 router.put('/:id', requireSession, actualizarPersona);

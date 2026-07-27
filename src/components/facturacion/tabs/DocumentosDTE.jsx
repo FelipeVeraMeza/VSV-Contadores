@@ -236,14 +236,14 @@ const DocumentosDTE = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#0f172a]/60 p-4 rounded-2xl border border-white/5 backdrop-blur-md shadow-xl">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl border border-[#efe8dd] backdrop-blur-md shadow-xl">
         <div className="flex items-center gap-3">
-            <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400">
+            <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-600">
                 <FileText size={20} />
             </div>
             <div>
-                <h2 className="text-white font-black uppercase tracking-tighter text-lg">Bóveda de Documentos</h2>
-                <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">
+                <h2 className="text-slate-900 font-black uppercase tracking-tighter text-lg">Bóveda de Documentos</h2>
+                <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-widest">
                     {isModoGlobalActivo ? '🌐 TODAS LAS EMPRESAS' : formatDisplay(selectedCompany?.razon_social || selectedCompany?.razonSocial)}
                 </p>
             </div>
@@ -254,17 +254,17 @@ const DocumentosDTE = () => {
               <Button 
                   onClick={() => setVistaGlobal(!vistaGlobal)} 
                   variant="outline" 
-                  className={`h-10 text-[10px] font-black uppercase tracking-widest ${vistaGlobal ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' : 'bg-black/40 border-white/10 text-gray-400'}`}
+                  className={`h-10 text-[10px] font-black uppercase tracking-widest ${vistaGlobal ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' : 'bg-slate-50 border-[#efe8dd] text-slate-500'}`}
               >
                   <Globe size={14} className="mr-2" /> {vistaGlobal ? 'Ocultar Global' : 'Modo Global'}
               </Button>
             )}
 
-            <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 w-full sm:w-auto h-10">
+            <div className="flex bg-slate-50 p-1 rounded-xl border border-[#efe8dd] w-full sm:w-auto h-10">
                 <button
                     onClick={() => setTipoVista('VENTAS')}
                     className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                        tipoVista === 'VENTAS' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-gray-500 hover:text-gray-300'
+                        tipoVista === 'VENTAS' ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'text-slate-400 hover:text-slate-600'
                     }`}
                 >
                     <ArrowUpRight size={14} /> Ventas
@@ -272,7 +272,7 @@ const DocumentosDTE = () => {
                 <button
                     onClick={() => setTipoVista('COMPRAS')}
                     className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                        tipoVista === 'COMPRAS' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'text-gray-500 hover:text-gray-300'
+                        tipoVista === 'COMPRAS' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-400 hover:text-slate-600'
                     }`}
                 >
                     <ArrowDownLeft size={14} /> Compras
@@ -281,13 +281,13 @@ const DocumentosDTE = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-[#0f172a]/60 p-4 rounded-2xl border border-white/5 backdrop-blur-md shadow-xl">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white p-4 rounded-2xl border border-[#efe8dd] backdrop-blur-md shadow-xl">
         
         {/* ========================================================== */}
         {/* BUSCADOR PROFESIONAL (DISEÑO ULTRA-MODERNO) */}
         {/* ========================================================== */}
         <div className="relative group z-50">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-blue-400 transition-colors" size={15} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={15} />
           <input 
             type="text"
             placeholder="Buscar por Nombre o RUT..."
@@ -298,7 +298,7 @@ const DocumentosDTE = () => {
             }}
             onFocus={() => setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-            className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 transition-all placeholder:text-gray-600 shadow-inner"
+            className="w-full bg-slate-50 border border-[#efe8dd] rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500/50 transition-all placeholder:text-slate-400 shadow-inner"
           />
           
           <AnimatePresence>
@@ -308,10 +308,10 @@ const DocumentosDTE = () => {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 5, scale: 0.98 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
-                className="absolute top-full left-0 right-0 mt-2 bg-[#0f172a]/95 backdrop-blur-2xl border border-white/10 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] z-50 overflow-hidden ring-1 ring-white/5"
+                className="absolute top-full left-0 right-0 mt-2 bg-white backdrop-blur-2xl border border-[#efe8dd] rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] z-50 overflow-hidden ring-1 ring-white/5"
               >
-                <div className="px-4 py-2 border-b border-white/5 bg-black/20">
-                  <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">Sugerencias</span>
+                <div className="px-4 py-2 border-b border-[#efe8dd] bg-slate-50">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Sugerencias</span>
                 </div>
                 <div className="p-1.5">
                   {sugerenciasBusqueda.map((ent) => (
@@ -325,14 +325,14 @@ const DocumentosDTE = () => {
                       className="group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-200 hover:bg-blue-600/30 hover:border hover:border-blue-500/50 hover:shadow-[0_0_15px_-3px_rgba(59,130,246,0.3)] border border-transparent"
                     >
                       <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="p-1.5 bg-black/40 border border-white/5 rounded-md group-hover:bg-blue-500/40 group-hover:border-blue-400/50 transition-colors shadow-sm">
-                          <Building2 size={14} className="text-gray-400 group-hover:text-blue-200 transition-colors" />
+                        <div className="p-1.5 bg-slate-50 border border-[#efe8dd] rounded-md group-hover:bg-blue-500/40 group-hover:border-blue-400/50 transition-colors shadow-sm">
+                          <Building2 size={14} className="text-slate-500 group-hover:text-blue-200 transition-colors" />
                         </div>
-                        <span className="text-xs text-gray-300 group-hover:text-white font-bold tracking-tight truncate transition-colors drop-shadow-md">
+                        <span className="text-xs text-slate-600 group-hover:text-slate-900 font-bold tracking-tight truncate transition-colors drop-shadow-md">
                           {formatDisplay(ent.nombre)}
                         </span>
                       </div>
-                      <span className="text-[9px] text-gray-500 font-mono flex-shrink-0 ml-2 bg-black/40 px-2 py-1 rounded-md border border-white/5 group-hover:text-blue-200 group-hover:border-blue-400/50 transition-colors group-hover:bg-blue-900/40">
+                      <span className="text-[9px] text-slate-400 font-mono flex-shrink-0 ml-2 bg-slate-50 px-2 py-1 rounded-md border border-[#efe8dd] group-hover:text-blue-200 group-hover:border-blue-400/50 transition-colors group-hover:bg-blue-900/40">
                         {formatDisplay(ent.rut)}
                       </span>
                     </div>
@@ -344,7 +344,7 @@ const DocumentosDTE = () => {
         </div>
 
         <div className="relative">
-            <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 appearance-none cursor-pointer">
+            <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)} className="w-full bg-slate-50 border border-[#efe8dd] rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-500 appearance-none cursor-pointer">
                 <option value="TODOS">Todos los Tipos</option>
                 <option value="33">Factura Electrónica (33)</option>
                 <option value="34">Factura Exenta (34)</option>
@@ -353,13 +353,13 @@ const DocumentosDTE = () => {
                 <option value="39">Boleta Electrónica (39)</option>
             </select>
         </div>
-        <select value={filterMes} onChange={(e) => setFilterMes(e.target.value)} className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 appearance-none cursor-pointer">
+        <select value={filterMes} onChange={(e) => setFilterMes(e.target.value)} className="bg-slate-50 border border-[#efe8dd] rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-500 appearance-none cursor-pointer">
           <option value="TODOS">Todos los Meses</option>
           {["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"].map((m, i) => (
             <option key={m} value={(i + 1).toString()}>{m}</option>
           ))}
         </select>
-        <select value={filterAnio} onChange={(e) => setFilterAnio(e.target.value)} className="bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 appearance-none cursor-pointer">
+        <select value={filterAnio} onChange={(e) => setFilterAnio(e.target.value)} className="bg-slate-50 border border-[#efe8dd] rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-500 appearance-none cursor-pointer">
           <option value="TODOS">Todos los Años</option>
           <option value="2024">2024</option>
           <option value="2025">2025</option>
@@ -383,7 +383,7 @@ const DocumentosDTE = () => {
             className={`text-[10px] font-black uppercase tracking-widest transition-all border ${
                 isSyncing 
                 ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/50 cursor-wait' 
-                : 'bg-black/40 text-gray-400 hover:text-white hover:bg-white/10 border-white/10'
+                : 'bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 border-[#efe8dd]'
             }`}
         >
             {isSyncing ? (
@@ -400,19 +400,19 @@ const DocumentosDTE = () => {
         </Button>
       </div>
 
-      <div ref={tableContainerRef} className="overflow-hidden rounded-2xl border border-white/5 bg-black/20 backdrop-blur-xl shadow-2xl flex flex-col pt-2 scroll-mt-24">
+      <div ref={tableContainerRef} className="overflow-hidden rounded-2xl border border-[#efe8dd] bg-slate-50 backdrop-blur-xl shadow-2xl flex flex-col pt-2 scroll-mt-24">
         <div className="overflow-x-auto custom-scrollbar w-full">
           <table className="w-full text-left border-collapse min-w-[900px]">
-            <thead className="bg-white/5 border-b border-white/10">
+            <thead className="bg-slate-50 border-b border-[#efe8dd]">
               <tr>
-                <th className="px-6 py-5 text-[10px] font-black uppercase text-gray-400 tracking-widest">Documento</th>
-                <th className="px-6 py-5 text-[10px] font-black uppercase text-gray-400 tracking-widest">Folio</th>
-                <th className="px-6 py-5 text-[10px] font-black uppercase text-gray-400 tracking-widest">
+                <th className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest">Documento</th>
+                <th className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest">Folio</th>
+                <th className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest">
                     {tipoVista === 'VENTAS' ? 'Cliente' : 'Proveedor'}
                 </th>
-                <th className="px-6 py-5 text-[10px] font-black uppercase text-gray-400 tracking-widest">Emisión</th>
-                <th className="px-6 py-5 text-[10px] font-black uppercase text-gray-400 tracking-widest text-right">Monto</th>
-                <th className="px-6 py-5 text-[10px] font-black uppercase text-gray-400 text-center">PDF</th>
+                <th className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest">Emisión</th>
+                <th className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest text-right">Monto</th>
+                <th className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 text-center">PDF</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
@@ -421,7 +421,7 @@ const DocumentosDTE = () => {
                   <motion.tr key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                     <td colSpan={6} className="py-24 text-center">
                       <Loader2 className={`h-10 w-10 animate-spin mx-auto mb-4 ${tipoVista === 'VENTAS' ? 'text-blue-500' : 'text-emerald-500'}`} />
-                      <p className={`text-[10px] font-black uppercase tracking-widest animate-pulse italic ${tipoVista === 'VENTAS' ? 'text-blue-400' : 'text-emerald-400'}`}>
+                      <p className={`text-[10px] font-black uppercase tracking-widest animate-pulse italic ${tipoVista === 'VENTAS' ? 'text-blue-600' : 'text-emerald-600'}`}>
                         Cargando bóveda {isModoGlobalActivo ? 'global' : 'local'}...
                       </p>
                     </td>
@@ -446,38 +446,38 @@ const DocumentosDTE = () => {
                           initial={{ opacity: 0, y: 10 }} 
                           animate={{ opacity: 1, y: 0 }} 
                           transition={{ delay: idx * 0.02 }}
-                          className="hover:bg-white/[0.03] group transition-colors border-b border-white/5 last:border-none"
+                          className="hover:bg-white group transition-colors border-b border-[#efe8dd] last:border-none"
                         >
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase border ${
-                                tipoVista === 'VENTAS' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                tipoVista === 'VENTAS' ? 'bg-blue-500/10 border-blue-500/20 text-blue-600' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600'
                             }`}>
                               {NOMBRES_DTE[dte.tipo_dte] || `DTE ${dte.tipo_dte}`}
                             </span>
                           </td>
-                          <td className="px-6 py-4 text-sm font-bold text-white italic tracking-tighter whitespace-nowrap">
+                          <td className="px-6 py-4 text-sm font-bold text-slate-900 italic tracking-tighter whitespace-nowrap">
                             #{dte.folio}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex flex-col">
-                                <span className="text-xs text-gray-200 font-medium truncate max-w-[200px]" title={nombreContraparte}>
+                                <span className="text-xs text-slate-700 font-medium truncate max-w-[200px]" title={nombreContraparte}>
                                     {formatDisplay(nombreContraparte)}
                                 </span>
-                                <span className="text-[9px] text-gray-500 font-mono">
+                                <span className="text-[9px] text-slate-400 font-mono">
                                     {formatDisplay(rutContraparte)}
                                 </span>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-xs text-gray-400 font-medium whitespace-nowrap">
+                          <td className="px-6 py-4 text-xs text-slate-500 font-medium whitespace-nowrap">
                             {dte.fecha_emision ? new Date(dte.fecha_emision).toLocaleDateString('es-CL', { timeZone: 'UTC' }) : 'Sin Fecha'}
                           </td>
                           <td className="px-6 py-4 text-right whitespace-nowrap">
                             <div className="flex flex-col items-end">
-                                <span className={`text-sm font-black font-mono tracking-tighter ${tipoVista === 'VENTAS' ? 'text-blue-400' : 'text-emerald-400'}`}>
+                                <span className={`text-sm font-black font-mono tracking-tighter ${tipoVista === 'VENTAS' ? 'text-blue-600' : 'text-emerald-600'}`}>
                                     ${Number(montoPrincipal || 0).toLocaleString('es-CL')}
                                 </span>
                                 {tipoVista === 'COMPRAS' && dte.monto_iva > 0 && (
-                                    <span className="text-[9px] text-gray-500 uppercase tracking-widest mt-0.5">
+                                    <span className="text-[9px] text-slate-400 uppercase tracking-widest mt-0.5">
                                         IVA: ${Number(dte.monto_iva).toLocaleString('es-CL')}
                                     </span>
                                 )}
@@ -489,13 +489,13 @@ const DocumentosDTE = () => {
                                 href={dte.url_pdf} 
                                 target="_blank" 
                                 rel="noreferrer" 
-                                className="inline-flex items-center justify-center h-9 w-9 rounded-xl bg-white/5 text-gray-300 border border-white/10 hover:bg-white hover:text-black transition-all shadow-lg active:scale-90"
+                                className="inline-flex items-center justify-center h-9 w-9 rounded-xl bg-slate-50 text-slate-600 border border-[#efe8dd] hover:bg-white hover:text-black transition-all shadow-lg active:scale-90"
                                 title="Ver PDF"
                               >
                                 <Download size={16} />
                               </a>
                             ) : (
-                              <span className="text-[8px] text-gray-600 font-black uppercase italic bg-white/[0.02] px-2 py-1 rounded border border-white/5">Sin PDF</span>
+                              <span className="text-[8px] text-slate-400 font-black uppercase italic bg-white px-2 py-1 rounded border border-[#efe8dd]">Sin PDF</span>
                             )}
                           </td>
                         </motion.tr>
@@ -504,11 +504,11 @@ const DocumentosDTE = () => {
                 ) : (
                   <motion.tr key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                     <td colSpan={6} className="py-24 text-center">
-                      <FileWarning size={56} className="text-gray-700 mx-auto mb-4" />
-                      <p className="text-white font-black uppercase tracking-tighter italic text-xl">
+                      <FileWarning size={56} className="text-slate-600 mx-auto mb-4" />
+                      <p className="text-slate-900 font-black uppercase tracking-tighter italic text-xl">
                         Bóveda Vacía
                       </p>
-                      <p className="text-xs text-gray-500 max-w-[300px] mx-auto uppercase tracking-widest mt-2 leading-relaxed">
+                      <p className="text-xs text-slate-400 max-w-[300px] mx-auto uppercase tracking-widest mt-2 leading-relaxed">
                         No se encontraron resultados para "{searchTerm}". Intenta con otro término o limpia los filtros.
                       </p>
                     </td>
@@ -521,8 +521,8 @@ const DocumentosDTE = () => {
 
         {/* CONTROLES DE PAGINACIÓN */}
         {!loading && documentosFiltrados.length > 0 && (
-          <div className="flex items-center justify-between px-6 py-4 bg-[#0f172a] border-t border-white/10 relative z-30">
-            <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">
+          <div className="flex items-center justify-between px-6 py-4 bg-white border-t border-[#efe8dd] relative z-30">
+            <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
               Mostrando {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, documentosFiltrados.length)} de {documentosFiltrados.length}
             </div>
             
@@ -532,12 +532,12 @@ const DocumentosDTE = () => {
                 size="sm" 
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="h-8 bg-black/40 border-white/10 text-gray-400 hover:text-white disabled:opacity-20 transition-all font-bold text-xs"
+                className="h-8 bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900 disabled:opacity-20 transition-all font-bold text-xs"
               >
                 <ChevronLeft size={14} className="mr-1" /> Ant
               </Button>
               
-              <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">
+              <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">
                 Pág {currentPage} de {totalPages}
               </div>
               
@@ -546,7 +546,7 @@ const DocumentosDTE = () => {
                 size="sm" 
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="h-8 bg-black/40 border-white/10 text-gray-400 hover:text-white disabled:opacity-20 transition-all font-bold text-xs"
+                className="h-8 bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900 disabled:opacity-20 transition-all font-bold text-xs"
               >
                 Sig <ChevronRight size={14} className="ml-1" />
               </Button>

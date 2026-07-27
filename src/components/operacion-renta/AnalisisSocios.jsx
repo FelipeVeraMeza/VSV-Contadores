@@ -32,17 +32,17 @@ const AnalisisSocios = ({ empresaId }) => {
             transition={{ duration: 0.4 }}
             className="space-y-8"
         >
-            <div className="bg-white/5 p-6 rounded-xl border border-white/10 shadow-2xl">
+            <div className="bg-slate-50 p-6 rounded-xl border border-[#efe8dd] shadow-2xl">
                 <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-semibold text-white tracking-tighter uppercase italic">Análisis Individual por Socio</h3>
-                    <Button onClick={() => showToast("Selección General")} variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10 text-[10px] font-bold">Seleccionar Socio</Button>
+                    <h3 className="text-xl font-semibold text-slate-900 tracking-tighter uppercase italic">Análisis Individual por Socio</h3>
+                    <Button onClick={() => showToast("Selección General")} variant="outline" size="sm" className="border-[#efe8dd] text-slate-700 hover:bg-slate-100 text-[10px] font-bold">Seleccionar Socio</Button>
                 </div>
 
-                <div className="h-80 bg-gradient-to-r from-indigo-500/20 to-blue-500/20 rounded-xl flex items-center justify-center border border-indigo-500/30 relative overflow-hidden group">
+                <div className="h-80 bg-gradient-to-r from-teal-500/20 to-cyan-500/20 rounded-xl flex items-center justify-center border border-teal-500/30 relative overflow-hidden group">
                     {isLoading ? (
                         <div className="text-center">
                             <Loader2 className="h-12 w-12 text-indigo-400 animate-spin mx-auto mb-4" />
-                            <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest animate-pulse">Cruzando retiros y créditos...</p>
+                            <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest animate-pulse">Cruzando retiros y créditos...</p>
                         </div>
                     ) : socios && socios.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full p-6 z-10 overflow-y-auto max-h-full no-scrollbar">
@@ -52,7 +52,7 @@ const AnalisisSocios = ({ empresaId }) => {
                                     initial={{ opacity: 0, scale: 0.95 }}
                                     animate={{ opacity: 1, scale: 1 }}
                                     transition={{ delay: idx * 0.1 }}
-                                    className="bg-black/40 p-4 rounded-lg border border-white/10 hover:border-indigo-500/50 transition-colors cursor-pointer"
+                                    className="bg-slate-50 p-4 rounded-lg border border-[#efe8dd] hover:border-indigo-500/50 transition-colors cursor-pointer"
                                     onClick={() => showToast(socio.nombre)}
                                 >
                                     <div className="flex items-center space-x-3 mb-2">
@@ -60,17 +60,17 @@ const AnalisisSocios = ({ empresaId }) => {
                                             <User className="h-4 w-4 text-indigo-400" />
                                         </div>
                                         <div>
-                                            <p className="text-white font-bold text-sm leading-none">{socio.nombre}</p>
-                                            <p className="text-[10px] text-gray-500 uppercase tracking-tighter">{socio.rut}</p>
+                                            <p className="text-slate-900 font-bold text-sm leading-none">{socio.nombre}</p>
+                                            <p className="text-[10px] text-slate-400 uppercase tracking-tighter">{socio.rut}</p>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-white/5">
+                                    <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-[#efe8dd]">
                                         <div>
-                                            <p className="text-[9px] text-gray-400 uppercase font-bold">Retiros</p>
-                                            <p className="text-white font-semibold text-xs">${socio.retiros.toLocaleString('es-CL')}</p>
+                                            <p className="text-[9px] text-slate-500 uppercase font-bold">Retiros</p>
+                                            <p className="text-slate-900 font-semibold text-xs">${socio.retiros.toLocaleString('es-CL')}</p>
                                         </div>
                                         <div>
-                                            <p className="text-[9px] text-gray-400 uppercase font-bold">Crédito IDPC</p>
+                                            <p className="text-[9px] text-slate-500 uppercase font-bold">Crédito IDPC</p>
                                             <p className="text-indigo-400 font-semibold text-xs">${socio.credito.toLocaleString('es-CL')}</p>
                                         </div>
                                     </div>
@@ -78,9 +78,9 @@ const AnalisisSocios = ({ empresaId }) => {
                             ))}
                         </div>
                     ) : (
-                        <div className="text-center text-gray-400 z-10">
+                        <div className="text-center text-slate-500 z-10">
                             <Users className="h-16 w-16 text-indigo-400 mx-auto mb-4 opacity-50" />
-                            <p className="text-white font-bold">Panel de Socios</p>
+                            <p className="text-slate-900 font-bold">Panel de Socios</p>
                             <p className="text-sm mt-2">Retiros, sueldos y proyección de Global Complementario.</p>
                             <p className="text-xs mt-1 italic">Datos no disponibles en el búnker.</p>
                         </div>

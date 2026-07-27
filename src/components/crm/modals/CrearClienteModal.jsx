@@ -28,18 +28,19 @@ const getSessionId = () => {
 
 const Field = ({ label, children }) => (
     <div className="flex flex-col gap-1">
-        <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">{label}</span>
+        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
         {children}
     </div>
 );
 
-const inputClass = "bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500 transition-colors placeholder:text-gray-600";
+const inputClass = "bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500 transition-colors placeholder:text-slate-400";
 
 const CrearClienteModal = ({ onClose, onCreated, empresaId = null }) => {
     const [form, setForm] = useState({
         nombre: '', segundoNombre: '', apellidos: '', fechaNacimiento: '',
         rut: '', telefono: '', correo: '', direccion: '', comuna: '', region: '',
-        rubro: '', observaciones: '', origen: 'manual', ejecutivoId: '', etiquetasStr: ''
+        rubro: '', observaciones: '', origen: 'manual', ejecutivoId: '', etiquetasStr: '',
+        necesidad: ''
     });
     const [catalogos, setCatalogos] = useState({ etiquetas: [], ejecutivos: [], servicios: [] });
     const [serviciosSel, setServiciosSel] = useState([]);
@@ -105,6 +106,7 @@ const CrearClienteModal = ({ onClose, onCreated, empresaId = null }) => {
                 correos: form.correo ? [form.correo] : [],
                 direccion: form.direccion, comuna: form.comuna, region: form.region,
                 rubro: form.rubro, observaciones: form.observaciones, origen: form.origen,
+                necesidad: form.necesidad,
                 ejecutivoId: form.ejecutivoId || null,
                 etiquetas: form.etiquetasStr.split(',').map(s => s.trim()).filter(Boolean),
                 serviciosInteres: serviciosSel,
@@ -138,18 +140,18 @@ const CrearClienteModal = ({ onClose, onCreated, empresaId = null }) => {
                 <motion.div
                     initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
                     onClick={(e) => e.stopPropagation()}
-                    className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl scrollbar-thin scrollbar-thumb-white/10"
+                    className="w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white border border-[#efe8dd] rounded-2xl shadow-2xl scrollbar-thin scrollbar-thumb-white/10"
                 >
                     {/* Header */}
-                    <div className="flex items-center justify-between p-4 border-b border-white/10 sticky top-0 bg-[#0f172a] z-10">
-                        <h2 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
-                            <UserPlus size={16} className="text-blue-400" /> Crear Cliente
+                    <div className="flex items-center justify-between p-4 border-b border-[#efe8dd] sticky top-0 bg-white z-10">
+                        <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                            <UserPlus size={16} className="text-blue-600" /> Crear Cliente
                         </h2>
-                        <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
+                        <button onClick={onClose} className="text-slate-400 hover:text-slate-900"><X size={18} /></button>
                     </div>
 
                     <div className="p-4 space-y-4">
-                        <p className="text-[10px] text-gray-500">Puedes crear un cliente con un solo dato (nombre, teléfono, correo o RUT). Ingresará como <span className="text-amber-400 font-bold">prospecto</span>.</p>
+                        <p className="text-[10px] text-slate-400">Puedes crear un cliente con un solo dato (nombre, teléfono, correo o RUT). Ingresará como <span className="text-amber-600 font-bold">prospecto</span>.</p>
 
                         {/* Info personal */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -161,7 +163,7 @@ const CrearClienteModal = ({ onClose, onCreated, empresaId = null }) => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <Field label="RUT">
                                 <input className={`${inputClass} ${rutError ? 'border-red-500' : ''}`} value={form.rut} onChange={set('rut')} onBlur={handleRutBlur} placeholder="12.345.678-9" />
-                                {rutError && <span className="text-[10px] text-red-400">{rutError}</span>}
+                                {rutError && <span className="text-[10px] text-red-500">{rutError}</span>}
                             </Field>
                             <Field label="Fecha de nacimiento"><input type="date" className={inputClass} value={form.fechaNacimiento} onChange={set('fechaNacimiento')} /></Field>
                         </div>
@@ -207,13 +209,19 @@ const CrearClienteModal = ({ onClose, onCreated, empresaId = null }) => {
                                 <div className="flex flex-wrap gap-1.5">
                                     {catalogos.servicios.map(s => (
                                         <button type="button" key={s.id} onClick={() => toggleServicio(s.id)}
-                                            className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors ${serviciosSel.includes(s.id) ? 'bg-blue-600 border-blue-500 text-white' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
+                                            className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors ${serviciosSel.includes(s.id) ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
                                             {s.nombre}
                                         </button>
                                     ))}
                                 </div>
                             </Field>
                         )}
+
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                            <Field label="¿Qué necesita?">
+                                <textarea className="w-full bg-white border border-emerald-200 rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500 resize-none placeholder:text-slate-400" rows={2} value={form.necesidad} onChange={set('necesidad')} placeholder="Ej: llevar la contabilidad, crear empresa, declaración de renta..." />
+                            </Field>
+                        </div>
 
                         <Field label="Observaciones">
                             <textarea className={`${inputClass} resize-none`} rows={2} value={form.observaciones} onChange={set('observaciones')} placeholder="Notas internas..." />
@@ -222,18 +230,18 @@ const CrearClienteModal = ({ onClose, onCreated, empresaId = null }) => {
                         {/* Aviso de duplicados */}
                         {duplicados.length > 0 && (
                             <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
-                                <div className="flex items-center gap-2 text-amber-400 text-[11px] font-black uppercase tracking-widest mb-2">
+                                <div className="flex items-center gap-2 text-amber-600 text-[11px] font-black uppercase tracking-widest mb-2">
                                     <AlertTriangle size={14} /> Posible{duplicados.length > 1 ? 's' : ''} duplicado{duplicados.length > 1 ? 's' : ''}
                                 </div>
                                 <div className="space-y-1 mb-2">
                                     {duplicados.map(d => (
-                                        <div key={d.id} className="text-xs text-gray-200">
+                                        <div key={d.id} className="text-xs text-slate-700">
                                             • {[d.nombre, d.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}
-                                            <span className="text-gray-500"> — {d.estado} · coincide por {d.criterios.join(', ')}</span>
+                                            <span className="text-slate-400"> — {d.estado} · coincide por {d.criterios.join(', ')}</span>
                                         </div>
                                     ))}
                                 </div>
-                                <label className="flex items-center gap-2 text-[11px] text-gray-300 cursor-pointer">
+                                <label className="flex items-center gap-2 text-[11px] text-slate-600 cursor-pointer">
                                     <input type="checkbox" checked={forzar} onChange={(e) => setForzar(e.target.checked)} />
                                     Crear de todos modos
                                 </label>
@@ -242,9 +250,9 @@ const CrearClienteModal = ({ onClose, onCreated, empresaId = null }) => {
                     </div>
 
                     {/* Footer */}
-                    <div className="flex gap-3 p-4 border-t border-white/10 sticky bottom-0 bg-[#0f172a]">
-                        <Button variant="ghost" onClick={onClose} className="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-[10px] font-black uppercase tracking-widest h-10">Cancelar</Button>
-                        <Button onClick={handleSubmit} disabled={saving || !tieneAlgo} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest h-10 flex items-center justify-center gap-2">
+                    <div className="flex gap-3 p-4 border-t border-[#efe8dd] sticky bottom-0 bg-white">
+                        <Button variant="ghost" onClick={onClose} className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest h-10">Cancelar</Button>
+                        <Button onClick={handleSubmit} disabled={saving || !tieneAlgo} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest h-10 flex items-center justify-center gap-2">
                             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Crear Cliente
                         </Button>
                     </div>

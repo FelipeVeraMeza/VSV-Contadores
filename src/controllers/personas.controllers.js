@@ -168,6 +168,7 @@ export const crearPersona = async (req, res) => {
             origen = 'manual', ejecutivoId, empresaId,
             etiquetas = [], serviciosInteres = [],
             proximoContacto,
+            necesidad, estadoComercial, accionSiguiente,
             forzar = false
         } = req.body;
 
@@ -208,8 +209,9 @@ export const crearPersona = async (req, res) => {
             `INSERT INTO persona
                 (nombre, segundo_nombre, apellidos, fecha_nacimiento, rut_encrypted, rut_hash,
                  estado, origen, rubro, direccion, comuna, region, ejecutivo_id, observaciones,
-                 organizacion_id, proximo_contacto, creado_por, fecha_ultimo_contacto)
-             VALUES ($1,$2,$3,$4,$5,$6,'prospecto',$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
+                 organizacion_id, proximo_contacto, creado_por,
+                 necesidad, estado_comercial, accion_siguiente, fecha_ultimo_contacto)
+             VALUES ($1,$2,$3,$4,$5,$6,'prospecto',$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW())
              RETURNING id, nombre, segundo_nombre, apellidos, estado, origen, created_at`,
             [
                 nombre?.trim() || null, segundoNombre?.trim() || null, apellidos?.trim() || null,
@@ -220,7 +222,8 @@ export const crearPersona = async (req, res) => {
                 organizacionId,
                 proximoContacto || null,
                 // Dueño del prospecto: solo él (y el Administrador) lo verá.
-                req.user?.usuarioId || null
+                req.user?.usuarioId || null,
+                necesidad?.trim() || null, estadoComercial?.trim() || null, accionSiguiente?.trim() || null
             ]
         );
         const persona = insertPersona.rows[0];
@@ -319,6 +322,7 @@ export const listarPersonas = async (req, res) => {
             `SELECT p.id, p.nombre, p.segundo_nombre, p.apellidos, p.estado, p.origen,
                     p.rubro, p.comuna, p.region, p.rut_encrypted, p.created_at, p.observaciones,
                     p.ejecutivo_id, p.proximo_contacto, p.fecha_ultimo_contacto,
+                    p.necesidad, p.estado_comercial, p.accion_siguiente,
                     u.nombre AS ejecutivo_nombre,
                     COALESCE(json_agg(DISTINCT pt.telefono) FILTER (WHERE pt.id IS NOT NULL), '[]') AS telefonos,
                     COALESCE(json_agg(DISTINCT pc.correo) FILTER (WHERE pc.id IS NOT NULL), '[]') AS correos
@@ -354,6 +358,9 @@ export const listarPersonas = async (req, res) => {
                 ejecutivoNombre: r.ejecutivo_nombre || null,
                 proximoContacto: r.proximo_contacto,
                 fechaUltimoContacto: r.fecha_ultimo_contacto,
+                necesidad: r.necesidad,
+                estadoComercial: r.estado_comercial,
+                accionSiguiente: r.accion_siguiente,
                 createdAt: r.created_at
             };
         }).filter(p => {
@@ -362,6 +369,7 @@ export const listarPersonas = async (req, res) => {
                 p.nombreCompleto.toLowerCase().includes(term) ||
                 (p.rut || '').toLowerCase().includes(term) ||
                 (p.observaciones || '').toLowerCase().includes(term) ||
+                (p.necesidad || '').toLowerCase().includes(term) ||
                 (p.rubro || '').toLowerCase().includes(term) ||
                 p.correos.some(c => c.toLowerCase().includes(term)) ||
                 p.telefonos.some(t => t.replace(/\D/g, '').includes(term.replace(/\D/g, '')))
@@ -412,6 +420,9 @@ export const obtenerPersona = async (req, res) => {
                 ejecutivoNombre: ejec.rows[0]?.nombre || null,
                 proximoContacto: p.proximo_contacto,
                 fechaUltimoContacto: p.fecha_ultimo_contacto,
+                necesidad: p.necesidad,
+                estadoComercial: p.estado_comercial,
+                accionSiguiente: p.accion_siguiente,
                 consentimiento: p.consentimiento_contacto !== false,
                 etiquetas: etiq.rows.map(e => e.nombre),
                 serviciosInteres: servInt.rows.map(s => ({ id: s.id, nombre: s.nombre })),
@@ -439,7 +450,8 @@ export const actualizarPersona = async (req, res) => {
         const {
             nombre, segundoNombre, apellidos, fechaNacimiento, rut,
             telefonos, correos, direccion, comuna, region, rubro, observaciones, ejecutivoId,
-            etiquetas, serviciosInteres, proximoContacto, consentimiento
+            etiquetas, serviciosInteres, proximoContacto, consentimiento,
+            necesidad, estadoComercial, accionSiguiente
         } = req.body;
 
         if (!await cargarPersonaPermitida(req, id)) return res.status(404).json(NO_ENCONTRADO);
@@ -465,6 +477,7 @@ export const actualizarPersona = async (req, res) => {
                 observaciones = $11, ejecutivo_id = $12,
                 proximo_contacto = $14,
                 consentimiento_contacto = COALESCE($15, consentimiento_contacto),
+                necesidad = $16, estado_comercial = $17, accion_siguiente = $18,
                 updated_at = NOW()
              WHERE id = $13`,
             [
@@ -473,7 +486,8 @@ export const actualizarPersona = async (req, res) => {
                 rubro?.trim() || null, direccion?.trim() || null, comuna?.trim() || null, region?.trim() || null,
                 observaciones?.trim() || null, ejecutivoId || null, id,
                 proximoContacto || null,
-                (consentimiento === undefined ? null : !!consentimiento)
+                (consentimiento === undefined ? null : !!consentimiento),
+                necesidad?.trim() || null, estadoComercial?.trim() || null, accionSiguiente?.trim() || null
             ]
         );
 
@@ -593,19 +607,32 @@ export const catalogosCRM = async (req, res) => {
     try {
         // Los ejecutivos asignables son los de la propia organización.
         const org = req.user?.organizacionId || null;
-        const [etiq, ejec, serv] = await Promise.all([
+        const [etiq, ejec, serv, estCom] = await Promise.all([
             pool.query(`SELECT id, nombre, color FROM etiqueta ORDER BY nombre`),
             pool.query(
                 `SELECT id, nombre FROM usuario
                  WHERE activo = true AND organizacion_id IS NOT DISTINCT FROM $1::uuid
                  ORDER BY nombre`, [org]),
             pool.query(`SELECT id, nombre, categoria FROM servicio WHERE activo = true ORDER BY nombre`),
+            // "Estado del cliente" (situación comercial): valores ya usados en la
+            // organización. El combobox los ofrece para buscar y permite escribir uno nuevo.
+            pool.query(
+                `SELECT DISTINCT estado_comercial FROM persona
+                 WHERE estado_comercial IS NOT NULL AND trim(estado_comercial) <> ''
+                   AND organizacion_id IS NOT DISTINCT FROM $1::uuid
+                 ORDER BY estado_comercial`, [org]),
         ]);
+        // Situaciones comerciales sugeridas por defecto, más las ya usadas (sin repetir).
+        const DEFAULT_ESTADOS = ['Nuevo', 'Contactado', 'Esperando respuesta', 'Pensándolo', 'Reunión agendada', 'Propuesta enviada', 'Ganado', 'Perdido'];
+        const usados = estCom.rows.map(r => r.estado_comercial);
+        const estadosComerciales = [...new Set([...DEFAULT_ESTADOS, ...usados])];
         return res.json({
             success: true,
             etiquetas: etiq.rows,
             ejecutivos: ejec.rows.map(u => ({ id: u.id, nombre: u.nombre })),
             servicios: serv.rows.map(s => ({ id: s.id, nombre: s.nombre, categoria: s.categoria })),
+            estadosComerciales,
+            accionesSugeridas: ['Llamar', 'Enviar WhatsApp', 'Enviar correo', 'Agendar reunión', 'Hacer seguimiento'],
         });
     } catch (error) {
         console.error('❌ Error catálogos CRM:', error.message);
@@ -655,6 +682,23 @@ export const editarNotaPersona = async (req, res) => {
     } catch (error) {
         console.error('❌ Error editando nota:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo editar la nota.' });
+    }
+};
+
+// Eliminar una nota de prospecto (mismo control de dueño que editar)
+export const eliminarNotaPersona = async (req, res) => {
+    try {
+        const { notaId } = req.params;
+        const duenio = await pool.query(`SELECT persona_id FROM nota WHERE id = $1`, [notaId]);
+        const personaId = duenio.rows[0]?.persona_id;
+        if (!personaId || !await cargarPersonaPermitida(req, personaId)) {
+            return res.status(404).json({ success: false, message: 'Nota no encontrada.' });
+        }
+        await pool.query(`DELETE FROM nota WHERE id = $1`, [notaId]);
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('❌ Error eliminando nota:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo eliminar la nota.' });
     }
 };
 

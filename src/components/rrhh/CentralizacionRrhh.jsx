@@ -46,31 +46,31 @@ const CentralizacionRrhh = ({ empresaId }) => {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-3">
                     <EmpresaPicker />
-                    <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-44 bg-white/[0.04] border-white/10" />
+                    <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-44 bg-slate-50 border-[#efe8dd]" />
                 </div>
                 {empresaId && (ya ? (
                     <Button onClick={() => { if (window.confirm('¿Reversar la centralización? Se eliminará el comprobante contable.')) reversar.mutate(); }} disabled={reversar.isPending} variant="outline" className="border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10 h-10">
                         {reversar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-2" />}Reversar
                     </Button>
                 ) : (
-                    <Button onClick={() => centralizar.mutate()} disabled={!puedeCentralizar || centralizar.isPending} className="bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-semibold h-10 shadow-lg shadow-indigo-900/20">
+                    <Button onClick={() => centralizar.mutate()} disabled={!puedeCentralizar || centralizar.isPending} className="bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-slate-900 font-semibold h-10 shadow-lg shadow-indigo-900/20">
                         {centralizar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <BookCopy className="h-4 w-4 mr-2" />}Centralizar período
                     </Button>
                 ))}
             </div>
 
             {!empresaId ? (
-                <div className="flex flex-col items-center text-gray-500 py-20">
-                    <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center mb-4"><Building2 className="h-6 w-6 text-purple-400/60" /></div>
-                    <h3 className="text-base font-semibold text-white">Elige una empresa</h3>
+                <div className="flex flex-col items-center text-slate-400 py-20">
+                    <div className="w-14 h-14 rounded-2xl bg-white border border-[#efe8dd] flex items-center justify-center mb-4"><Building2 className="h-6 w-6 text-purple-600/60" /></div>
+                    <h3 className="text-base font-semibold text-slate-900">Elige una empresa</h3>
                     <p className="text-sm mt-1">Selecciona una empresa arriba para ver y generar su asiento de centralización.</p>
                 </div>
             ) : isLoading ? (
                 <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-indigo-500" /></div>
             ) : !data || data.cantidad === 0 ? (
-                <div className="flex flex-col items-center text-gray-500 py-20">
-                    <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center mb-4"><FileWarning className="h-6 w-6 opacity-40" /></div>
-                    <h3 className="text-base font-semibold text-white">Sin liquidaciones aprobadas en {periodo}</h3>
+                <div className="flex flex-col items-center text-slate-400 py-20">
+                    <div className="w-14 h-14 rounded-2xl bg-white border border-[#efe8dd] flex items-center justify-center mb-4"><FileWarning className="h-6 w-6 opacity-40" /></div>
+                    <h3 className="text-base font-semibold text-slate-900">Sin liquidaciones aprobadas en {periodo}</h3>
                     <p className="text-sm mt-1">Aprueba liquidaciones del período para poder centralizar.</p>
                 </div>
             ) : (
@@ -94,31 +94,31 @@ const CentralizacionRrhh = ({ empresaId }) => {
                     )}
 
                     {/* Asiento */}
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
+                    <div className="rounded-2xl border border-[#efe8dd] bg-white overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="border-b border-white/10 bg-white/[0.03]">
-                                        <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Cuenta</th>
-                                        <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Descripción</th>
-                                        <th className="px-5 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Debe</th>
-                                        <th className="px-5 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Haber</th>
+                                    <tr className="border-b border-[#efe8dd] bg-white">
+                                        <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Cuenta</th>
+                                        <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Descripción</th>
+                                        <th className="px-5 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400">Debe</th>
+                                        <th className="px-5 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400">Haber</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/[0.06]">
                                     {lineas.map((l, i) => (
-                                        <tr key={i} className="hover:bg-white/[0.03]">
-                                            <td className="px-5 py-3 font-mono text-xs text-gray-400">{l.cuenta || <span className="text-red-400">sin cuenta</span>}</td>
-                                            <td className="px-5 py-3 text-gray-200">{l.descripcion}</td>
-                                            <td className="px-5 py-3 text-right text-gray-300">{l.debe ? clp(l.debe) : '—'}</td>
-                                            <td className="px-5 py-3 text-right text-gray-300">{l.haber ? clp(l.haber) : '—'}</td>
+                                        <tr key={i} className="hover:bg-white">
+                                            <td className="px-5 py-3 font-mono text-xs text-slate-500">{l.cuenta || <span className="text-red-500">sin cuenta</span>}</td>
+                                            <td className="px-5 py-3 text-slate-700">{l.descripcion}</td>
+                                            <td className="px-5 py-3 text-right text-slate-600">{l.debe ? clp(l.debe) : '—'}</td>
+                                            <td className="px-5 py-3 text-right text-slate-600">{l.haber ? clp(l.haber) : '—'}</td>
                                         </tr>
                                     ))}
                                 </tbody>
-                                <tfoot className="bg-white/[0.04] font-bold text-white">
+                                <tfoot className="bg-slate-50 font-bold text-slate-900">
                                     <tr>
                                         <td className="px-5 py-3.5" colSpan="2">
-                                            <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full ${data.cuadra ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
+                                            <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full ${data.cuadra ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-500'}`}>
                                                 {data.cuadra ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}{data.cuadra ? 'Cuadrado' : 'Descuadrado'}
                                             </span>
                                         </td>

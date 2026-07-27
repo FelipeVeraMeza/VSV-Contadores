@@ -54,6 +54,16 @@ function MainPage() {
     { id: 'analytics',     name: 'Métricas',      icon: PieChart },
   ];
 
+  // Submódulos del menú de Facturación (soporte interno / SII).
+  // "Cobro del Mes" es el ciclo de cobro a los clientes del CRM: solo el
+  // Administrador (dueño de la organización) factura, así que ese cliente
+  // no lo ve.
+  const subFacturacion = [
+    { id: 'emision',    name: 'Emitir DTE',              icon: Send },
+    { id: 'documentos', name: 'Historial de Documentos', icon: FileText },
+    ...(user?.rol === 'Administrador' ? [{ id: 'cobros', name: 'Cobro del Mes', icon: Wallet }] : []),
+  ];
+
   // Submódulos del menú de Recursos Humanos (Remuneraciones)
   // subRRHH viene de src/config/rrhhNav.js (7 secciones planas y uniformes;
   // las sub-páginas de cada sección se muestran como pestañas DENTRO de la página).
@@ -63,6 +73,7 @@ function MainPage() {
     if (location.pathname.startsWith('/contabilidad')) setExpandedModule('contabilidad');
     else if (location.pathname.startsWith('/CRM')) setExpandedModule('CRM');
     else if (location.pathname.startsWith('/rrhh')) setExpandedModule('rrhh');
+    else if (location.pathname.startsWith('/facturacion')) setExpandedModule('facturacion');
   }, [location.pathname]);
 
   const subActivo = new URLSearchParams(location.search).get('sub');
@@ -85,17 +96,17 @@ function MainPage() {
     modules = [
       { id: 'CRM', path: '/CRM', name: 'CRM', icon: Package, color: 'from-pink-500 to-rose-500', sub: subCRM },
       { id: 'contabilidad', path: '/contabilidad', name: 'Contabilidad', icon: Calculator, color: 'from-green-500 to-emerald-500', sub: subContabilidad },
-      { id: 'facturacion', path: '/facturacion', name: 'Facturación SII', icon: FileText, color: 'from-orange-500 to-red-500' },
+      { id: 'facturacion', path: '/facturacion', name: 'Facturación SII', icon: FileText, color: 'from-orange-500 to-red-500', sub: subFacturacion },
       { id: 'bancos', path: '/bancos', name: 'Bancos', icon: Landmark, color: 'from-indigo-500 to-blue-600' },
       { id: 'perfil', path: '/perfil', name: 'Mi Perfil', icon: UserCircle, color: 'from-cyan-500 to-blue-600' }
     ];
   } else {
     modules = [
-      { id: 'dashboard', path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard, color: 'from-blue-500 to-cyan-500' },
+      { id: 'dashboard', path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard, color: 'from-emerald-500 to-green-500' },
       { id: 'CRM', path: '/CRM', name: 'CRM', icon: Package, color: 'from-pink-500 to-rose-500', sub: subCRM },
       { id: 'contabilidad', path: '/contabilidad', name: 'Contabilidad', icon: Calculator, color: 'from-green-500 to-emerald-500', sub: subContabilidad },
       { id: 'rrhh', path: '/rrhh', name: 'Recursos Humanos', icon: Users, color: 'from-purple-500 to-violet-500', sub: subRRHH },
-      { id: 'facturacion', path: '/facturacion', name: 'Facturación SII', icon: FileText, color: 'from-orange-500 to-red-500' },
+      { id: 'facturacion', path: '/facturacion', name: 'Facturación SII', icon: FileText, color: 'from-orange-500 to-red-500', sub: subFacturacion },
       { id: 'operacionRenta', path: '/operacion-renta', name: 'Operación Renta', icon: FileBarChart, color: 'from-teal-500 to-cyan-600' },
       { id: 'bancos', path: '/bancos', name: 'Bancos', icon: Landmark, color: 'from-indigo-500 to-blue-600' },
     ];
@@ -110,7 +121,7 @@ function MainPage() {
   return (
     <>
       <Helmet><title>VSV Pro | Sistema Contable</title></Helmet>
-      <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-indigo-900 font-sans">
+      <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[#fdfcf9] via-[#f4eee3] to-[#eadfce] font-sans">
         
         <AnimatePresence>
           {(sidebarOpen || windowWidth >= 1024) && (
@@ -119,17 +130,17 @@ function MainPage() {
               animate={{ x: 0, opacity: 1, width: rail ? 76 : 240 }}
               exit={{ x: -300, opacity: 0 }}
               transition={{ x: { type: 'tween', duration: 0.25 }, width: { type: 'tween', duration: 0.2 } }}
-              className="fixed lg:relative inset-y-0 left-0 z-50 h-full bg-black/40 backdrop-blur-xl border-r border-white/10 flex flex-col overflow-hidden"
+              className="fixed lg:relative inset-y-0 left-0 z-50 h-full bg-white border-r border-[#efe8dd] flex flex-col overflow-hidden"
             >
               {/* Encabezado: logo + botón para colapsar el panel */}
-              <div className={`flex items-center ${rail ? 'justify-center' : 'justify-between'} gap-2 h-[68px] px-4 border-b border-white/10 flex-shrink-0`}>
+              <div className={`flex items-center ${rail ? 'justify-center' : 'justify-between'} gap-2 h-[68px] px-4 border-b border-[#efe8dd] flex-shrink-0`}>
                 {!rail && (
-                  <h1 className="text-white font-black text-lg flex items-center gap-2 italic uppercase tracking-tighter min-w-0">
-                    <ShieldCheck className="text-purple-400 h-6 w-6 flex-shrink-0" /><span className="truncate">VSV Pro</span>
+                  <h1 className="text-[#1a1c1e] font-black text-lg flex items-center gap-2 italic uppercase tracking-tighter min-w-0">
+                    <ShieldCheck className="text-[#199b4d] h-6 w-6 flex-shrink-0" /><span className="truncate">VSV Pro</span>
                   </h1>
                 )}
                 <button onClick={toggleRail} title={rail ? 'Expandir panel' : 'Colapsar panel'}
-                  className="hidden lg:inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0">
+                  className="hidden lg:inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors flex-shrink-0">
                   {rail ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
                 </button>
               </div>
@@ -157,7 +168,7 @@ function MainPage() {
                         }}
                         title={rail ? m.name : undefined}
                         className={`w-full flex items-center ${rail ? 'justify-center' : 'justify-between'} px-3 py-3 rounded-xl transition-all ${
-                          isActive ? `bg-gradient-to-r ${m.color} text-white shadow-lg shadow-purple-500/25` : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                          isActive ? `bg-gradient-to-r ${m.color} text-white shadow-lg shadow-emerald-500/25` : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
                         }`}
                       >
                         <span className={`flex items-center min-w-0 ${rail ? '' : 'space-x-3'}`}>
@@ -173,7 +184,7 @@ function MainPage() {
                           {expandido && (
                             <motion.div
                               initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                              className="overflow-hidden ml-3 mt-1 border-l border-white/10 pl-2 space-y-0.5"
+                              className="overflow-hidden ml-3 mt-1 border-l border-[#efe8dd] pl-2 space-y-0.5"
                             >
                               {m.sub.map((s) => {
                                 const SubIcon = s.icon;
@@ -181,7 +192,7 @@ function MainPage() {
                                 return (
                                   <button key={s.id}
                                     onClick={() => { navigate(`${m.path}?sub=${s.id}`); if (windowWidth < 1024) setSidebarOpen(false); }}
-                                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all text-left ${subActive ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
+                                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all text-left ${subActive ? 'bg-emerald-50 text-[#199b4d]' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}>
                                     <SubIcon className="h-4 w-4 flex-shrink-0" />
                                     <span className="font-bold uppercase text-[10px] tracking-wider truncate">{s.name}</span>
                                   </button>
@@ -201,9 +212,9 @@ function MainPage() {
 
         <div className="flex-1 flex flex-col h-full overflow-hidden w-full">
           {/* HEADER CON SELECTOR GLOBAL */}
-          <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 w-full z-30 px-6 py-4 flex items-center justify-between">
+          <header className="bg-white border-b border-[#efe8dd] w-full z-30 px-6 py-4 flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden text-white">
+              <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden text-slate-700">
                 {sidebarOpen ? <X /> : <Menu />}
               </Button>
             </div>
@@ -214,10 +225,10 @@ function MainPage() {
             <div className="flex items-center space-x-4">
               <AvisoFacturacion />
               <div className="hidden md:block text-right mr-2">
-                <p className="text-white text-sm font-bold italic uppercase">{user?.nombre}</p>
-                <p className="text-[9px] font-black uppercase text-amber-400 tracking-widest">{user?.rol}</p>
+                <p className="text-[#1a1c1e] text-sm font-bold italic uppercase">{user?.nombre}</p>
+                <p className="text-[9px] font-black uppercase text-[#199b4d] tracking-widest">{user?.rol}</p>
               </div>
-              <Button variant="ghost" size="icon" onClick={logout} className="h-10 w-10 text-gray-400 hover:text-red-400"><LogOut /></Button>
+              <Button variant="ghost" size="icon" onClick={logout} className="h-10 w-10 text-slate-400 hover:text-red-500"><LogOut /></Button>
             </div>
           </header>
 

@@ -18,8 +18,8 @@ const mesActual = () => new Date().toISOString().slice(0, 7);
 
 // Pill de naturaleza (Haber / Descuento)
 const NatBadge = ({ nat }) => nat === 'DESCUENTO'
-    ? <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-md bg-red-500/10 text-red-400"><ArrowDownCircle className="h-3 w-3" />Descuento</span>
-    : <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-md bg-emerald-500/10 text-emerald-400"><ArrowUpCircle className="h-3 w-3" />Haber</span>;
+    ? <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-md bg-red-500/10 text-red-500"><ArrowDownCircle className="h-3 w-3" />Descuento</span>
+    : <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-md bg-emerald-500/10 text-emerald-600"><ArrowUpCircle className="h-3 w-3" />Haber</span>;
 
 // modo: 'fijos' | 'mes' | undefined. Si viene definido, la página queda fija en
 // ese modo (Haberes y Descuentos = fijos; Novedades del período = mes) y oculta
@@ -95,13 +95,13 @@ const HaberesDescuentosRrhh = ({ empresaId, modo }) => {
                     <TrabajadorSelect value={trabajadorId} onChange={setTrabajadorId} empresaId={empresaId} />
                 </div>
                 {!modo && (
-                    <div className="flex items-center gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/10 w-fit">
+                    <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-50 border border-[#efe8dd] w-fit">
                         <TabBtn active={tab === 'fijos'} onClick={() => setTab('fijos')} icon={Repeat} label="Fijos (recurrentes)" />
                         <TabBtn active={tab === 'mes'} onClick={() => setTab('mes')} icon={CalendarDays} label="Del mes" />
                     </div>
                 )}
                 {tab === 'mes' && (
-                    <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-40 bg-white/[0.04] border-white/10 lg:ml-auto" />
+                    <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-40 bg-slate-50 border-[#efe8dd] lg:ml-auto" />
                 )}
             </div>
 
@@ -119,30 +119,30 @@ const HaberesDescuentosRrhh = ({ empresaId, modo }) => {
                     </div>
 
                     {/* Alta rápida */}
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 p-4 rounded-2xl bg-white/[0.02] border border-white/10">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 p-4 rounded-2xl bg-white border border-[#efe8dd]">
                         <div className="flex-1 min-w-0">
-                            <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Concepto</label>
+                            <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Concepto</label>
                             <ThemedSelect value={conceptoId} onChange={setConceptoId} placeholder="Concepto…"
                                 options={conceptos.map(c => ({ value: c.id, label: `${c.codigo} · ${c.descripcion} (${c.naturaleza === 'HABER' ? 'Haber' : 'Desc.'})` }))} />
                         </div>
                         <div className="w-full sm:w-40">
-                            <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Monto</label>
-                            <Input type="number" min="0" value={monto} onChange={e => setMonto(e.target.value)} placeholder="0" className="bg-white/[0.04] border-white/10" />
+                            <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Monto</label>
+                            <Input type="number" min="0" value={monto} onChange={e => setMonto(e.target.value)} placeholder="0" className="bg-slate-50 border-[#efe8dd]" />
                         </div>
-                        <Button onClick={() => agregar.mutate()} disabled={agregar.isPending} className="bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white font-semibold h-10">
+                        <Button onClick={() => agregar.mutate()} disabled={agregar.isPending} className="bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-slate-900 font-semibold h-10">
                             {agregar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}Agregar
                         </Button>
                     </div>
 
                     {/* Lista */}
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
+                    <div className="rounded-2xl border border-[#efe8dd] bg-white overflow-hidden">
                         {cargando ? (
                             <div className="flex items-center justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-purple-500" /></div>
                         ) : lista.length ? (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
-                                        <tr className="border-b border-white/10 bg-white/[0.03] text-gray-500">
+                                        <tr className="border-b border-[#efe8dd] bg-white text-slate-400">
                                             <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider">Concepto</th>
                                             <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider">Tipo</th>
                                             <th className="px-5 py-3 text-right text-[10px] font-semibold uppercase tracking-wider">Monto</th>
@@ -151,12 +151,12 @@ const HaberesDescuentosRrhh = ({ empresaId, modo }) => {
                                     </thead>
                                     <tbody className="divide-y divide-white/[0.06]">
                                         {lista.map((row, i) => (
-                                            <motion.tr key={row.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, delay: i * 0.02 }} className="group hover:bg-white/[0.03]">
-                                                <td className="px-5 py-3 text-gray-200">{row.codigo ? `${row.codigo} · ` : ''}{row.descripcion || row.glosa || 'Concepto'}</td>
+                                            <motion.tr key={row.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, delay: i * 0.02 }} className="group hover:bg-white">
+                                                <td className="px-5 py-3 text-slate-700">{row.codigo ? `${row.codigo} · ` : ''}{row.descripcion || row.glosa || 'Concepto'}</td>
                                                 <td className="px-5 py-3"><NatBadge nat={nat(row)} /></td>
-                                                <td className={`px-5 py-3 text-right font-semibold ${nat(row) === 'DESCUENTO' ? 'text-red-400' : 'text-emerald-400'}`}>{nat(row) === 'DESCUENTO' ? '− ' : ''}{clp(row.monto)}</td>
+                                                <td className={`px-5 py-3 text-right font-semibold ${nat(row) === 'DESCUENTO' ? 'text-red-500' : 'text-emerald-600'}`}>{nat(row) === 'DESCUENTO' ? '− ' : ''}{clp(row.monto)}</td>
                                                 <td className="px-5 py-3 text-right">
-                                                    <button onClick={() => quitar.mutate(row.id)} className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 opacity-70 group-hover:opacity-100 transition"><Trash2 className="h-4 w-4" /></button>
+                                                    <button onClick={() => quitar.mutate(row.id)} className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-500/10 opacity-70 group-hover:opacity-100 transition"><Trash2 className="h-4 w-4" /></button>
                                                 </td>
                                             </motion.tr>
                                         ))}
@@ -176,15 +176,15 @@ const HaberesDescuentosRrhh = ({ empresaId, modo }) => {
 };
 
 const TabBtn = ({ active, onClick, icon: Icon, label }) => (
-    <button onClick={onClick} className={`inline-flex items-center gap-2 px-3.5 h-9 rounded-lg text-sm font-medium transition-colors ${active ? 'bg-gradient-to-r from-purple-500 to-violet-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
+    <button onClick={onClick} className={`inline-flex items-center gap-2 px-3.5 h-9 rounded-lg text-sm font-medium transition-colors ${active ? 'bg-gradient-to-r from-purple-500 to-violet-600 text-white shadow' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}>
         <Icon className="h-4 w-4" />{label}
     </button>
 );
 
 const EmptyState = ({ icon: Icon, titulo, texto, inset }) => (
-    <div className={`flex flex-col items-center text-gray-500 ${inset ? 'py-14' : 'py-20'}`}>
-        <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center mb-4"><Icon className="h-6 w-6 text-purple-400/60" /></div>
-        <h3 className="text-base font-semibold text-white">{titulo}</h3>
+    <div className={`flex flex-col items-center text-slate-400 ${inset ? 'py-14' : 'py-20'}`}>
+        <div className="w-14 h-14 rounded-2xl bg-white border border-[#efe8dd] flex items-center justify-center mb-4"><Icon className="h-6 w-6 text-purple-600/60" /></div>
+        <h3 className="text-base font-semibold text-slate-900">{titulo}</h3>
         <p className="text-sm mt-1">{texto}</p>
     </div>
 );

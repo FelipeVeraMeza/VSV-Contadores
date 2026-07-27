@@ -92,18 +92,18 @@ const Bancos = () => {
       />
       
       {/* CABECERA DINÁMICA */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8 space-y-4 lg:space-y-0 bg-white/5 p-6 rounded-3xl border border-white/10 backdrop-blur-xl">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8 space-y-4 lg:space-y-0 bg-slate-50 p-6 rounded-3xl border border-[#efe8dd] backdrop-blur-xl">
         <div>
           <div className="flex items-center gap-3 mb-2">
-            <div className={`p-2.5 rounded-xl ${selectedCompany ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
+            <div className={`p-2.5 rounded-xl ${selectedCompany ? 'bg-blue-500/20 text-blue-600' : 'bg-purple-500/20 text-purple-600'}`}>
               {selectedCompany ? <Building2 size={24} /> : <ShieldCheck size={24} />}
             </div>
-            <h1 className="text-2xl font-black text-white uppercase tracking-tighter">
+            <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tighter">
               Tesorería y Bancos
             </h1>
           </div>
-          <p className="text-gray-400 text-sm font-medium">
-            Viendo cartola de: <span className={selectedCompany ? "text-blue-400 font-bold" : "text-purple-400 font-bold"}>{nombreVista}</span>
+          <p className="text-slate-500 text-sm font-medium">
+            Viendo cartola de: <span className={selectedCompany ? "text-blue-600 font-bold" : "text-purple-600 font-bold"}>{nombreVista}</span>
           </p>
         </div>
         
@@ -111,7 +111,7 @@ const Bancos = () => {
           <Button 
             variant="outline"
             disabled={mutation.isPending}
-            className="border-white/20 text-white hover:bg-white/10 font-bold rounded-xl h-11 px-6 bg-black/20"
+            className="border-[#efe8dd] text-slate-700 hover:bg-slate-100 font-bold rounded-xl h-11 px-6 bg-slate-50"
             onClick={() => setIsCartolaModalOpen(true)}
           >
             {mutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}

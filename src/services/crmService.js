@@ -76,3 +76,47 @@ export const reactivarServicioApi = (sessionId, empresaServicioId) => {
     method: 'PATCH'
   });
 };
+
+// ============================================================
+// Dashboard: métricas y meta mensual
+// ============================================================
+export const getMetricasCrmApi = (sessionId, { periodo = '', scope = '', seguimientoDias = '', desde = '', hasta = '' } = {}) => {
+  const p = new URLSearchParams();
+  if (periodo) p.set('periodo', periodo);
+  if (scope) p.set('scope', scope);
+  if (seguimientoDias) p.set('seguimientoDias', seguimientoDias);
+  if (desde) p.set('desde', desde);
+  if (hasta) p.set('hasta', hasta);
+  const qs = p.toString();
+  return fetchWithAuth(`/crm/metricas${qs ? `?${qs}` : ''}`, sessionId);
+};
+
+export const guardarMetaCrmApi = (sessionId, metaMensual) =>
+  fetchWithAuth('/crm/meta', sessionId, { method: 'PUT', body: { metaMensual } });
+
+// ============================================================
+// Tareas / actividades (dashboard, WhatsApp, automatización)
+// ============================================================
+export const listarTareasApi = (sessionId, { estado = '', tipo = '', personaId = '', desde = '', hasta = '', scope = '' } = {}) => {
+  const p = new URLSearchParams();
+  if (estado) p.set('estado', estado);
+  if (tipo) p.set('tipo', tipo);
+  if (personaId) p.set('personaId', personaId);
+  if (desde) p.set('desde', desde);
+  if (hasta) p.set('hasta', hasta);
+  if (scope) p.set('scope', scope);
+  const qs = p.toString();
+  return fetchWithAuth(`/crm/tareas${qs ? `?${qs}` : ''}`, sessionId);
+};
+
+export const crearTareaApi = (sessionId, data) =>
+  fetchWithAuth('/crm/tareas', sessionId, { method: 'POST', body: data });
+
+export const actualizarTareaApi = (sessionId, id, data) =>
+  fetchWithAuth(`/crm/tareas/${id}`, sessionId, { method: 'PUT', body: data });
+
+export const completarTareaApi = (sessionId, id) =>
+  fetchWithAuth(`/crm/tareas/${id}`, sessionId, { method: 'PUT', body: { estado: 'completada' } });
+
+export const eliminarTareaApi = (sessionId, id) =>
+  fetchWithAuth(`/crm/tareas/${id}`, sessionId, { method: 'DELETE' });

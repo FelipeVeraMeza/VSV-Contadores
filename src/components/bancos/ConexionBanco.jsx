@@ -75,23 +75,23 @@ const ConexionBanco = ({ empresaId }) => {
                 isConnecting={isConnecting} 
             />
 
-            <div className="mb-6 bg-black/20 rounded-xl border border-white/5 shadow-lg flex flex-col">
+            <div className="mb-6 bg-slate-50 rounded-xl border border-[#efe8dd] shadow-lg flex flex-col">
                 
                 {/* BOTÓN DESPLEGABLE */}
                 <button 
                     onClick={() => setIsExpanded(!isExpanded)}
-                    className="w-full flex items-center justify-between px-6 py-4 bg-transparent hover:bg-white/5 transition-colors focus:outline-none rounded-xl"
+                    className="w-full flex items-center justify-between px-6 py-4 bg-transparent hover:bg-slate-100 transition-colors focus:outline-none rounded-xl"
                 >
                     <div className="flex items-center gap-4">
-                        <div className="p-2.5 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        <div className="p-2.5 rounded-lg bg-blue-500/10 text-blue-600 border border-blue-500/20">
                             <ShieldCheck className="h-5 w-5" />
                         </div>
                         <div className="text-left flex flex-col">
-                            <h2 className="text-base font-semibold text-white tracking-wide">Sincronización Automática</h2>
-                            <p className="text-xs text-white/50 mt-0.5">Vincule cuentas bancarias para descargar cartolas automáticamente.</p>
+                            <h2 className="text-base font-semibold text-slate-900 tracking-wide">Sincronización Automática</h2>
+                            <p className="text-xs text-slate-900/50 mt-0.5">Vincule cuentas bancarias para descargar cartolas automáticamente.</p>
                         </div>
                     </div>
-                    <ChevronDown className={`h-5 w-5 text-white/50 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                    <ChevronDown className={`h-5 w-5 text-slate-700/50 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
                 </button>
 
                 {/* CONTENIDO DESPLEGABLE */}
@@ -105,7 +105,7 @@ const ConexionBanco = ({ empresaId }) => {
                             transition={{ duration: 0.3, ease: "easeInOut" }}
                             className="overflow-hidden" 
                         >
-                            <div className="p-6 border-t border-white/5 bg-black/10">
+                            <div className="p-6 border-t border-[#efe8dd] bg-slate-50">
                                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
                                     {bancosDisponibles.map((banco, index) => {
                                         const isConnected = bancosConectados.some(b => b.banco_id === banco.id || b === banco.id);
@@ -117,12 +117,12 @@ const ConexionBanco = ({ empresaId }) => {
                                                 animate={{ opacity: 1, y: 0 }}
                                                 transition={{ duration: 0.2, delay: index * 0.05 }}
                                                 // CLAVE AQUÍ: Se eliminó h-full, se añadió min-h-[160px] y justify-between
-                                                className="relative flex flex-col items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10 hover:border-blue-500/50 hover:bg-white/10 transition-all duration-300 group min-h-[160px]"
+                                                className="relative flex flex-col items-center justify-between p-4 rounded-xl bg-slate-50 border border-[#efe8dd] hover:border-blue-500/50 hover:bg-slate-100 transition-all duration-300 group min-h-[160px]"
                                             >
                                                 <div className="flex flex-col items-center w-full">
                                                     {/* Contenedor del Logo */}
                                                     <div className="h-12 w-12 mb-3 bg-white/90 rounded-lg flex items-center justify-center p-2 shadow-sm group-hover:scale-105 transition-transform duration-300 relative overflow-hidden">
-                                                        <Building2 className="absolute text-gray-300 h-6 w-6 z-0" />
+                                                        <Building2 className="absolute text-slate-600 h-6 w-6 z-0" />
                                                         <img
                                                             src={banco.logo}
                                                             alt={banco.nombre}
@@ -133,7 +133,7 @@ const ConexionBanco = ({ empresaId }) => {
                                                         />
                                                     </div>
 
-                                                    <span className="text-xs font-semibold text-white/80 mb-4 text-center line-clamp-2">
+                                                    <span className="text-xs font-semibold text-slate-900/80 mb-4 text-center line-clamp-2">
                                                         {banco.nombre}
                                                     </span>
                                                 </div>
@@ -141,7 +141,7 @@ const ConexionBanco = ({ empresaId }) => {
                                                 {/* Contenedor Inferior Fijo */}
                                                 <div className="w-full">
                                                     {isConnected ? (
-                                                        <div className="flex items-center justify-center gap-1 w-full py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                                                        <div className="flex items-center justify-center gap-1 w-full py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-md text-emerald-600 text-[10px] font-bold uppercase tracking-wider">
                                                             <CheckCircle2 className="h-3.5 w-3.5" />
                                                             Conectado
                                                         </div>
@@ -149,7 +149,7 @@ const ConexionBanco = ({ empresaId }) => {
                                                         <Button 
                                                             variant="ghost" 
                                                             size="sm"
-                                                            className="w-full h-8 bg-black/30 hover:bg-blue-600 hover:text-white text-white/80 text-[11px] font-semibold transition-all rounded-md" 
+                                                            className="w-full h-8 bg-slate-50 hover:bg-blue-600 hover:text-white text-slate-700/80 text-[11px] font-semibold transition-all rounded-md" 
                                                             onClick={() => handleConnectClick(banco)}
                                                             disabled={isConnecting}
                                                         >

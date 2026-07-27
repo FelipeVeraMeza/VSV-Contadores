@@ -10,11 +10,11 @@ import { getLiquidacionApi, cambiarEstadoLiquidacionApi } from '@/services/rrhhS
 const clp = (v) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(Number(v) || 0);
 
 const ESTILO_ESTADO = {
-    borrador: 'bg-gray-500/20 text-gray-300',
-    revisada: 'bg-blue-500/20 text-blue-400',
+    borrador: 'bg-gray-500/20 text-slate-600',
+    revisada: 'bg-blue-500/20 text-blue-600',
     aprobada: 'bg-green-500/20 text-green-400',
-    pagada: 'bg-emerald-500/20 text-emerald-400',
-    anulada: 'bg-red-500/20 text-red-400',
+    pagada: 'bg-emerald-500/20 text-emerald-600',
+    anulada: 'bg-red-500/20 text-red-500',
 };
 
 const LiquidacionDetalleModal = ({ isOpen, setIsOpen, liquidacionId, empresaId }) => {
@@ -90,7 +90,7 @@ const LiquidacionDetalleModal = ({ isOpen, setIsOpen, liquidacionId, empresaId }
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="sm:max-w-2xl bg-black/60 backdrop-blur-xl border-white/20 text-white max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-2xl bg-slate-50 backdrop-blur-xl border-[#efe8dd] text-slate-700 max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="text-xl flex items-center justify-between">
                         <span>Liquidación de Sueldo</span>
@@ -102,10 +102,10 @@ const LiquidacionDetalleModal = ({ isOpen, setIsOpen, liquidacionId, empresaId }
                     <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-green-500" /></div>
                 ) : (
                     <div className="space-y-4 py-2 text-sm" id="liq-print">
-                        <div className="text-center border-b border-white/10 pb-3">
-                            <p className="text-lg font-bold text-white">{liq.empleado}</p>
-                            <p className="text-gray-400">{liq.cargo || '—'}</p>
-                            <p className="text-[11px] uppercase tracking-widest text-gray-500 mt-1">
+                        <div className="text-center border-b border-[#efe8dd] pb-3">
+                            <p className="text-lg font-bold text-slate-900">{liq.empleado}</p>
+                            <p className="text-slate-500">{liq.cargo || '—'}</p>
+                            <p className="text-[11px] uppercase tracking-widest text-slate-400 mt-1">
                                 Período {new Date(liq.periodo).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })} · {liq.totales.dias_trabajados} días
                             </p>
                         </div>
@@ -114,23 +114,23 @@ const LiquidacionDetalleModal = ({ isOpen, setIsOpen, liquidacionId, empresaId }
                             <div>
                                 <h5 className="text-[10px] font-black uppercase tracking-widest text-green-400 mb-1">Haberes</h5>
                                 {haberes.map((d, i) => (
-                                    <div key={i} className="flex justify-between py-0.5"><span className="text-gray-300">{d.codigo ? `${d.codigo} · ` : ''}{d.descripcion}</span><span className="text-gray-100">{clp(d.monto)}</span></div>
+                                    <div key={i} className="flex justify-between py-0.5"><span className="text-slate-600">{d.codigo ? `${d.codigo} · ` : ''}{d.descripcion}</span><span className="text-slate-700">{clp(d.monto)}</span></div>
                                 ))}
-                                <div className="flex justify-between border-t border-white/10 mt-1 pt-1 font-semibold"><span>Total haberes</span><span>{clp(liq.totales.total_haberes)}</span></div>
+                                <div className="flex justify-between border-t border-[#efe8dd] mt-1 pt-1 font-semibold"><span>Total haberes</span><span>{clp(liq.totales.total_haberes)}</span></div>
                             </div>
                             <div>
-                                <h5 className="text-[10px] font-black uppercase tracking-widest text-red-400 mb-1">Descuentos</h5>
+                                <h5 className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-1">Descuentos</h5>
                                 {descuentos.map((d, i) => (
-                                    <div key={i} className="flex justify-between py-0.5"><span className="text-gray-300">{d.codigo ? `${d.codigo} · ` : ''}{d.descripcion}</span><span className="text-red-400">-{clp(d.monto)}</span></div>
+                                    <div key={i} className="flex justify-between py-0.5"><span className="text-slate-600">{d.codigo ? `${d.codigo} · ` : ''}{d.descripcion}</span><span className="text-red-500">-{clp(d.monto)}</span></div>
                                 ))}
-                                <div className="flex justify-between border-t border-white/10 mt-1 pt-1 font-semibold"><span>Total descuentos</span><span className="text-red-400">-{clp(liq.totales.total_descuentos)}</span></div>
+                                <div className="flex justify-between border-t border-[#efe8dd] mt-1 pt-1 font-semibold"><span>Total descuentos</span><span className="text-red-500">-{clp(liq.totales.total_descuentos)}</span></div>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 text-xs text-gray-400 border-t border-white/10 pt-2">
-                            <span>Imponible: <span className="text-gray-200">{clp(liq.totales.total_imponible)}</span></span>
-                            <span>No imponible: <span className="text-gray-200">{clp(liq.totales.total_no_imponible)}</span></span>
-                            <span>Base tributable: <span className="text-gray-200">{clp(liq.totales.base_tributable)}</span></span>
+                        <div className="grid grid-cols-3 gap-2 text-xs text-slate-500 border-t border-[#efe8dd] pt-2">
+                            <span>Imponible: <span className="text-slate-700">{clp(liq.totales.total_imponible)}</span></span>
+                            <span>No imponible: <span className="text-slate-700">{clp(liq.totales.total_no_imponible)}</span></span>
+                            <span>Base tributable: <span className="text-slate-700">{clp(liq.totales.base_tributable)}</span></span>
                         </div>
 
                         <div className="flex justify-between text-xl font-black bg-green-500/10 rounded-lg px-4 py-3 border border-green-500/20">
@@ -138,7 +138,7 @@ const LiquidacionDetalleModal = ({ isOpen, setIsOpen, liquidacionId, empresaId }
                         </div>
 
                         {aportes.length > 0 && (
-                            <details className="text-xs text-gray-400">
+                            <details className="text-xs text-slate-500">
                                 <summary className="cursor-pointer">Aportes del empleador: {clp(liq.totales.aportes_patronales)} (no afecta el líquido)</summary>
                                 <div className="pl-2 pt-1">
                                     {aportes.map((a, i) => <div key={i} className="flex justify-between"><span>{a.descripcion}</span><span>{clp(a.monto)}</span></div>)}
@@ -149,7 +149,7 @@ const LiquidacionDetalleModal = ({ isOpen, setIsOpen, liquidacionId, empresaId }
                 )}
 
                 <DialogFooter className="gap-2">
-                    <Button type="button" variant="outline" onClick={imprimirPDF} disabled={!liq} className="border-white/20 text-white hover:bg-white/10"><Printer className="h-4 w-4 mr-2" />Imprimir / PDF</Button>
+                    <Button type="button" variant="outline" onClick={imprimirPDF} disabled={!liq} className="border-[#efe8dd] text-slate-700 hover:bg-slate-100"><Printer className="h-4 w-4 mr-2" />Imprimir / PDF</Button>
                     {accion && (
                         <Button type="button" onClick={() => cambiarEstado.mutate(accion.estado)} disabled={cambiarEstado.isPending} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white">
                             {cambiarEstado.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}{accion.label}

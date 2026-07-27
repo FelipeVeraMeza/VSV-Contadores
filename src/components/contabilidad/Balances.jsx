@@ -83,10 +83,10 @@ const Balances = ({ empresaId, periodoInicial, rango, vista = 'completo' }) => {
   const hayDatos = activos.length || pasivos.length || ingresos.length || gastos.length;
 
   const Fila = ({ nombre, codigo, monto, color }) => (
-    <div className="flex items-center justify-between py-2 px-3 hover:bg-white/[0.03] rounded-lg transition-colors">
+    <div className="flex items-center justify-between py-2 px-3 hover:bg-white rounded-lg transition-colors">
       <div className="min-w-0">
-        <p className="text-xs text-white font-bold truncate uppercase tracking-tight">{nombre}</p>
-        <p className="text-[9px] text-gray-500 font-mono">{codigo}</p>
+        <p className="text-xs text-slate-900 font-bold truncate uppercase tracking-tight">{nombre}</p>
+        <p className="text-[9px] text-slate-400 font-mono">{codigo}</p>
       </div>
       <span className={`text-xs font-mono font-black ${color}`}>{formatCLP(monto)}</span>
     </div>
@@ -97,35 +97,35 @@ const Balances = ({ empresaId, periodoInicial, rango, vista = 'completo' }) => {
       {/* CONTROLES DE PERÍODO */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {usaRango ? (
-          <div className="text-[10px] font-black uppercase tracking-widest text-blue-400 flex items-center gap-2">
+          <div className="text-[10px] font-black uppercase tracking-widest text-blue-600 flex items-center gap-2">
             <CalendarDays className="h-3.5 w-3.5" /> Rango: {rango.desde} → {rango.hasta}
           </div>
         ) : (
         <div className="flex items-center gap-2">
           <button onClick={() => setModo('acumulado')}
-            className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${modo === 'acumulado' ? 'bg-blue-600 text-white' : 'bg-black/40 border border-white/10 text-gray-400 hover:text-white'}`}>
+            className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${modo === 'acumulado' ? 'bg-blue-600 text-white' : 'bg-slate-50 border border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
             Acumulado
           </button>
           <button onClick={() => setModo('mensual')}
-            className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${modo === 'mensual' ? 'bg-blue-600 text-white' : 'bg-black/40 border border-white/10 text-gray-400 hover:text-white'}`}>
+            className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${modo === 'mensual' ? 'bg-blue-600 text-white' : 'bg-slate-50 border border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
             Mensual
           </button>
           <button onClick={() => setModo('anual')}
-            className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${modo === 'anual' ? 'bg-blue-600 text-white' : 'bg-black/40 border border-white/10 text-gray-400 hover:text-white'}`}>
+            className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${modo === 'anual' ? 'bg-blue-600 text-white' : 'bg-slate-50 border border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
             Anual
           </button>
           {(modo === 'mensual' || modo === 'anual') && (
-            <div className="flex items-center bg-black/40 border border-white/10 rounded-lg px-1">
-              <CalendarDays className="h-3.5 w-3.5 text-blue-400 ml-2" />
+            <div className="flex items-center bg-slate-50 border border-[#efe8dd] rounded-lg px-1">
+              <CalendarDays className="h-3.5 w-3.5 text-blue-600 ml-2" />
               {modo === 'mensual' && (
                 <select value={mes} onChange={e => setMes(e.target.value)}
-                  className="bg-transparent text-white text-[10px] font-black uppercase tracking-widest px-2 py-2 focus:outline-none cursor-pointer">
-                  {MESES.map(m => <option key={m.v} value={m.v} className="bg-slate-900">{m.l}</option>)}
+                  className="bg-transparent text-slate-700 text-[10px] font-black uppercase tracking-widest px-2 py-2 focus:outline-none cursor-pointer">
+                  {MESES.map(m => <option key={m.v} value={m.v} className="bg-white">{m.l}</option>)}
                 </select>
               )}
               <select value={anio} onChange={e => setAnio(e.target.value)}
-                className="bg-transparent text-white text-[10px] font-black uppercase tracking-widest px-2 py-2 focus:outline-none cursor-pointer">
-                {ANIOS.map(a => <option key={a} value={a} className="bg-slate-900">{a}</option>)}
+                className="bg-transparent text-slate-700 text-[10px] font-black uppercase tracking-widest px-2 py-2 focus:outline-none cursor-pointer">
+                {ANIOS.map(a => <option key={a} value={a} className="bg-white">{a}</option>)}
               </select>
             </div>
           )}
@@ -136,12 +136,12 @@ const Balances = ({ empresaId, periodoInicial, rango, vista = 'completo' }) => {
         <div className="flex items-center gap-2">
           {hayDatos && (
             cuadrado ? (
-              <div className="flex items-center gap-2 text-emerald-400 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20">
+              <div className="flex items-center gap-2 text-emerald-600 bg-emerald-500/10 px-3 py-2 rounded-lg border border-emerald-500/20">
                 <CheckCircle className="h-3.5 w-3.5" />
                 <span className="text-[10px] font-black uppercase tracking-widest">Balance Cuadrado</span>
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-amber-400 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20">
+              <div className="flex items-center gap-2 text-amber-600 bg-amber-500/10 px-3 py-2 rounded-lg border border-amber-500/20">
                 <AlertCircle className="h-3.5 w-3.5" />
                 <span className="text-[10px] font-black uppercase tracking-widest">
                   Descuadre {formatCLP(Math.abs(totalActivos - totalPasivosPatrimonio))}
@@ -158,14 +158,14 @@ const Balances = ({ empresaId, periodoInicial, rango, vista = 'completo' }) => {
       </div>
 
       {isLoading ? (
-        <div className="h-64 flex flex-col items-center justify-center text-gray-500">
+        <div className="h-64 flex flex-col items-center justify-center text-slate-400">
           <Loader2 className="h-10 w-10 animate-spin mb-4 text-blue-500 opacity-40" />
           <p className="text-[10px] font-black uppercase tracking-[0.3em]">Calculando Estados Financieros...</p>
         </div>
       ) : !hayDatos ? (
-        <div className="h-64 flex flex-col items-center justify-center text-center text-gray-500 bg-white/5 rounded-xl border border-white/10">
+        <div className="h-64 flex flex-col items-center justify-center text-center text-slate-400 bg-slate-50 rounded-xl border border-[#efe8dd]">
           <FileWarning className="h-12 w-12 mb-4 opacity-20" />
-          <h4 className="text-xs font-black uppercase text-white/40">Sin datos contabilizados</h4>
+          <h4 className="text-xs font-black uppercase text-slate-700/40">Sin datos contabilizados</h4>
           <p className="text-[10px] mt-2 max-w-xs">Contabiliza movimientos (botón "Contabilizar Todo") para generar los saldos del balance.</p>
         </div>
       ) : (
@@ -173,38 +173,38 @@ const Balances = ({ empresaId, periodoInicial, rango, vista = 'completo' }) => {
           {/* BALANCE GENERAL */}
           {(vista === 'completo' || vista === 'balance') && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}
-            className="bg-white/5 rounded-xl p-6 border border-white/10 backdrop-blur-md">
-            <h3 className="text-lg font-black text-white mb-4 uppercase italic tracking-tighter flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-blue-400" /> Balance General
+            className="bg-slate-50 rounded-xl p-6 border border-[#efe8dd] backdrop-blur-md">
+            <h3 className="text-lg font-black text-slate-900 mb-4 uppercase italic tracking-tighter flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-blue-600" /> Balance General
             </h3>
 
             {/* Activos */}
-            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1 mt-2">Activos</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1 mt-2">Activos</p>
             <div className="divide-y divide-white/5">
-              {activos.length ? activos.map(c => <Fila key={c.codigo} {...c} color="text-emerald-400" />)
-                : <p className="text-[10px] text-gray-600 py-2 px-3">Sin activos</p>}
+              {activos.length ? activos.map(c => <Fila key={c.codigo} {...c} color="text-emerald-600" />)
+                : <p className="text-[10px] text-slate-400 py-2 px-3">Sin activos</p>}
             </div>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10 px-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Activos</span>
-              <span className="text-sm font-mono font-black text-emerald-300">{formatCLP(totalActivos)}</span>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#efe8dd] px-3">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Activos</span>
+              <span className="text-sm font-mono font-black text-emerald-700">{formatCLP(totalActivos)}</span>
             </div>
 
             {/* Pasivos + Patrimonio */}
-            <p className="text-[10px] font-black uppercase tracking-widest text-red-400 mb-1 mt-5">Pasivos y Patrimonio</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-1 mt-5">Pasivos y Patrimonio</p>
             <div className="divide-y divide-white/5">
-              {pasivos.length ? pasivos.map(c => <Fila key={c.codigo} {...c} color="text-red-400" />)
-                : <p className="text-[10px] text-gray-600 py-2 px-3">Sin pasivos</p>}
+              {pasivos.length ? pasivos.map(c => <Fila key={c.codigo} {...c} color="text-red-500" />)
+                : <p className="text-[10px] text-slate-400 py-2 px-3">Sin pasivos</p>}
               <div className="flex items-center justify-between py-2 px-3">
                 <div>
-                  <p className="text-xs text-white font-bold uppercase tracking-tight">Resultado del Ejercicio</p>
-                  <p className="text-[9px] text-gray-500">Utilidad / Pérdida</p>
+                  <p className="text-xs text-slate-900 font-bold uppercase tracking-tight">Resultado del Ejercicio</p>
+                  <p className="text-[9px] text-slate-400">Utilidad / Pérdida</p>
                 </div>
-                <span className={`text-xs font-mono font-black ${utilidad >= 0 ? 'text-blue-400' : 'text-red-400'}`}>{formatCLP(utilidad)}</span>
+                <span className={`text-xs font-mono font-black ${utilidad >= 0 ? 'text-blue-600' : 'text-red-500'}`}>{formatCLP(utilidad)}</span>
               </div>
             </div>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10 px-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Pasivo + Patrimonio</span>
-              <span className="text-sm font-mono font-black text-red-300">{formatCLP(totalPasivosPatrimonio)}</span>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#efe8dd] px-3">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Pasivo + Patrimonio</span>
+              <span className="text-sm font-mono font-black text-red-600">{formatCLP(totalPasivosPatrimonio)}</span>
             </div>
           </motion.div>
           )}
@@ -212,44 +212,44 @@ const Balances = ({ empresaId, periodoInicial, rango, vista = 'completo' }) => {
           {/* ESTADO DE RESULTADOS */}
           {(vista === 'completo' || vista === 'resultados') && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}
-            className="bg-white/5 rounded-xl p-6 border border-white/10 backdrop-blur-md">
-            <h3 className="text-lg font-black text-white mb-4 uppercase italic tracking-tighter flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-purple-400" /> Estado de Resultados
+            className="bg-slate-50 rounded-xl p-6 border border-[#efe8dd] backdrop-blur-md">
+            <h3 className="text-lg font-black text-slate-900 mb-4 uppercase italic tracking-tighter flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-purple-600" /> Estado de Resultados
             </h3>
 
-            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 mb-1 mt-2 flex items-center gap-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1 mt-2 flex items-center gap-1">
               <TrendingUp className="h-3 w-3" /> Ingresos
             </p>
             <div className="divide-y divide-white/5">
-              {ingresos.length ? ingresos.map(c => <Fila key={c.codigo} nombre={c.nombre} codigo={c.codigo} monto={c.monto} color="text-emerald-400" />)
-                : <p className="text-[10px] text-gray-600 py-2 px-3">Sin ingresos</p>}
+              {ingresos.length ? ingresos.map(c => <Fila key={c.codigo} nombre={c.nombre} codigo={c.codigo} monto={c.monto} color="text-emerald-600" />)
+                : <p className="text-[10px] text-slate-400 py-2 px-3">Sin ingresos</p>}
             </div>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10 px-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Ingresos</span>
-              <span className="text-sm font-mono font-black text-emerald-300">{formatCLP(er.totalIngresos)}</span>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#efe8dd] px-3">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Ingresos</span>
+              <span className="text-sm font-mono font-black text-emerald-700">{formatCLP(er.totalIngresos)}</span>
             </div>
 
-            <p className="text-[10px] font-black uppercase tracking-widest text-red-400 mb-1 mt-5 flex items-center gap-1">
+            <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-1 mt-5 flex items-center gap-1">
               <TrendingDown className="h-3 w-3" /> Gastos
             </p>
             <div className="divide-y divide-white/5">
-              {gastos.length ? gastos.map(c => <Fila key={c.codigo} nombre={c.nombre} codigo={c.codigo} monto={c.monto} color="text-red-400" />)
-                : <p className="text-[10px] text-gray-600 py-2 px-3">Sin gastos</p>}
+              {gastos.length ? gastos.map(c => <Fila key={c.codigo} nombre={c.nombre} codigo={c.codigo} monto={c.monto} color="text-red-500" />)
+                : <p className="text-[10px] text-slate-400 py-2 px-3">Sin gastos</p>}
             </div>
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/10 px-3">
-              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Gastos</span>
-              <span className="text-sm font-mono font-black text-red-300">{formatCLP(er.totalGastos)}</span>
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#efe8dd] px-3">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total Gastos</span>
+              <span className="text-sm font-mono font-black text-red-600">{formatCLP(er.totalGastos)}</span>
             </div>
 
             {/* Resultado */}
-            <div className="mt-5 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl p-5 border border-white/10">
+            <div className="mt-5 bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-xl p-5 border border-[#efe8dd]">
               <div className="flex items-center justify-between mb-1">
-                <h4 className="text-sm font-bold text-white uppercase tracking-tight">
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-tight">
                   {utilidad >= 0 ? 'Utilidad del Ejercicio' : 'Pérdida del Ejercicio'}
                 </h4>
-                <span className="text-[10px] font-black text-gray-400 uppercase">Margen {er.margen}%</span>
+                <span className="text-[10px] font-black text-slate-500 uppercase">Margen {er.margen}%</span>
               </div>
-              <p className={`text-3xl font-black tracking-tighter ${utilidad >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              <p className={`text-3xl font-black tracking-tighter ${utilidad >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                 {formatCLP(utilidad)}
               </p>
             </div>

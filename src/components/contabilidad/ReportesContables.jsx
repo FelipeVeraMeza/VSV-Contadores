@@ -49,14 +49,14 @@ const ReportesContables = ({ empresaId }) => {
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.4, delay: index * 0.1 }}
-                            className="bg-white/5 rounded-xl p-6 hover:bg-white/10 transition-colors cursor-pointer border border-white/5 hover:border-blue-500/30 group"
+                            className="bg-slate-50 rounded-xl p-6 hover:bg-slate-100 transition-colors cursor-pointer border border-[#efe8dd] hover:border-blue-500/30 group"
                             onClick={() => handleReportClick(reporte.action)}
                         >
                             <div className={`w-12 h-12 bg-gradient-to-r ${reporte.color} rounded-xl flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform`}>
                                 <Icon className="h-6 w-6 text-white" />
                             </div>
-                            <h3 className="text-white font-black uppercase italic text-sm tracking-tight">{reporte.name}</h3>
-                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-1">Generar reporte búnker</p>
+                            <h3 className="text-slate-900 font-black uppercase italic text-sm tracking-tight">{reporte.name}</h3>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Generar reporte búnker</p>
                         </motion.div>
                     );
                 })}

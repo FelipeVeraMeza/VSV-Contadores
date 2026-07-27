@@ -49,6 +49,10 @@ export const editarNotaApi = (sessionId, notaId, texto) => {
   return fetchWithAuth(`/personas/notas/${notaId}`, sessionId, { method: 'PATCH', body: { texto } });
 };
 
+export const eliminarNotaApi = (sessionId, notaId) => {
+  return fetchWithAuth(`/personas/notas/${notaId}`, sessionId, { method: 'DELETE' });
+};
+
 export const asociarEmpresaApi = (sessionId, personaId, data) => {
   return fetchWithAuth(`/personas/${personaId}/empresas`, sessionId, { method: 'POST', body: data });
 };

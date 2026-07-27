@@ -29,14 +29,14 @@ const RrhhStats = ({ empresaId }) => {
         { title: 'Finiquitos', value: data?.finiquitos ?? 0, hint: 'este mes', icon: UserMinus, color: 'from-rose-500 to-pink-500', ring: 'bg-rose-500/10' },
     ], [data]);
 
-    if (isError) return <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs">No se pudieron cargar las métricas.</div>;
+    if (isError) return <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-xs">No se pudieron cargar las métricas.</div>;
 
     if (isLoading) {
         return (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="h-28 bg-white/[0.03] animate-pulse rounded-2xl border border-white/10 flex items-center justify-center">
-                        <Loader2 className="h-5 w-5 text-white/10 animate-spin" />
+                    <div key={i} className="h-28 bg-white animate-pulse rounded-2xl border border-[#efe8dd] flex items-center justify-center">
+                        <Loader2 className="h-5 w-5 text-slate-700/10 animate-spin" />
                     </div>
                 ))}
             </div>
@@ -53,13 +53,13 @@ const RrhhStats = ({ empresaId }) => {
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.35, delay: index * 0.06 }}
-                        className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] p-5 hover:border-white/20 hover:bg-white/[0.06] transition-all"
+                        className="relative overflow-hidden rounded-2xl border border-[#efe8dd] bg-slate-50 p-5 hover:border-[#efe8dd] hover:bg-slate-100 transition-all"
                     >
                         <div className="flex items-start justify-between">
                             <div className="min-w-0">
-                                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-500">{stat.title}</p>
-                                <p className="text-[26px] leading-none font-bold text-white mt-3 tracking-tight truncate">{stat.value}</p>
-                                <p className="text-[11px] text-gray-500 mt-2">{stat.hint}</p>
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-400">{stat.title}</p>
+                                <p className="text-[26px] leading-none font-bold text-slate-900 mt-3 tracking-tight truncate">{stat.value}</p>
+                                <p className="text-[11px] text-slate-400 mt-2">{stat.hint}</p>
                             </div>
                             <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center shadow-lg shadow-black/20 flex-shrink-0`}>
                                 <Icon className="h-[18px] w-[18px] text-white" />

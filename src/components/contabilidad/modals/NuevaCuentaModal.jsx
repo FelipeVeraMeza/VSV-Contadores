@@ -63,12 +63,12 @@ const NuevaCuentaModal = ({ isOpen, setIsOpen, onGuardado, cuenta, empresaId }) 
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="sm:max-w-[460px] bg-[#0f172a] border-white/10 text-white shadow-2xl">
+            <DialogContent className="sm:max-w-[460px] bg-white border-[#efe8dd] text-slate-700 shadow-2xl">
                 <DialogHeader>
-                    <DialogTitle className="text-lg font-black uppercase tracking-tight text-blue-400">
+                    <DialogTitle className="text-lg font-black uppercase tracking-tight text-blue-600">
                         {isEditing ? 'Editar Cuenta' : 'Nueva Cuenta Contable'}
                     </DialogTitle>
-                    <DialogDescription className="text-gray-400 text-xs">
+                    <DialogDescription className="text-slate-500 text-xs">
                         {isEditing ? `Modificando: ${cuenta.codigo}` : 'Agrega una cuenta al plan contable'}
                     </DialogDescription>
                 </DialogHeader>
@@ -77,37 +77,37 @@ const NuevaCuentaModal = ({ isOpen, setIsOpen, onGuardado, cuenta, empresaId }) 
                     {/* Código — solo en creación */}
                     {!isEditing && (
                         <div className="space-y-1.5">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Código de Cuenta</label>
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Código de Cuenta</label>
                             <input
                                 value={codigo}
                                 onChange={e => setCodigo(e.target.value)}
                                 placeholder="Ej: 1104-02"
-                                className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-blue-500"
+                                className="w-full bg-white border border-[#efe8dd] rounded-lg px-3 py-2 text-sm text-slate-900 font-mono focus:outline-none focus:border-emerald-500"
                             />
                         </div>
                     )}
 
                     {/* Descripción */}
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Descripción</label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Descripción</label>
                         <input
                             value={descripcion}
                             onChange={e => setDescripcion(e.target.value)}
                             placeholder="Ej: BANCO SANTANDER"
-                            className="w-full bg-slate-900 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                            className="w-full bg-white border border-[#efe8dd] rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-emerald-500"
                         />
                     </div>
 
                     {/* Tipo de cuenta */}
                     <div className="space-y-1.5">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Tipo de Cuenta</label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Tipo de Cuenta</label>
                         <div className="grid grid-cols-4 gap-2">
                             {TIPOS_CUENTA.map(t => (
                                 <button key={t.value} type="button" onClick={() => setTipoCuenta(t.value)}
                                     className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                                         tipo_cuenta === t.value
                                             ? 'bg-blue-600 text-white'
-                                            : 'bg-slate-800/50 text-gray-500 hover:text-white border border-white/5'
+                                            : 'bg-slate-50 text-slate-400 hover:text-slate-900 border border-[#efe8dd]'
                                     }`}>
                                     {t.label}
                                 </button>
@@ -117,11 +117,11 @@ const NuevaCuentaModal = ({ isOpen, setIsOpen, onGuardado, cuenta, empresaId }) 
                 </form>
 
                 <DialogFooter className="mt-2">
-                    <Button variant="ghost" onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white">
+                    <Button variant="ghost" onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-slate-900">
                         Cancelar
                     </Button>
                     <Button onClick={handleSubmit} disabled={isSaving}
-                        className="bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-xs tracking-widest disabled:opacity-40">
+                        className="bg-emerald-600 hover:bg-emerald-500 text-slate-900 font-black uppercase text-xs tracking-widest disabled:opacity-40">
                         {isSaving ? <><Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />Guardando...</> : isEditing ? 'Actualizar' : 'Crear Cuenta'}
                     </Button>
                 </DialogFooter>

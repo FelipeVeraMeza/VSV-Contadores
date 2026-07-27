@@ -29,9 +29,9 @@ const ControlAsistencia = ({ empresaId }) => {
 
     if (isLoading) {
         return (
-            <div className="flex flex-col items-center justify-center py-20 text-white">
+            <div className="flex flex-col items-center justify-center py-20 text-slate-700">
                 <Loader2 className="h-10 w-10 text-blue-500 animate-spin mb-4" />
-                <p className="text-gray-400 animate-pulse uppercase tracking-widest text-[10px] font-black">Sincronizando marcajes...</p>
+                <p className="text-slate-500 animate-pulse uppercase tracking-widest text-[10px] font-black">Sincronizando marcajes...</p>
             </div>
         );
     }
@@ -45,21 +45,21 @@ const ControlAsistencia = ({ empresaId }) => {
         >
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
                 <div>
-                    <h3 className="text-2xl font-semibold text-white mb-2">Control de Asistencia</h3>
-                    <p className="text-gray-300">Registra y gestiona las horas de trabajo de tu equipo.</p>
+                    <h3 className="text-2xl font-semibold text-slate-900 mb-2">Control de Asistencia</h3>
+                    <p className="text-slate-600">Registra y gestiona las horas de trabajo de tu equipo.</p>
                 </div>
                 <div className="flex items-center space-x-3">
                     <Button 
                         onClick={() => showToast("Reporte Mensual")} 
                         variant="outline" 
-                        className="border-white/20 text-white hover:bg-white/10"
+                        className="border-[#efe8dd] text-slate-700 hover:bg-slate-100"
                     >
                         <Calendar className="h-4 w-4 mr-2" />
                         Ver Reporte Mensual
                     </Button>
                     <Button 
                         onClick={() => showToast("Importación de Registros")} 
-                        className="bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+                        className="bg-gradient-to-r from-emerald-500 to-green-600 text-white"
                     >
                         <Upload className="h-4 w-4 mr-2" />
                         Importar Registros
@@ -67,32 +67,32 @@ const ControlAsistencia = ({ empresaId }) => {
                 </div>
             </div>
 
-            <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
+            <div className="bg-slate-50 rounded-xl border border-[#efe8dd] overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full">
-                        <thead className="bg-white/10">
+                        <thead className="bg-slate-100">
                             <tr>
-                                <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Empleado</th>
-                                <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Fecha</th>
-                                <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Entrada</th>
-                                <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Salida</th>
-                                <th className="px-6 py-4 text-left text-sm font-medium text-gray-300">Horas Trabajadas</th>
+                                <th className="px-6 py-4 text-left text-sm font-medium text-slate-600">Empleado</th>
+                                <th className="px-6 py-4 text-left text-sm font-medium text-slate-600">Fecha</th>
+                                <th className="px-6 py-4 text-left text-sm font-medium text-slate-600">Entrada</th>
+                                <th className="px-6 py-4 text-left text-sm font-medium text-slate-600">Salida</th>
+                                <th className="px-6 py-4 text-left text-sm font-medium text-slate-600">Horas Trabajadas</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/10">
                             {asistenciaData.length > 0 ? (
                                 asistenciaData.map((registro, index) => (
-                                    <motion.tr key={index} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: index * 0.1 }} className="hover:bg-white/5 transition-colors">
-                                        <td className="px-6 py-4 text-sm text-white font-medium">{registro.empleado}</td>
-                                        <td className="px-6 py-4 text-sm text-gray-300">{registro.fecha}</td>
+                                    <motion.tr key={index} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: index * 0.1 }} className="hover:bg-slate-100 transition-colors">
+                                        <td className="px-6 py-4 text-sm text-slate-900 font-medium">{registro.empleado}</td>
+                                        <td className="px-6 py-4 text-sm text-slate-600">{registro.fecha}</td>
                                         <td className="px-6 py-4 text-sm text-green-400">{registro.entrada}</td>
-                                        <td className="px-6 py-4 text-sm text-orange-400">{registro.salida}</td>
-                                        <td className="px-6 py-4 text-sm text-white">{registro.horas}</td>
+                                        <td className="px-6 py-4 text-sm text-orange-600">{registro.salida}</td>
+                                        <td className="px-6 py-4 text-sm text-slate-900">{registro.horas}</td>
                                     </motion.tr>
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="5" className="text-center py-20 text-gray-500">
+                                    <td colSpan="5" className="text-center py-20 text-slate-400">
                                         <FileWarning className="h-10 w-10 mx-auto mb-4 opacity-20" />
                                         <p>No hay registros de asistencia para esta empresa.</p>
                                     </td>

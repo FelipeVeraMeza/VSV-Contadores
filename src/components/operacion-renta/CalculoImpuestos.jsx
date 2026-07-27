@@ -33,48 +33,48 @@ const CalculoImpuestos = ({ empresaId }) => {
             className="space-y-8"
         >
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-white/5 p-6 rounded-xl border border-white/10 shadow-xl">
+                <div className="bg-slate-50 p-6 rounded-xl border border-[#efe8dd] shadow-xl">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-semibold text-white tracking-tighter uppercase italic">Proyección Renta Anual (F22)</h3>
-                        <Button onClick={() => showToast("Simulador F22")} variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10 text-[10px] font-bold">Simulador F22</Button>
+                        <h3 className="text-xl font-semibold text-slate-900 tracking-tighter uppercase italic">Proyección Renta Anual (F22)</h3>
+                        <Button onClick={() => showToast("Simulador F22")} variant="outline" size="sm" className="border-[#efe8dd] text-slate-700 hover:bg-slate-100 text-[10px] font-bold">Simulador F22</Button>
                     </div>
-                    <div className="h-64 bg-gradient-to-r from-purple-500/20 to-violet-500/20 rounded-xl flex items-center justify-center border border-purple-500/30 relative overflow-hidden group">
+                    <div className="h-64 bg-gradient-to-r from-teal-500/20 to-cyan-500/20 rounded-xl flex items-center justify-center border border-teal-500/30 relative overflow-hidden group">
                         {isLoading ? (
-                            <Loader2 className="h-10 w-10 text-purple-400 animate-spin" />
+                            <Loader2 className="h-10 w-10 text-purple-600 animate-spin" />
                         ) : calculo ? (
                             <div className="text-center z-10">
-                                <Calculator className="h-16 w-16 text-purple-400 mx-auto mb-4 group-hover:scale-110 transition-transform" />
-                                <p className="text-white font-bold text-2xl">${calculo.totalAPagar.toLocaleString('es-CL')}</p>
-                                <p className="text-sm text-purple-300 uppercase font-black tracking-widest mt-1">Impuesto Neto a Pagar</p>
+                                <Calculator className="h-16 w-16 text-purple-600 mx-auto mb-4 group-hover:scale-110 transition-transform" />
+                                <p className="text-slate-900 font-bold text-2xl">${calculo.totalAPagar.toLocaleString('es-CL')}</p>
+                                <p className="text-sm text-purple-700 uppercase font-black tracking-widest mt-1">Impuesto Neto a Pagar</p>
                             </div>
                         ) : (
-                            <div className="text-center text-gray-400">
-                                <FileWarning className="h-16 w-16 text-purple-400 mx-auto mb-4 opacity-50" />
-                                <p className="text-white">Cálculo de Impuesto a la Renta</p>
+                            <div className="text-center text-slate-500">
+                                <FileWarning className="h-16 w-16 text-purple-600 mx-auto mb-4 opacity-50" />
+                                <p className="text-slate-700">Cálculo de Impuesto a la Renta</p>
                                 <p className="text-sm mt-2">Datos no disponibles.</p>
                             </div>
                         )}
                     </div>
                 </div>
 
-                <div className="bg-white/5 p-6 rounded-xl border border-white/10 shadow-xl">
+                <div className="bg-slate-50 p-6 rounded-xl border border-[#efe8dd] shadow-xl">
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-semibold text-white tracking-tighter uppercase italic">Seguimiento de PPM</h3>
-                        <Button onClick={() => showToast("Historial PPM")} variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10 text-[10px] font-bold">Ver Historial</Button>
+                        <h3 className="text-xl font-semibold text-slate-900 tracking-tighter uppercase italic">Seguimiento de PPM</h3>
+                        <Button onClick={() => showToast("Historial PPM")} variant="outline" size="sm" className="border-[#efe8dd] text-slate-700 hover:bg-slate-100 text-[10px] font-bold">Ver Historial</Button>
                     </div>
                     <div className="h-64 bg-gradient-to-r from-orange-500/20 to-red-500/20 rounded-xl flex items-center justify-center border border-orange-500/30 relative overflow-hidden group">
                         {isLoading ? (
-                            <Loader2 className="h-10 w-10 text-orange-400 animate-spin" />
+                            <Loader2 className="h-10 w-10 text-orange-600 animate-spin" />
                         ) : calculo ? (
                             <div className="text-center z-10">
-                                <Percent className="h-16 w-16 text-orange-400 mx-auto mb-4 group-hover:scale-110 transition-transform" />
-                                <p className="text-white font-bold text-2xl">${calculo.ppmPagados.toLocaleString('es-CL')}</p>
-                                <p className="text-sm text-orange-300 uppercase font-black tracking-widest mt-1">PPM Acumulado a la Fecha</p>
+                                <Percent className="h-16 w-16 text-orange-600 mx-auto mb-4 group-hover:scale-110 transition-transform" />
+                                <p className="text-slate-900 font-bold text-2xl">${calculo.ppmPagados.toLocaleString('es-CL')}</p>
+                                <p className="text-sm text-orange-700 uppercase font-black tracking-widest mt-1">PPM Acumulado a la Fecha</p>
                             </div>
                         ) : (
-                            <div className="text-center text-gray-400">
-                                <FileWarning className="h-16 w-16 text-orange-400 mx-auto mb-4 opacity-50" />
-                                <p className="text-white">PPM Acumulado vs Proyección</p>
+                            <div className="text-center text-slate-500">
+                                <FileWarning className="h-16 w-16 text-orange-600 mx-auto mb-4 opacity-50" />
+                                <p className="text-slate-700">PPM Acumulado vs Proyección</p>
                                 <p className="text-sm mt-2">Datos no disponibles.</p>
                             </div>
                         )}

@@ -25,10 +25,10 @@ const OperacionRenta = () => {
     return (
       <div className="flex flex-col items-center justify-center h-[70vh] text-center">
         <Loader2 className="h-12 w-12 text-teal-500 animate-spin mb-4" />
-        <h2 className="text-xl font-bold text-white uppercase tracking-tighter italic">
+        <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tighter italic">
           Preparando Operación Renta 2026
         </h2>
-        <p className="text-gray-400 text-sm mt-2 font-bold uppercase tracking-widest">
+        <p className="text-slate-500 text-sm mt-2 font-bold uppercase tracking-widest">
           Selecciona una entidad para analizar el búnker tributario.
         </p>
       </div>
@@ -55,10 +55,10 @@ const OperacionRenta = () => {
     <div className="space-y-8">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
         <div>
-           <h1 className="text-4xl font-black text-white mb-2 italic uppercase tracking-tighter">
+           <h1 className="text-4xl font-black text-slate-900 mb-2 italic uppercase tracking-tighter">
             Módulo de Operación Renta
           </h1>
-          <p className="text-gray-400 text-[10px] font-bold uppercase tracking-[0.3em]">
+          <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.3em]">
             Análisis, cálculo y gestión del proceso de renta anual
           </p>
         </div>
@@ -67,7 +67,7 @@ const OperacionRenta = () => {
           <Button 
             onClick={showNotImplementedToast}
             variant="outline"
-            className="border-white/20 text-white hover:bg-white/10 h-11 px-4 w-full sm:w-auto flex items-center justify-center text-sm font-bold transition-all"
+            className="border-[#efe8dd] text-slate-700 hover:bg-slate-100 h-11 px-4 w-full sm:w-auto flex items-center justify-center text-sm font-bold transition-all"
           >
             <Brain className="h-4 w-4 mr-2 shrink-0" />
             <span className="whitespace-nowrap">Recomendaciones IA</span>
@@ -82,8 +82,8 @@ const OperacionRenta = () => {
         </div>
       </div>
 
-      <div className="bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 overflow-hidden shadow-2xl">
-        <div className="flex border-b border-white/10 overflow-x-auto no-scrollbar">
+      <div className="bg-white backdrop-blur-xl rounded-2xl border border-[#efe8dd] overflow-hidden shadow-2xl">
+        <div className="flex border-b border-[#efe8dd] overflow-x-auto no-scrollbar">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -94,10 +94,10 @@ const OperacionRenta = () => {
                 className={`flex-shrink-0 flex items-center space-x-2 px-6 py-4 text-[10px] font-black uppercase tracking-widest transition-all ${
                   isActive
                     ? 'bg-gradient-to-r from-teal-500/20 to-cyan-500/20 text-white border-b-2 border-teal-500'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
                 }`}
               >
-                <Icon className={`h-4 w-4 ${isActive ? 'text-teal-400' : 'text-gray-500'}`} />
+                <Icon className={`h-4 w-4 ${isActive ? 'text-teal-600' : 'text-slate-400'}`} />
                 <span>{tab.name}</span>
               </button>
             );

@@ -23,22 +23,22 @@ const fmtCompact = (n) => {
   return `$${Math.round(v)}`;
 };
 
-const TOOLTIP_STYLE = { borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)', backgroundColor: '#0f172a', color: '#fff', fontSize: '12px' };
+const TOOLTIP_STYLE = { borderRadius: '16px', border: '1px solid #efe8dd', backgroundColor: '#ffffff', color: '#1a1c1e', fontSize: '12px' };
 
 const KpiCard = ({ icon: Icon, label, value, sub, color }) => (
-  <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4 flex flex-col gap-1 backdrop-blur-md">
+  <div className="bg-white border border-[#efe8dd] rounded-2xl p-4 flex flex-col gap-1 backdrop-blur-md">
     <div className="flex items-center justify-between">
-      <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{label}</span>
+      <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{label}</span>
       <Icon size={16} className={color} />
     </div>
-    <span className="text-2xl font-black text-white tracking-tight">{value}</span>
-    {sub && <span className="text-[10px] text-gray-500">{sub}</span>}
+    <span className="text-2xl font-black text-slate-900 tracking-tight">{value}</span>
+    {sub && <span className="text-[10px] text-slate-500">{sub}</span>}
   </div>
 );
 
 const ChartCard = ({ icon: Icon, title, color, children, height = 360 }) => (
-  <div className="bg-white/[0.03] border border-white/5 p-6 rounded-[2rem] flex flex-col backdrop-blur-md" style={{ height }}>
-    <h3 className="text-xs font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+  <div className="bg-white border border-[#efe8dd] p-6 rounded-[2rem] flex flex-col backdrop-blur-md" style={{ height }}>
+    <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
       <Icon className={color} size={16} /> {cleanStr(title)}
     </h3>
     <div className="flex-1 min-h-0">
@@ -128,7 +128,7 @@ const CrmAnalytics = ({ clients = [], cashFlow = [] }) => {
         <KpiCard icon={CheckCircle2} label="Al día" value={m.alDia} sub={`${pctAlDia}% de la cartera`} color="text-emerald-500" />
         <KpiCard icon={AlertTriangle} label="Críticos" value={m.criticos} color="text-red-500" />
         <KpiCard icon={FileText} label="F29 pendientes" value={m.f29Pendientes} color="text-amber-500" />
-        <KpiCard icon={DollarSign} label="Deuda estimada" value={fmtCompact(m.deudaTotal)} sub="no pagados / suspendidos" color="text-red-400" />
+        <KpiCard icon={DollarSign} label="Deuda estimada" value={fmtCompact(m.deudaTotal)} sub="no pagados / suspendidos" color="text-red-500" />
         <KpiCard icon={Gauge} label="Score promedio" value={m.scoreProm} color="text-purple-500" />
       </div>
 
@@ -181,17 +181,17 @@ const CrmAnalytics = ({ clients = [], cashFlow = [] }) => {
               <Bar dataKey="value" fill="#ef4444" radius={[0, 4, 4, 0]} barSize={16} />
             </BarChart>
           ) : (
-            <div className="h-full flex items-center justify-center text-gray-500 text-xs italic">Sin montos de deuda registrados.</div>
+            <div className="h-full flex items-center justify-center text-slate-500 text-xs italic">Sin montos de deuda registrados.</div>
           )}
         </ChartCard>
       </div>
 
       {/* ===== Flujo de caja (estimación / histórico) ===== */}
       {safeCashFlow.length > 0 && (
-        <div className="bg-white/[0.03] border border-white/5 p-6 rounded-[2rem] backdrop-blur-md mb-10" style={{ height: 360 }}>
-          <h3 className="text-xs font-black text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+        <div className="bg-white border border-[#efe8dd] p-6 rounded-[2rem] backdrop-blur-md mb-10" style={{ height: 360 }}>
+          <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
             <TrendingUp className="text-blue-500" size={16} /> {cleanStr('Flujo de Caja & Estimación')}
-            <span className="ml-2 text-[9px] font-bold text-gray-500 normal-case tracking-normal">(datos de ejemplo · pendiente conectar histórico real)</span>
+            <span className="ml-2 text-[9px] font-bold text-slate-500 normal-case tracking-normal">(datos de ejemplo · pendiente conectar histórico real)</span>
           </h3>
           <div style={{ height: 280 }}>
             <ResponsiveContainer width="100%" height="100%">

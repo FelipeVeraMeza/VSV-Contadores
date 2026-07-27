@@ -308,7 +308,7 @@ const CRM = () => {
     }
   };
 
-  if (loading) return <div className="h-full flex items-center justify-center text-white"><div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div>;
+  if (loading) return <div className="h-full flex items-center justify-center text-slate-500"><div className="animate-spin w-8 h-8 border-4 border-[#199b4d] border-t-transparent rounded-full"></div></div>;
 
   return (
     <CrmErrorBoundary>
@@ -316,14 +316,14 @@ const CRM = () => {
       {activeTab !== 'dashboard' && (
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
           <div>
-              <h1 className="text-xl md:text-2xl font-black text-white uppercase tracking-tighter">{TITULOS[activeTab] || 'CRM'}</h1>
+              <h1 className="text-xl md:text-2xl font-black text-[#1a1c1e] uppercase tracking-tighter">{TITULOS[activeTab] || 'CRM'}</h1>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 z-50">
               {activeTab === 'list' && (
                 <button
                     onClick={() => setShowImport(true)}
-                    className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                    className="flex items-center gap-2 bg-white hover:bg-slate-50 border border-[#efe8dd] text-slate-600 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
                 >
                     <Upload size={14} /> Importar
                 </button>
@@ -331,14 +331,14 @@ const CRM = () => {
               {activeTab === 'prospectos' && (
                 <button
                     onClick={() => setShowImportProspectos(true)}
-                    className="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
+                    className="flex items-center gap-2 bg-white hover:bg-slate-50 border border-[#efe8dd] text-slate-600 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors"
                 >
                     <Upload size={14} /> Importar
                 </button>
               )}
               <button
                   onClick={() => activeTab === 'prospectos' ? setShowCrearCliente(true) : setShowCrearEmpresa(true)}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 transition-colors"
+                  className="flex items-center gap-2 bg-[#199b4d] hover:bg-[#147a3d] text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-sm transition-colors"
               >
                   <UserPlus size={14} /> {activeTab === 'prospectos' ? 'Crear Prospecto' : 'Crear Cliente'}
               </button>
@@ -425,7 +425,7 @@ const CRM = () => {
       {activeTab === 'analytics' && (
         <div className="flex-1 min-h-0 flex flex-col gap-3">
           {chartsSample && (
-            <div className="flex items-center gap-2 text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl px-3 py-2 flex-shrink-0">
+            <div className="flex items-center gap-2 text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex-shrink-0">
               <FileSpreadsheet size={13} /> Los gráficos muestran <span className="uppercase tracking-widest">datos de ejemplo</span> — aún no hay historial financiero real cargado.
             </div>
           )}

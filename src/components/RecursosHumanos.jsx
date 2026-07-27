@@ -63,9 +63,9 @@ const SUBPAGINAS = {
 };
 
 const Proximamente = ({ titulo }) => (
-  <div className="flex flex-col items-center justify-center py-24 text-gray-500">
+  <div className="flex flex-col items-center justify-center py-24 text-slate-400">
     <FileWarning className="h-14 w-14 mb-4 opacity-20" />
-    <h3 className="text-lg font-semibold text-white">{titulo}</h3>
+    <h3 className="text-lg font-semibold text-slate-900">{titulo}</h3>
     <p className="text-sm">Esta sección estará disponible próximamente.</p>
   </div>
 );
@@ -138,20 +138,20 @@ const RecursosHumanos = () => {
           <Users className="h-6 w-6 text-white" />
         </div>
         <div>
-          <p className="text-purple-400/80 text-[10px] font-semibold uppercase tracking-[0.25em]">Recursos Humanos</p>
-          <h1 className="text-2xl font-bold text-white tracking-tight leading-tight">{seccion.label}</h1>
-          <p className="text-gray-500 text-xs mt-0.5">{meta.subtitulo}</p>
+          <p className="text-purple-600/80 text-[10px] font-semibold uppercase tracking-[0.25em]">Recursos Humanos</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-tight">{seccion.label}</h1>
+          <p className="text-slate-400 text-xs mt-0.5">{meta.subtitulo}</p>
         </div>
       </div>
 
       {/* Pestañas de la sección (sus sub-páginas van aquí, no en el menú) */}
       {conPestanas && (
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white/[0.03] border border-white/10 overflow-x-auto custom-scrollbar">
+        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-white border border-[#efe8dd] overflow-x-auto custom-scrollbar">
           {seccion.items.map(it => {
             const activo = it.id === sub;
             return (
               <button key={it.id} onClick={() => setSearchParams({ sub: it.id })}
-                className={`px-3.5 h-9 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${activo ? 'bg-gradient-to-r from-purple-500 to-violet-600 text-white shadow' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
+                className={`px-3.5 h-9 rounded-lg text-sm font-medium whitespace-nowrap transition-colors flex-shrink-0 ${activo ? 'bg-gradient-to-r from-purple-500 to-violet-600 text-white shadow' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'}`}>
                 {it.label}
               </button>
             );

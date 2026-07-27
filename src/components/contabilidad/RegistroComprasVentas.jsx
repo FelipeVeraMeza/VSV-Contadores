@@ -195,32 +195,32 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#0f172a]/60 p-4 rounded-xl border border-white/5 backdrop-blur-md shadow-xl">
-        <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-1 py-1 shadow-inner focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/30 transition-all">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-[#efe8dd] backdrop-blur-md shadow-xl">
+        <div className="flex items-center bg-slate-50 border border-[#efe8dd] rounded-xl px-1 py-1 shadow-inner focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/30 transition-all">
           <div className="flex items-center pl-3 pr-1">
-            <CalendarDays className="h-4 w-4 text-blue-400" />
+            <CalendarDays className="h-4 w-4 text-blue-600" />
           </div>
           <select 
             value={mesActivo} 
             onChange={(e) => setMesActivo(e.target.value)}
-            className="bg-transparent text-white text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-400 transition-colors"
+            className="bg-transparent text-slate-700 text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-600 transition-colors"
           >
             {MESES.map(m => (
-              <option key={m.value} value={m.value} className="bg-slate-900 text-white">{m.label}</option>
+              <option key={m.value} value={m.value} className="bg-white text-slate-700">{m.label}</option>
             ))}
           </select>
-          <span className="text-white/20 font-light mx-1">/</span>
+          <span className="text-slate-700/20 font-light mx-1">/</span>
           <select 
             value={anioActivo} 
             onChange={(e) => setAnioActivo(e.target.value)}
-            className="bg-transparent text-white text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-400 transition-colors"
+            className="bg-transparent text-slate-700 text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-600 transition-colors"
           >
             {ANIOS.map(a => (
-              <option key={a} value={a} className="bg-slate-900 text-white">{a}</option>
+              <option key={a} value={a} className="bg-white text-slate-700">{a}</option>
             ))}
           </select>
           <div className="pr-3 pl-1 pointer-events-none">
-            <ChevronDown className="h-4 w-4 text-gray-500" />
+            <ChevronDown className="h-4 w-4 text-slate-400" />
           </div>
         </div>
 
@@ -228,7 +228,7 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
           <Button 
             onClick={handleSyncSII} 
             disabled={isSyncing || targetId === 'ALL'}
-            className="bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[10px] tracking-widest"
+            className="bg-emerald-600 hover:bg-emerald-500 text-slate-900 font-black uppercase text-[10px] tracking-widest"
             title={targetId === 'ALL' ? 'Selecciona una empresa para sincronizar' : ''}
           >
             {isSyncing ? <RefreshCcw className="h-4 w-4 mr-2 animate-spin" /> : <DownloadCloud className="h-4 w-4 mr-2" />}
@@ -237,7 +237,7 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
           <Button 
             onClick={() => setIsModalDiarioOpen(true)}
             disabled={documentosActivos.length === 0}
-            className={`font-black uppercase text-[10px] tracking-widest shadow-lg ${documentosActivos.length > 0 ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-900/40' : 'bg-black/40 border border-white/10 text-gray-500 cursor-not-allowed opacity-50'}`}
+            className={`font-black uppercase text-[10px] tracking-widest shadow-lg ${documentosActivos.length > 0 ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-emerald-900/40' : 'bg-slate-50 border border-[#efe8dd] text-slate-400 cursor-not-allowed opacity-50'}`}
           >
             <BookCopy className="h-4 w-4 mr-2" />
             GENERAR LIBRO DIARIO
@@ -247,63 +247,63 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* COMPRAS */}
-        <div onClick={() => setActiveView('compras')} className={`cursor-pointer p-5 rounded-xl border transition-all backdrop-blur-md ${activeView === 'compras' ? 'bg-[#0f172a]/80 border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.15)]' : 'bg-black/20 border-white/5 hover:bg-black/40'}`}>
+        <div onClick={() => setActiveView('compras')} className={`cursor-pointer p-5 rounded-xl border transition-all backdrop-blur-md ${activeView === 'compras' ? 'bg-white border-red-500/50 shadow-[0_0_20px_rgba(239,68,68,0.15)]' : 'bg-slate-50 border-[#efe8dd] hover:bg-slate-50'}`}>
           <div className="flex justify-between items-start mb-4">
             <div className="flex items-center gap-2">
-              <div className={`p-2 rounded-lg ${activeView === 'compras' ? 'bg-red-500/20 text-red-400' : 'bg-white/5 text-gray-400'}`}>
+              <div className={`p-2 rounded-lg ${activeView === 'compras' ? 'bg-red-500/20 text-red-500' : 'bg-slate-50 text-slate-500'}`}>
                 <ArrowDownRight className="h-5 w-5" />
               </div>
-              <h3 className={`font-black uppercase tracking-tight ${activeView === 'compras' ? 'text-red-400' : 'text-gray-400'}`}>COMPRAS (RECIBIDOS)</h3>
+              <h3 className={`font-black uppercase tracking-tight ${activeView === 'compras' ? 'text-red-500' : 'text-slate-500'}`}>COMPRAS (RECIBIDOS)</h3>
             </div>
-            <span className="text-xs font-black bg-white/10 px-2 py-1 rounded text-white">{stats.compras.dtes} DTES</span>
+            <span className="text-xs font-black bg-slate-100 px-2 py-1 rounded text-slate-700">{stats.compras.dtes} DTES</span>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <div><p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">NETO</p><p className="text-sm font-bold text-gray-300">{formatCLP(stats.compras.neto)}</p></div>
-            <div><p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">IVA</p><p className="text-sm font-bold text-gray-300">{formatCLP(stats.compras.iva)}</p></div>
-            <div className="text-right"><p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">TOTAL</p><p className="text-lg font-black text-white">{formatCLP(stats.compras.total)}</p></div>
+            <div><p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">NETO</p><p className="text-sm font-bold text-slate-600">{formatCLP(stats.compras.neto)}</p></div>
+            <div><p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">IVA</p><p className="text-sm font-bold text-slate-600">{formatCLP(stats.compras.iva)}</p></div>
+            <div className="text-right"><p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">TOTAL</p><p className="text-lg font-black text-slate-900">{formatCLP(stats.compras.total)}</p></div>
           </div>
         </div>
 
         {/* VENTAS */}
-        <div onClick={() => setActiveView('ventas')} className={`cursor-pointer p-5 rounded-xl border transition-all backdrop-blur-md ${activeView === 'ventas' ? 'bg-[#0f172a]/80 border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.15)]' : 'bg-black/20 border-white/5 hover:bg-black/40'}`}>
+        <div onClick={() => setActiveView('ventas')} className={`cursor-pointer p-5 rounded-xl border transition-all backdrop-blur-md ${activeView === 'ventas' ? 'bg-white border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.15)]' : 'bg-slate-50 border-[#efe8dd] hover:bg-slate-50'}`}>
           <div className="flex justify-between items-start mb-4">
             <div className="flex items-center gap-2">
-              <div className={`p-2 rounded-lg ${activeView === 'ventas' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-gray-400'}`}>
+              <div className={`p-2 rounded-lg ${activeView === 'ventas' ? 'bg-emerald-500/20 text-emerald-600' : 'bg-slate-50 text-slate-500'}`}>
                 <ArrowUpRight className="h-5 w-5" />
               </div>
-              <h3 className={`font-black uppercase tracking-tight ${activeView === 'ventas' ? 'text-emerald-400' : 'text-gray-400'}`}>VENTAS (EMITIDOS)</h3>
+              <h3 className={`font-black uppercase tracking-tight ${activeView === 'ventas' ? 'text-emerald-600' : 'text-slate-500'}`}>VENTAS (EMITIDOS)</h3>
             </div>
-            <span className="text-xs font-black bg-white/10 px-2 py-1 rounded text-white">{stats.ventas.dtes} DTES</span>
+            <span className="text-xs font-black bg-slate-100 px-2 py-1 rounded text-slate-700">{stats.ventas.dtes} DTES</span>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <div><p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">NETO</p><p className="text-sm font-bold text-gray-300">{formatCLP(stats.ventas.neto)}</p></div>
-            <div><p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">IVA</p><p className="text-sm font-bold text-gray-300">{formatCLP(stats.ventas.iva)}</p></div>
-            <div className="text-right"><p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">TOTAL</p><p className="text-lg font-black text-white">{formatCLP(stats.ventas.total)}</p></div>
+            <div><p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">NETO</p><p className="text-sm font-bold text-slate-600">{formatCLP(stats.ventas.neto)}</p></div>
+            <div><p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">IVA</p><p className="text-sm font-bold text-slate-600">{formatCLP(stats.ventas.iva)}</p></div>
+            <div className="text-right"><p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">TOTAL</p><p className="text-lg font-black text-slate-900">{formatCLP(stats.ventas.total)}</p></div>
           </div>
         </div>
       </div>
 
-      <div className="bg-[#0f172a]/80 rounded-xl border border-white/5 overflow-hidden backdrop-blur-md shadow-2xl flex flex-col">
+      <div className="bg-white rounded-xl border border-[#efe8dd] overflow-hidden backdrop-blur-md shadow-2xl flex flex-col">
         {isLoadingDB ? (
           <div className="p-16 flex flex-col justify-center items-center">
             <Loader2 className="h-10 w-10 text-blue-500 animate-spin mb-4" />
-            <span className="text-blue-400 font-black text-xs uppercase tracking-widest animate-pulse">CONSULTANDO BUNKER...</span>
+            <span className="text-blue-600 font-black text-xs uppercase tracking-widest animate-pulse">CONSULTANDO BUNKER...</span>
           </div>
         ) : documentosActivos.length === 0 ? (
           <div className="p-16 text-center flex flex-col items-center justify-center">
-            <div className="bg-white/5 p-5 rounded-full mb-4 border border-white/10">
-              <FileCheck className="h-8 w-8 text-gray-500" />
+            <div className="bg-slate-50 p-5 rounded-full mb-4 border border-[#efe8dd]">
+              <FileCheck className="h-8 w-8 text-slate-400" />
             </div>
-            <h4 className="text-white font-black tracking-wide uppercase text-sm">SIN REGISTROS PARA MOSTRAR</h4>
-            <p className="text-gray-500 text-[10px] mt-2 uppercase tracking-widest font-black max-w-md leading-relaxed">
+            <h4 className="text-slate-900 font-black tracking-wide uppercase text-sm">SIN REGISTROS PARA MOSTRAR</h4>
+            <p className="text-slate-400 text-[10px] mt-2 uppercase tracking-widest font-black max-w-md leading-relaxed">
               NO HAY DOCUMENTOS DE {activeView} EN LA BASE DE DATOS PARA ESTE PERIODO.
             </p>
           </div>
         ) : (
           <>
             <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left text-sm text-gray-300 min-w-[800px]">
-                <thead className="bg-white/5 border-b border-white/10 text-[10px] uppercase tracking-widest font-black text-gray-400">
+              <table className="w-full text-left text-sm text-slate-600 min-w-[800px]">
+                <thead className="bg-slate-50 border-b border-[#efe8dd] text-[10px] uppercase tracking-widest font-black text-slate-500">
                   <tr>
                     <th className="px-6 py-4">FECHA</th>
                     <th className="px-6 py-4">DOCUMENTO</th>
@@ -325,27 +325,27 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
                     const razonSocial = formatText(razonSocialRaw || 'SIN RAZON SOCIAL');
                     
                     return (
-                      <tr key={doc.id} className="hover:bg-white/[0.02] transition-colors group">
-                        <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-400 font-bold">
+                      <tr key={doc.id} className="hover:bg-white transition-colors group">
+                        <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-500 font-bold">
                           {doc.fecha_emision ? new Date(doc.fecha_emision).toLocaleDateString('es-CL', { timeZone: 'UTC' }) : 'N/A'}
                         </td>
                         <td className="px-6 py-4">
-                          <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${activeView === 'compras' ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                          <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${activeView === 'compras' ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'}`}>
                             {TIPO_DTE_MAP[doc.tipo_dte] || `TIPO ${doc.tipo_dte}`}
                           </span>
                         </td>
-                        <td className="px-6 py-4 font-black text-white italic">#{doc.folio}</td>
+                        <td className="px-6 py-4 font-black text-slate-900 italic">#{doc.folio}</td>
                         <td className="px-6 py-4">
                           <div className="flex flex-col">
-                            <span className="text-xs text-gray-200 font-black truncate max-w-[200px]" title={razonSocial}>
+                            <span className="text-xs text-slate-700 font-black truncate max-w-[200px]" title={razonSocial}>
                               {razonSocial}
                             </span>
-                            <span className="text-[9px] font-mono font-bold text-gray-500 mt-0.5">{rutRelacionado}</span>
+                            <span className="text-[9px] font-mono font-bold text-slate-400 mt-0.5">{rutRelacionado}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-right font-mono font-bold text-xs">{formatCLP(neto)}</td>
                         <td className="px-6 py-4 text-right font-mono font-bold text-xs">{formatCLP(iva)}</td>
-                        <td className={`px-6 py-4 text-right font-black font-mono tracking-tighter ${activeView === 'compras' ? 'text-red-400' : 'text-emerald-400'}`}>
+                        <td className={`px-6 py-4 text-right font-black font-mono tracking-tighter ${activeView === 'compras' ? 'text-red-500' : 'text-emerald-600'}`}>
                           {formatCLP(total)}
                         </td>
                       </tr>
@@ -355,19 +355,19 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
               </table>
             </div>
             
-            <div className="flex items-center justify-between px-6 py-4 bg-black/20 border-t border-white/10 relative z-30">
-              <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">
+            <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-[#efe8dd] relative z-30">
+              <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
                 MOSTRANDO {(currentPage - 1) * ITEMS_PER_PAGE + 1} - {Math.min(currentPage * ITEMS_PER_PAGE, documentosActivos.length)} DE {documentosActivos.length}
               </div>
               
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-8 bg-black/40 border-white/10 text-gray-400 hover:text-white disabled:opacity-20 transition-all font-black text-xs uppercase">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-8 bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900 disabled:opacity-20 transition-all font-black text-xs uppercase">
                   <ChevronLeft size={14} className="mr-1" /> ANT
                 </Button>
-                <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">
+                <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">
                   PAG {currentPage} DE {totalPages}
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-8 bg-black/40 border-white/10 text-gray-400 hover:text-white disabled:opacity-20 transition-all font-black text-xs uppercase">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-8 bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900 disabled:opacity-20 transition-all font-black text-xs uppercase">
                   SIG <ChevronRight size={14} className="ml-1" />
                 </Button>
               </div>

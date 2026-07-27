@@ -13,10 +13,10 @@ const mesActual = () => new Date().toISOString().slice(0, 7);
 const periodoTexto = (v) => { const d = String(v).slice(0, 7).split('-'); const M = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']; return d.length === 2 ? `${M[Number(d[1]) - 1]} ${d[0]}` : String(v); };
 
 const TIPOS = {
-    libro:    { titulo: 'Libro de Remuneraciones', icon: Book, color: 'text-teal-400', desc: 'Detalle de todas las liquidaciones del período por trabajador.', boton: 'Descargar Libro (CSV)', run: exportLibro, soloPagables: false },
+    libro:    { titulo: 'Libro de Remuneraciones', icon: Book, color: 'text-teal-600', desc: 'Detalle de todas las liquidaciones del período por trabajador.', boton: 'Descargar Libro (CSV)', run: exportLibro, soloPagables: false },
     previred: { titulo: 'PREVIRED', icon: FileText, color: 'text-indigo-400', desc: 'Cotizaciones previsionales de las liquidaciones aprobadas/pagadas.', boton: 'Descargar PREVIRED (CSV)', run: exportPrevired, soloPagables: true },
-    lre:      { titulo: 'Libro Electrónico DT (LRE)', icon: FileSpreadsheet, color: 'text-amber-400', desc: 'Libro de Remuneraciones Electrónico para la Dirección del Trabajo.', boton: 'Descargar LRE (CSV)', run: exportLre, soloPagables: false },
-    nomina:   { titulo: 'Nómina Bancaria', icon: Landmark, color: 'text-emerald-400', desc: 'Archivo de pago para el banco con líquidos y datos bancarios.', boton: 'Descargar Nómina (CSV)', run: exportNominaBancaria, soloPagables: true },
+    lre:      { titulo: 'Libro Electrónico DT (LRE)', icon: FileSpreadsheet, color: 'text-amber-600', desc: 'Libro de Remuneraciones Electrónico para la Dirección del Trabajo.', boton: 'Descargar LRE (CSV)', run: exportLre, soloPagables: false },
+    nomina:   { titulo: 'Nómina Bancaria', icon: Landmark, color: 'text-emerald-600', desc: 'Archivo de pago para el banco con líquidos y datos bancarios.', boton: 'Descargar Nómina (CSV)', run: exportNominaBancaria, soloPagables: true },
 };
 
 const DocumentosRrhh = ({ empresaId, tipo = 'libro' }) => {
@@ -46,15 +46,15 @@ const DocumentosRrhh = ({ empresaId, tipo = 'libro' }) => {
 
     return (
         <div className="space-y-5">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <div className="rounded-2xl border border-[#efe8dd] bg-white p-5">
                 <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                     <div className="flex items-start gap-3 flex-1">
-                        <div className="w-11 h-11 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center flex-shrink-0"><Icon className={`h-5 w-5 ${cfg.color}`} /></div>
-                        <div><h3 className="text-base font-bold text-white">{cfg.titulo}</h3><p className="text-xs text-gray-400 mt-0.5 max-w-xl">{cfg.desc}</p></div>
+                        <div className="w-11 h-11 rounded-xl bg-slate-50 border border-[#efe8dd] flex items-center justify-center flex-shrink-0"><Icon className={`h-5 w-5 ${cfg.color}`} /></div>
+                        <div><h3 className="text-base font-bold text-slate-900">{cfg.titulo}</h3><p className="text-xs text-slate-500 mt-0.5 max-w-xl">{cfg.desc}</p></div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                        <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-40 bg-white/[0.04] border-white/10" />
-                        <Button onClick={descargar} disabled={!fuente.length} className="bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white font-semibold h-10"><Download className="h-4 w-4 mr-2" />{cfg.boton}</Button>
+                        <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-40 bg-slate-50 border-[#efe8dd]" />
+                        <Button onClick={descargar} disabled={!fuente.length} className="bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-slate-900 font-semibold h-10"><Download className="h-4 w-4 mr-2" />{cfg.boton}</Button>
                     </div>
                 </div>
             </div>
@@ -68,20 +68,20 @@ const DocumentosRrhh = ({ empresaId, tipo = 'libro' }) => {
             {isLoading ? (
                 <div className="flex justify-center py-20"><Loader2 className="h-9 w-9 animate-spin text-purple-500" /></div>
             ) : filas.length === 0 ? (
-                <div className="flex flex-col items-center text-gray-500 py-20">
-                    <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center mb-4"><FileWarning className="h-6 w-6 opacity-40" /></div>
-                    <h3 className="text-base font-semibold text-white">Sin liquidaciones en {periodoTexto(periodo)}</h3>
+                <div className="flex flex-col items-center text-slate-400 py-20">
+                    <div className="w-14 h-14 rounded-2xl bg-white border border-[#efe8dd] flex items-center justify-center mb-4"><FileWarning className="h-6 w-6 opacity-40" /></div>
+                    <h3 className="text-base font-semibold text-slate-900">Sin liquidaciones en {periodoTexto(periodo)}</h3>
                     <p className="text-sm mt-1">Genera y aprueba liquidaciones del período para producir este documento.</p>
                 </div>
             ) : (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
-                    <div className="px-5 py-3 border-b border-white/10">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Vista previa · {filas.length} liquidación(es){cfg.soloPagables ? ` · ${pagables.length} aprobada(s)/pagada(s)` : ''}</span>
+                <div className="rounded-2xl border border-[#efe8dd] bg-white overflow-hidden">
+                    <div className="px-5 py-3 border-b border-[#efe8dd]">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Vista previa · {filas.length} liquidación(es){cfg.soloPagables ? ` · ${pagables.length} aprobada(s)/pagada(s)` : ''}</span>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-white/10 bg-white/[0.03] text-gray-500">
+                                <tr className="border-b border-[#efe8dd] bg-white text-slate-400">
                                     <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider">Empleado</th>
                                     <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider">RUT</th>
                                     {consolidado && <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-wider">Empresa</th>}
@@ -94,25 +94,25 @@ const DocumentosRrhh = ({ empresaId, tipo = 'libro' }) => {
                             </thead>
                             <tbody className="divide-y divide-white/[0.06]">
                                 {filas.map((f, i) => (
-                                    <tr key={i} className="hover:bg-white/[0.03]">
-                                        <td className="px-4 py-3 text-white">{f.empleado}<div className="text-[10px] text-gray-500">{f.cargo}</div></td>
-                                        <td className="px-4 py-3 text-gray-400 font-mono text-xs">{f.rut}</td>
-                                        {consolidado && <td className="px-4 py-3 text-gray-400 truncate max-w-[200px]">{f.empresa || '—'}</td>}
-                                        <td className="px-4 py-3 text-right text-gray-300">{clp(f.imponible)}</td>
-                                        <td className="px-4 py-3 text-right text-gray-300">{clp(f.haberes)}</td>
-                                        <td className="px-4 py-3 text-right text-red-400">{clp(f.descuentos)}</td>
+                                    <tr key={i} className="hover:bg-white">
+                                        <td className="px-4 py-3 text-slate-700">{f.empleado}<div className="text-[10px] text-slate-400">{f.cargo}</div></td>
+                                        <td className="px-4 py-3 text-slate-500 font-mono text-xs">{f.rut}</td>
+                                        {consolidado && <td className="px-4 py-3 text-slate-500 truncate max-w-[200px]">{f.empresa || '—'}</td>}
+                                        <td className="px-4 py-3 text-right text-slate-600">{clp(f.imponible)}</td>
+                                        <td className="px-4 py-3 text-right text-slate-600">{clp(f.haberes)}</td>
+                                        <td className="px-4 py-3 text-right text-red-500">{clp(f.descuentos)}</td>
                                         <td className="px-4 py-3 text-right text-green-400 font-bold">{clp(f.liquido)}</td>
-                                        <td className="px-4 py-3 text-center"><span className="text-[10px] uppercase text-gray-400">{f.estado}</span></td>
+                                        <td className="px-4 py-3 text-center"><span className="text-[10px] uppercase text-slate-500">{f.estado}</span></td>
                                     </tr>
                                 ))}
                             </tbody>
                             {totales && (
-                                <tfoot className="bg-white/[0.04] font-bold text-white">
+                                <tfoot className="bg-slate-50 font-bold text-slate-900">
                                     <tr>
                                         <td className="px-4 py-3" colSpan={consolidado ? 3 : 2}>TOTALES ({libro.cantidad})</td>
                                         <td className="px-4 py-3 text-right">{clp(totales.imponible)}</td>
                                         <td className="px-4 py-3 text-right">{clp(totales.haberes)}</td>
-                                        <td className="px-4 py-3 text-right text-red-400">{clp(totales.descuentos)}</td>
+                                        <td className="px-4 py-3 text-right text-red-500">{clp(totales.descuentos)}</td>
                                         <td className="px-4 py-3 text-right text-green-400">{clp(totales.liquido)}</td>
                                         <td></td>
                                     </tr>

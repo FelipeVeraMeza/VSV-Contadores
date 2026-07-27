@@ -79,71 +79,71 @@ const LoginPage = ({ onLogin }) => {
         <title>Acceso - VSV Pro</title>
       </Helmet>
       
-      <div className="min-h-screen w-full flex items-center justify-center bg-[#0f172a] p-4 font-sans relative overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-600/20 blur-[120px] rounded-full" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-600/20 blur-[120px] rounded-full" />
+      <div className="min-h-screen w-full flex items-center justify-center bg-[#fbfaf7] p-4 font-sans relative overflow-hidden">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-emerald-200/50 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-green-200/50 blur-[120px] rounded-full" />
 
         <div className="w-full max-w-md relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="bg-white/10 backdrop-blur-2xl border border-white/20 rounded-[2rem] shadow-2xl overflow-hidden"
+            className="bg-white border border-[#efe8dd] rounded-[2rem] shadow-xl shadow-black/[0.06] overflow-hidden"
           >
             <div className="p-8 md:p-10">
               <div className="flex flex-col items-center mb-10">
                 <motion.div 
                   whileHover={{ scale: 1.05 }}
-                  className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-blue-500/20"
+                  className="w-16 h-16 bg-[#199b4d] rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-emerald-600/30"
                 >
                   <ShieldCheck className="h-9 w-9 text-white" />
                 </motion.div>
-                <h1 className="text-4xl font-black text-white text-center tracking-tighter uppercase italic leading-none">
-                  VSV <span className="text-blue-400 text-3xl">PRO</span>
+                <h1 className="text-4xl font-black text-[#1a1c1e] text-center tracking-tighter uppercase italic leading-none">
+                  VSV <span className="text-[#199b4d] text-3xl">PRO</span>
                 </h1>
-                <p className="text-gray-300 text-[10px] font-bold uppercase tracking-[0.4em] mt-3">
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.4em] mt-3">
                   Sistema de Gestión Central
                 </p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-xs font-bold text-gray-300 uppercase ml-1 tracking-wider">
+                  <Label htmlFor="email" className="text-xs font-bold text-slate-600 uppercase ml-1 tracking-wider">
                     Correo Electrónico
                   </Label>
                   <div className="relative group">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 group-focus-within:text-blue-400 transition-colors" />
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#199b4d] transition-colors" />
                     <Input
                       id="email"
                       type="email"
                       placeholder="Correo"
                       value={formData.email}
                       onChange={handleChange}
-                      className="pl-12 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-blue-500/50 focus:ring-blue-500/20 transition-all h-12 rounded-xl"
+                      className="pl-12 !bg-white !border-[#e5ddd0] !text-slate-900 placeholder:!text-slate-400 focus:!border-[#199b4d] focus:!ring-2 focus:!ring-[#199b4d]/20 transition-all h-12 rounded-xl"
                       required
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="clave" className="text-xs font-bold text-gray-300 uppercase tracking-wider ml-1">
+                  <Label htmlFor="clave" className="text-xs font-bold text-slate-600 uppercase tracking-wider ml-1">
                     Contraseña
                   </Label>
                   <div className="relative group">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 group-focus-within:text-blue-400 transition-colors" />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#199b4d] transition-colors" />
                     <Input
                       id="clave"
                       type={showPassword ? 'text' : 'password'}
                       placeholder="••••••••"
                       value={formData.clave}
                       onChange={handleChange}
-                      className="pl-12 pr-12 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-blue-500/50 focus:ring-blue-500/20 transition-all h-12 rounded-xl"
+                      className="pl-12 pr-12 !bg-white !border-[#e5ddd0] !text-slate-900 placeholder:!text-slate-400 focus:!border-[#199b4d] focus:!ring-2 focus:!ring-[#199b4d]/20 transition-all h-12 rounded-xl"
                       required
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors"
                     >
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -154,7 +154,7 @@ const LoginPage = ({ onLogin }) => {
                   <Button 
                     type="submit" 
                     disabled={isLoading} 
-                    className="w-full h-12 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white rounded-xl font-bold uppercase text-sm tracking-widest shadow-lg shadow-blue-900/30 transition-all"
+                    className="w-full h-12 bg-[#199b4d] hover:bg-[#147a3d] text-white rounded-xl font-bold uppercase text-sm tracking-widest shadow-lg shadow-emerald-600/25 transition-all"
                   >
                     {isLoading ? (
                       <div className="flex items-center gap-3">
@@ -172,15 +172,15 @@ const LoginPage = ({ onLogin }) => {
               </form>
 
               <div className="text-center mt-10 space-y-4">
-                <p className="text-gray-400 text-xs font-medium">
+                <p className="text-slate-500 text-xs font-medium">
                   ¿Aún no tienes cuenta?{' '}
-                  <Link to="/register" className="text-blue-400 hover:text-blue-300 transition-colors font-bold underline underline-offset-4">
+                  <Link to="/register" className="text-[#199b4d] hover:text-[#147a3d] transition-colors font-bold underline underline-offset-4">
                     Regístrate aquí
                   </Link>
                 </p>
-                <button 
+                <button
                   onClick={() => toast({ title: "Recuperación", description: "Contacta a soporte@vsv.cl para resetear tu clave." })}
-                  className="block w-full text-gray-500 hover:text-gray-300 text-[10px] font-bold uppercase tracking-widest transition-colors"
+                  className="block w-full text-slate-400 hover:text-slate-600 text-[10px] font-bold uppercase tracking-widest transition-colors"
                 >
                   ¿Olvidaste tus credenciales?
                 </button>
@@ -188,9 +188,9 @@ const LoginPage = ({ onLogin }) => {
             </div>
           </motion.div>
           
-          <div className="mt-8 flex items-center justify-center gap-4 text-[9px] text-gray-500 font-bold uppercase tracking-[0.3em]">
+          <div className="mt-8 flex items-center justify-center gap-4 text-[9px] text-slate-400 font-bold uppercase tracking-[0.3em]">
              <span>VSV PRO v2.0</span>
-             <div className="w-1 h-1 bg-gray-700 rounded-full" />
+             <div className="w-1 h-1 bg-slate-300 rounded-full" />
              <span>Secure Access</span>
           </div>
         </div>

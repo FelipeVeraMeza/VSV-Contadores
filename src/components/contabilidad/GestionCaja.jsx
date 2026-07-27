@@ -333,64 +333,64 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
     const Icon = info.icon;
     return (
       <button onClick={onClick} title="Cambiar medio de pago"
-        className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-blue-400/40 transition-all whitespace-nowrap">
+        className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg bg-slate-50 border border-[#efe8dd] text-slate-600 hover:text-slate-900 hover:border-blue-400/40 transition-all whitespace-nowrap">
         <Icon className="h-3 w-3" /> {info.label} <Pencil className="h-2.5 w-2.5 opacity-60" />
       </button>
     );
   };
 
   const EstadoBadge = ({ c }) => {
-    if (c.estado === 'efectivo') return <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 whitespace-nowrap"><Check className="h-3 w-3" /> {estadoEfectivoLabel}</span>;
-    if (c.estado === 'parcial') return <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 whitespace-nowrap">Parcial</span>;
-    return <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 whitespace-nowrap">{estadoPendienteLabel}</span>;
+    if (c.estado === 'efectivo') return <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-emerald-600 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 whitespace-nowrap"><Check className="h-3 w-3" /> {estadoEfectivoLabel}</span>;
+    if (c.estado === 'parcial') return <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-blue-600 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20 whitespace-nowrap">Parcial</span>;
+    return <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-amber-600 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 whitespace-nowrap">{estadoPendienteLabel}</span>;
   };
 
   return (
     <div className="space-y-5">
       {/* RESUMEN */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-black/20 rounded-xl border border-white/5 px-5 py-3.5">
-          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Documentos</p>
-          <p className="font-black text-white text-lg">{cuentas.length}</p>
+        <div className="bg-slate-50 rounded-xl border border-[#efe8dd] px-5 py-3.5">
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Documentos</p>
+          <p className="font-black text-slate-900 text-lg">{cuentas.length}</p>
         </div>
-        <div className="bg-black/20 rounded-xl border border-white/5 px-5 py-3.5">
-          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{estadoPendienteLabel}</p>
-          <p className="font-black text-amber-400 text-lg font-mono tracking-tighter">{formatCLP(totalPorCobrar)}</p>
-          <p className="text-[9px] text-gray-600 font-bold uppercase">{pendientesCount} pendiente{pendientesCount !== 1 ? 's' : ''}</p>
+        <div className="bg-slate-50 rounded-xl border border-[#efe8dd] px-5 py-3.5">
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{estadoPendienteLabel}</p>
+          <p className="font-black text-amber-600 text-lg font-mono tracking-tighter">{formatCLP(totalPorCobrar)}</p>
+          <p className="text-[9px] text-slate-400 font-bold uppercase">{pendientesCount} pendiente{pendientesCount !== 1 ? 's' : ''}</p>
         </div>
-        <div className="bg-black/20 rounded-xl border border-white/5 px-5 py-3.5">
-          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Total {estadoEfectivoLabel}</p>
-          <p className="font-black text-emerald-400 text-lg font-mono tracking-tighter">{formatCLP(totalEfectivo)}</p>
+        <div className="bg-slate-50 rounded-xl border border-[#efe8dd] px-5 py-3.5">
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total {estadoEfectivoLabel}</p>
+          <p className="font-black text-emerald-600 text-lg font-mono tracking-tighter">{formatCLP(totalEfectivo)}</p>
         </div>
-        <div className="bg-black/20 rounded-xl border border-white/5 px-5 py-3.5">
-          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Total Período</p>
-          <p className="font-black text-white text-lg font-mono tracking-tighter">{formatCLP(totalPorCobrar + totalEfectivo)}</p>
+        <div className="bg-slate-50 rounded-xl border border-[#efe8dd] px-5 py-3.5">
+          <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Total Período</p>
+          <p className="font-black text-slate-900 text-lg font-mono tracking-tighter">{formatCLP(totalPorCobrar + totalEfectivo)}</p>
         </div>
       </div>
 
       {/* TOOLBAR: buscador propio + acciones */}
       <div className="flex flex-col lg:flex-row lg:items-center gap-3">
         <div className="relative flex-1 max-w-md">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input type="text" value={busqueda} onChange={e => setBusqueda(e.target.value)}
             placeholder={`Buscar por folio, RUT o nombre de ${labelContraparte.toLowerCase()}...`}
-            className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-8 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+            className="w-full bg-slate-50 border border-[#efe8dd] rounded-xl pl-9 pr-8 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 transition-colors" />
           {busqueda && (
-            <button onClick={() => setBusqueda('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xs">✕</button>
+            <button onClick={() => setBusqueda('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900 text-xs">✕</button>
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Button onClick={() => hacerEfectivo(seleccionValida)} disabled={seleccionValida.length === 0 || isEfectivizando}
-            className={`${esRecaudacion ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700' : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700'} disabled:opacity-40 text-white font-black uppercase text-[10px] tracking-widest h-11 px-5`}>
+            className={`${esRecaudacion ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700' : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700'} disabled:opacity-40 text-slate-900 font-black uppercase text-[10px] tracking-widest h-11 px-5`}>
             {isEfectivizando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
             {verboEfectivo} {seleccionValida.length > 0 ? `(${seleccionValida.length})` : 'seleccionados'}
           </Button>
           <Button onClick={() => setIsOpen(true)}
-            className="bg-white/5 border border-white/10 hover:bg-white/10 text-gray-200 font-black uppercase text-[10px] tracking-widest h-11 px-4">
+            className="bg-slate-50 border border-[#efe8dd] hover:bg-slate-100 text-slate-700 font-black uppercase text-[10px] tracking-widest h-11 px-4">
             <Plus className="h-4 w-4 mr-2" /> Registro manual
           </Button>
           <Button onClick={refrescar} title="Refrescar datos"
-            className="bg-white/5 border border-white/10 hover:bg-white/10 text-gray-400 hover:text-white h-11 px-3">
+            className="bg-slate-50 border border-[#efe8dd] hover:bg-slate-100 text-slate-500 hover:text-slate-900 h-11 px-3">
             <RefreshCcw className="h-4 w-4" />
           </Button>
         </div>
@@ -398,47 +398,47 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
 
       {seleccionValida.length > 0 && (
         <div className="flex items-center justify-between bg-emerald-500/[0.07] border border-emerald-500/20 rounded-xl px-4 py-2.5">
-          <p className="text-[11px] font-bold text-emerald-300">
+          <p className="text-[11px] font-bold text-emerald-700">
             {seleccionValida.length} documento{seleccionValida.length !== 1 ? 's' : ''} seleccionado{seleccionValida.length !== 1 ? 's' : ''} — total a {verboEfectivo.toLowerCase()}: <span className="font-black font-mono">{formatCLP(totalSeleccion)}</span>
           </p>
-          <button onClick={() => setSeleccion(new Set())} className="text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-white">Limpiar</button>
+          <button onClick={() => setSeleccion(new Set())} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900">Limpiar</button>
         </div>
       )}
 
       {/* PESTAÑAS: Por cobrar/pagar | Cobrado/Pagado */}
-      <div className="flex items-center gap-1 bg-black/30 border border-white/10 rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1 bg-slate-50 border border-[#efe8dd] rounded-xl p-1 w-fit">
         {[
           { id: 'pendientes', label: estadoPendienteLabel, count: pendientesList.length, on: 'bg-amber-600 text-white' },
           { id: 'pagados',    label: estadoEfectivoLabel,  count: pagadosList.length,    on: 'bg-emerald-600 text-white' },
         ].map(t => (
           <button key={t.id} onClick={() => setVista(t.id)}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-              vista === t.id ? t.on : 'text-gray-400 hover:text-white'
+              vista === t.id ? t.on : 'text-slate-500 hover:text-slate-900'
             }`}>
             {t.label}
-            <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${vista === t.id ? 'bg-black/25' : 'bg-white/5 text-gray-500'}`}>{t.count}</span>
+            <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${vista === t.id ? 'bg-black/25' : 'bg-slate-50 text-slate-400'}`}>{t.count}</span>
           </button>
         ))}
       </div>
 
       {/* LISTADO CUENTAS POR COBRAR / PAGAR */}
-      <div className="bg-[#0f172a]/80 rounded-xl border border-white/5 overflow-hidden shadow-2xl">
+      <div className="bg-white rounded-xl border border-[#efe8dd] overflow-hidden shadow-2xl">
         {loadingDocs ? (
           <div className="py-16 flex justify-center"><Loader2 className="h-8 w-8 text-blue-500 animate-spin opacity-40" /></div>
         ) : cuentas.length === 0 ? (
           <div className="py-16 flex flex-col items-center gap-3 text-center px-6">
-            <div className="bg-white/5 p-5 rounded-full border border-white/10">
-              {esRecaudacion ? <CircleDollarSign className="h-8 w-8 text-gray-500" /> : <ArrowDownRight className="h-8 w-8 text-gray-500" />}
+            <div className="bg-slate-50 p-5 rounded-full border border-[#efe8dd]">
+              {esRecaudacion ? <CircleDollarSign className="h-8 w-8 text-slate-400" /> : <ArrowDownRight className="h-8 w-8 text-slate-400" />}
             </div>
-            <p className="text-white font-black uppercase text-sm">Sin documentos contabilizados</p>
-            <p className="text-gray-500 text-[10px] uppercase tracking-widest font-bold max-w-sm leading-relaxed">
+            <p className="text-slate-900 font-black uppercase text-sm">Sin documentos contabilizados</p>
+            <p className="text-slate-400 text-[10px] uppercase tracking-widest font-bold max-w-sm leading-relaxed">
               Aquí aparecen las {esRecaudacion ? 'ventas' : 'compras'} ya contabilizadas del período. Contabiliza {esRecaudacion ? 'ventas' : 'compras'} primero para verlas acá.
             </p>
           </div>
         ) : cuentasVista.length === 0 ? (
           <div className="py-16 flex flex-col items-center gap-2 text-center px-6">
-            <Search className="h-7 w-7 text-gray-600" />
-            <p className="text-gray-400 font-black uppercase text-xs tracking-widest">
+            <Search className="h-7 w-7 text-slate-400" />
+            <p className="text-slate-500 font-black uppercase text-xs tracking-widest">
               {busqueda.trim()
                 ? `Sin resultados para "${busqueda}"`
                 : vista === 'pagados'
@@ -449,7 +449,7 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
         ) : (
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left text-sm min-w-[820px]">
-              <thead className="bg-white/5 border-b border-white/10 text-[10px] uppercase tracking-widest font-black text-gray-400">
+              <thead className="bg-slate-50 border-b border-[#efe8dd] text-[10px] uppercase tracking-widest font-black text-slate-500">
                 <tr>
                   <th className="px-4 py-4 w-10">
                     <input type="checkbox" checked={vista === 'pendientes' && seleccionables.length > 0 && seleccionables.every(c => seleccion.has(c.id))}
@@ -471,26 +471,26 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
                   const checked = seleccion.has(c.id);
                   const selectable = c.estado !== 'efectivo';
                   return (
-                    <tr key={c.id} className={`group transition-colors ${checked ? 'bg-emerald-500/[0.06]' : 'hover:bg-white/[0.02]'}`}>
+                    <tr key={c.id} className={`group transition-colors ${checked ? 'bg-emerald-500/[0.06]' : 'hover:bg-white'}`}>
                       <td className="px-4 py-3">
                         <input type="checkbox" checked={checked} disabled={!selectable} onChange={() => toggleSel(c.id)}
                           className="h-4 w-4 rounded accent-emerald-500 cursor-pointer disabled:opacity-20 disabled:cursor-not-allowed" />
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-400 font-bold whitespace-nowrap">{formatFecha(c.fecha)}</td>
-                      <td className="px-4 py-3 font-black text-white italic text-sm whitespace-nowrap">#{c.folio}</td>
+                      <td className="px-4 py-3 text-xs text-slate-500 font-bold whitespace-nowrap">{formatFecha(c.fecha)}</td>
+                      <td className="px-4 py-3 font-black text-slate-900 italic text-sm whitespace-nowrap">#{c.folio}</td>
                       <td className="px-4 py-3">
-                        <p className="text-xs text-white font-bold truncate max-w-[220px]">{c.nombre || '—'}</p>
-                        <p className="text-[9px] text-gray-500 font-mono">{c.rut || '—'}</p>
+                        <p className="text-xs text-slate-900 font-bold truncate max-w-[220px]">{c.nombre || '—'}</p>
+                        <p className="text-[9px] text-slate-400 font-mono">{c.rut || '—'}</p>
                       </td>
-                      <td className="px-4 py-3 text-right font-bold font-mono text-gray-300 whitespace-nowrap">{formatCLP(c.total)}</td>
-                      <td className="px-4 py-3 text-right font-bold font-mono text-emerald-400/80 whitespace-nowrap">{c.pagado > 0 ? formatCLP(c.pagado) : '—'}</td>
-                      <td className={`px-4 py-3 text-right font-black font-mono whitespace-nowrap ${c.saldo > 0 ? 'text-amber-400' : 'text-gray-600'}`}>{c.saldo > 0 ? formatCLP(c.saldo) : '—'}</td>
+                      <td className="px-4 py-3 text-right font-bold font-mono text-slate-600 whitespace-nowrap">{formatCLP(c.total)}</td>
+                      <td className="px-4 py-3 text-right font-bold font-mono text-emerald-600/80 whitespace-nowrap">{c.pagado > 0 ? formatCLP(c.pagado) : '—'}</td>
+                      <td className={`px-4 py-3 text-right font-black font-mono whitespace-nowrap ${c.saldo > 0 ? 'text-amber-600' : 'text-slate-400'}`}>{c.saldo > 0 ? formatCLP(c.saldo) : '—'}</td>
                       <td className="px-4 py-3 text-center"><EstadoBadge c={c} /></td>
                       <td className="px-4 py-3 text-center">
                         {selectable ? (
                           <button onClick={() => hacerEfectivo([c.id])} disabled={efectivizandoId === c.id || isEfectivizando}
                             title={`${verboEfectivo} saldo completo`}
-                            className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-emerald-400 hover:bg-emerald-500/15 hover:border-emerald-500/30 transition-all disabled:opacity-40 whitespace-nowrap">
+                            className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg bg-slate-50 border border-[#efe8dd] text-emerald-600 hover:bg-emerald-500/15 hover:border-emerald-500/30 transition-all disabled:opacity-40 whitespace-nowrap">
                             {efectivizandoId === c.id ? <Loader2 className="h-3 w-3 animate-spin inline" /> : verboEfectivo}
                           </button>
                         ) : (
@@ -498,7 +498,7 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
                             <MedioBadge folio={c.folio} onClick={() => abrirMedioFolio(c.folio)} />
                             <button onClick={() => deshacerEfectivo(c.folio)} disabled={deshaciendoFolio === String(c.folio)}
                               title="Deshacer y volver a pendiente"
-                              className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:bg-red-500/15 hover:border-red-500/30 hover:text-red-400 transition-all disabled:opacity-40 whitespace-nowrap">
+                              className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-lg bg-slate-50 border border-[#efe8dd] text-slate-500 hover:bg-red-500/15 hover:border-red-500/30 hover:text-red-500 transition-all disabled:opacity-40 whitespace-nowrap">
                               {deshaciendoFolio === String(c.folio) ? <Loader2 className="h-3 w-3 animate-spin inline" /> : 'Deshacer'}
                             </button>
                           </div>
@@ -515,32 +515,32 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
 
       {/* OTROS MOVIMIENTOS MANUALES (sin documento asociado) */}
       {otrosMovimientos.length > 0 && (
-        <div className="bg-[#0f172a]/60 rounded-xl border border-white/5 overflow-hidden">
-          <div className="px-5 py-3 border-b border-white/5 bg-white/[0.02]">
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Otros movimientos manuales (sin documento)</p>
+        <div className="bg-white rounded-xl border border-[#efe8dd] overflow-hidden">
+          <div className="px-5 py-3 border-b border-[#efe8dd] bg-white">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Otros movimientos manuales (sin documento)</p>
           </div>
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left text-sm min-w-[640px]">
               <tbody className="divide-y divide-white/5">
                 {otrosMovimientos.map((m) => (
-                  <tr key={m.id} className="hover:bg-white/[0.02] group">
-                    <td className="px-5 py-3 text-xs text-gray-400 font-bold whitespace-nowrap">{formatFecha(m.fecha)}</td>
+                  <tr key={m.id} className="hover:bg-white group">
+                    <td className="px-5 py-3 text-xs text-slate-500 font-bold whitespace-nowrap">{formatFecha(m.fecha)}</td>
                     <td className="px-5 py-3">
-                      <p className="text-xs text-white font-bold truncate max-w-[200px]">{m.nombre || '—'}</p>
-                      <p className="text-[9px] text-gray-500 font-mono">{m.rut}</p>
+                      <p className="text-xs text-slate-900 font-bold truncate max-w-[200px]">{m.nombre || '—'}</p>
+                      <p className="text-[9px] text-slate-400 font-mono">{m.rut}</p>
                     </td>
-                    <td className="px-5 py-3 text-xs text-gray-400 truncate max-w-[200px]">{m.glosa || '—'}</td>
-                    <td className={`px-5 py-3 text-right font-black font-mono ${esRecaudacion ? 'text-emerald-400' : 'text-red-400'}`}>{formatCLP(m.monto)}</td>
+                    <td className="px-5 py-3 text-xs text-slate-500 truncate max-w-[200px]">{m.glosa || '—'}</td>
+                    <td className={`px-5 py-3 text-right font-black font-mono ${esRecaudacion ? 'text-emerald-600' : 'text-red-500'}`}>{formatCLP(m.monto)}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-2">
                         {(() => { const info = infoMedio(m.medio_pago || 'efectivo'); const Icon = info.icon; return (
                           <button onClick={() => abrirMedioMovimiento(m)} title="Cambiar medio de pago"
-                            className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:border-blue-400/40 transition-all whitespace-nowrap">
+                            className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg bg-slate-50 border border-[#efe8dd] text-slate-600 hover:text-slate-900 hover:border-blue-400/40 transition-all whitespace-nowrap">
                             <Icon className="h-3 w-3" /> {info.label} <Pencil className="h-2.5 w-2.5 opacity-60" />
                           </button>
                         ); })()}
                         <button onClick={() => handleEliminar(m.id)} disabled={deletingId === m.id}
-                          className="p-1.5 text-gray-600 hover:text-red-400 rounded opacity-0 group-hover:opacity-100 transition-all disabled:opacity-40">
+                          className="p-1.5 text-slate-400 hover:text-red-500 rounded opacity-0 group-hover:opacity-100 transition-all disabled:opacity-40">
                           {deletingId === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                         </button>
                       </div>
@@ -555,9 +555,9 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
 
       {/* MODAL REGISTRO MANUAL */}
       <Dialog open={isOpen} onOpenChange={(o) => { if (!o) resetForm(); setIsOpen(o); }}>
-        <DialogContent className="sm:max-w-[560px] bg-[#0f172a] border-white/10 text-white">
+        <DialogContent className="sm:max-w-[560px] bg-white border-[#efe8dd] text-slate-700">
           <DialogHeader>
-            <DialogTitle className={`text-lg font-black uppercase tracking-tight ${esRecaudacion ? 'text-emerald-400' : 'text-red-400'}`}>
+            <DialogTitle className={`text-lg font-black uppercase tracking-tight ${esRecaudacion ? 'text-emerald-600' : 'text-red-500'}`}>
               {esRecaudacion ? 'Registrar Recaudación' : 'Registrar Pago'}
             </DialogTitle>
           </DialogHeader>
@@ -565,7 +565,7 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
           <div className="space-y-4 mt-2">
             <div className="grid grid-cols-2 gap-4">
               <Campo label="Fecha">
-                <input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className="inp [color-scheme:dark]" />
+                <input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} className="inp [color-scheme:light]" />
               </Campo>
               <Campo label="Monto">
                 <input type="number" min="0" placeholder="0" value={form.monto} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} className="inp font-mono" />
@@ -583,20 +583,20 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
               <input type="text" placeholder="N° de factura" value={form.folio_asociado} onChange={e => onChangeFolio(e.target.value)} className="inp" />
               {form.folio_asociado.trim() && (
                 documentosRaw.some(d => String(d.folio) === form.folio_asociado.trim())
-                  ? <p className="text-[9px] text-emerald-400 font-bold mt-1">✓ Documento encontrado — datos autocompletados</p>
-                  : <p className="text-[9px] text-gray-600 mt-1">No se encontró factura con ese folio (puedes registrar igual).</p>
+                  ? <p className="text-[9px] text-emerald-600 font-bold mt-1">✓ Documento encontrado — datos autocompletados</p>
+                  : <p className="text-[9px] text-slate-400 mt-1">No se encontró factura con ese folio (puedes registrar igual).</p>
               )}
             </Campo>
 
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-2">Medio de Pago</p>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">Medio de Pago</p>
               <div className="grid grid-cols-5 gap-2">
                 {MEDIOS.map(med => {
                   const Icon = med.icon; const active = form.medio_pago === med.id;
                   return (
                     <button key={med.id} onClick={() => setForm(f => ({ ...f, medio_pago: med.id }))}
                       className={`flex flex-col items-center gap-1 py-2.5 rounded-lg text-[8px] font-black uppercase tracking-wide transition-all border ${
-                        active ? 'bg-blue-600 border-blue-400/50 text-white' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                        active ? 'bg-blue-600 border-blue-400/50 text-white' : 'bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900'
                       }`}>
                       <Icon className="h-4 w-4" /> {med.label}
                     </button>
@@ -611,9 +611,9 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
           </div>
 
           <DialogFooter className="mt-4">
-            <Button variant="ghost" onClick={() => { resetForm(); setIsOpen(false); }} className="text-gray-400 hover:text-white">Cancelar</Button>
+            <Button variant="ghost" onClick={() => { resetForm(); setIsOpen(false); }} className="text-slate-500 hover:text-slate-900">Cancelar</Button>
             <Button onClick={handleGuardar} disabled={isSaving || !(Number(form.monto) > 0)}
-              className={`${esRecaudacion ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'} text-white font-black uppercase text-xs tracking-widest disabled:opacity-40`}>
+              className={`${esRecaudacion ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'} text-slate-900 font-black uppercase text-xs tracking-widest disabled:opacity-40`}>
               {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />} Registrar
             </Button>
           </DialogFooter>
@@ -622,15 +622,15 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
 
       {/* MODAL EDITAR MEDIO DE PAGO */}
       <Dialog open={!!medioModal} onOpenChange={(o) => { if (!o) setMedioModal(null); }}>
-        <DialogContent className="sm:max-w-[460px] bg-[#0f172a] border-white/10 text-white">
+        <DialogContent className="sm:max-w-[460px] bg-white border-[#efe8dd] text-slate-700">
           <DialogHeader>
-            <DialogTitle className="text-lg font-black uppercase tracking-tight text-blue-400">Cambiar medio de pago</DialogTitle>
+            <DialogTitle className="text-lg font-black uppercase tracking-tight text-blue-600">Cambiar medio de pago</DialogTitle>
           </DialogHeader>
           {medioModal && (
             <div className="space-y-4 mt-2">
-              <p className="text-[11px] text-gray-400 font-bold">
+              <p className="text-[11px] text-slate-500 font-bold">
                 {medioModal.titulo}
-                {medioModal.ids.length > 1 && <span className="text-gray-600"> · {medioModal.ids.length} movimientos</span>}
+                {medioModal.ids.length > 1 && <span className="text-slate-400"> · {medioModal.ids.length} movimientos</span>}
               </p>
               <div className="grid grid-cols-5 gap-2">
                 {MEDIOS.map(med => {
@@ -638,18 +638,18 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
                   return (
                     <button key={med.id} disabled={savingMedio} onClick={() => guardarMedio(med.id)}
                       className={`flex flex-col items-center gap-1 py-2.5 rounded-lg text-[8px] font-black uppercase tracking-wide transition-all border disabled:opacity-40 ${
-                        active ? 'bg-blue-600 border-blue-400/50 text-white' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                        active ? 'bg-blue-600 border-blue-400/50 text-white' : 'bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900'
                       }`}>
                       <Icon className="h-4 w-4" /> {med.label}
                     </button>
                   );
                 })}
               </div>
-              {savingMedio && <p className="text-[10px] text-blue-400 font-bold flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Guardando…</p>}
+              {savingMedio && <p className="text-[10px] text-blue-600 font-bold flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Guardando…</p>}
             </div>
           )}
           <DialogFooter className="mt-4">
-            <Button variant="ghost" onClick={() => setMedioModal(null)} className="text-gray-400 hover:text-white">Cerrar</Button>
+            <Button variant="ghost" onClick={() => setMedioModal(null)} className="text-slate-500 hover:text-slate-900">Cerrar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -661,7 +661,7 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
 
 const Campo = ({ label, children }) => (
   <div>
-    <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">{label}</label>
+    <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1.5 block">{label}</label>
     {children}
   </div>
 );

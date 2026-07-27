@@ -42,12 +42,12 @@ const AvisoFacturacion = () => {
     <div className="relative">
       <button
         onClick={() => setAbierto(v => !v)}
-        className="relative h-10 w-10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+        className="relative h-10 w-10 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
         title="Avisos de facturación"
       >
         <Bell size={18} />
         {totalAvisos > 0 && (
-          <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-amber-400 ring-2 ring-[#0f172a] animate-pulse" />
+          <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white animate-pulse" />
         )}
       </button>
 
@@ -57,52 +57,52 @@ const AvisoFacturacion = () => {
             <div className="fixed inset-0 z-40" onClick={() => setAbierto(false)} />
             <motion.div
               initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
-              className="absolute right-0 mt-2 w-80 bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden"
+              className="absolute right-0 mt-2 w-80 bg-white border border-[#e5ddd0] rounded-2xl shadow-xl shadow-black/[0.08] z-50 overflow-hidden"
             >
-              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Avisos</span>
-                <button onClick={() => setAbierto(false)} className="text-gray-500 hover:text-white"><X size={14} /></button>
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[#efe8dd]">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Avisos</span>
+                <button onClick={() => setAbierto(false)} className="text-slate-400 hover:text-slate-700"><X size={14} /></button>
               </div>
 
               <div className="p-2 space-y-1.5">
                 {avisoFacturar && (
-                  <button onClick={irACobros} className="w-full text-left p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 hover:bg-amber-500/15 transition-colors">
-                    <p className="flex items-center gap-1.5 text-amber-200 font-black uppercase tracking-widest text-[10px]">
+                  <button onClick={irACobros} className="w-full text-left p-3 rounded-xl bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors">
+                    <p className="flex items-center gap-1.5 text-amber-700 font-black uppercase tracking-widest text-[10px]">
                       <CalendarClock size={12} /> Toca facturar
                     </p>
-                    <p className="text-gray-300 text-xs mt-1 leading-relaxed">
-                      Quedan <span className="font-black text-white">{resumen.porEmitir}</span> empresas por facturar
+                    <p className="text-slate-600 text-xs mt-1 leading-relaxed">
+                      Quedan <span className="font-black text-slate-900">{resumen.porEmitir}</span> empresas por facturar
                       este mes ({clp(resumen.montoPorEmitir)}).
                     </p>
                   </button>
                 )}
 
                 {vencidos > 0 && (
-                  <button onClick={irACobros} className="w-full text-left p-3 rounded-xl bg-red-500/10 border border-red-500/25 hover:bg-red-500/15 transition-colors">
-                    <p className="flex items-center gap-1.5 text-red-200 font-black uppercase tracking-widest text-[10px]">
+                  <button onClick={irACobros} className="w-full text-left p-3 rounded-xl bg-red-50 border border-red-200 hover:bg-red-100 transition-colors">
+                    <p className="flex items-center gap-1.5 text-red-600 font-black uppercase tracking-widest text-[10px]">
                       <AlertTriangle size={12} /> Pagos vencidos
                     </p>
-                    <p className="text-gray-300 text-xs mt-1 leading-relaxed">
-                      <span className="font-black text-white">{vencidos}</span> cobros pasaron el vencimiento (día 5).
+                    <p className="text-slate-600 text-xs mt-1 leading-relaxed">
+                      <span className="font-black text-slate-900">{vencidos}</span> cobros pasaron el vencimiento (día 5).
                     </p>
                   </button>
                 )}
 
                 {/* Cuenta regresiva: siempre visible cuando aún no toca facturar */}
                 {!avisoFacturar && resumen.porEmitir > 0 && (
-                  <button onClick={irACobros} className="w-full text-left p-3 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-colors">
-                    <p className="flex items-center gap-1.5 text-blue-300 font-black uppercase tracking-widest text-[10px]">
+                  <button onClick={irACobros} className="w-full text-left p-3 rounded-xl bg-slate-50 border border-[#efe8dd] hover:bg-slate-100 transition-colors">
+                    <p className="flex items-center gap-1.5 text-[#199b4d] font-black uppercase tracking-widest text-[10px]">
                       <CalendarClock size={12} /> Próxima facturación: día {resumen.diaFacturacion}
                     </p>
-                    <p className="text-gray-400 text-xs mt-1 leading-relaxed">
-                      Faltan <span className="font-black text-white">{resumen.diasParaFacturar}</span> días ·
-                      {' '}<span className="font-black text-white">{resumen.porEmitir}</span> empresas por facturar.
+                    <p className="text-slate-500 text-xs mt-1 leading-relaxed">
+                      Faltan <span className="font-black text-slate-900">{resumen.diasParaFacturar}</span> días ·
+                      {' '}<span className="font-black text-slate-900">{resumen.porEmitir}</span> empresas por facturar.
                     </p>
                   </button>
                 )}
 
                 {totalAvisos === 0 && resumen.porEmitir === 0 && (
-                  <p className="p-4 text-center text-gray-500 text-xs font-bold uppercase tracking-widest">
+                  <p className="p-4 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
                     Todo al día ✓
                   </p>
                 )}

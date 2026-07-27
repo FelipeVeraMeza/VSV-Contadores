@@ -29,16 +29,29 @@ const soloTel = (v) => String(v || '').replace(/\D/g, '');
 const correoValido = (c) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(c || '').trim());
 
 // Fecha chilena dd/mm/yyyy (día primero). Años de 2 dígitos → 2000+.
+// También acepta un serial de Excel por si la celda viene sin formato de fecha.
 const parseFechaCL = (str) => {
     const s = String(str || '').trim();
+    if (!s) return null;
     const m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
-    if (!m) return null;
-    let [, d, mo, y] = m;
-    d = +d; mo = +mo; y = +y < 100 ? 2000 + +y : +y;
-    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
-    const dt = new Date(y, mo - 1, d);
-    return isNaN(dt) ? null : dt;
+    if (m) {
+        let [, d, mo, y] = m;
+        d = +d; mo = +mo; y = +y < 100 ? 2000 + +y : +y;
+        if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+            const dt = new Date(y, mo - 1, d);
+            if (!isNaN(dt)) return dt;
+        }
+    }
+    // Serial de Excel (días desde 1899-12-30)
+    if (/^\d{4,6}$/.test(s)) {
+        const dt = new Date(Date.UTC(1899, 11, 30) + (+s) * 86400000);
+        if (!isNaN(dt)) return dt;
+    }
+    return null;
 };
+
+// Recorta a lo que aceptan las columnas varchar(120) del backend.
+const cap = (v, n = 120) => { const s = String(v || '').trim(); return s ? s.slice(0, n) : null; };
 
 // Convierte una fecha a formato yyyy-mm-dd (para el campo date)
 const aISO = (dt) => dt ? `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}` : null;
@@ -53,15 +66,15 @@ const mapRow = (row) => {
     const correos = correoValido(correoRaw) ? [correoRaw] : [];
 
     const cuandoLlego = pick(row, ['cuando llego']);
-    const partes = [];
     const necesita = pick(row, ['que necesita']);
     const estadoCli = pick(row, ['estado del cliente']);
     const llamados = pick(row, ['llamados']);
     const accion = pick(row, ['accion']);
-    if (necesita) partes.push(`Necesita: ${necesita}`);
-    if (estadoCli) partes.push(`Estado: ${estadoCli}`);
+
+    // Cada columna del Excel cae en su campo propio (necesidad / estado
+    // comercial / acción). Lo que no tiene campo propio va a observaciones.
+    const partes = [];
     if (llamados) partes.push(`Llamados: ${llamados}`);
-    if (accion) partes.push(`Acción: ${accion}`);
     if (cuandoLlego) partes.push(`Llegó: ${cuandoLlego}`);
     const observaciones = partes.join('\n');
 
@@ -72,6 +85,9 @@ const mapRow = (row) => {
         nombre,
         telefonos: tels,
         correos,
+        necesidad: cap(necesita, 500),
+        estadoComercial: cap(estadoCli),
+        accionSiguiente: cap(accion),
         observaciones: observaciones || null,
         proximoContacto: aISO(contactarDate),
         origen: 'import',
@@ -82,14 +98,17 @@ const mapRow = (row) => {
     };
 };
 
-const inputCls = "bg-black/40 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none focus:border-blue-500 transition-colors w-full";
+const inputCls = "bg-slate-50 border border-[#efe8dd] rounded-lg p-2.5 text-xs text-slate-900 outline-none focus:border-emerald-500 transition-colors w-full";
 
 const CrmImportProspectosModal = ({ onClose, onImported }) => {
     const [workbook, setWorkbook] = useState(null);
     const [sheets, setSheets] = useState([]);
     const [sheetName, setSheetName] = useState('');
     const [fileName, setFileName] = useState('');
-    const [corte, setCorte] = useState('2026-07-10');
+    // Sin corte por defecto: se importan todos los registros. El filtro por
+    // fecha es opcional (antes venía fijo en 2026-07-10 y descartaba en
+    // silencio todo lo anterior, por eso "no cargaba la totalidad").
+    const [corte, setCorte] = useState('');
     const [parsing, setParsing] = useState(false);
     const [importing, setImporting] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -102,17 +121,20 @@ const CrmImportProspectosModal = ({ onClose, onImported }) => {
         if (!sheet) return { total: 0, enRango: [], fueraRango: 0, sinFecha: 0 };
         const json = utils.sheet_to_json(sheet, { defval: '', raw: false });
         const corteDate = corteStr ? new Date(corteStr + 'T00:00:00') : null;
-        let fueraRango = 0, sinFecha = 0;
+        let fueraRango = 0, sinFecha = 0, sinDato = 0;
         const enRango = [];
         json.forEach(r => {
             const m = mapRow(r);
-            // Descarta filas sin ningún dato aprovechable
-            if (!m.nombre && m.telefonos.length === 0 && m.correos.length === 0) return;
-            if (!m._fecha) { sinFecha++; return; }
-            if (corteDate && m._fecha < corteDate) { fueraRango++; return; }
+            // Descarta filas sin ningún dato aprovechable (ni nombre, ni teléfono, ni correo)
+            if (!m.nombre && m.telefonos.length === 0 && m.correos.length === 0) { sinDato++; return; }
+            // El filtro por fecha solo aplica si el usuario fijó un corte.
+            if (corteDate) {
+                if (!m._fecha) { sinFecha++; return; }
+                if (m._fecha < corteDate) { fueraRango++; return; }
+            }
             enRango.push(m);
         });
-        return { total: json.length, enRango, fueraRango, sinFecha };
+        return { total: json.length, enRango, fueraRango, sinFecha, sinDato };
     };
 
     const [stats, setStats] = useState(null);
@@ -163,6 +185,9 @@ const CrmImportProspectosModal = ({ onClose, onImported }) => {
                 nombre: m.nombre || null,
                 telefonos: m.telefonos,
                 correos: m.correos,
+                necesidad: m.necesidad,
+                estadoComercial: m.estadoComercial,
+                accionSiguiente: m.accionSiguiente,
                 observaciones: m.observaciones,
                 proximoContacto: m.proximoContacto,
                 origen: m.origen,
@@ -191,81 +216,86 @@ const CrmImportProspectosModal = ({ onClose, onImported }) => {
         >
             <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-full max-w-2xl bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]"
+                className="w-full max-w-2xl bg-white border border-[#efe8dd] rounded-2xl shadow-2xl flex flex-col max-h-[90vh]"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="p-5 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-amber-900/30 to-transparent shrink-0">
+                <div className="p-5 border-b border-[#efe8dd] flex items-center justify-between bg-gradient-to-r from-amber-900/30 to-transparent shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-400">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-600">
                             <Users size={20} />
                         </div>
                         <div>
-                            <h2 className="text-sm font-black text-white uppercase tracking-tight">Importar Prospectos</h2>
-                            <p className="text-[10px] text-gray-500">Desde Excel — filtra por fecha de ingreso</p>
+                            <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight">Importar Prospectos</h2>
+                            <p className="text-[10px] text-slate-400">Desde Excel — filtra por fecha de ingreso</p>
                         </div>
                     </div>
-                    <button onClick={onClose} aria-label="Cerrar" className="p-2 rounded-xl bg-white/5 text-gray-400 hover:text-red-400 transition-colors"><X size={18} /></button>
+                    <button onClick={onClose} aria-label="Cerrar" className="p-2 rounded-xl bg-slate-50 text-slate-500 hover:text-red-500 transition-colors"><X size={18} /></button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
                     {/* Cargar archivo */}
                     <div
                         onClick={() => fileRef.current?.click()}
-                        className="border-2 border-dashed border-white/15 hover:border-amber-500/50 rounded-2xl p-6 text-center cursor-pointer transition-colors"
+                        className="border-2 border-dashed border-[#e5ddd0] hover:border-amber-500/50 rounded-2xl p-6 text-center cursor-pointer transition-colors"
                     >
                         <input ref={fileRef} type="file" accept=".csv,.xls,.xlsx" className="hidden" onChange={handleFile} />
-                        {parsing ? <Loader2 size={28} className="mx-auto text-amber-400 animate-spin" /> : <Upload size={28} className="mx-auto text-gray-500" />}
-                        <p className="text-xs text-gray-300 mt-2 font-bold">{fileName || 'Haz clic para seleccionar un archivo'}</p>
-                        <p className="text-[10px] text-gray-600 mt-1">Columnas reconocidas: Nombre completo, Teléfono, Teléfono 2, Mail, Cuando llegó</p>
+                        {parsing ? <Loader2 size={28} className="mx-auto text-amber-600 animate-spin" /> : <Upload size={28} className="mx-auto text-slate-400" />}
+                        <p className="text-xs text-slate-600 mt-2 font-bold">{fileName || 'Haz clic para seleccionar un archivo'}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Columnas reconocidas: Nombre completo, Teléfono, Teléfono 2, Mail, Cuando llegó</p>
                     </div>
 
                     {/* Hoja + corte de fecha */}
                     {workbook && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <label className="flex flex-col gap-1">
-                                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Hoja del Excel</span>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Hoja del Excel</span>
                                 <select value={sheetName} onChange={(e) => cambiarHoja(e.target.value)} className={`${inputCls} cursor-pointer`}>
                                     {sheets.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </label>
                             <label className="flex flex-col gap-1">
-                                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-1"><Calendar size={11} /> Importar desde (Cuando llegó)</span>
-                                <input type="date" value={corte} onChange={(e) => cambiarCorte(e.target.value)} className={inputCls} />
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Calendar size={11} /> Importar desde (opcional)</span>
+                                <input type="date" value={corte} onChange={(e) => cambiarCorte(e.target.value)} className={inputCls} placeholder="Todos" />
+                                <span className="text-[9px] text-slate-400">{corte ? 'Solo los que llegaron desde esa fecha.' : 'Vacío = importar todos.'}</span>
                             </label>
                         </div>
                     )}
 
                     {/* Contadores */}
                     {stats && !result && (
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-4 gap-2">
                             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-center">
-                                <div className="text-xl font-black text-emerald-400">{enRango.length}</div>
-                                <div className="text-[9px] uppercase tracking-widest text-gray-400 mt-0.5">En rango</div>
+                                <div className="text-xl font-black text-emerald-600">{enRango.length}</div>
+                                <div className="text-[9px] uppercase tracking-widest text-slate-500 mt-0.5">A importar</div>
                             </div>
-                            <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3 text-center">
-                                <div className="text-xl font-black text-gray-300">{stats.fueraRango}</div>
-                                <div className="text-[9px] uppercase tracking-widest text-gray-500 mt-0.5">Antes del corte</div>
+                            <div className="bg-white border border-[#efe8dd] rounded-xl p-3 text-center">
+                                <div className="text-xl font-black text-slate-600">{stats.total}</div>
+                                <div className="text-[9px] uppercase tracking-widest text-slate-400 mt-0.5">Filas Excel</div>
                             </div>
-                            <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3 text-center">
-                                <div className="text-xl font-black text-gray-300">{stats.sinFecha}</div>
-                                <div className="text-[9px] uppercase tracking-widest text-gray-500 mt-0.5">Sin fecha</div>
+                            <div className="bg-white border border-[#efe8dd] rounded-xl p-3 text-center">
+                                <div className="text-xl font-black text-slate-600">{stats.fueraRango}</div>
+                                <div className="text-[9px] uppercase tracking-widest text-slate-400 mt-0.5">Antes del corte</div>
+                            </div>
+                            <div className="bg-white border border-[#efe8dd] rounded-xl p-3 text-center">
+                                <div className="text-xl font-black text-slate-600">{stats.sinDato || 0}</div>
+                                <div className="text-[9px] uppercase tracking-widest text-slate-400 mt-0.5">Sin datos</div>
                             </div>
                         </div>
                     )}
 
                     {/* Vista previa */}
                     {enRango.length > 0 && !result && (
-                        <div className="bg-black/20 border border-white/5 rounded-xl p-3">
-                            <p className="text-[11px] text-gray-300 font-bold mb-2">{enRango.length} prospecto(s) a importar. Primeros 5:</p>
+                        <div className="bg-slate-50 border border-[#efe8dd] rounded-xl p-3">
+                            <p className="text-[11px] text-slate-600 font-bold mb-2">{enRango.length} prospecto(s) a importar. Primeros 5:</p>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-[10px] text-left">
-                                    <thead className="text-gray-500 uppercase">
+                                    <thead className="text-slate-400 uppercase">
                                         <tr><th className="pr-3 py-1">Nombre</th><th className="pr-3 py-1">Teléfono</th><th className="pr-3 py-1">Qué necesita</th><th className="pr-3 py-1">Llegó</th></tr>
                                     </thead>
-                                    <tbody className="text-gray-300">
+                                    <tbody className="text-slate-600">
                                         {enRango.slice(0, 5).map((m, i) => (
-                                            <tr key={i} className="border-t border-white/5">
-                                                <td className="pr-3 py-1">{m.nombre || <span className="text-gray-600 italic">sin nombre</span>}</td>
+                                            <tr key={i} className="border-t border-[#efe8dd]">
+                                                <td className="pr-3 py-1">{m.nombre || <span className="text-slate-400 italic">sin nombre</span>}</td>
                                                 <td className="pr-3 py-1 font-mono">{m.telefonos[0] || '—'}</td>
                                                 <td className="pr-3 py-1 max-w-[160px] truncate" title={m._necesita || ''}>{m._necesita || '—'}</td>
                                                 <td className="pr-3 py-1 font-mono">{m._fechaTxt}</td>
@@ -280,21 +310,21 @@ const CrmImportProspectosModal = ({ onClose, onImported }) => {
                     {/* Progreso */}
                     {importing && (
                         <div>
-                            <div className="h-2 bg-black/40 rounded-full overflow-hidden">
+                            <div className="h-2 bg-slate-50 rounded-full overflow-hidden">
                                 <div className="h-full bg-amber-500 transition-all" style={{ width: `${progress}%` }} />
                             </div>
-                            <p className="text-[10px] text-gray-500 text-center mt-1">Importando… {progress}%</p>
+                            <p className="text-[10px] text-slate-400 text-center mt-1">Importando… {progress}%</p>
                         </div>
                     )}
 
                     {/* Resultado */}
                     {result && (
-                        <div className="bg-black/20 border border-white/5 rounded-xl p-4 space-y-2">
-                            <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold"><CheckCircle2 size={16} /> {result.creados} prospecto(s) creado(s)</div>
+                        <div className="bg-slate-50 border border-[#efe8dd] rounded-xl p-4 space-y-2">
+                            <div className="flex items-center gap-2 text-emerald-600 text-xs font-bold"><CheckCircle2 size={16} /> {result.creados} prospecto(s) creado(s)</div>
                             {result.errores.length > 0 && (
                                 <div>
-                                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold mb-1"><AlertTriangle size={16} /> {result.errores.length} con error</div>
-                                    <div className="max-h-32 overflow-y-auto text-[10px] text-gray-400 space-y-0.5">
+                                    <div className="flex items-center gap-2 text-red-500 text-xs font-bold mb-1"><AlertTriangle size={16} /> {result.errores.length} con error</div>
+                                    <div className="max-h-32 overflow-y-auto text-[10px] text-slate-500 space-y-0.5">
                                         {result.errores.slice(0, 20).map((e, i) => (
                                             <div key={i}>Fila {e.fila} ({e.nombre}): {e.motivo}</div>
                                         ))}
@@ -305,8 +335,8 @@ const CrmImportProspectosModal = ({ onClose, onImported }) => {
                     )}
                 </div>
 
-                <div className="p-4 border-t border-white/10 flex gap-3 shrink-0 bg-[#0f172a]">
-                    <Button variant="ghost" onClick={onClose} className="flex-1 uppercase font-black text-[10px] tracking-widest text-gray-400 h-10 rounded-xl bg-white/5 hover:bg-white/10">
+                <div className="p-4 border-t border-[#efe8dd] flex gap-3 shrink-0 bg-white">
+                    <Button variant="ghost" onClick={onClose} className="flex-1 uppercase font-black text-[10px] tracking-widest text-slate-500 h-10 rounded-xl bg-slate-50 hover:bg-slate-100">
                         {result ? 'Cerrar' : 'Cancelar'}
                     </Button>
                     {!result && (

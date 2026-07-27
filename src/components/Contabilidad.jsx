@@ -20,11 +20,11 @@ const hoy = () => new Date().toISOString().slice(0, 10);
 
 const EnConstruccion = ({ titulo }) => (
   <div className="h-[55vh] flex flex-col items-center justify-center text-center">
-    <div className="bg-white/5 p-6 rounded-full mb-4 border border-white/10">
-      <Hammer className="h-10 w-10 text-amber-400" />
+    <div className="bg-slate-50 p-6 rounded-full mb-4 border border-[#efe8dd]">
+      <Hammer className="h-10 w-10 text-amber-600" />
     </div>
-    <h3 className="text-white font-black uppercase tracking-tight text-lg">{titulo}</h3>
-    <p className="text-gray-500 text-xs mt-2 uppercase tracking-widest font-bold max-w-md leading-relaxed">
+    <h3 className="text-slate-900 font-black uppercase tracking-tight text-lg">{titulo}</h3>
+    <p className="text-slate-400 text-xs mt-2 uppercase tracking-widest font-bold max-w-md leading-relaxed">
       Este submódulo está en construcción. Próximamente disponible.
     </p>
   </div>
@@ -43,22 +43,22 @@ const SelectorRango = ({ rango, setRango }) => {
 
   const Campo = ({ label, value, min, max, onChange }) => (
     <label className="group relative flex flex-col cursor-pointer">
-      <span className="text-[8px] font-black uppercase tracking-[0.2em] text-gray-500 group-hover:text-blue-400 transition-colors mb-0.5">{label}</span>
+      <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-blue-600 transition-colors mb-0.5">{label}</span>
       <input type="date" value={value} min={min} max={max} onChange={onChange}
-        className="bg-transparent text-white text-[13px] font-bold focus:outline-none cursor-pointer [color-scheme:dark] w-[120px] tracking-tight" />
+        className="bg-transparent text-slate-700 text-[13px] font-bold focus:outline-none cursor-pointer [color-scheme:light] w-[120px] tracking-tight" />
     </label>
   );
 
   return (
-    <div className="flex flex-col xl:flex-row xl:items-center gap-2.5 bg-gradient-to-br from-slate-800/70 to-slate-900/70 border border-white/10 rounded-2xl p-2.5 backdrop-blur-xl shadow-xl shadow-black/20">
+    <div className="flex flex-col xl:flex-row xl:items-center gap-2.5 bg-white border border-[#efe8dd] rounded-2xl p-2.5 shadow-sm">
       {/* Campos desde / hasta */}
-      <div className="flex items-center gap-3 bg-black/30 rounded-xl pl-3 pr-4 py-2 border border-white/5">
+      <div className="flex items-center gap-3 bg-slate-50 rounded-xl pl-3 pr-4 py-2 border border-[#efe8dd]">
         <div className="p-1.5 bg-blue-500/15 rounded-lg">
-          <CalendarRange className="h-4 w-4 text-blue-400" />
+          <CalendarRange className="h-4 w-4 text-blue-600" />
         </div>
         <Campo label="Desde" value={rango.desde} max={rango.hasta} onChange={e => setRango(r => ({ ...r, desde: e.target.value }))} />
         <div className="flex items-center self-stretch">
-          <div className="h-7 w-px bg-white/10" />
+          <div className="h-7 w-px bg-slate-100" />
         </div>
         <Campo label="Hasta" value={rango.hasta} min={rango.desde} onChange={e => setRango(r => ({ ...r, hasta: e.target.value }))} />
       </div>
@@ -69,8 +69,8 @@ const SelectorRango = ({ rango, setRango }) => {
           <button key={p.label} onClick={() => setRango({ desde: p.desde, hasta: p.hasta })}
             className={`px-3 py-2 rounded-full text-[9px] font-black uppercase tracking-widest transition-all border ${
               activo(p)
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-400/50 text-white shadow-lg shadow-blue-900/40'
-                : 'bg-white/[0.04] border-white/10 text-gray-400 hover:text-white hover:border-blue-400/30 hover:bg-white/[0.08]'
+                ? 'bg-gradient-to-r from-emerald-600 to-green-600 border-blue-400/50 text-white shadow-lg shadow-emerald-900/40'
+                : 'bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900 hover:border-blue-400/30 hover:bg-slate-100'
             }`}>
             {p.label}
           </button>
@@ -94,8 +94,8 @@ const Contabilidad = () => {
     return (
       <div className="flex flex-col items-center justify-center h-[70vh] text-center">
         <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-        <h2 className="text-xl font-bold text-white uppercase tracking-tighter italic">Bóveda Global de Contabilidad</h2>
-        <p className="text-gray-400 text-sm mt-2 font-bold uppercase tracking-widest">
+        <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tighter italic">Bóveda Global de Contabilidad</h2>
+        <p className="text-slate-500 text-sm mt-2 font-bold uppercase tracking-widest">
           Selecciona una entidad en el CRM para acceder a sus registros contables.
         </p>
       </div>
@@ -124,8 +124,8 @@ const Contabilidad = () => {
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-1 tracking-tight">{TITULOS[sub] || 'Contabilidad'}</h1>
-          <p className="text-gray-400 text-sm font-medium uppercase tracking-wider">
+          <h1 className="text-3xl font-bold text-slate-900 mb-1 tracking-tight">{TITULOS[sub] || 'Contabilidad'}</h1>
+          <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">
             {selectedCompany?.razon_social || selectedCompany?.razonSocial || 'VOLLAIRE & OLIVOS SIMPLE PYME LTDA'}
           </p>
         </div>

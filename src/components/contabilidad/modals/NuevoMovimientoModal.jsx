@@ -242,24 +242,24 @@ const NuevoMovimientoModal = ({ isOpen, setIsOpen, tipo, empresaId, onGuardado }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) resetForm(); setIsOpen(open); }}>
-      <DialogContent className="sm:max-w-[820px] bg-[#0f172a] border-white/10 text-white shadow-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[820px] bg-white border-[#efe8dd] text-slate-700 shadow-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-xl font-black tracking-tight text-blue-400 uppercase">
+          <DialogTitle className="text-xl font-black tracking-tight text-blue-600 uppercase">
             Nueva {tLabel}
           </DialogTitle>
-          <DialogDescription className="text-gray-400 text-xs">
+          <DialogDescription className="text-slate-500 text-xs">
             Registra el documento y su asiento contable.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 mt-2">
           {/* DATOS DEL DOCUMENTO */}
-          <div className="bg-black/20 rounded-xl border border-white/5 p-4 space-y-4">
-            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Datos del Documento</p>
+          <div className="bg-slate-50 rounded-xl border border-[#efe8dd] p-4 space-y-4">
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Datos del Documento</p>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="relative" ref={rutInputRef}>
-                <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">
+                <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1.5 block">
                   RUT {tipo === 'compras' ? 'Proveedor' : 'Cliente'}
                 </label>
                 <div className="relative">
@@ -278,79 +278,79 @@ const NuevoMovimientoModal = ({ isOpen, setIsOpen, tipo, empresaId, onGuardado }
                       }
                     }}
                     onFocus={() => crmHabilitado && rutQuery && setShowSuggestions(true)}
-                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors pr-8"
+                    className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 transition-colors pr-8"
                   />
                   {crmHabilitado && (
-                    <Search size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                    <Search size={13} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   )}
                 </div>
                 {/* Dropdown sugerencias CRM */}
                 {crmHabilitado && showSuggestions && sugerenciasCRM.length > 0 && (
-                  <div ref={suggestionsRef} className="absolute z-50 top-full left-0 right-0 mt-1 bg-slate-900 border border-white/10 rounded-lg shadow-2xl overflow-hidden max-h-52 overflow-y-auto">
+                  <div ref={suggestionsRef} className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-[#efe8dd] rounded-lg shadow-2xl overflow-hidden max-h-52 overflow-y-auto">
                     {sugerenciasCRM.map(c => (
                       <button
                         key={c.id}
                         type="button"
                         onMouseDown={() => seleccionarCRM(c)}
-                        className="w-full text-left px-3 py-2 hover:bg-blue-500/20 transition-colors border-b border-white/5 last:border-0"
+                        className="w-full text-left px-3 py-2 hover:bg-blue-500/20 transition-colors border-b border-[#efe8dd] last:border-0"
                       >
-                        <p className="text-xs font-mono text-blue-400">{c.rut}</p>
-                        <p className="text-xs text-gray-300 truncate">{c.razonSocial || c.razon_social}</p>
+                        <p className="text-xs font-mono text-blue-600">{c.rut}</p>
+                        <p className="text-xs text-slate-600 truncate">{c.razonSocial || c.razon_social}</p>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
               <div>
-                <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">
+                <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1.5 block">
                   {tipo === 'compras' ? 'Nombre del Proveedor' : 'Nombre del Cliente'}
                 </label>
                 <input type="text" placeholder="Razón social" value={nombre}
                   onChange={e => setNombre(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" />
+                  className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 transition-colors" />
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">Tipo Documento</label>
+                <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1.5 block">Tipo Documento</label>
                 <select value={tipoDoc} onChange={e => setTipoDoc(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 appearance-none transition-colors">
+                  className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 appearance-none transition-colors">
                   {TIPOS_DOCUMENTO.map(t => (
-                    <option key={t.value} value={t.value} className="bg-slate-900">{t.label}</option>
+                    <option key={t.value} value={t.value} className="bg-white">{t.label}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">Folio</label>
+                <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1.5 block">Folio</label>
                 <input type="text" placeholder="Nº de folio" value={folio}
                   onChange={e => setFolio(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" />
+                  className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 transition-colors" />
               </div>
               <div>
-                <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">Fecha</label>
+                <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1.5 block">Fecha</label>
                 <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" />
+                  className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 transition-colors" />
               </div>
             </div>
 
             <div>
-              <label className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1.5 block">Glosa / Descripción</label>
+              <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1.5 block">Glosa / Descripción</label>
               <input type="text" placeholder="Ej: Compra materiales oficina" value={descripcion}
                 onChange={e => setDescripcion(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" />
+                className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-emerald-500 transition-colors" />
             </div>
           </div>
 
           {/* ASIENTO CONTABLE */}
-          <div className="bg-black/20 rounded-xl border border-white/5 p-4">
-            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-4">Asiento Contable — Partida Doble</p>
+          <div className="bg-slate-50 rounded-xl border border-[#efe8dd] p-4">
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-4">Asiento Contable — Partida Doble</p>
 
             {/* Header */}
             <div className="grid grid-cols-[1fr_120px_120px_36px] gap-2 mb-2 px-1">
-              <span className="text-[10px] text-gray-600 font-black uppercase tracking-widest">Cuenta</span>
-              <span className="text-[10px] text-gray-600 font-black uppercase tracking-widest text-right">Debe</span>
-              <span className="text-[10px] text-gray-600 font-black uppercase tracking-widest text-right">Haber</span>
+              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Cuenta</span>
+              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest text-right">Debe</span>
+              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest text-right">Haber</span>
               <span />
             </div>
 
@@ -362,18 +362,18 @@ const NuevoMovimientoModal = ({ isOpen, setIsOpen, tipo, empresaId, onGuardado }
               <div key={linea.id} className="grid grid-cols-[1fr_120px_120px_36px] gap-2 mb-2 items-center">
                 {/* Selector de cuenta */}
                 <Select value={linea.cuenta} onValueChange={val => actualizarCuenta(linea.id, val)}>
-                  <SelectTrigger className="bg-slate-900/80 border-white/10 text-xs text-white h-9 w-full">
+                  <SelectTrigger className="bg-white border-[#efe8dd] text-xs text-slate-900 h-9 w-full">
                     <SelectValue placeholder="Seleccionar cuenta...">
                       {linea.cuenta
                         ? <span className="font-mono">{linea.cuenta} — {linea.nombre || getNombre(linea.cuenta)}</span>
-                        : <span className="text-gray-500">Seleccionar cuenta...</span>}
+                        : <span className="text-slate-400">Seleccionar cuenta...</span>}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-white/10 text-white max-h-[260px] overflow-y-auto z-50">
+                  <SelectContent className="bg-white border-[#efe8dd] text-slate-700 max-h-[260px] overflow-y-auto z-50">
                     {plan.map(c => (
                       <SelectItem key={c.codigo} value={c.codigo} className="text-xs">
-                        <span className="font-mono text-blue-400">{c.codigo}</span>
-                        <span className="ml-2 text-gray-300">{c.descripcion}</span>
+                        <span className="font-mono text-blue-600">{c.codigo}</span>
+                        <span className="ml-2 text-slate-600">{c.descripcion}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -383,17 +383,17 @@ const NuevoMovimientoModal = ({ isOpen, setIsOpen, tipo, empresaId, onGuardado }
                 <input type="number" min="0" placeholder={debeOff ? '—' : '0'} value={linea.debe}
                   disabled={debeOff}
                   onChange={e => actualizarMonto(linea.id, 'debe', e.target.value)}
-                  className="w-full bg-slate-900/80 border border-white/10 rounded px-3 py-2 text-xs text-right text-emerald-400 font-mono focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" />
+                  className="w-full bg-white border border-[#efe8dd] rounded px-3 py-2 text-xs text-right text-emerald-600 font-mono focus:outline-none focus:border-emerald-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" />
 
                 {/* Haber */}
                 <input type="number" min="0" placeholder={haberOff ? '—' : '0'} value={linea.haber}
                   disabled={haberOff}
                   onChange={e => actualizarMonto(linea.id, 'haber', e.target.value)}
-                  className="w-full bg-slate-900/80 border border-white/10 rounded px-3 py-2 text-xs text-right text-orange-400 font-mono focus:outline-none focus:border-orange-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" />
+                  className="w-full bg-white border border-[#efe8dd] rounded px-3 py-2 text-xs text-right text-orange-600 font-mono focus:outline-none focus:border-orange-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed" />
 
                 {/* Eliminar */}
                 <button onClick={() => eliminarLinea(linea.id)} disabled={lineas.length <= 2}
-                  className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors disabled:opacity-20 flex items-center justify-center">
+                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-400/10 rounded transition-colors disabled:opacity-20 flex items-center justify-center">
                   <Trash2 size={13} />
                 </button>
               </div>
@@ -401,41 +401,41 @@ const NuevoMovimientoModal = ({ isOpen, setIsOpen, tipo, empresaId, onGuardado }
             })}
 
             <Button onClick={agregarLinea} variant="outline" size="sm"
-              className="mt-3 bg-transparent border-dashed border-white/20 text-blue-400 hover:text-blue-300 hover:border-blue-400 w-full text-xs font-bold hover:bg-transparent">
+              className="mt-3 bg-transparent border-dashed border-[#efe8dd] text-blue-600 hover:text-blue-700 hover:border-blue-400 w-full text-xs font-bold hover:bg-transparent">
               <Plus size={13} className="mr-1" /> AÑADIR LÍNEA
             </Button>
           </div>
         </div>
 
         {/* FOOTER */}
-        <DialogFooter className="mt-4 flex-col sm:flex-row justify-between items-center bg-black/40 p-4 rounded-xl border border-white/5 gap-4">
+        <DialogFooter className="mt-4 flex-col sm:flex-row justify-between items-center bg-slate-50 p-4 rounded-xl border border-[#efe8dd] gap-4">
           <div className="flex gap-6 w-full sm:w-auto">
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Debe</p>
-              <p className="text-lg font-mono font-bold text-emerald-400">${totales.debe.toLocaleString('es-CL')}</p>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Debe</p>
+              <p className="text-lg font-mono font-bold text-emerald-600">${totales.debe.toLocaleString('es-CL')}</p>
             </div>
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Haber</p>
-              <p className="text-lg font-mono font-bold text-orange-400">${totales.haber.toLocaleString('es-CL')}</p>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Haber</p>
+              <p className="text-lg font-mono font-bold text-orange-600">${totales.haber.toLocaleString('es-CL')}</p>
             </div>
             {totales.debe > 0 && !estaCuadrado && (
-              <div className="flex items-center gap-2 text-red-400 bg-red-400/10 px-3 py-1.5 rounded-lg border border-red-400/20">
+              <div className="flex items-center gap-2 text-red-500 bg-red-400/10 px-3 py-1.5 rounded-lg border border-red-400/20">
                 <AlertCircle size={13} />
                 <span className="text-xs font-bold">DESCUADRE ${Math.abs(totales.diferencia).toLocaleString('es-CL')}</span>
               </div>
             )}
             {estaCuadrado && (
-              <div className="flex items-center gap-2 text-emerald-400 bg-emerald-400/10 px-3 py-1.5 rounded-lg border border-emerald-400/20">
+              <div className="flex items-center gap-2 text-emerald-600 bg-emerald-400/10 px-3 py-1.5 rounded-lg border border-emerald-400/20">
                 <span className="text-xs font-bold">✓ CUADRADO</span>
               </div>
             )}
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => { resetForm(); setIsOpen(false); }} className="text-gray-400 hover:text-white">
+            <Button variant="ghost" onClick={() => { resetForm(); setIsOpen(false); }} className="text-slate-500 hover:text-slate-900">
               Cancelar
             </Button>
             <Button onClick={handleGuardar} disabled={!esValido || isSaving}
-              className={`font-black uppercase text-xs tracking-widest ${esValido ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-800 text-gray-500'}`}>
+              className={`font-black uppercase text-xs tracking-widest ${esValido ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-50 text-slate-400'}`}>
               {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
               GUARDAR {tLabel.toUpperCase()}
             </Button>

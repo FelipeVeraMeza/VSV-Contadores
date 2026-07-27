@@ -97,7 +97,7 @@ const EditarEmpleadoModal = ({ isOpen, setIsOpen, trabajadorId, empresaId }) => 
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="sm:max-w-4xl bg-black/60 backdrop-blur-xl border-white/20 text-white max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-4xl bg-slate-50 backdrop-blur-xl border-[#efe8dd] text-slate-700 max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="text-2xl">Editar Ficha del Trabajador</DialogTitle>
                     <DialogDescription>{form ? `${form.nombres} ${form.apellidoPaterno || ''} · ${form.rut}` : 'Cargando ficha...'}</DialogDescription>
@@ -109,7 +109,7 @@ const EditarEmpleadoModal = ({ isOpen, setIsOpen, trabajadorId, empresaId }) => 
                     <div className="space-y-6 py-2">
                         {/* Personales */}
                         <section>
-                            <h3 className="text-sm font-bold text-cyan-400 flex items-center mb-3"><User className="mr-2 h-4 w-4" />Datos Personales</h3>
+                            <h3 className="text-sm font-bold text-cyan-600 flex items-center mb-3"><User className="mr-2 h-4 w-4" />Datos Personales</h3>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div><Label>Nombres</Label><Input name="nombres" value={form.nombres} onChange={onChange} /></div>
                                 <div><Label>Apellido Paterno</Label><Input name="apellidoPaterno" value={form.apellidoPaterno} onChange={onChange} /></div>
@@ -128,7 +128,7 @@ const EditarEmpleadoModal = ({ isOpen, setIsOpen, trabajadorId, empresaId }) => 
 
                         {/* Laborales */}
                         <section>
-                            <h3 className="text-sm font-bold text-purple-400 flex items-center mb-3"><Briefcase className="mr-2 h-4 w-4" />Datos Laborales</h3>
+                            <h3 className="text-sm font-bold text-purple-600 flex items-center mb-3"><Briefcase className="mr-2 h-4 w-4" />Datos Laborales</h3>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div><Label>Cargo</Label><Input name="cargo" value={form.cargo} onChange={onChange} /></div>
                                 <div><Label>Departamento</Label><Input name="departamento" value={form.departamento} onChange={onChange} /></div>
@@ -184,7 +184,7 @@ const EditarEmpleadoModal = ({ isOpen, setIsOpen, trabajadorId, empresaId }) => 
 
                         {/* Pago */}
                         <section>
-                            <h3 className="text-sm font-bold text-emerald-400 flex items-center mb-3"><CreditCard className="mr-2 h-4 w-4" />Datos de Pago</h3>
+                            <h3 className="text-sm font-bold text-emerald-600 flex items-center mb-3"><CreditCard className="mr-2 h-4 w-4" />Datos de Pago</h3>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                 <div><Label>Tipo de Pago</Label>
                                     <Select name="tipoPago" value={form.tipoPago} onChange={onChange} opts={[['', 'Seleccionar...'], ['efectivo', 'Efectivo'], ['transferencia', 'Transferencia'], ['cheque', 'Cheque'], ['otro', 'Otro']]} />
@@ -198,7 +198,7 @@ const EditarEmpleadoModal = ({ isOpen, setIsOpen, trabajadorId, empresaId }) => 
                 )}
 
                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)} className="border-white/20 text-white hover:bg-white/10">Cancelar</Button>
+                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)} className="border-[#efe8dd] text-slate-700 hover:bg-slate-100">Cancelar</Button>
                     <Button type="button" onClick={() => guardar.mutate()} disabled={!form || guardar.isPending} className="bg-gradient-to-r from-purple-500 to-violet-600 text-white">
                         {guardar.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Guardando...</> : 'Guardar Cambios'}
                     </Button>
@@ -223,8 +223,8 @@ const Select = ({ name, value, onChange, opts }) => {
 };
 
 const Check = ({ label, name, checked, onChange }) => (
-    <label className={`flex items-center gap-2.5 text-sm cursor-pointer rounded-lg border px-3 h-10 transition ${checked ? 'border-purple-500/40 bg-purple-500/10 text-white' : 'border-white/10 bg-white/[0.03] text-gray-300 hover:bg-white/[0.06]'}`}>
-        <input type="checkbox" name={name} checked={checked} onChange={onChange} className="h-4 w-4 rounded accent-purple-500 [color-scheme:dark]" />
+    <label className={`flex items-center gap-2.5 text-sm cursor-pointer rounded-lg border px-3 h-10 transition ${checked ? 'border-purple-500/40 bg-purple-500/10 text-purple-700' : 'border-[#efe8dd] bg-white text-slate-600 hover:bg-slate-100'}`}>
+        <input type="checkbox" name={name} checked={checked} onChange={onChange} className="h-4 w-4 rounded accent-purple-500 [color-scheme:light]" />
         <span className="leading-tight">{label}</span>
     </label>
 );

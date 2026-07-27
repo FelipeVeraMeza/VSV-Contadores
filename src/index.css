@@ -7,25 +7,25 @@
 
 @layer base {
   :root {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 84% 4.9%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --background: 43 33% 98%;
+    --foreground: 210 8% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 210 8% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 8% 11%;
+    --primary: 145 72% 35%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 40 30% 94%;
+    --secondary-foreground: 210 8% 11%;
+    --muted: 40 25% 94%;
+    --muted-foreground: 215 14% 45%;
+    --accent: 145 45% 94%;
+    --accent-foreground: 145 72% 25%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48.1%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 39 32% 90%;
+    --input: 39 30% 88%;
+    --ring: 145 72% 35%;
     --radius: 0.75rem;
   }
 
@@ -37,7 +37,7 @@
   }
   
   body {
-    @apply bg-gradient-to-br from-slate-900 via-purple-900 to-indigo-900 text-foreground;
+    @apply bg-[#fbfaf7] text-foreground;
     min-height: 100vh;
   }
 
@@ -56,20 +56,20 @@
      NUEVA CLASE: Glassmorphism Premium (CRM V4)
      ========================================= */
   .premium-glass {
-    @apply bg-white/[0.02] backdrop-blur-xl border border-white/[0.08] shadow-[0_8px_32px_0_rgba(0,0,0,0.36)];
+    @apply bg-white border border-[#efe8dd] shadow-[0_4px_20px_0_rgba(0,0,0,0.05)];
   }
 
   /* Clases Originales Mantenidas */
   .glass-effect {
-    @apply bg-white/10 backdrop-blur-xl border border-white/20;
+    @apply bg-white border border-[#efe8dd] shadow-sm;
   }
-  
+
   .gradient-text {
-    @apply bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-emerald-600 to-green-500 bg-clip-text text-transparent;
   }
   
   .card-hover {
-    @apply transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-purple-500/25;
+    @apply transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-emerald-500/25;
   }
   
   .animate-float {
@@ -92,10 +92,10 @@
 
 @keyframes glow {
   from {
-    box-shadow: 0 0 20px rgba(147, 51, 234, 0.5);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
   }
   to {
-    box-shadow: 0 0 30px rgba(147, 51, 234, 0.8);
+    box-shadow: 0 0 30px rgba(16, 185, 129, 0.8);
   }
 }
 
@@ -112,17 +112,17 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(to bottom, #8b5cf6, #a855f7);
+  background: linear-gradient(to bottom, #10b981, #059669);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(to bottom, #7c3aed, #9333ea);
+  background: linear-gradient(to bottom, #059669, #047857);
 }
 
 /* Efectos de selección */
 ::selection {
-  background: rgba(139, 92, 246, 0.3);
+  background: rgba(16, 185, 129, 0.3);
   color: white;
 }
 
@@ -150,8 +150,7 @@
 
 /* Estilos para tablas */
 .table-hover tbody tr:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-  transform: scale(1.01);
+  background-color: rgba(0, 0, 0, 0.03);
   transition: all 0.2s ease;
 }
 
@@ -173,24 +172,24 @@
 
 /* Estilos para formularios */
 .form-input {
-  @apply bg-white/10 border border-white/20 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200;
+  @apply bg-white border border-[#e5ddd0] rounded-lg px-4 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200;
 }
 
 .form-input:focus {
-  box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.1);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
 /* Efectos para cards */
 .card-gradient {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #ffffff;
+  border: 1px solid #efe8dd;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .card-gradient:hover {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.08) 100%);
+  background: #ffffff;
   transform: translateY(-5px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.08);
 }
 
 /* Animaciones de entrada */
@@ -230,7 +229,7 @@
 }
 
 .text-glow {
-  text-shadow: 0 0 10px rgba(147, 51, 234, 0.5);
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
 }
 
 /* Responsive adjustments */

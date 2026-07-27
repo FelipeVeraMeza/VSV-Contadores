@@ -114,29 +114,29 @@ const ConciliacionBancaria = ({ empresaId }) => {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="space-y-6">
       {/* RESUMEN */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white/5 p-6 rounded-2xl border border-white/10">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-50 p-6 rounded-2xl border border-[#efe8dd]">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-500/10 rounded-lg text-blue-400"><GitMerge className="h-5 w-5" /></div>
+          <div className="p-2 bg-blue-500/10 rounded-lg text-blue-600"><GitMerge className="h-5 w-5" /></div>
           <div>
-            <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Conciliación Bancaria</h3>
-            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mt-0.5">Unión automática: abonos del banco ↔ facturas</p>
+            <h3 className="text-xl font-black text-slate-900 uppercase italic tracking-tighter">Conciliación Bancaria</h3>
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-0.5">Unión automática: abonos del banco ↔ facturas</p>
           </div>
         </div>
         <div className="flex items-center gap-5">
           <div className="text-center">
-            <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest">Conciliados</p>
-            <p className="text-lg font-black text-emerald-400">{matches.length}</p>
+            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Conciliados</p>
+            <p className="text-lg font-black text-emerald-600">{matches.length}</p>
           </div>
           <div className="text-center">
-            <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest">Monto Unido</p>
-            <p className="text-sm font-black text-emerald-400">{formatCLP(totalConciliado)}</p>
+            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Monto Unido</p>
+            <p className="text-sm font-black text-emerald-600">{formatCLP(totalConciliado)}</p>
           </div>
           <div className="text-center">
-            <p className="text-[9px] font-black uppercase text-gray-500 tracking-widest">Pendientes</p>
-            <p className="text-lg font-black text-amber-400">{abonosPend.length + facturasPend.length}</p>
+            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Pendientes</p>
+            <p className="text-lg font-black text-amber-600">{abonosPend.length + facturasPend.length}</p>
           </div>
           <Button onClick={handleConciliarAuto} disabled={isConciliando || matches.length === 0}
-            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black uppercase text-[10px] tracking-widest h-11 px-5 disabled:opacity-40">
+            className="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-slate-900 font-black uppercase text-[10px] tracking-widest h-11 px-5 disabled:opacity-40">
             {isConciliando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bot className="h-4 w-4 mr-2" />}
             {isConciliando ? 'Conciliando...' : 'Conciliar Automáticamente'}
           </Button>
@@ -144,7 +144,7 @@ const ConciliacionBancaria = ({ empresaId }) => {
       </div>
 
       {isLoading ? (
-        <div className="h-64 flex flex-col items-center justify-center text-gray-500">
+        <div className="h-64 flex flex-col items-center justify-center text-slate-400">
           <Loader2 className="h-10 w-10 animate-spin mb-4 text-blue-500 opacity-40" />
           <p className="text-[10px] font-black uppercase tracking-[0.3em]">Cruzando banco con facturas...</p>
         </div>
@@ -154,22 +154,22 @@ const ConciliacionBancaria = ({ empresaId }) => {
           {matches.length > 0 && (
             <div className="bg-emerald-500/[0.07] rounded-2xl p-5 border border-emerald-500/20">
               <div className="flex items-center gap-2 mb-4">
-                <CheckCircle className="h-4 w-4 text-emerald-400" />
-                <h4 className="text-sm font-black text-emerald-400 uppercase tracking-widest">Conciliados ({matches.length})</h4>
+                <CheckCircle className="h-4 w-4 text-emerald-600" />
+                <h4 className="text-sm font-black text-emerald-600 uppercase tracking-widest">Conciliados ({matches.length})</h4>
               </div>
               <div className="space-y-2">
                 {matches.map((m, i) => (
-                  <div key={i} className="flex items-center gap-3 p-3 bg-black/30 rounded-xl border border-white/5">
+                  <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-[#efe8dd]">
                     <div className="flex-1 min-w-0">
-                      <p className="text-[10px] text-gray-400 uppercase font-bold flex items-center gap-1"><Landmark className="h-3 w-3" /> Banco · {formatFecha(m.abono.fecha)}</p>
-                      <p className="text-xs text-white font-bold truncate">{m.abono.descripcion}</p>
+                      <p className="text-[10px] text-slate-500 uppercase font-bold flex items-center gap-1"><Landmark className="h-3 w-3" /> Banco · {formatFecha(m.abono.fecha)}</p>
+                      <p className="text-xs text-slate-900 font-bold truncate">{m.abono.descripcion}</p>
                     </div>
-                    <Link2 className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                    <Link2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
                     <div className="flex-1 min-w-0 text-right">
-                      <p className="text-[10px] text-gray-400 uppercase font-bold">Factura #{m.factura.folio}</p>
-                      <p className="text-xs text-white font-bold truncate">{m.factura.razon_social || m.factura.rut_cliente || 'Cliente'}</p>
+                      <p className="text-[10px] text-slate-500 uppercase font-bold">Factura #{m.factura.folio}</p>
+                      <p className="text-xs text-slate-900 font-bold truncate">{m.factura.razon_social || m.factura.rut_cliente || 'Cliente'}</p>
                     </div>
-                    <span className="text-sm font-black text-emerald-400 font-mono w-28 text-right flex-shrink-0">{formatCLP(m.abono.abono)}</span>
+                    <span className="text-sm font-black text-emerald-600 font-mono w-28 text-right flex-shrink-0">{formatCLP(m.abono.abono)}</span>
                   </div>
                 ))}
               </div>
@@ -179,20 +179,20 @@ const ConciliacionBancaria = ({ empresaId }) => {
           {/* PENDIENTES: BANCO | FACTURAS */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="space-y-3">
-              <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] px-2 flex items-center gap-2">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] px-2 flex items-center gap-2">
                 <Landmark className="h-3.5 w-3.5" /> Abonos del banco sin factura ({abonosPend.length})
               </h4>
-              <div className="bg-black/20 rounded-2xl p-2 border border-white/5 min-h-[300px]">
+              <div className="bg-slate-50 rounded-2xl p-2 border border-[#efe8dd] min-h-[300px]">
                 {abonosPend.length ? abonosPend.map((m, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl">
+                  <div key={i} className="flex items-center justify-between p-3 hover:bg-slate-100 rounded-xl">
                     <div className="min-w-0">
-                      <p className="text-xs text-white font-bold truncate uppercase">{m.descripcion}</p>
-                      <p className="text-[9px] text-gray-500 mt-0.5">{formatFecha(m.fecha)}</p>
+                      <p className="text-xs text-slate-900 font-bold truncate uppercase">{m.descripcion}</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5">{formatFecha(m.fecha)}</p>
                     </div>
-                    <span className="text-sm font-black text-emerald-400 font-mono">{formatCLP(m.abono)}</span>
+                    <span className="text-sm font-black text-emerald-600 font-mono">{formatCLP(m.abono)}</span>
                   </div>
                 )) : (
-                  <div className="h-56 flex flex-col items-center justify-center text-gray-600">
+                  <div className="h-56 flex flex-col items-center justify-center text-slate-400">
                     <CheckCircle className="h-10 w-10 mb-2 opacity-20" />
                     <p className="text-[10px] font-black uppercase tracking-widest">Banco al día</p>
                   </div>
@@ -201,20 +201,20 @@ const ConciliacionBancaria = ({ empresaId }) => {
             </div>
 
             <div className="space-y-3">
-              <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] px-2 flex items-center gap-2">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] px-2 flex items-center gap-2">
                 <ArrowDownRight className="h-3.5 w-3.5" /> Facturas sin pago en banco ({facturasPend.length})
               </h4>
-              <div className="bg-black/20 rounded-2xl p-2 border border-white/5 min-h-[300px]">
+              <div className="bg-slate-50 rounded-2xl p-2 border border-[#efe8dd] min-h-[300px]">
                 {facturasPend.length ? facturasPend.map((f, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 hover:bg-white/5 rounded-xl">
+                  <div key={i} className="flex items-center justify-between p-3 hover:bg-slate-100 rounded-xl">
                     <div className="min-w-0">
-                      <p className="text-xs text-white font-bold truncate uppercase">#{f.folio} · {f.razon_social || f.rut_cliente || 'Cliente'}</p>
-                      <p className="text-[9px] text-gray-500 mt-0.5">{formatFecha(f.fecha_emision)}</p>
+                      <p className="text-xs text-slate-900 font-bold truncate uppercase">#{f.folio} · {f.razon_social || f.rut_cliente || 'Cliente'}</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5">{formatFecha(f.fecha_emision)}</p>
                     </div>
-                    <span className="text-sm font-black text-blue-400 font-mono">{formatCLP(f.total)}</span>
+                    <span className="text-sm font-black text-blue-600 font-mono">{formatCLP(f.total)}</span>
                   </div>
                 )) : (
-                  <div className="h-56 flex flex-col items-center justify-center text-gray-600">
+                  <div className="h-56 flex flex-col items-center justify-center text-slate-400">
                     <FileWarning className="h-10 w-10 mb-2 opacity-20" />
                     <p className="text-[10px] font-black uppercase tracking-widest">Sin facturas pendientes</p>
                   </div>

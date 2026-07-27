@@ -447,7 +447,7 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(val) => !isSubmitting && setIsOpen(val)}>
-      <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-white/10 text-white overflow-visible p-0 shadow-2xl">
+      <DialogContent className="sm:max-w-[800px] bg-slate-50 border-[#efe8dd] text-slate-700 overflow-visible p-0 shadow-2xl">
         
         {(isSubmitting || isFinished) && (
           <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-zinc-950/95 backdrop-blur-md rounded-lg">
@@ -456,11 +456,11 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
                 <div className="relative">
                   <Loader2 className="h-16 w-16 animate-spin text-emerald-500 opacity-20" />
                   <Loader2 className="h-16 w-16 animate-spin text-emerald-500 absolute top-0 left-0" style={{ animationDirection: 'reverse', animationDuration: '3s' }} />
-                  <Receipt className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-emerald-400 h-6 w-6 animate-pulse" />
+                  <Receipt className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-emerald-600 h-6 w-6 animate-pulse" />
                 </div>
                 <div className="text-center">
-                  <h3 className="text-xl font-black uppercase tracking-widest animate-pulse text-emerald-400">INYECTANDO EXENTA...</h3>
-                  <p className="text-sm text-gray-400 font-mono mt-1">Conectando con el SII a través de Puppeteer</p>
+                  <h3 className="text-xl font-black uppercase tracking-widest animate-pulse text-emerald-600">INYECTANDO EXENTA...</h3>
+                  <p className="text-sm text-slate-500 font-mono mt-1">Conectando con el SII a través de Puppeteer</p>
                 </div>
               </div>
             ) : (
@@ -468,7 +468,7 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
                 <CheckCircle2 className="h-24 w-24 text-emerald-500" />
                 <div>
                   <h3 className="text-3xl font-black uppercase italic tracking-tighter mb-1">¡Proceso Finalizado!</h3>
-                  <p className="font-mono text-xl text-emerald-400 font-bold">Folio N° {folioGenerado}</p>
+                  <p className="font-mono text-xl text-emerald-600 font-bold">Folio N° {folioGenerado}</p>
                 </div>
                 <Button onClick={() => setIsOpen(false)} className="bg-emerald-600 hover:bg-emerald-700 w-full mt-4 rounded-xl font-black uppercase tracking-widest h-14">
                   Volver al CRM
@@ -488,15 +488,15 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
                   </div>
                   <div>
                     <DialogTitle className="text-2xl font-black italic uppercase tracking-tighter leading-none">{DOC_CONFIG.title}</DialogTitle>
-                    <DialogDescription className="text-gray-500 text-[10px] uppercase font-bold tracking-[0.2em] mt-1">{DOC_CONFIG.code} • {DOC_CONFIG.description}</DialogDescription>
+                    <DialogDescription className="text-slate-400 text-[10px] uppercase font-bold tracking-[0.2em] mt-1">{DOC_CONFIG.code} • {DOC_CONFIG.description}</DialogDescription>
                   </div>
                 </div>
               </div>
             </DialogHeader>
 
-            <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 mb-4">
-              <button onClick={() => !isSubmitting && setActiveTab(TABS.UNICA)} disabled={isBulkSubmitting} className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${activeTab === TABS.UNICA ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-gray-400 hover:text-white'}`}> Individual </button>
-              <button onClick={() => !isSubmitting && setActiveTab(TABS.MASIVA)} disabled={isSubmitting && !isBulkSubmitting} className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${activeTab === TABS.MASIVA ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-gray-400 hover:text-white'}`}> Masiva (CSV) </button>
+            <div className="flex bg-slate-50 p-1 rounded-xl border border-[#efe8dd] mb-4">
+              <button onClick={() => !isSubmitting && setActiveTab(TABS.UNICA)} disabled={isBulkSubmitting} className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${activeTab === TABS.UNICA ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-500 hover:text-slate-900'}`}> Individual </button>
+              <button onClick={() => !isSubmitting && setActiveTab(TABS.MASIVA)} disabled={isSubmitting && !isBulkSubmitting} className={`flex-1 py-2.5 text-xs font-black uppercase tracking-widest rounded-lg transition-all ${activeTab === TABS.MASIVA ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-500 hover:text-slate-900'}`}> Masiva (CSV) </button>
             </div>
           </div>
 
@@ -505,26 +505,26 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
               <>
                 <div className="space-y-4">
                   <div className="relative z-50">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Buscador Inteligente</Label>
+                    <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 block">Buscador Inteligente</Label>
                     <div className="relative flex items-center">
                       <Search className="absolute left-4 text-emerald-500" size={18} />
-                      <Input value={searchTerm} onChange={handleSearchChange} placeholder="Escribe el RUT o Nombre de la empresa..." className="h-14 pl-12 bg-black/50 border-emerald-500/30 text-white placeholder:text-gray-600 text-lg rounded-xl focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.1)] transition-all" />
-                      {isLoadingCrm && <Loader2 className="absolute right-4 animate-spin text-gray-500" size={18} />}
+                      <Input value={searchTerm} onChange={handleSearchChange} placeholder="Escribe el RUT o Nombre de la empresa..." className="h-14 pl-12 bg-slate-50 border-emerald-500/30 text-slate-700 placeholder:text-slate-400 text-lg rounded-xl focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.1)] transition-all" />
+                      {isLoadingCrm && <Loader2 className="absolute right-4 animate-spin text-slate-400" size={18} />}
                     </div>
 
                     {showSuggestions && searchTerm.length >= 2 && (
-                      <div className="absolute top-full left-0 right-0 mt-2 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-slate-50 border border-[#efe8dd] rounded-xl shadow-2xl overflow-hidden z-50">
                         {filteredSuggestions.map((c, i) => (
-                          <div key={i} onClick={() => onSelectCliente(c)} className="p-4 hover:bg-white/5 cursor-pointer border-b border-white/5 flex justify-between items-center group transition-all">
+                          <div key={i} onClick={() => onSelectCliente(c)} className="p-4 hover:bg-slate-100 cursor-pointer border-b border-[#efe8dd] flex justify-between items-center group transition-all">
                             <div>
-                              <div className="font-bold text-sm text-gray-200 group-hover:text-emerald-400 transition-colors">{c.razon_social || c.razonSocial}</div>
-                              <div className="text-xs text-gray-500 font-mono mt-1 tracking-widest">{formatRutSimple(c.rut_encrypted || c.rut)}</div>
+                              <div className="font-bold text-sm text-slate-700 group-hover:text-emerald-600 transition-colors">{c.razon_social || c.razonSocial}</div>
+                              <div className="text-xs text-slate-400 font-mono mt-1 tracking-widest">{formatRutSimple(c.rut_encrypted || c.rut)}</div>
                             </div>
                             <CheckCircle2 size={16} className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-all" />
                           </div>
                         ))}
                         {searchTerm.length >= 3 && (
-                          <button type="button" onMouseDown={handleForzarEmpresa} className="w-full p-4 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border-t border-white/5 transition-all">
+                          <button type="button" onMouseDown={handleForzarEmpresa} className="w-full p-4 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border-t border-[#efe8dd] transition-all">
                             <UserPlus size={16} /> Registrar Empresa Externa
                           </button>
                         )}
@@ -532,21 +532,21 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-4 bg-black/30 rounded-xl border border-white/5">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-4 bg-slate-50 rounded-xl border border-[#efe8dd]">
                     <div>
-                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Razón Social</p>
-                      <p className={`text-sm font-black truncate ${empresaEfectiva ? 'text-white' : 'text-gray-700'}`}>{razonSocialSegura}</p>
+                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Razón Social</p>
+                      <p className={`text-sm font-black truncate ${empresaEfectiva ? 'text-slate-700' : 'text-slate-600'}`}>{razonSocialSegura}</p>
                     </div>
                     <div>
-                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">RUT Receptor</p>
-                      <p className={`text-sm font-mono font-bold ${empresaEfectiva ? 'text-emerald-400' : 'text-gray-700'}`}>{item.rutFacturar || '---'}</p>
+                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">RUT Receptor</p>
+                      <p className={`text-sm font-mono font-bold ${empresaEfectiva ? 'text-emerald-600' : 'text-slate-600'}`}>{item.rutFacturar || '---'}</p>
                     </div>
                     <div>
-                      <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-1 mb-1"><Mail size={10} /> Correo Receptor</p>
+                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest flex items-center gap-1 mb-1"><Mail size={10} /> Correo Receptor</p>
                       {isExternal ? (
-                        <Input placeholder="email@..." value={item.contactoReceptor} onChange={(e) => setItem({...item, contactoReceptor: e.target.value})} className="h-8 text-xs bg-black/50 border-white/10" />
+                        <Input placeholder="email@..." value={item.contactoReceptor} onChange={(e) => setItem({...item, contactoReceptor: e.target.value})} className="h-8 text-xs bg-slate-50 border-[#efe8dd]" />
                       ) : (
-                        <p className={`text-sm font-medium truncate ${empresaEfectiva ? 'text-gray-300' : 'text-gray-700'}`}>{item.contactoReceptor || '---'}</p>
+                        <p className={`text-sm font-medium truncate ${empresaEfectiva ? 'text-slate-600' : 'text-slate-600'}`}>{item.contactoReceptor || '---'}</p>
                       )}
                     </div>
                   </div>
@@ -554,19 +554,19 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
 
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
                   <div className="md:col-span-1 space-y-2">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Plan / Servicio</Label>
-                    <Input value={item.name} onChange={(e) => setItem({ ...item, name: e.target.value })} className="h-12 bg-black/40 border-white/10 rounded-xl font-bold" />
+                    <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Plan / Servicio</Label>
+                    <Input value={item.name} onChange={(e) => setItem({ ...item, name: e.target.value })} className="h-12 bg-slate-50 border-[#efe8dd] rounded-xl font-bold" />
                   </div>
                   <div className="md:col-span-1 space-y-2">
-                    <Label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest ml-1">Monto Exento</Label>
+                    <Label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest ml-1">Monto Exento</Label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold">$</span>
-                      <Input type="number" value={item.precio} onChange={(e) => setItem({...item, precio: e.target.value})} className="pl-11 h-12 bg-black/40 border-white/10 rounded-xl font-mono text-lg font-bold text-emerald-500" />
+                      <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 font-bold">$</span>
+                      <Input type="number" value={item.precio} onChange={(e) => setItem({...item, precio: e.target.value})} className="pl-11 h-12 bg-slate-50 border-[#efe8dd] rounded-xl font-mono text-lg font-bold text-emerald-500" />
                     </div>
                   </div>
                   <div className="md:col-span-2 space-y-2">
-                    <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Observaciones / Mes</Label>
-                    <Input value={item.descripcionProducto} onChange={(e) => setItem({ ...item, descripcionProducto: e.target.value })} className="h-12 bg-black/40 border-white/10 rounded-xl" placeholder="Ej: Servicios correspondientes a..." />
+                    <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Observaciones / Mes</Label>
+                    <Input value={item.descripcionProducto} onChange={(e) => setItem({ ...item, descripcionProducto: e.target.value })} className="h-12 bg-slate-50 border-[#efe8dd] rounded-xl" placeholder="Ej: Servicios correspondientes a..." />
                   </div>
                 </div>
               </>
@@ -577,17 +577,17 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
                 {progresoRobot.activo && (
                   <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-xl p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <Loader2 className="animate-spin text-emerald-400" size={24}/>
+                      <Loader2 className="animate-spin text-emerald-600" size={24}/>
                       <div>
-                        <h4 className="text-emerald-400 font-black tracking-widest text-xs">EMITIENDO EXENTAS...</h4>
-                        <p className="text-[10px] text-gray-400 uppercase mt-0.5">RUT: <span className="text-white">{progresoRobot.rutActual || "Cargando..."}</span></p>
+                        <h4 className="text-emerald-600 font-black tracking-widest text-xs">EMITIENDO EXENTAS...</h4>
+                        <p className="text-[10px] text-slate-500 uppercase mt-0.5">RUT: <span className="text-slate-700">{progresoRobot.rutActual || "Cargando..."}</span></p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <p className="text-2xl font-black text-white italic tracking-tighter leading-none">{progresoRobot.actual} / {progresoRobot.total}</p>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                          Éxitos: <span className="text-emerald-400">{progresoRobot.exitos}</span> | Errores: <span className="text-red-400">{progresoRobot.errores}</span>
+                        <p className="text-2xl font-black text-slate-900 italic tracking-tighter leading-none">{progresoRobot.actual} / {progresoRobot.total}</p>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
+                          Éxitos: <span className="text-emerald-600">{progresoRobot.exitos}</span> | Errores: <span className="text-red-500">{progresoRobot.errores}</span>
                         </p>
                       </div>
                       <Button onClick={handleDetenerMasivo} variant="destructive" className="h-10 px-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-red-500/20 hover:bg-red-600 transition-all text-xs">
@@ -599,28 +599,28 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
 
                 <div className="flex gap-4 mb-3 flex-shrink-0">
                   <div className="flex-1 bg-emerald-900/10 border border-emerald-500/30 rounded-xl p-3 flex flex-col items-center justify-center border-dashed cursor-pointer hover:bg-emerald-900/20 transition-all" onClick={() => fileInputRef.current?.click()}>
-                    <UploadCloud size={20} className="text-emerald-400 mb-1" />
-                    <span className="text-[10px] font-bold text-white uppercase tracking-widest">Subir Excel / CSV</span>
+                    <UploadCloud size={20} className="text-emerald-600 mb-1" />
+                    <span className="text-[10px] font-bold text-slate-900 uppercase tracking-widest">Subir Excel / CSV</span>
                     <Input ref={fileInputRef} type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" disabled={isBulkSubmitting}/>
                   </div>
-                  <div className="flex-1 bg-zinc-900/50 border border-white/10 rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all" onClick={addEmptyRow}>
-                    <Plus size={20} className="text-gray-400 mb-1" />
-                    <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Añadir Fila Manual</span>
+                  <div className="flex-1 bg-slate-50/50 border border-[#efe8dd] rounded-xl p-3 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100 transition-all" onClick={addEmptyRow}>
+                    <Plus size={20} className="text-slate-500 mb-1" />
+                    <span className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Añadir Fila Manual</span>
                   </div>
                 </div>
 
                 {bulkRows.length > 0 && (
-                  <div className="flex-1 flex flex-col overflow-hidden bg-black/40 rounded-xl border border-white/5 relative">
+                  <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 rounded-xl border border-[#efe8dd] relative">
                     <div className="overflow-x-auto flex-1 custom-scrollbar pb-16">
                       <table className="w-full text-left min-w-[800px]">
-                        <thead className="bg-white/5 border-b border-white/10">
+                        <thead className="bg-slate-50 border-b border-[#efe8dd]">
                           <tr>
                             <th className="px-4 py-3 text-[10px] font-black text-emerald-500 uppercase tracking-widest whitespace-nowrap"><Search size={10} className="inline mr-1"/> CRM</th>
-                            <th className="px-4 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">RUT / Cliente</th>
-                            <th className="px-4 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Correo</th>
-                            <th className="px-4 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Concepto</th>
-                            <th className="px-4 py-3 text-[10px] font-black text-emerald-400 uppercase tracking-widest whitespace-nowrap text-right">Exento</th>
-                            <th className="px-4 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center whitespace-nowrap">Acción</th>
+                            <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">RUT / Cliente</th>
+                            <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Correo</th>
+                            <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Concepto</th>
+                            <th className="px-4 py-3 text-[10px] font-black text-emerald-600 uppercase tracking-widest whitespace-nowrap text-right">Exento</th>
+                            <th className="px-4 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest text-center whitespace-nowrap">Acción</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5 relative">
@@ -628,29 +628,29 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
                             const absoluteIndex = (currentPage - 1) * ROWS_PER_PAGE + index;
                             const isOmitted = row.estado === 'omitir';
                             return (
-                              <tr key={row.index || absoluteIndex} className={`group transition-all ${activeRowIndex === absoluteIndex ? 'bg-white/5 z-50 relative' : 'hover:bg-white/[0.04] z-0 relative'} ${isOmitted ? 'opacity-40 grayscale' : ''}`}>
+                              <tr key={row.index || absoluteIndex} className={`group transition-all ${activeRowIndex === absoluteIndex ? 'bg-slate-50 z-50 relative' : 'hover:bg-slate-50 z-0 relative'} ${isOmitted ? 'opacity-40 grayscale' : ''}`}>
                                 <td className={`px-4 py-1.5 relative ${activeRowIndex === absoluteIndex ? 'z-50' : 'z-0'}`}>
                                   <div className="flex items-center gap-2">
-                                    <Search size={12} className={`absolute left-6 transition-colors z-20 ${activeRowIndex === absoluteIndex ? 'text-emerald-400' : 'text-gray-500'}`} />
-                                    <Input value={row.searchQuery !== undefined ? row.searchQuery : row.rut} onChange={(e) => handleBulkSearchChange(absoluteIndex, e.target.value)} onFocus={() => setActiveRowIndex(absoluteIndex)} onBlur={() => setTimeout(() => setActiveRowIndex(null), 250)} className={`h-9 pl-7 bg-black/40 border-white/10 hover:border-white/30 focus:bg-black/80 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 text-[10px] font-bold rounded-lg shadow-none uppercase transition-all relative z-10 ${activeRowIndex === absoluteIndex ? 'text-emerald-300' : 'text-gray-300 font-mono'}`} placeholder="BUSCAR..." disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted} />
+                                    <Search size={12} className={`absolute left-6 transition-colors z-20 ${activeRowIndex === absoluteIndex ? 'text-emerald-600' : 'text-slate-400'}`} />
+                                    <Input value={row.searchQuery !== undefined ? row.searchQuery : row.rut} onChange={(e) => handleBulkSearchChange(absoluteIndex, e.target.value)} onFocus={() => setActiveRowIndex(absoluteIndex)} onBlur={() => setTimeout(() => setActiveRowIndex(null), 250)} className={`h-9 pl-7 bg-slate-50 border-[#efe8dd] hover:border-[#e5ddd0] focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 text-[10px] font-bold rounded-lg shadow-none uppercase transition-all relative z-10 ${activeRowIndex === absoluteIndex ? 'text-emerald-700' : 'text-slate-600 font-mono'}`} placeholder="BUSCAR..." disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted} />
                                   </div>
                                   {activeRowIndex === absoluteIndex && (row.searchQuery || row.rut)?.length >= 2 && !isOmitted && (
-                                    <div className="absolute top-[calc(100%+4px)] left-4 w-[300px] bg-zinc-800 border border-emerald-500/30 rounded-lg shadow-2xl overflow-hidden z-[999]">
+                                    <div className="absolute top-[calc(100%+4px)] left-4 w-[300px] bg-slate-100 border border-emerald-500/30 rounded-lg shadow-2xl overflow-hidden z-[999]">
                                       {allClientes.filter(c => cleanStr(c.razon_social||c.razonSocial).includes(cleanStr(row.searchQuery||row.rut)) || cleanRut(c.rut_encrypted||c.rut).includes(cleanRut(row.searchQuery||row.rut))).slice(0, 4).map((c, i) => (
-                                        <div key={i} onMouseDown={() => applyClientToRow(absoluteIndex, c)} className="px-4 py-2.5 hover:bg-emerald-500/20 cursor-pointer border-b border-white/5 text-left group/item flex flex-col">
-                                          <span className="font-bold text-xs text-white uppercase group-hover/item:text-emerald-400">{formatData(c.razon_social||c.razonSocial)}</span>
+                                        <div key={i} onMouseDown={() => applyClientToRow(absoluteIndex, c)} className="px-4 py-2.5 hover:bg-emerald-500/20 cursor-pointer border-b border-[#efe8dd] text-left group/item flex flex-col">
+                                          <span className="font-bold text-xs text-slate-900 uppercase group-hover/item:text-emerald-600">{formatData(c.razon_social||c.razonSocial)}</span>
                                           <span className="text-[10px] font-mono text-emerald-500/70">{formatRutSimple(c.rut_encrypted||c.rut)}</span>
                                         </div>
                                       ))}
                                     </div>
                                   )}
                                 </td>
-                                <td className="px-3 py-1.5"><Input value={row.rut} readOnly className="h-9 bg-transparent border-transparent text-[10px] font-mono font-bold text-emerald-400 rounded-lg shadow-none uppercase transition-all" /></td>
-                                <td className="px-3 py-1.5"><Input value={row.contacto} onChange={(e) => updateBulkRow(absoluteIndex, 'contacto', e.target.value)} className="h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-emerald-500 text-[9px] font-medium text-gray-300 rounded-lg" placeholder="EMAIL@..." disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted} /></td>
-                                <td className="px-3 py-1.5"><Input value={formatData(row.plan)} onChange={(e) => updateBulkRow(absoluteIndex, 'plan', e.target.value)} className="h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-emerald-500 text-[9px] font-bold text-gray-300 rounded-lg" placeholder="CONCEPTO" disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted} /></td>
-                                <td className="px-3 py-1.5 text-right"><Input value={row.precio} onChange={(e) => updateBulkRow(absoluteIndex, 'precio', e.target.value)} className="h-9 w-20 ml-auto bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-emerald-500 text-[11px] font-mono font-bold text-emerald-400 text-right rounded-lg" placeholder="0" disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted} /></td>
+                                <td className="px-3 py-1.5"><Input value={row.rut} readOnly className="h-9 bg-transparent border-transparent text-[10px] font-mono font-bold text-emerald-600 rounded-lg shadow-none uppercase transition-all" /></td>
+                                <td className="px-3 py-1.5"><Input value={row.contacto} onChange={(e) => updateBulkRow(absoluteIndex, 'contacto', e.target.value)} className="h-9 bg-transparent border-transparent hover:border-[#efe8dd] focus:bg-slate-50 focus:border-emerald-500 text-[9px] font-medium text-slate-600 rounded-lg" placeholder="EMAIL@..." disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted} /></td>
+                                <td className="px-3 py-1.5"><Input value={formatData(row.plan)} onChange={(e) => updateBulkRow(absoluteIndex, 'plan', e.target.value)} className="h-9 bg-transparent border-transparent hover:border-[#efe8dd] focus:bg-slate-50 focus:border-emerald-500 text-[9px] font-bold text-slate-600 rounded-lg" placeholder="CONCEPTO" disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted} /></td>
+                                <td className="px-3 py-1.5 text-right"><Input value={row.precio} onChange={(e) => updateBulkRow(absoluteIndex, 'precio', e.target.value)} className="h-9 w-20 ml-auto bg-transparent border-transparent hover:border-[#efe8dd] focus:bg-slate-50 focus:border-emerald-500 text-[11px] font-mono font-bold text-emerald-600 text-right rounded-lg" placeholder="0" disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted} /></td>
                                 <td className="px-4 py-1.5 text-center">
-                                  {row.estado === 'completado' ? <CheckCircle2 className="text-emerald-500 inline" size={18} /> : row.estado === 'procesando' ? <Loader2 className="animate-spin text-blue-400 inline" size={18} /> : <button onClick={() => toggleSkipRow(absoluteIndex)} disabled={isBulkSubmitting} className={`p-1.5 rounded-md transition-all ${isOmitted ? 'bg-gray-500/20 text-gray-500 hover:text-white' : 'bg-red-500/10 text-red-500 hover:bg-red-500/20'}`} title={isOmitted ? "Activar" : "Omitir"}><X size={14} className={isOmitted ? 'rotate-45 transition-transform' : 'transition-transform'} /></button>}
+                                  {row.estado === 'completado' ? <CheckCircle2 className="text-emerald-500 inline" size={18} /> : row.estado === 'procesando' ? <Loader2 className="animate-spin text-blue-600 inline" size={18} /> : <button onClick={() => toggleSkipRow(absoluteIndex)} disabled={isBulkSubmitting} className={`p-1.5 rounded-md transition-all ${isOmitted ? 'bg-gray-500/20 text-slate-400 hover:text-slate-900' : 'bg-red-500/10 text-red-500 hover:bg-red-500/20'}`} title={isOmitted ? "Activar" : "Omitir"}><X size={14} className={isOmitted ? 'rotate-45 transition-transform' : 'transition-transform'} /></button>}
                                 </td>
                               </tr>
                             );
@@ -659,15 +659,15 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
                       </table>
                     </div>
 
-                    <div className="absolute bottom-0 left-0 right-0 h-14 bg-zinc-950/90 border-t border-white/5 flex items-center justify-between px-4 z-40">
-                      <span className="text-[10px] text-gray-400 uppercase font-black tracking-widest">
-                        Total Filas: <span className="text-white">{bulkRows.length}</span> | Activas: <span className="text-emerald-400">{bulkRows.filter(r => r.estado === 'pendiente').length}</span>
+                    <div className="absolute bottom-0 left-0 right-0 h-14 bg-zinc-950/90 border-t border-[#efe8dd] flex items-center justify-between px-4 z-40">
+                      <span className="text-[10px] text-slate-500 uppercase font-black tracking-widest">
+                        Total Filas: <span className="text-slate-700">{bulkRows.length}</span> | Activas: <span className="text-emerald-600">{bulkRows.filter(r => r.estado === 'pendiente').length}</span>
                       </span>
                       {totalPages > 1 && (
                         <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" onClick={goToPrevPage} disabled={currentPage === 1 || isBulkSubmitting} className="bg-black/40 border-white/10 text-white hover:bg-white/10 h-7 text-[10px] px-3"><ChevronLeft size={14} className="mr-1"/> Ant</Button>
-                          <span className="text-[10px] font-mono text-gray-400">Pág {currentPage} de {totalPages}</span>
-                          <Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages || isBulkSubmitting} className="bg-black/40 border-white/10 text-white hover:bg-white/10 h-7 text-[10px] px-3">Sig <ChevronRight size={14} className="ml-1"/></Button>
+                          <Button variant="outline" size="sm" onClick={goToPrevPage} disabled={currentPage === 1 || isBulkSubmitting} className="bg-slate-50 border-[#efe8dd] text-slate-700 hover:bg-slate-100 h-7 text-[10px] px-3"><ChevronLeft size={14} className="mr-1"/> Ant</Button>
+                          <span className="text-[10px] font-mono text-slate-500">Pág {currentPage} de {totalPages}</span>
+                          <Button variant="outline" size="sm" onClick={goToNextPage} disabled={currentPage === totalPages || isBulkSubmitting} className="bg-slate-50 border-[#efe8dd] text-slate-700 hover:bg-slate-100 h-7 text-[10px] px-3">Sig <ChevronRight size={14} className="ml-1"/></Button>
                         </div>
                       )}
                     </div>
@@ -677,14 +677,14 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
             )}
           </div>
 
-          <div className="flex gap-4 pt-4 mt-2 border-t border-white/5 flex-shrink-0 relative z-20">
-            <Button type="button" onClick={() => setIsOpen(false)} className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 uppercase font-black text-[11px] tracking-widest h-10 rounded-xl transition-all">Cerrar</Button>
+          <div className="flex gap-4 pt-4 mt-2 border-t border-[#efe8dd] flex-shrink-0 relative z-20">
+            <Button type="button" onClick={() => setIsOpen(false)} className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-500 uppercase font-black text-[11px] tracking-widest h-10 rounded-xl transition-all">Cerrar</Button>
             {activeTab === TABS.UNICA ? (
-              <Button onClick={handleSubmitUnica} disabled={!empresaEfectiva || isSubmitting} className="flex-[2] bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-emerald-600/20 transition-all">
+              <Button onClick={handleSubmitUnica} disabled={!empresaEfectiva || isSubmitting} className="flex-[2] bg-emerald-600 hover:bg-emerald-500 text-slate-900 font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-emerald-600/20 transition-all">
                 {isSubmitting ? 'Procesando...' : 'Emitir Exenta Individual'}
               </Button>
             ) : (
-              <Button onClick={handleBulkSubmit} disabled={isBulkSubmitting || bulkRows.filter(r => r.estado === 'pendiente').length === 0} className="flex-[2] bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-emerald-600/20 transition-all">
+              <Button onClick={handleBulkSubmit} disabled={isBulkSubmitting || bulkRows.filter(r => r.estado === 'pendiente').length === 0} className="flex-[2] bg-emerald-600 hover:bg-emerald-500 text-slate-900 font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-emerald-600/20 transition-all">
                 {isBulkSubmitting ? 'Emitiendo en Lote...' : 'Iniciar Motor Masivo'}
               </Button>
             )}

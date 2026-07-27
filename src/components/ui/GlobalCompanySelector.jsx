@@ -27,9 +27,9 @@ const GlobalCompanySelector = () => {
         <div className="relative">
             <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className={`flex items-center gap-2 bg-[#0f172a]/90 border border-white/10 text-white text-xs font-black uppercase px-4 py-2 rounded-xl hover:bg-[#1e293b] transition-all w-64 shadow-lg ${!selectedCompany ? 'border-dashed border-blue-500' : ''}`}
+                className={`flex items-center gap-2 bg-white border border-[#e5ddd0] text-slate-700 text-xs font-black uppercase px-4 py-2 rounded-xl hover:bg-slate-50 transition-all w-64 shadow-sm ${!selectedCompany ? 'border-dashed border-[#199b4d]' : ''}`}
             >
-                <Building2 size={14} className={selectedCompany ? "text-emerald-400" : "text-gray-500"} />
+                <Building2 size={14} className={selectedCompany ? "text-[#199b4d]" : "text-slate-400"} />
                 <span className="truncate flex-1 text-left">
                     {selectedCompany ? (selectedCompany.razon_social || selectedCompany.razonSocial) : etiquetaPrincipal}
                 </span>
@@ -39,14 +39,14 @@ const GlobalCompanySelector = () => {
             {isOpen && (
                 <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-                    <div className="absolute top-full right-0 mt-2 w-72 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl p-2 z-50">
+                    <div className="absolute top-full right-0 mt-2 w-72 bg-white border border-[#e5ddd0] rounded-xl shadow-xl shadow-black/[0.08] p-2 z-50">
                         <div className="p-2">
-                            <input 
+                            <input
                                 autoFocus
                                 placeholder="Buscar empresa..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none"
+                                className="w-full bg-white border border-[#e5ddd0] rounded-lg p-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#199b4d]"
                             />
                         </div>
                         
@@ -58,7 +58,7 @@ const GlobalCompanySelector = () => {
                                     localStorage.removeItem('selectedCompany');
                                     setIsOpen(false);
                                 }}
-                                className="w-full text-left px-4 py-2 text-xs text-blue-400 hover:bg-white/5 rounded-lg border-b border-white/5 font-bold uppercase tracking-widest"
+                                className="w-full text-left px-4 py-2 text-xs text-[#199b4d] hover:bg-slate-100 rounded-lg border-b border-[#efe8dd] font-bold uppercase tracking-widest"
                             >
                                 {etiquetaPrincipal}
                             </button>
@@ -72,10 +72,10 @@ const GlobalCompanySelector = () => {
                                         localStorage.setItem('selectedCompany', JSON.stringify(c));
                                         setIsOpen(false);
                                     }}
-                                    className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-white/5 rounded-lg flex items-center justify-between"
+                                    className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-100 rounded-lg flex items-center justify-between"
                                 >
                                     {c.razon_social || c.razonSocial}
-                                    {selectedCompany?.id === c.id && <CheckCircle2 size={12} className="text-emerald-400" />}
+                                    {selectedCompany?.id === c.id && <CheckCircle2 size={12} className="text-[#199b4d]" />}
                                 </button>
                             ))}
                         </div>

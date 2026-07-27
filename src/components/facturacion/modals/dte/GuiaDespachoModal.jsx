@@ -200,15 +200,15 @@ export default function GuiaDespachoModal({ isOpen, setIsOpen }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(val) => { if(!isSubmitting) setIsOpen(val); }}>
-      <DialogContent className="sm:max-w-[650px] bg-zinc-900 border-white/10 text-white">
+      <DialogContent className="sm:max-w-[650px] bg-slate-50 border-[#efe8dd] text-slate-700">
         {(isSubmitting || isFinished) && (
           <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-zinc-950/95 backdrop-blur-sm animate-in fade-in duration-300 pointer-events-auto">
             <div className="flex flex-col items-center gap-6 p-10 text-center w-full max-w-sm">
               
               {isSubmitting ? (
                 <>
-                  <span className="h-16 w-16 animate-spin rounded-full border-4 border-white/10 border-t-blue-500" />
-                  <h3 className="text-xl font-bold text-white">Firmando con el SII...</h3>
+                  <span className="h-16 w-16 animate-spin rounded-full border-4 border-[#efe8dd] border-t-blue-500" />
+                  <h3 className="text-xl font-bold text-slate-900">Firmando con el SII...</h3>
                 </>
               ) : (
                 <>
@@ -217,7 +217,7 @@ export default function GuiaDespachoModal({ isOpen, setIsOpen }) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <h3 className="text-2xl font-bold text-white uppercase italic tracking-tighter">¡Guía Emitida!</h3>
+                  <h3 className="text-2xl font-bold text-slate-900 uppercase italic tracking-tighter">¡Guía Emitida!</h3>
                   
                   <div className="flex flex-col gap-3 w-full">
                     <a 
@@ -225,7 +225,7 @@ export default function GuiaDespachoModal({ isOpen, setIsOpen }) {
                       download={downloadInfo?.archivo}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center w-full h-12 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all bg-blue-600 rounded-xl hover:bg-blue-700 active:scale-95 shadow-lg shadow-blue-900/20 cursor-pointer"
+                      className="flex items-center justify-center w-full h-12 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white transition-all bg-blue-600 rounded-xl hover:bg-blue-700 active:scale-95 shadow-lg shadow-emerald-900/20 cursor-pointer"
                     >
                       Descargar Guía PDF
                     </a>
@@ -233,7 +233,7 @@ export default function GuiaDespachoModal({ isOpen, setIsOpen }) {
                     <Button 
                       variant="ghost" 
                       onClick={() => { resetForm(); setIsOpen(false); }} 
-                      className="text-gray-500 font-bold uppercase text-[10px] tracking-widest hover:text-white"
+                      className="text-slate-400 font-bold uppercase text-[10px] tracking-widest hover:text-slate-900"
                     >
                       Finalizar Operación
                     </Button>
@@ -254,7 +254,7 @@ export default function GuiaDespachoModal({ isOpen, setIsOpen }) {
             </div>
 
              {showTransporte && (
-                <div className="md:col-span-2 mt-2 p-4 bg-white/5 rounded-lg border border-white/10 space-y-4">
+                <div className="md:col-span-2 mt-2 p-4 bg-slate-50 rounded-lg border border-[#efe8dd] space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> 
                     <div className="space-y-2">
                       <Label htmlFor="transporte_rut">RUT Transporte</Label>
@@ -355,10 +355,10 @@ export default function GuiaDespachoModal({ isOpen, setIsOpen }) {
                   value={item.traslado} 
                   onValueChange={(val) => setItem({...item, traslado: val})}
                 >
-                  <SelectTrigger className="border-white/10">
+                  <SelectTrigger className="border-[#efe8dd]">
                     <SelectValue placeholder="Seleccione método" />
                   </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 text-white">
+                  <SelectContent className="bg-slate-50 text-slate-700">
                     <SelectItem value="1">Operación constituye venta</SelectItem>
                     <SelectItem value="2">Ventas por efectuar</SelectItem>
                     <SelectItem value="3">Consignaciones</SelectItem>
@@ -390,7 +390,7 @@ export default function GuiaDespachoModal({ isOpen, setIsOpen }) {
             </div>
 
             {showTransporte && (
-              <div className="md:col-span-2 mt-2 p-4 bg-white/5 rounded-lg border border-white/10 space-y-4">
+              <div className="md:col-span-2 mt-2 p-4 bg-slate-50 rounded-lg border border-[#efe8dd] space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="transporte_rut">RUT Transporte</Label>
@@ -431,20 +431,20 @@ export default function GuiaDespachoModal({ isOpen, setIsOpen }) {
               </div>
             )}
 
-            <div className="p-4 bg-white/5 rounded-lg border border-white/10 space-y-1 mt-2">
+            <div className="p-4 bg-slate-50 rounded-lg border border-[#efe8dd] space-y-1 mt-2">
               <div className="flex justify-between text-sm text-zinc-400">
                 <span>Neto:</span>
                 <span>${totalNeto.toLocaleString("es-CL")}</span>
               </div>
-              <div className="flex justify-between text-xl font-bold pt-2 border-t border-white/10">
+              <div className="flex justify-between text-xl font-bold pt-2 border-t border-[#efe8dd]">
                 <span>Total DTE:</span>
-                <span className="text-blue-400">${total.toLocaleString("es-CL")}</span>
+                <span className="text-blue-600">${total.toLocaleString("es-CL")}</span>
               </div>
             </div>
 
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>Cancelar</Button>
-              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Emitir Guía</Button>
+              <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700">Emitir Guía</Button>
             </DialogFooter>
           </form>
         </div>

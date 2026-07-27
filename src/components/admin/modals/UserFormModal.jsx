@@ -185,55 +185,55 @@ const UserFormModal = ({ isOpen, onClose, onSave, user, companies = [] }) => {
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            className="relative bg-white border border-[#efe8dd] rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
           >
-            <div className="p-6 border-b border-white/5 bg-white/5 flex items-center justify-between shrink-0">
+            <div className="p-6 border-b border-[#efe8dd] bg-slate-50 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-500/20 rounded-xl">
-                  <User className="h-5 w-5 text-blue-400" />
+                  <User className="h-5 w-5 text-blue-600" />
                 </div>
-                <h2 className="text-xl font-bold text-white uppercase italic tracking-tighter">
+                <h2 className="text-xl font-bold text-slate-900 uppercase italic tracking-tighter">
                   {user ? 'Editar Perfil' : 'Nuevo Usuario'}
                 </h2>
               </div>
-              <Button variant="ghost" size="icon" onClick={onClose} className="text-gray-400 hover:text-white rounded-full">
+              <Button variant="ghost" size="icon" onClick={onClose} className="text-slate-500 hover:text-slate-900 rounded-full">
                 <X className="h-5 w-5" />
               </Button>
             </div>
 
             <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1">
               
-              <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
-                <div className="text-xs font-bold text-white uppercase tracking-tighter">Estado de Cuenta</div>
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-[#efe8dd]">
+                <div className="text-xs font-bold text-slate-900 uppercase tracking-tighter">Estado de Cuenta</div>
                 <Switch checked={formData.activo} onCheckedChange={handleActiveChange} />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Nombre Completo</Label>
+                  <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Nombre Completo</Label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input 
                       name="nombre" 
                       value={formData.nombre} 
                       onChange={handleChange} 
                       required 
                       placeholder="Ej: Juan Pérez"
-                      className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-white" 
+                      className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700" 
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">RUT</Label>
+                  <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">RUT</Label>
                   <div className="relative">
-                    <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input 
                       name="rut" 
                       value={formData.rut} 
                       onChange={handleChange} 
                       required 
                       placeholder="12345678-9"
-                      className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-white font-mono uppercase" 
+                      className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700 font-mono uppercase" 
                     />
                   </div>
                 </div>
@@ -241,9 +241,9 @@ const UserFormModal = ({ isOpen, onClose, onSave, user, companies = [] }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Email</Label>
+                  <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Email</Label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input 
                       name="email" 
                       type="email" 
@@ -251,14 +251,14 @@ const UserFormModal = ({ isOpen, onClose, onSave, user, companies = [] }) => {
                       onChange={handleChange} 
                       required 
                       placeholder="ejemplo@vsv.cl"
-                      className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-white" 
+                      className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700" 
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Contraseña</Label>
+                  <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Contraseña</Label>
                   <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                     <Input 
                       name="clave" 
                       type={showPassword ? 'text' : 'password'}
@@ -267,12 +267,12 @@ const UserFormModal = ({ isOpen, onClose, onSave, user, companies = [] }) => {
                       required={!user} 
                       autoComplete="new-password"
                       placeholder={user ? "••••••••" : "Mínimo 8 caracteres"}
-                      className="pl-10 pr-10 bg-white/5 border-white/10 rounded-xl h-12 text-white" 
+                      className="pl-10 pr-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700" 
                     />
                     <button 
                       type="button" 
                       onClick={() => setShowPassword(!showPassword)} 
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900"
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
@@ -290,11 +290,11 @@ const UserFormModal = ({ isOpen, onClose, onSave, user, companies = [] }) => {
               )}
 
               <div className="space-y-3">
-                <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Rol en el Sistema</Label>
+                <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Rol en el Sistema</Label>
                 <RadioGroup value={formData.rol} onValueChange={handleRolChange} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { id: 'Consultor', icon: Briefcase, color: 'text-blue-400' },
-                    { id: 'Cliente', icon: User, color: 'text-emerald-400' }
+                    { id: 'Consultor', icon: Briefcase, color: 'text-blue-600' },
+                    { id: 'Cliente', icon: User, color: 'text-emerald-600' }
                   ].map(({ id, icon: RoleIcon, color }) => (
                     <div key={id} className="relative">
                       <RadioGroupItem value={id} id={id} className="sr-only" />
@@ -303,13 +303,13 @@ const UserFormModal = ({ isOpen, onClose, onSave, user, companies = [] }) => {
                         className={`flex items-center gap-4 rounded-2xl border p-4 cursor-pointer transition-all duration-200 ${
                           formData.rol === id 
                             ? 'border-blue-500 bg-blue-500/10 ring-1 ring-blue-500/50' 
-                            : 'border-white/10 bg-white/5 hover:border-white/20'
+                            : 'border-[#efe8dd] bg-slate-50 hover:border-[#efe8dd]'
                         }`}
                       >
-                        <div className={`p-2 rounded-lg ${formData.rol === id ? 'bg-blue-500/20' : 'bg-slate-800'}`}>
-                          <RoleIcon className={`h-5 w-5 ${formData.rol === id ? 'text-blue-400' : 'text-gray-500'}`} />
+                        <div className={`p-2 rounded-lg ${formData.rol === id ? 'bg-blue-500/20' : 'bg-slate-50'}`}>
+                          <RoleIcon className={`h-5 w-5 ${formData.rol === id ? 'text-blue-600' : 'text-slate-400'}`} />
                         </div>
-                        <span className={`text-sm font-bold uppercase tracking-tight ${formData.rol === id ? 'text-white' : 'text-gray-400'}`}>
+                        <span className={`text-sm font-bold uppercase tracking-tight ${formData.rol === id ? 'text-slate-700' : 'text-slate-500'}`}>
                           {id}
                         </span>
                       </Label>
@@ -319,16 +319,16 @@ const UserFormModal = ({ isOpen, onClose, onSave, user, companies = [] }) => {
               </div>
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between border-t border-white/5 pt-6">
-                  <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Empresas Asignadas</Label>
+                <div className="flex items-center justify-between border-t border-[#efe8dd] pt-6">
+                  <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Empresas Asignadas</Label>
                   <div className="relative w-40">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-gray-500" />
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
                     <input 
                       type="text" 
                       value={searchTerm} 
                       onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder="FILTRAR..." 
-                      className="w-full bg-white/5 border border-white/10 rounded-lg pl-7 py-1.5 text-[9px] text-white outline-none focus:border-blue-500 uppercase font-bold"
+                      className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg pl-7 py-1.5 text-[9px] text-slate-900 outline-none focus:border-emerald-500 uppercase font-bold"
                     />
                   </div>
                 </div>
@@ -340,19 +340,19 @@ const UserFormModal = ({ isOpen, onClose, onSave, user, companies = [] }) => {
                     return (
                       <div 
                         key={company.id} 
-                        className={`flex items-center space-x-3 p-3 rounded-xl border transition-all ${isSelected ? 'bg-blue-600/10 border-blue-500/30' : 'bg-white/5 border-white/5'}`}
+                        className={`flex items-center space-x-3 p-3 rounded-xl border transition-all ${isSelected ? 'bg-blue-600/10 border-blue-500/30' : 'bg-slate-50 border-[#efe8dd]'}`}
                       >
                         <Checkbox
                           id={`co-${company.id || company.empresa_id}`}
                           checked={formData.assignedCompanies.includes(String(company.id || company.empresa_id))}
                           onCheckedChange={() => handleCompanyChange(company.id || company.empresa_id)}
-                          className="data-[state=checked]:bg-blue-600 border-white/20"
+                          className="data-[state=checked]:bg-blue-600 border-[#efe8dd]"
                         />
                         <div className="flex flex-col flex-1 min-w-0 pointer-events-none">
-                          <span className={`text-[10px] font-bold uppercase truncate ${isSelected ? 'text-white' : 'text-gray-300'}`}>
+                          <span className={`text-[10px] font-bold uppercase truncate ${isSelected ? 'text-slate-700' : 'text-slate-600'}`}>
                             {company.razonSocial}
                           </span>
-                          <span className="text-[8px] font-mono text-gray-500">{cleanRut(company.rut || '')}</span>
+                          <span className="text-[8px] font-mono text-slate-400">{cleanRut(company.rut || '')}</span>
                         </div>
                       </div>
                     );
@@ -361,7 +361,7 @@ const UserFormModal = ({ isOpen, onClose, onSave, user, companies = [] }) => {
               </div>
             </form>
 
-            <div className="p-6 border-t border-white/5 bg-white/5 flex justify-end gap-3 shrink-0">
+            <div className="p-6 border-t border-[#efe8dd] bg-slate-50 flex justify-end gap-3 shrink-0">
               <Button type="button" variant="ghost" onClick={onClose} disabled={loading} className="uppercase text-[10px] font-black tracking-widest">
                 Cancelar
               </Button>
@@ -369,7 +369,7 @@ const UserFormModal = ({ isOpen, onClose, onSave, user, companies = [] }) => {
                 type="submit" 
                 onClick={handleSubmit}
                 disabled={loading} 
-                className="bg-blue-600 hover:bg-blue-500 text-white px-10 h-12 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 shadow-lg shadow-blue-900/20"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 h-12 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-900/20"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (user ? 'Guardar Cambios' : 'Registrar Usuario')}
               </Button>

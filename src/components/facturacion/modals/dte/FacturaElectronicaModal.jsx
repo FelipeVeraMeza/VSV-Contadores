@@ -904,7 +904,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(val) => { if (!isSubmitting && !isBulkSubmitting) setIsOpen(val); }}>
-      <DialogContent className={`w-full bg-[#0a0a0a] border-white/10 text-white overflow-hidden p-0 shadow-2xl flex flex-col transition-all duration-500 max-h-[95vh] ${
+      <DialogContent className={`w-full bg-white border-[#efe8dd] text-slate-700 overflow-hidden p-0 shadow-2xl flex flex-col transition-all duration-500 max-h-[95vh] ${
           (activeTab === TABS.MASIVA || activeTab === TABS.CORREOS) ? 'max-w-[95vw] lg:max-w-[1250px]' : 'sm:max-w-[800px]'
       }`}>
         
@@ -915,14 +915,14 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                 <div className="relative">
                   <Loader2 className="h-20 w-20 animate-spin text-blue-500" />
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <Building2 size={24} className="text-white animate-pulse" />
+                    <Building2 size={24} className="text-slate-700 animate-pulse" />
                   </div>
                 </div>
                 <div>
-                  <h3 className="text-2xl font-black uppercase italic tracking-widest text-white mb-2">
+                  <h3 className="text-2xl font-black uppercase italic tracking-widest text-slate-700 mb-2">
                     Emitiendo al SII...
                   </h3>
-                  <p className="text-red-400 font-bold uppercase tracking-widest text-xs animate-pulse bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20">
+                  <p className="text-red-500 font-bold uppercase tracking-widest text-xs animate-pulse bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20">
                     ⚠️ SISTEMA BLOQUEADO MIENTRAS SE EMITE. NO CIERRE LA VENTANA.
                   </p>
                 </div>
@@ -932,9 +932,9 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                 <CheckCircle2 className="h-24 w-24 text-emerald-500" />
                 <div>
                   <h3 className="text-3xl font-black uppercase italic tracking-tighter mb-1">¡Proceso Finalizado!</h3>
-                  <p className="font-mono text-xl text-emerald-400 font-bold">Folio N° {folioGenerado}</p>
+                  <p className="font-mono text-xl text-emerald-600 font-bold">Folio N° {folioGenerado}</p>
                 </div>
-                <Button onClick={() => setIsOpen(false)} className="bg-blue-600 hover:bg-blue-700 w-full mt-4 rounded-xl font-black uppercase tracking-widest h-14">
+                <Button onClick={() => setIsOpen(false)} className="bg-emerald-600 hover:bg-emerald-700 w-full mt-4 rounded-xl font-black uppercase tracking-widest h-14">
                   Volver al CRM
                 </Button>
               </div>
@@ -953,16 +953,16 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                    </div>
                    <div>
                       <DialogTitle className="text-2xl font-black italic uppercase tracking-tighter leading-none">{DOC_CONFIG.title}</DialogTitle>
-                      <DialogDescription className="text-gray-500 text-[10px] uppercase font-bold tracking-[0.2em] mt-1">{DOC_CONFIG.code} • {DOC_CONFIG.description}</DialogDescription>
+                      <DialogDescription className="text-slate-400 text-[10px] uppercase font-bold tracking-[0.2em] mt-1">{DOC_CONFIG.code} • {DOC_CONFIG.description}</DialogDescription>
                    </div>
                 </div>
               </div>
             </DialogHeader>
 
-            <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 mb-4">
-                <button onClick={() => setActiveTab(TABS.UNICA)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.UNICA ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}>Factura Única</button>
-                <button onClick={() => setActiveTab(TABS.MASIVA)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.MASIVA ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}><FileText size={14} /> Factura Masiva (CSV o Manual)</button>
-                <button onClick={() => setActiveTab(TABS.CORREOS)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.CORREOS ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'}`}><Mail size={14} /> Correos Enviados</button>
+            <div className="flex bg-slate-50 p-1 rounded-xl border border-[#efe8dd] mb-4">
+                <button onClick={() => setActiveTab(TABS.UNICA)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.UNICA ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}>Factura Única</button>
+                <button onClick={() => setActiveTab(TABS.MASIVA)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.MASIVA ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}><FileText size={14} /> Factura Masiva (CSV o Manual)</button>
+                <button onClick={() => setActiveTab(TABS.CORREOS)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.CORREOS ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}><Mail size={14} /> Correos Enviados</button>
             </div>
           </div>
 
@@ -974,38 +974,38 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
               {activeTab === TABS.UNICA && (
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 animate-in fade-in duration-300">
                   <div className="space-y-6 pb-4">
-                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 shadow-inner relative">
-                      <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <div className="bg-white border border-[#efe8dd] rounded-2xl p-6 shadow-inner relative">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                         <Search size={14} /> {selectedCompany ? 'Cliente Seleccionado' : 'Buscador de Clientes Búnker'}
                       </h4>
 
                       {!selectedCompany && (
                         <div className="mb-6 relative">
                           <div className="relative">
-                            <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors z-10 ${empresaEncontrada ? 'text-emerald-500' : 'text-gray-500'}`} size={18} />
+                            <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors z-10 ${empresaEncontrada ? 'text-emerald-500' : 'text-slate-400'}`} size={18} />
                             <Input 
                               placeholder="Nombre de Empresa o RUT..."
                               value={searchTerm}
                               onChange={handleSearchChange}
                               onFocus={() => setShowSuggestions(true)}
                               onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                              className="pl-12 h-12 bg-black/40 border-white/10 rounded-xl text-sm focus:border-blue-500 shadow-xl transition-all"
+                              className="pl-12 h-12 bg-slate-50 border-[#efe8dd] rounded-xl text-sm focus:border-emerald-500 shadow-xl transition-all"
                             />
                           </div>
 
                           {showSuggestions && (
-                            <div className="absolute top-full left-0 w-full mt-2 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2">
+                            <div className="absolute top-full left-0 w-full mt-2 bg-white border border-[#efe8dd] rounded-xl shadow-2xl overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2">
                               {filteredSuggestions.map((c, i) => (
-                                <div key={i} onMouseDown={() => onSelectCliente(c)} className="px-5 py-3 cursor-pointer hover:bg-blue-600/20 border-b border-white/5 flex justify-between items-center group transition-colors">
+                                <div key={i} onMouseDown={() => onSelectCliente(c)} className="px-5 py-3 cursor-pointer hover:bg-blue-600/20 border-b border-[#efe8dd] flex justify-between items-center group transition-colors">
                                   <div>
-                                    <div className="text-sm font-bold text-white">{cleanStr(c.razon_social || c.razonSocial)}</div>
-                                    <div className="text-[10px] text-gray-500 font-mono mt-0.5 tracking-widest">{formatRutSimple(c.rut || c.rut_encrypted)}</div>
+                                    <div className="text-sm font-bold text-slate-900">{cleanStr(c.razon_social || c.razonSocial)}</div>
+                                    <div className="text-[10px] text-slate-400 font-mono mt-0.5 tracking-widest">{formatRutSimple(c.rut || c.rut_encrypted)}</div>
                                   </div>
                                   <CheckCircle2 size={16} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-all" />
                                 </div>
                               ))}
                               {searchTerm.length >= 3 && (
-                                <button type="button" onMouseDown={handleForzarEmpresa} className="w-full p-4 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border-t border-white/5 transition-all">
+                                <button type="button" onMouseDown={handleForzarEmpresa} className="w-full p-4 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 border-t border-[#efe8dd] transition-all">
                                   <UserPlus size={16} /> Registrar Empresa Externa
                                 </button>
                               )}
@@ -1014,17 +1014,17 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                         </div>
                       )}
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-4 bg-black/30 rounded-xl border border-white/5">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-4 bg-slate-50 rounded-xl border border-[#efe8dd]">
                         <div>
-                          <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">Razón Social</p>
-                          <p className={`text-sm font-black truncate ${empresaEfectiva ? 'text-white' : 'text-gray-700'}`}>{razonSocialSegura}</p>
+                          <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Razón Social</p>
+                          <p className={`text-sm font-black truncate ${empresaEfectiva ? 'text-slate-700' : 'text-slate-600'}`}>{razonSocialSegura}</p>
                         </div>
                         <div>
-                          <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest mb-1">RUT Receptor</p>
-                          <p className={`text-sm font-mono font-bold ${empresaEfectiva ? 'text-blue-400' : 'text-gray-700'}`}>{item.rutFacturar || '---'}</p>
+                          <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">RUT Receptor</p>
+                          <p className={`text-sm font-mono font-bold ${empresaEfectiva ? 'text-blue-600' : 'text-slate-600'}`}>{item.rutFacturar || '---'}</p>
                         </div>
                         <div>
-                          <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest flex items-center gap-1 mb-1">
+                          <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest flex items-center gap-1 mb-1">
                             <Mail size={10} /> Correo Receptor
                           </p>
                           {isExternal ? (
@@ -1032,10 +1032,10 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                               placeholder="email@..."
                               value={item.contactoReceptor}
                               onChange={(e) => setItem({...item, contactoReceptor: e.target.value})}
-                              className="h-8 bg-blue-500/10 border-blue-500/30 text-xs rounded-lg focus:border-blue-500 text-blue-300 placeholder:text-blue-500/40"
+                              className="h-8 bg-blue-500/10 border-blue-500/30 text-xs rounded-lg focus:border-emerald-500 text-blue-700 placeholder:text-blue-500/40"
                             />
                           ) : (
-                            <p className={`text-sm truncate font-medium ${empresaEfectiva ? 'text-gray-300' : 'text-gray-700'}`}>{item.contactoReceptor || '---'}</p>
+                            <p className={`text-sm truncate font-medium ${empresaEfectiva ? 'text-slate-600' : 'text-slate-600'}`}>{item.contactoReceptor || '---'}</p>
                           )}
                         </div>
                       </div>
@@ -1043,22 +1043,22 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Plan / Concepto</Label>
+                        <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Plan / Concepto</Label>
                         <div className="relative">
-                          <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
-                          <Input value={cleanStr(item.name)} onChange={(e) => setItem({...item, name: e.target.value})} className="pl-11 h-12 bg-black/40 border-white/10 rounded-xl uppercase" placeholder="EJ: PLAN CONTABLE" />
+                          <Tag className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                          <Input value={cleanStr(item.name)} onChange={(e) => setItem({...item, name: e.target.value})} className="pl-11 h-12 bg-slate-50 border-[#efe8dd] rounded-xl uppercase" placeholder="EJ: PLAN CONTABLE" />
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Valor Neto ($)</Label>
+                        <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Valor Neto ($)</Label>
                         <div className="relative">
-                          <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
-                          <Input type="number" value={item.precio} onChange={(e) => setItem({...item, precio: e.target.value})} className="pl-11 h-12 bg-black/40 border-white/10 rounded-xl font-mono text-lg font-bold text-emerald-500" placeholder="0"/>
+                          <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                          <Input type="number" value={item.precio} onChange={(e) => setItem({...item, precio: e.target.value})} className="pl-11 h-12 bg-slate-50 border-[#efe8dd] rounded-xl font-mono text-lg font-bold text-emerald-500" placeholder="0"/>
                         </div>
                       </div>
                       <div className="md:col-span-2 space-y-2">
-                        <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Observaciones / Mes</Label>
-                        <Input value={cleanStr(item.descripcionProducto)} onChange={(e) => setItem({ ...item, descripcionProducto: e.target.value })} className="h-12 bg-black/40 border-white/10 rounded-xl uppercase" placeholder="EJ: SERVICIOS CORRESPONDIENTES A..." />
+                        <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Observaciones / Mes</Label>
+                        <Input value={cleanStr(item.descripcionProducto)} onChange={(e) => setItem({ ...item, descripcionProducto: e.target.value })} className="h-12 bg-slate-50 border-[#efe8dd] rounded-xl uppercase" placeholder="EJ: SERVICIOS CORRESPONDIENTES A..." />
                       </div>
                     </div>
                   </div>
@@ -1075,23 +1075,23 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                   {progresoRobot.activo && (
                       <div className="bg-blue-600/20 border border-blue-500 rounded-xl p-3 mb-3 flex items-center justify-between shadow-[0_0_20px_rgba(59,130,246,0.3)] animate-pulse flex-shrink-0">
                           <div className="flex items-center gap-4">
-                              <Loader2 className="animate-spin text-blue-400 w-6 h-6" />
+                              <Loader2 className="animate-spin text-blue-600 w-6 h-6" />
                               <div>
-                                  <p className="text-white font-black uppercase text-xs tracking-widest">
+                                  <p className="text-slate-900 font-black uppercase text-xs tracking-widest">
                                       Robot Facturando en Segundo Plano...
                                   </p>
-                                  <p className="text-blue-300 text-[10px] font-mono mt-0.5">
+                                  <p className="text-blue-700 text-[10px] font-mono mt-0.5">
                                       Procesando RUT: {progresoRobot.rutActual || '...'}
                                   </p>
                               </div>
                           </div>
                           <div className="flex items-center gap-4 text-right">
                               <div>
-                                  <p className="text-2xl font-black text-white italic leading-none">
+                                  <p className="text-2xl font-black text-slate-900 italic leading-none">
                                       {progresoRobot.actual} / {progresoRobot.total}
                                   </p>
-                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
-                                      Éxitos: <span className="text-emerald-400">{progresoRobot.exitos}</span> | Errores: <span className="text-red-400">{progresoRobot.errores}</span>
+                                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
+                                      Éxitos: <span className="text-emerald-600">{progresoRobot.exitos}</span> | Errores: <span className="text-red-500">{progresoRobot.errores}</span>
                                   </p>
                               </div>
                               <Button onClick={handleDetenerMasivo} variant="destructive" className="h-10 px-4 rounded-xl font-black uppercase tracking-widest shadow-lg shadow-red-500/20 hover:bg-red-600 transition-all text-xs">
@@ -1103,41 +1103,41 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
 
                   <div className="flex gap-4 mb-3 flex-shrink-0">
                     <div className="flex-1 bg-blue-900/10 border border-blue-500/30 rounded-xl p-3 flex flex-col items-center justify-center border-dashed cursor-pointer hover:bg-blue-900/20 transition-all" onClick={() => fileInputRef.current?.click()}>
-                      <UploadCloud size={20} className="text-blue-400 mb-1" />
-                      <span className="text-[10px] font-bold text-white uppercase tracking-widest">Subir Excel / CSV</span>
+                      <UploadCloud size={20} className="text-blue-600 mb-1" />
+                      <span className="text-[10px] font-bold text-slate-900 uppercase tracking-widest">Subir Excel / CSV</span>
                       <Input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls,.txt" onChange={handleCsvUpload} className="hidden" disabled={isBulkSubmitting}/>
                     </div>
 
                     <div className="flex-1 bg-emerald-900/10 border border-emerald-500/30 rounded-xl p-3 flex flex-col items-center justify-center border-dashed cursor-pointer hover:bg-emerald-900/20 transition-all" onClick={handleAddManualRow}>
-                      <Plus size={20} className="text-emerald-400 mb-1" />
-                      <span className="text-[10px] font-bold text-white uppercase tracking-widest">+ Fila Manual</span>
+                      <Plus size={20} className="text-emerald-600 mb-1" />
+                      <span className="text-[10px] font-bold text-slate-900 uppercase tracking-widest">+ Fila Manual</span>
                     </div>
                   </div>
 
                   {bulkRows.length > 0 && (
-                    <div className="flex-1 flex flex-col overflow-hidden rounded-xl border border-white/10 bg-[#0a0a0a] shadow-2xl">
+                    <div className="flex-1 flex flex-col overflow-hidden rounded-xl border border-[#efe8dd] bg-white shadow-2xl">
                       
-                      <div className="bg-[#121212] px-6 py-2 border-b border-white/10 flex justify-between items-center flex-shrink-0">
+                      <div className="bg-slate-50 px-6 py-2 border-b border-[#efe8dd] flex justify-between items-center flex-shrink-0">
                         <div className="flex gap-6">
-                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                            A Facturar: <span className="text-white">{bulkRows.filter(r => r.estado !== 'omitido').length}</span>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                            A Facturar: <span className="text-slate-700">{bulkRows.filter(r => r.estado !== 'omitido').length}</span>
                           </span>
-                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest flex items-center gap-1">
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                            Ignoradas ($0): <span className="text-red-400">{bulkRows.filter(r => r.estado === 'omitido').length}</span>
+                            Ignoradas ($0): <span className="text-red-500">{bulkRows.filter(r => r.estado === 'omitido').length}</span>
                           </span>
                         </div>
-                        <div className="text-[11px] text-gray-400 font-black uppercase tracking-widest">
-                          Proyección Neta: <span className="text-emerald-400 font-mono tracking-tighter text-sm">${bulkRows.filter(r => r.estado !== 'omitido').reduce((acc, curr) => acc + (Number(curr.precio) || 0), 0).toLocaleString('es-CL')}</span>
+                        <div className="text-[11px] text-slate-500 font-black uppercase tracking-widest">
+                          Proyección Neta: <span className="text-emerald-600 font-mono tracking-tighter text-sm">${bulkRows.filter(r => r.estado !== 'omitido').reduce((acc, curr) => acc + (Number(curr.precio) || 0), 0).toLocaleString('es-CL')}</span>
                         </div>
                       </div>
 
                       {/* 🔥 CONTENEDOR DE LA TABLA COMPACTA (Scrollea solo en móvil) */}
                       <div className="flex-1 overflow-x-auto overflow-y-auto md:overflow-y-hidden custom-scrollbar">
                         <table className="w-full text-left whitespace-nowrap border-collapse">
-                          <thead className="bg-[#121212] sticky top-0 z-10 border-b border-white/10">
-                            <tr className="text-gray-500 font-black uppercase tracking-widest text-[9px]">
-                              <th className="px-4 py-2.5 w-56 text-blue-400">Buscador Búnker</th>
+                          <thead className="bg-slate-50 sticky top-0 z-10 border-b border-[#efe8dd]">
+                            <tr className="text-slate-400 font-black uppercase tracking-widest text-[9px]">
+                              <th className="px-4 py-2.5 w-56 text-blue-600">Buscador Búnker</th>
                               <th className="px-3 py-2.5 min-w-[140px]">Razón Social</th>
                               <th className="px-3 py-2.5 w-28">RUT Receptor</th>
                               <th className="px-3 py-2.5 min-w-[140px]">Correo Receptor</th>
@@ -1156,18 +1156,18 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                               const isOmitted = row.estado === 'omitido';
 
                               return (
-                                <tr key={absoluteIndex} className={`transition-all duration-200 group ${activeRowIndex === absoluteIndex ? 'bg-blue-600/10 z-50 relative' : 'hover:bg-white/[0.04] z-0 relative'} ${isOmitted ? 'opacity-40 grayscale' : ''}`}>
+                                <tr key={absoluteIndex} className={`transition-all duration-200 group ${activeRowIndex === absoluteIndex ? 'bg-blue-600/10 z-50 relative' : 'hover:bg-slate-50 z-0 relative'} ${isOmitted ? 'opacity-40 grayscale' : ''}`}>
                                   
                                   {/* 1. BUSCADOR INTELIGENTE EN CADA FILA */}
                                   <td className={`px-4 py-1.5 relative ${activeRowIndex === absoluteIndex ? 'z-50' : 'z-0'}`}>
                                     <div className="flex items-center gap-2">
-                                      <Search size={12} className={`absolute left-6 transition-colors z-20 ${activeRowIndex === absoluteIndex ? 'text-blue-400' : 'text-gray-500'}`} />
+                                      <Search size={12} className={`absolute left-6 transition-colors z-20 ${activeRowIndex === absoluteIndex ? 'text-blue-600' : 'text-slate-400'}`} />
                                       <Input 
                                         value={row.searchQuery !== undefined ? row.searchQuery : row.rut} 
                                         onChange={(e) => handleBulkSearchChange(absoluteIndex, e.target.value)} 
                                         onFocus={() => setActiveRowIndex(absoluteIndex)}
                                         onBlur={() => setTimeout(() => setActiveRowIndex(null), 250)}
-                                        className={`h-9 pl-7 bg-black/40 border-white/10 hover:border-white/30 focus:bg-black/80 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 text-[10px] font-bold rounded-lg shadow-none uppercase transition-all relative z-10 ${activeRowIndex === absoluteIndex ? 'text-blue-300' : 'text-gray-300 font-mono'}`} 
+                                        className={`h-9 pl-7 bg-slate-50 border-[#efe8dd] hover:border-[#e5ddd0] focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 text-[10px] font-bold rounded-lg shadow-none uppercase transition-all relative z-10 ${activeRowIndex === absoluteIndex ? 'text-blue-700' : 'text-slate-600 font-mono'}`} 
                                         placeholder="BUSCAR..." 
                                         disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                       />
@@ -1175,7 +1175,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                     
                                     {/* DROPDOWN DESPLEGABLE */}
                                     {activeRowIndex === absoluteIndex && (row.searchQuery || row.rut)?.length >= 2 && !isOmitted && (
-                                      <div className="absolute top-[calc(100%-4px)] left-4 w-[350px] bg-[#1a1a1a] border-2 border-blue-500 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-[9999] overflow-hidden animate-in fade-in slide-in-from-top-2">
+                                      <div className="absolute top-[calc(100%-4px)] left-4 w-[350px] bg-white border-2 border-blue-500 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-[9999] overflow-hidden animate-in fade-in slide-in-from-top-2">
                                         {(() => {
                                            const term = cleanStr(row.searchQuery !== undefined ? row.searchQuery : row.rut);
                                            const termRut = String(row.searchQuery !== undefined ? row.searchQuery : row.rut).replace(/[^0-9kK]/gi, '').toLowerCase();
@@ -1188,17 +1188,17 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                            return (
                                              <>
                                                {matches.map((c, idx) => (
-                                                 <div key={idx} onMouseDown={() => applyClientToRow(absoluteIndex, c)} className="px-5 py-2.5 cursor-pointer hover:bg-blue-600/20 border-b border-white/5 flex justify-between items-center group transition-colors">
+                                                 <div key={idx} onMouseDown={() => applyClientToRow(absoluteIndex, c)} className="px-5 py-2.5 cursor-pointer hover:bg-blue-600/20 border-b border-[#efe8dd] flex justify-between items-center group transition-colors">
                                                    <div>
-                                                     <div className="text-xs font-bold text-white">{cleanStr(c.razon_social || c.razonSocial)}</div>
-                                                     <div className="text-[9px] text-gray-500 font-mono mt-0.5 tracking-widest">{formatRutSimple(c.rut || c.rut_encrypted)}</div>
+                                                     <div className="text-xs font-bold text-slate-900">{cleanStr(c.razon_social || c.razonSocial)}</div>
+                                                     <div className="text-[9px] text-slate-400 font-mono mt-0.5 tracking-widest">{formatRutSimple(c.rut || c.rut_encrypted)}</div>
                                                    </div>
                                                    <CheckCircle2 size={14} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-all" />
                                                  </div>
                                                ))}
                                                
                                                {(term.length >= 3 || termRut.length >= 3) && (
-                                                 <button type="button" onMouseDown={() => setRowAsExternal(absoluteIndex, (row.searchQuery || row.rut))} className="w-full p-3 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 border-t border-white/5 transition-all">
+                                                 <button type="button" onMouseDown={() => setRowAsExternal(absoluteIndex, (row.searchQuery || row.rut))} className="w-full p-3 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 border-t border-[#efe8dd] transition-all">
                                                    <UserPlus size={14} /> Registrar Empresa Externa
                                                  </button>
                                                )}
@@ -1214,11 +1214,11 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                     <Input 
                                       value={formatData(row.razonSocial)} 
                                       onChange={(e) => updateBulkRow(absoluteIndex, 'razonSocial', e.target.value)} 
-                                      className="h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[9px] font-bold text-gray-200 rounded-lg shadow-none uppercase transition-all" 
+                                      className="h-9 bg-transparent border-transparent hover:border-[#efe8dd] focus:bg-slate-50 focus:border-emerald-500 text-[9px] font-bold text-slate-700 rounded-lg shadow-none uppercase transition-all" 
                                       placeholder="RAZÓN SOCIAL..." 
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
-                                    {row.id === 'EXTERNO' && <span className="block text-[7px] text-orange-400 font-black tracking-widest ml-3 mt-0.5">⚠️ EXTERNO</span>}
+                                    {row.id === 'EXTERNO' && <span className="block text-[7px] text-orange-600 font-black tracking-widest ml-3 mt-0.5">⚠️ EXTERNO</span>}
                                   </td>
 
                                   {/* 3. RUT RECEPTOR */}
@@ -1226,7 +1226,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                     <Input 
                                       value={row.rut} 
                                       onChange={(e) => updateBulkRow(absoluteIndex, 'rut', formatRutSimple(e.target.value))} 
-                                      className="w-full min-w-[90px] h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[10px] font-mono font-bold text-blue-400 rounded-lg shadow-none uppercase transition-all" 
+                                      className="w-full min-w-[90px] h-9 bg-transparent border-transparent hover:border-[#efe8dd] focus:bg-slate-50 focus:border-emerald-500 text-[10px] font-mono font-bold text-blue-600 rounded-lg shadow-none uppercase transition-all" 
                                       placeholder="RUT..." 
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
@@ -1237,7 +1237,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                     <Input 
                                       value={row.contacto} 
                                       onChange={(e) => updateBulkRow(absoluteIndex, 'contacto', e.target.value)} 
-                                      className="h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[9px] font-medium text-gray-300 rounded-lg shadow-none transition-all" 
+                                      className="h-9 bg-transparent border-transparent hover:border-[#efe8dd] focus:bg-slate-50 focus:border-emerald-500 text-[9px] font-medium text-slate-600 rounded-lg shadow-none transition-all" 
                                       placeholder="EMAIL@..." 
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
@@ -1248,7 +1248,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                     <Input 
                                       value={formatData(row.plan)} 
                                       onChange={(e) => updateBulkRow(absoluteIndex, 'plan', e.target.value)} 
-                                      className="h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[9px] font-bold text-gray-300 rounded-lg shadow-none uppercase transition-all" 
+                                      className="h-9 bg-transparent border-transparent hover:border-[#efe8dd] focus:bg-slate-50 focus:border-emerald-500 text-[9px] font-bold text-slate-600 rounded-lg shadow-none uppercase transition-all" 
                                       placeholder="CONCEPTO..." 
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
@@ -1260,7 +1260,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                       type="number" 
                                       value={row.precio} 
                                       onChange={(e) => updateBulkRow(absoluteIndex, 'precio', e.target.value)} 
-                                      className="h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[11px] font-black font-mono text-emerald-400 rounded-lg shadow-none transition-all text-right" 
+                                      className="h-9 bg-transparent border-transparent hover:border-[#efe8dd] focus:bg-slate-50 focus:border-emerald-500 text-[11px] font-black font-mono text-emerald-600 rounded-lg shadow-none transition-all text-right" 
                                       placeholder="0" 
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
@@ -1271,7 +1271,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                     <Input 
                                       value={formatData(row.observacion)} 
                                       onChange={(e) => updateBulkRow(absoluteIndex, 'observacion', e.target.value)} 
-                                      className="h-9 bg-transparent border-transparent hover:border-white/20 focus:bg-black/60 focus:border-blue-500 text-[9px] font-medium text-gray-400 rounded-lg shadow-none uppercase transition-all" 
+                                      className="h-9 bg-transparent border-transparent hover:border-[#efe8dd] focus:bg-slate-50 focus:border-emerald-500 text-[9px] font-medium text-slate-500 rounded-lg shadow-none uppercase transition-all" 
                                       placeholder="GLOSA FACTURA..." 
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
@@ -1279,11 +1279,11 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
 
                                   <td className="px-3 py-1.5 text-center">
                                     <div className="flex justify-center" title={row.motivo || ''}>
-                                      {isOmitted && <span className="px-2 py-1 rounded-full bg-gray-500/10 text-gray-500 font-black text-[7px] uppercase border border-gray-500/20 tracking-widest">🚫 Omite</span>}
-                                      {row.estado === "pendiente" && <span className="px-2 py-1 rounded-full bg-white/5 text-gray-400 font-black text-[7px] uppercase border border-white/10 tracking-widest">En Fila</span>}
-                                      {row.estado === "completado" && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 font-black text-[7px] uppercase border border-emerald-500/20 flex items-center gap-1"><CheckCircle2 size={8}/> Listo</span>}
-                                      {row.estado === "procesando" && <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-400 font-black text-[7px] uppercase border border-blue-500/20 flex items-center gap-1"><Loader2 size={8} className="animate-spin"/> Emite</span>}
-                                      {row.estado === "error" && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-400 font-black text-[7px] uppercase border border-red-500/20 flex items-center gap-1" title={row.motivo || 'Revisar fila'}><AlertCircle size={8}/> Error</span>}
+                                      {isOmitted && <span className="px-2 py-1 rounded-full bg-gray-500/10 text-slate-400 font-black text-[7px] uppercase border border-gray-500/20 tracking-widest">🚫 Omite</span>}
+                                      {row.estado === "pendiente" && <span className="px-2 py-1 rounded-full bg-slate-50 text-slate-500 font-black text-[7px] uppercase border border-[#efe8dd] tracking-widest">En Fila</span>}
+                                      {row.estado === "completado" && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 font-black text-[7px] uppercase border border-emerald-500/20 flex items-center gap-1"><CheckCircle2 size={8}/> Listo</span>}
+                                      {row.estado === "procesando" && <span className="px-2 py-1 rounded-full bg-blue-500/10 text-blue-600 font-black text-[7px] uppercase border border-blue-500/20 flex items-center gap-1"><Loader2 size={8} className="animate-spin"/> Emite</span>}
+                                      {row.estado === "error" && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-500 font-black text-[7px] uppercase border border-red-500/20 flex items-center gap-1" title={row.motivo || 'Revisar fila'}><AlertCircle size={8}/> Error</span>}
                                     </div>
                                   </td>
 
@@ -1301,8 +1301,8 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                       
                       {/* 🔥 BARRA DE PAGINACIÓN */}
                       {totalPages > 1 && (
-                        <div className="bg-[#0f0f0f] border-t border-white/10 px-6 py-2.5 flex items-center justify-between flex-shrink-0">
-                          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                        <div className="bg-slate-50 border-t border-[#efe8dd] px-6 py-2.5 flex items-center justify-between flex-shrink-0">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                             Mostrando {((currentPage - 1) * ROWS_PER_PAGE) + 1} - {Math.min(currentPage * ROWS_PER_PAGE, bulkRows.length)} de {bulkRows.length} facturas
                           </p>
                           <div className="flex items-center gap-3">
@@ -1311,11 +1311,11 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                               size="sm" 
                               onClick={goToPrevPage} 
                               disabled={currentPage === 1 || isBulkSubmitting}
-                              className="bg-black/40 border-white/10 text-white hover:bg-white/10 hover:text-white h-7 text-[10px] px-3"
+                              className="bg-slate-50 border-[#efe8dd] text-slate-700 hover:bg-slate-100 hover:text-slate-900 h-7 text-[10px] px-3"
                             >
                               <ChevronLeft size={14} className="mr-1"/> Anterior
                             </Button>
-                            <span className="text-[11px] font-black font-mono text-gray-300">
+                            <span className="text-[11px] font-black font-mono text-slate-600">
                               PAG {currentPage} / {totalPages}
                             </span>
                             <Button 
@@ -1323,7 +1323,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                               size="sm" 
                               onClick={goToNextPage} 
                               disabled={currentPage === totalPages || isBulkSubmitting}
-                              className="bg-black/40 border-white/10 text-white hover:bg-white/10 hover:text-white h-7 text-[10px] px-3"
+                              className="bg-slate-50 border-[#efe8dd] text-slate-700 hover:bg-slate-100 hover:text-slate-900 h-7 text-[10px] px-3"
                             >
                               Siguiente <ChevronRight size={14} className="ml-1"/>
                             </Button>
@@ -1343,41 +1343,41 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                 <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-300">
                   <div className="flex items-center justify-between mb-3 flex-shrink-0 gap-4 flex-wrap">
                     <div className="flex gap-6 text-[10px] font-bold uppercase tracking-widest">
-                      <span className="text-gray-400">Total: <span className="text-white">{correosLog.length}</span></span>
-                      <span className="text-emerald-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Enviados: {correosLog.filter(c => c.estado === 'enviado').length}</span>
-                      <span className="text-red-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>Fallidos: {correosLog.filter(c => c.estado === 'fallido').length}</span>
-                      <span className="text-gray-500 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span>Omitidos: {correosLog.filter(c => c.estado === 'omitido').length}</span>
+                      <span className="text-slate-500">Total: <span className="text-slate-700">{correosLog.length}</span></span>
+                      <span className="text-emerald-600 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Enviados: {correosLog.filter(c => c.estado === 'enviado').length}</span>
+                      <span className="text-red-500 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>Fallidos: {correosLog.filter(c => c.estado === 'fallido').length}</span>
+                      <span className="text-slate-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span>Omitidos: {correosLog.filter(c => c.estado === 'omitido').length}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       {/* Enviar por folio manual */}
-                      <div className="flex items-center gap-1 bg-black/40 border border-white/10 rounded-lg pl-3 pr-1 h-9">
-                        <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Folio N°</span>
+                      <div className="flex items-center gap-1 bg-slate-50 border border-[#efe8dd] rounded-lg pl-3 pr-1 h-9">
+                        <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Folio N°</span>
                         <Input
                           value={manualFolio}
                           onChange={(e) => setManualFolio(e.target.value.replace(/[^0-9]/g, ''))}
                           placeholder="1145"
-                          className="h-7 w-24 bg-transparent border-0 text-xs font-mono font-bold text-blue-300 focus:ring-0 shadow-none"
+                          className="h-7 w-24 bg-transparent border-0 text-xs font-mono font-bold text-blue-700 focus:ring-0 shadow-none"
                         />
                         <Button
                           onClick={() => reenviarCorreo(manualFolio, null)}
                           disabled={!manualFolio || reenviandoFolio !== null}
-                          className="h-7 px-3 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 text-[10px] font-black uppercase tracking-widest rounded-md"
+                          className="h-7 px-3 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-700 text-[10px] font-black uppercase tracking-widest rounded-md"
                         >
                           {reenviandoFolio === manualFolio ? <Loader2 size={13} className="animate-spin" /> : 'Enviar'}
                         </Button>
                       </div>
-                      <Button onClick={cargarCorreosLog} disabled={isLoadingCorreos} className="h-9 px-4 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-300 text-[10px] font-black uppercase tracking-widest rounded-lg">
+                      <Button onClick={cargarCorreosLog} disabled={isLoadingCorreos} className="h-9 px-4 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-700 text-[10px] font-black uppercase tracking-widest rounded-lg">
                         {isLoadingCorreos ? <Loader2 size={14} className="animate-spin" /> : '🔄 Refrescar'}
                       </Button>
                     </div>
                   </div>
 
                   {/* Barra de acciones masivas */}
-                  <div className="flex items-center justify-between mb-2 flex-shrink-0 gap-3 flex-wrap bg-white/[0.02] border border-white/10 rounded-xl px-4 py-2">
+                  <div className="flex items-center justify-between mb-2 flex-shrink-0 gap-3 flex-wrap bg-white border border-[#efe8dd] rounded-xl px-4 py-2">
                     <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest">
-                      <span className="text-gray-400">Seleccionados: <span className="text-blue-400">{selectedFolios.length}</span></span>
-                      <button onClick={seleccionarPendientes} className="text-orange-400 hover:text-orange-300 underline-offset-2 hover:underline">Seleccionar los que faltan</button>
-                      {selectedFolios.length > 0 && <button onClick={limpiarSeleccion} className="text-gray-500 hover:text-gray-300">Limpiar</button>}
+                      <span className="text-slate-500">Seleccionados: <span className="text-blue-600">{selectedFolios.length}</span></span>
+                      <button onClick={seleccionarPendientes} className="text-orange-600 hover:text-orange-700 underline-offset-2 hover:underline">Seleccionar los que faltan</button>
+                      {selectedFolios.length > 0 && <button onClick={limpiarSeleccion} className="text-slate-400 hover:text-slate-600">Limpiar</button>}
                     </div>
                     <div className="flex items-center gap-2">
                       {/* 📢 Recordatorio de pago a todas las empresas facturadas (desde el 27-jun) */}
@@ -1402,16 +1402,16 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto custom-scrollbar rounded-xl border border-white/10 bg-[#0a0a0a]">
+                  <div className="flex-1 overflow-y-auto custom-scrollbar rounded-xl border border-[#efe8dd] bg-white">
                     {correosLog.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-full text-gray-600 gap-2 py-16">
+                      <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2 py-16">
                         <Mail size={32} className="opacity-40" />
                         <p className="text-xs font-bold uppercase tracking-widest">Aún no hay correos registrados</p>
                       </div>
                     ) : (
                       <table className="w-full text-left whitespace-nowrap border-collapse">
-                        <thead className="bg-[#121212] sticky top-0 z-10 border-b border-white/10">
-                          <tr className="text-gray-500 font-black uppercase tracking-widest text-[9px]">
+                        <thead className="bg-slate-50 sticky top-0 z-10 border-b border-[#efe8dd]">
+                          <tr className="text-slate-400 font-black uppercase tracking-widest text-[9px]">
                             <th className="px-3 py-2.5 w-8 text-center">
                               <input
                                 type="checkbox"
@@ -1432,7 +1432,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                         </thead>
                         <tbody className="divide-y divide-white/5">
                           {correosLog.map((c, i) => (
-                            <tr key={i} className={`hover:bg-white/[0.04] transition-colors ${selectedFolios.includes(String(c.folio)) ? 'bg-emerald-500/5' : ''}`}>
+                            <tr key={i} className={`hover:bg-slate-50 transition-colors ${selectedFolios.includes(String(c.folio)) ? 'bg-emerald-500/5' : ''}`}>
                               <td className="px-3 py-2 text-center">
                                 <input
                                   type="checkbox"
@@ -1441,23 +1441,23 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                                   onChange={() => toggleFolio(c.folio)}
                                 />
                               </td>
-                              <td className="px-4 py-2 text-[10px] text-gray-400 font-mono">{c.fecha ? new Date(c.fecha).toLocaleString('es-CL') : '—'}</td>
-                              <td className="px-3 py-2 text-[10px] font-mono font-bold text-blue-400">{c.folio || '—'}</td>
-                              <td className="px-3 py-2 text-[10px] font-bold text-gray-200 uppercase truncate max-w-[200px]">{c.razonSocial || '—'}</td>
-                              <td className="px-3 py-2 text-[10px] text-gray-300 truncate max-w-[200px]">{c.correo || '—'}</td>
+                              <td className="px-4 py-2 text-[10px] text-slate-500 font-mono">{c.fecha ? new Date(c.fecha).toLocaleString('es-CL') : '—'}</td>
+                              <td className="px-3 py-2 text-[10px] font-mono font-bold text-blue-600">{c.folio || '—'}</td>
+                              <td className="px-3 py-2 text-[10px] font-bold text-slate-700 uppercase truncate max-w-[200px]">{c.razonSocial || '—'}</td>
+                              <td className="px-3 py-2 text-[10px] text-slate-600 truncate max-w-[200px]">{c.correo || '—'}</td>
                               <td className="px-3 py-2 text-center">
-                                {c.estado === 'enviado' && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-400 font-black text-[8px] uppercase border border-emerald-500/20 inline-flex items-center gap-1"><CheckCircle2 size={9} /> Enviado</span>}
-                                {c.estado === 'fallido' && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-400 font-black text-[8px] uppercase border border-red-500/20 inline-flex items-center gap-1"><AlertCircle size={9} /> Fallido</span>}
-                                {c.estado === 'omitido' && <span className="px-2 py-1 rounded-full bg-gray-500/10 text-gray-400 font-black text-[8px] uppercase border border-gray-500/20">Omitido</span>}
-                                {!['enviado', 'fallido', 'omitido'].includes(c.estado) && <span className="text-gray-600 text-[9px]">{c.estado}</span>}
+                                {c.estado === 'enviado' && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 font-black text-[8px] uppercase border border-emerald-500/20 inline-flex items-center gap-1"><CheckCircle2 size={9} /> Enviado</span>}
+                                {c.estado === 'fallido' && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-500 font-black text-[8px] uppercase border border-red-500/20 inline-flex items-center gap-1"><AlertCircle size={9} /> Fallido</span>}
+                                {c.estado === 'omitido' && <span className="px-2 py-1 rounded-full bg-gray-500/10 text-slate-500 font-black text-[8px] uppercase border border-gray-500/20">Omitido</span>}
+                                {!['enviado', 'fallido', 'omitido'].includes(c.estado) && <span className="text-slate-400 text-[9px]">{c.estado}</span>}
                               </td>
-                              <td className="px-3 py-2 text-[9px] text-gray-500 whitespace-normal max-w-[260px]">{c.motivo || (c.estado === 'enviado' ? '✓ Entregado al cliente' : '—')}</td>
+                              <td className="px-3 py-2 text-[9px] text-slate-400 whitespace-normal max-w-[260px]">{c.motivo || (c.estado === 'enviado' ? '✓ Entregado al cliente' : '—')}</td>
                               <td className="px-3 py-2 text-center">
                                 <Button
                                   onClick={() => reenviarCorreo(c.folio, c.datos)}
                                   disabled={!c.folio || reenviandoFolio !== null}
                                   title="Reenviar este correo"
-                                  className="h-7 px-3 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-300 text-[9px] font-black uppercase tracking-widest rounded-md inline-flex items-center gap-1"
+                                  className="h-7 px-3 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-700 text-[9px] font-black uppercase tracking-widest rounded-md inline-flex items-center gap-1"
                                 >
                                   {reenviandoFolio === String(c.folio) ? <Loader2 size={12} className="animate-spin" /> : <><Mail size={11} /> {c.estado === 'enviado' ? 'Reenviar' : 'Enviar'}</>}
                                 </Button>
@@ -1472,16 +1472,16 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
               )}
           </div>
 
-          <div className="flex gap-4 pt-4 mt-2 border-t border-white/5 flex-shrink-0 relative z-20">
-            <Button type="button" onClick={() => setIsOpen(false)} className="flex-1 bg-white/5 hover:bg-white/10 text-gray-400 uppercase font-black text-[11px] tracking-widest h-10 rounded-xl transition-all">Cerrar</Button>
+          <div className="flex gap-4 pt-4 mt-2 border-t border-[#efe8dd] flex-shrink-0 relative z-20">
+            <Button type="button" onClick={() => setIsOpen(false)} className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-500 uppercase font-black text-[11px] tracking-widest h-10 rounded-xl transition-all">Cerrar</Button>
             
             {activeTab === TABS.UNICA && (
-              <Button onClick={handleSubmitUnica} disabled={!empresaEfectiva || isSubmitting} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
+              <Button onClick={handleSubmitUnica} disabled={!empresaEfectiva || isSubmitting} className="flex-[2] bg-emerald-600 hover:bg-emerald-500 text-slate-900 font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
                 {isSubmitting ? 'Procesando...' : 'Emitir Factura Individual'}
               </Button>
             )}
             {activeTab === TABS.MASIVA && (
-              <Button onClick={handleBulkSubmit} disabled={isBulkSubmitting || bulkRows.filter(r => r.estado === 'pendiente').length === 0} className="flex-[2] bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
+              <Button onClick={handleBulkSubmit} disabled={isBulkSubmitting || bulkRows.filter(r => r.estado === 'pendiente').length === 0} className="flex-[2] bg-emerald-600 hover:bg-emerald-500 text-slate-900 font-black uppercase text-[11px] tracking-widest h-10 rounded-xl shadow-lg shadow-blue-600/20 transition-all">
                 {isBulkSubmitting ? 'Procesando Lote...' : `Facturar Todo el Lote (${bulkRows.filter(r => r.estado === 'pendiente').length})`}
               </Button>
             )}

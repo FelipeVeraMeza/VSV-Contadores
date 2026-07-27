@@ -39,9 +39,9 @@ const formatText = (str) => str ? str.toString().normalize('NFD').replace(/[̀-�
 const formatCLP = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(val || 0);
 
 const COLOR_MAP = {
-  ventas:    { active: 'bg-emerald-500/10 text-emerald-400 border-b-2 border-emerald-500', badge: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20', total: 'text-emerald-400', row: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  compras:   { active: 'bg-red-500/10 text-red-400 border-b-2 border-red-500',             badge: 'bg-red-500/10 text-red-400 border border-red-500/20',             total: 'text-red-400',     row: 'bg-red-500/10 text-red-400 border-red-500/20' },
-  honorarios:{ active: 'bg-amber-500/10 text-amber-400 border-b-2 border-amber-500',       badge: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',       total: 'text-amber-400',   row: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  ventas:    { active: 'bg-emerald-500/10 text-emerald-600 border-b-2 border-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20', total: 'text-emerald-600', row: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
+  compras:   { active: 'bg-red-500/10 text-red-500 border-b-2 border-red-500',             badge: 'bg-red-500/10 text-red-500 border border-red-500/20',             total: 'text-red-500',     row: 'bg-red-500/10 text-red-500 border-red-500/20' },
+  honorarios:{ active: 'bg-amber-500/10 text-amber-600 border-b-2 border-amber-500',       badge: 'bg-amber-500/10 text-amber-600 border border-amber-500/20',       total: 'text-amber-600',   row: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
 };
 
 // El asiento por defecto lo genera `generarLineasAsiento` (src/lib/documento.js),
@@ -592,44 +592,44 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {!rango?.desde && (
-            <div className="flex items-center bg-black/40 border border-white/10 rounded-xl px-1 py-1 flex-shrink-0">
-              <div className="flex items-center pl-3 pr-1"><CalendarDays className="h-4 w-4 text-blue-400" /></div>
+            <div className="flex items-center bg-slate-50 border border-[#efe8dd] rounded-xl px-1 py-1 flex-shrink-0">
+              <div className="flex items-center pl-3 pr-1"><CalendarDays className="h-4 w-4 text-blue-600" /></div>
               <select value={mes} onChange={e => setMes(e.target.value)}
-                className="bg-transparent text-white text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-400 transition-colors">
-                {MESES.map(m => <option key={m.value} value={m.value} className="bg-slate-900 text-white">{m.label}</option>)}
+                className="bg-transparent text-slate-700 text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-600 transition-colors">
+                {MESES.map(m => <option key={m.value} value={m.value} className="bg-white text-slate-700">{m.label}</option>)}
               </select>
-              <span className="text-white/20 font-light mx-1">/</span>
+              <span className="text-slate-700/20 font-light mx-1">/</span>
               <select value={anio} onChange={e => setAnio(e.target.value)}
-                className="bg-transparent text-white text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-400 transition-colors">
-                {ANIOS.map(a => <option key={a} value={a} className="bg-slate-900 text-white">{a}</option>)}
+                className="bg-transparent text-slate-700 text-xs font-black uppercase tracking-widest px-2 py-2 focus:outline-none appearance-none cursor-pointer hover:text-blue-600 transition-colors">
+                {ANIOS.map(a => <option key={a} value={a} className="bg-white text-slate-700">{a}</option>)}
               </select>
-              <div className="pr-3 pl-1 pointer-events-none"><ChevronDown className="h-4 w-4 text-gray-500" /></div>
+              <div className="pr-3 pl-1 pointer-events-none"><ChevronDown className="h-4 w-4 text-slate-400" /></div>
             </div>
           )}
           {/* BOTÓN BUSCAR: aplica el período seleccionado (la lista no cambia hasta presionarlo) */}
           <Button onClick={aplicarBusqueda}
             className={`flex-shrink-0 font-black uppercase text-[10px] tracking-widest h-[42px] px-4 transition-all ${
               hayCambiosPeriodo
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-900/40 ring-2 ring-blue-400/40 animate-pulse'
+                ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-lg shadow-emerald-900/40 ring-2 ring-blue-400/40 animate-pulse'
                 : 'bg-blue-600/80 hover:bg-blue-600 text-white'
             }`}>
             <Search className="h-4 w-4 mr-2" /> Buscar
           </Button>
           {/* BUSCADOR unificado: folio + RUT + nombre */}
           <div className="relative flex-1 max-w-xs">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input type="text" value={busqueda} onChange={e => setBusqueda(e.target.value)}
               placeholder="Buscar por folio, RUT o nombre..."
-              className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-8 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500 transition-colors" />
+              className="w-full bg-slate-50 border border-[#efe8dd] rounded-xl pl-9 pr-8 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 transition-colors" />
             {busqueda && (
-              <button onClick={() => setBusqueda('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+              <button onClick={() => setBusqueda('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900">
                 <span className="text-xs">✕</span>
               </button>
             )}
           </div>
 
           {/* FILTRO DE ESTADO */}
-          <div className="flex items-center bg-black/40 border border-white/10 rounded-xl p-1 flex-shrink-0">
+          <div className="flex items-center bg-slate-50 border border-[#efe8dd] rounded-xl p-1 flex-shrink-0">
             {[
               { id: 'contabilizado', label: '✓ Contabilizados' },
               { id: 'pendiente',     label: 'Pendientes' },
@@ -639,7 +639,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                 className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
                   filtroEstado === f.id
                     ? (f.id === 'contabilizado' ? 'bg-emerald-600 text-white' : f.id === 'pendiente' ? 'bg-amber-600 text-white' : 'bg-blue-600 text-white')
-                    : 'text-gray-400 hover:text-white'
+                    : 'text-slate-500 hover:text-slate-900'
                 }`}>
                 {f.label}
               </button>
@@ -649,24 +649,24 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
 
         <div className="flex items-center gap-2 flex-wrap">
           <Button onClick={abrirSyncModal} disabled={isSyncing || targetId === 'ALL'}
-            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-black uppercase text-[10px] tracking-widest">
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-slate-900 font-black uppercase text-[10px] tracking-widest">
             {isSyncing ? <RefreshCcw className="h-4 w-4 mr-2 animate-spin" /> : <DownloadCloud className="h-4 w-4 mr-2" />}
             {isSyncing ? 'EXTRAYENDO...' : 'EXTRAER DE SII'}
           </Button>
           <Button onClick={() => setIsNuevoModalOpen(true)}
-            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black uppercase text-[10px] tracking-widest">
+            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-slate-900 font-black uppercase text-[10px] tracking-widest">
             <Plus className="h-4 w-4 mr-2" />
             Nueva {activeTab === 'ventas' ? 'Venta' : activeTab === 'compras' ? 'Compra' : 'Honorario'}
           </Button>
           <Button onClick={() => handleContabilizarTodo(false)} disabled={isContabilizando || !hayDatos}
-            className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 disabled:opacity-50 text-white font-black uppercase text-[10px] tracking-widest">
+            className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 disabled:opacity-50 text-slate-900 font-black uppercase text-[10px] tracking-widest">
             {isContabilizando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bot className="h-4 w-4 mr-2" />}
             {isContabilizando ? 'CONTABILIZANDO...' : 'CONTABILIZAR TODO'}
           </Button>
           <Button onClick={() => setIsLibroModalOpen(true)} disabled={!hayDatos}
             className={`font-black uppercase text-[10px] tracking-widest transition-all ${
-              hayDatos ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-lg shadow-purple-900/30'
-              : 'bg-black/40 border border-white/10 text-gray-500 opacity-50 cursor-not-allowed'
+              hayDatos ? 'bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white shadow-lg shadow-emerald-900/30'
+              : 'bg-slate-50 border border-[#efe8dd] text-slate-400 opacity-50 cursor-not-allowed'
             }`}>
             <BookCopy className="h-4 w-4 mr-2" />
             CENTRALIZAR
@@ -676,16 +676,16 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
 
       {/* SUB-TABS (se ocultan cuando la navegación viene del menú de Contabilidad) */}
       {!ocultarTabs && (
-      <div className="flex border-b border-white/5">
+      <div className="flex border-b border-[#efe8dd]">
         {TABS.map(({ id, label, icon: Icon, count }) => {
           const isActive = activeTab === id;
           const cm = COLOR_MAP[id];
           return (
             <button key={id} onClick={() => setActiveTab(id)}
-              className={`flex items-center gap-2 px-6 py-3.5 font-black uppercase text-[10px] tracking-widest transition-all ${isActive ? cm.active : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
+              className={`flex items-center gap-2 px-6 py-3.5 font-black uppercase text-[10px] tracking-widest transition-all ${isActive ? cm.active : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'}`}>
               <Icon className="h-3.5 w-3.5" />
               {label}
-              <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${isActive ? cm.badge : 'bg-white/5 text-gray-600'}`}>{count}</span>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-black ${isActive ? cm.badge : 'bg-slate-50 text-slate-400'}`}>{count}</span>
             </button>
           );
         })}
@@ -700,29 +700,29 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
           { label:'IVA 19%',    value: formatCLP(totales.iva) },
           { label:'Total',      value: formatCLP(totales.total) },
         ].map(item => (
-          <div key={item.label} className="bg-black/20 rounded-xl border border-white/5 p-4">
-            <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">{item.label}</p>
-            <p className="font-black text-white font-mono text-sm tracking-tighter">{item.value}</p>
+          <div key={item.label} className="bg-slate-50 rounded-xl border border-[#efe8dd] p-4">
+            <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">{item.label}</p>
+            <p className="font-black text-slate-900 font-mono text-sm tracking-tighter">{item.value}</p>
           </div>
         ))}
       </div>
 
       {/* TABLA */}
-      <div className="bg-[#0f172a]/80 rounded-xl border border-white/5 overflow-hidden backdrop-blur-md shadow-2xl">
+      <div className="bg-white rounded-xl border border-[#efe8dd] overflow-hidden backdrop-blur-md shadow-2xl">
         {isLoading ? (
           <div className="p-16 flex flex-col items-center justify-center">
             <Loader2 className="h-10 w-10 text-blue-500 animate-spin mb-4" />
-            <span className="text-blue-400 font-black text-xs uppercase tracking-widest animate-pulse">Consultando Bunker...</span>
+            <span className="text-blue-600 font-black text-xs uppercase tracking-widest animate-pulse">Consultando Bunker...</span>
           </div>
         ) : docActivos.length === 0 ? (
           <div className="p-16 text-center flex flex-col items-center justify-center">
-            <div className="bg-white/5 p-5 rounded-full mb-4 border border-white/10">
-              <FileCheck className="h-8 w-8 text-gray-500" />
+            <div className="bg-slate-50 p-5 rounded-full mb-4 border border-[#efe8dd]">
+              <FileCheck className="h-8 w-8 text-slate-400" />
             </div>
-            <h4 className="text-white font-black tracking-wide uppercase text-sm">Sin Registros</h4>
-            <p className="text-gray-500 text-[10px] mt-2 uppercase tracking-widest font-black">No hay {activeTab} para este período.</p>
+            <h4 className="text-slate-900 font-black tracking-wide uppercase text-sm">Sin Registros</h4>
+            <p className="text-slate-400 text-[10px] mt-2 uppercase tracking-widest font-black">No hay {activeTab} para este período.</p>
             <Button onClick={abrirSyncModal} disabled={isSyncing || targetId === 'ALL'}
-              className="mt-4 bg-blue-600 hover:bg-blue-500 text-white font-black uppercase text-[10px] tracking-widest disabled:opacity-50">
+              className="mt-4 bg-emerald-600 hover:bg-emerald-500 text-slate-900 font-black uppercase text-[10px] tracking-widest disabled:opacity-50">
               {isSyncing ? <RefreshCcw className="h-3.5 w-3.5 mr-2 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5 mr-2" />}
               {isSyncing ? 'Extrayendo...' : 'Extraer del SII'}
             </Button>
@@ -730,8 +730,8 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
         ) : (
           <>
             <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left text-sm text-gray-300 min-w-[900px]">
-                <thead className="bg-white/5 border-b border-white/10 text-[10px] uppercase tracking-widest font-black text-gray-400">
+              <table className="w-full text-left text-sm text-slate-600 min-w-[900px]">
+                <thead className="bg-slate-50 border-b border-[#efe8dd] text-[10px] uppercase tracking-widest font-black text-slate-500">
                   <tr>
                     <th className="px-5 py-4">Fecha Emisión</th>
                     <th className="px-5 py-4">Período</th>
@@ -767,40 +767,40 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                         {/* FILA PRINCIPAL */}
                         <motion.tr
                           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: idx * 0.02 }}
-                          className={`border-b transition-colors group cursor-pointer ${isExpanded ? 'bg-white/[0.04] border-white/10' : 'hover:bg-white/[0.03] border-white/5'}`}
+                          className={`border-b transition-colors group cursor-pointer ${isExpanded ? 'bg-slate-50 border-[#efe8dd]' : 'hover:bg-white border-[#efe8dd]'}`}
                           onClick={() => toggleRow(doc.id || idx, doc)}
                         >
-                          <td className="px-5 py-3.5 text-xs text-gray-400 font-bold whitespace-nowrap">{fecha}</td>
-                          <td className="px-5 py-3.5 text-xs font-mono text-blue-400 font-bold">{per}</td>
+                          <td className="px-5 py-3.5 text-xs text-slate-500 font-bold whitespace-nowrap">{fecha}</td>
+                          <td className="px-5 py-3.5 text-xs font-mono text-blue-600 font-bold">{per}</td>
                           <td className="px-5 py-3.5">
                             <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border whitespace-nowrap ${
-                              doc.tipo_dte === 61 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
-                              doc.tipo_dte === 56 ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                              doc.tipo_dte === 61 ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
+                              doc.tipo_dte === 56 ? 'bg-orange-500/10 text-orange-600 border-orange-500/20' :
                               colors.row
                             }`}>
                               {TIPO_DTE_MAP[doc.tipo_dte] || `TIPO ${doc.tipo_dte}`}
                             </span>
                           </td>
-                          <td className="px-5 py-3.5 font-black text-white italic text-sm">#{doc.folio}</td>
-                          <td className="px-5 py-3.5 font-mono text-xs text-gray-400">{rut}</td>
+                          <td className="px-5 py-3.5 font-black text-slate-900 italic text-sm">#{doc.folio}</td>
+                          <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{rut}</td>
                           <td className="px-5 py-3.5 max-w-[160px]">
-                            <span className="text-xs text-gray-200 font-bold truncate block">{razon || 'SIN RAZÓN SOCIAL'}</span>
+                            <span className="text-xs text-slate-700 font-bold truncate block">{razon || 'SIN RAZÓN SOCIAL'}</span>
                           </td>
                           {/* ESTADO */}
                           <td className="px-5 py-3.5 text-center">
                             {comp ? (
                               <div className="flex flex-col items-center gap-0.5">
-                                <span className="text-[8px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 whitespace-nowrap">
+                                <span className="text-[8px] font-black uppercase text-emerald-600 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20 whitespace-nowrap">
                                   ✓ Contabilizado{comp.numero != null ? ` N°${comp.numero}` : ''}
                                 </span>
                                 {comp.contabilizadoPor && (
-                                  <span className="text-[8px] text-gray-500 normal-case whitespace-nowrap" title={comp.contabilizadoAt ? new Date(comp.contabilizadoAt).toLocaleString('es-CL') : ''}>
+                                  <span className="text-[8px] text-slate-400 normal-case whitespace-nowrap" title={comp.contabilizadoAt ? new Date(comp.contabilizadoAt).toLocaleString('es-CL') : ''}>
                                     por {comp.contabilizadoPor}
                                   </span>
                                 )}
                               </div>
                             ) : (
-                              <span className="text-[8px] font-black uppercase text-amber-400 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 whitespace-nowrap">
+                              <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20 whitespace-nowrap">
                                 Pendiente
                               </span>
                             )}
@@ -811,18 +811,18 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={e => { e.stopPropagation(); handleVerAsiento(doc); }}
-                                className="p-1.5 text-blue-400 hover:bg-blue-500/20 rounded transition-colors"
+                                className="p-1.5 text-blue-600 hover:bg-blue-500/20 rounded transition-colors"
                                 title="Ver y editar asiento">
                                 <Eye className="h-3.5 w-3.5" />
                               </button>
                               <button onClick={e => { e.stopPropagation(); toggleRow(doc.id || idx, doc); }}
-                                className="p-1.5 text-gray-500 hover:text-white rounded transition-colors">
+                                className="p-1.5 text-slate-400 hover:text-slate-900 rounded transition-colors">
                                 {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                               </button>
                               <button
                                 onClick={e => { e.stopPropagation(); handleEliminarMovimiento(doc); }}
                                 disabled={deletingDocId === doc.id}
-                                className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/20 rounded transition-colors disabled:opacity-40"
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-500/20 rounded transition-colors disabled:opacity-40"
                                 title="Eliminar movimiento">
                                 {deletingDocId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                               </button>
@@ -841,33 +841,33 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                             const isSavingRow = savingRows.has(rowId);
                             return (
                               <tr>
-                                <td colSpan={9} className="p-0 border-b border-white/5">
+                                <td colSpan={9} className="p-0 border-b border-[#efe8dd]">
                                   <motion.div initial={{ opacity:0, height:0 }} animate={{ opacity:1, height:'auto' }} exit={{ opacity:0, height:0 }} transition={{ duration:0.2 }} className="overflow-hidden">
-                                    <div className="mx-5 my-3 bg-[#0a0f1e] rounded-xl border border-white/[0.07] overflow-hidden shadow-xl">
+                                    <div className="mx-5 my-3 bg-white rounded-xl border border-[#efe8dd] overflow-hidden shadow-xl">
                                       {/* Header */}
-                                      <div className="px-5 py-3 border-b border-white/[0.06] flex items-center justify-between gap-2 bg-white/[0.02]">
+                                      <div className="px-5 py-3 border-b border-white/[0.06] flex items-center justify-between gap-2 bg-white">
                                         <div className="flex items-center gap-3">
-                                          <span className="text-[10px] font-black uppercase tracking-widest text-gray-300">
+                                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
                                             Asiento — Folio #{folio}
                                           </span>
                                           {comp
-                                            ? <span className="flex items-center gap-1 text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20"><CheckCircle className="h-2.5 w-2.5" /> Guardado</span>
-                                            : <span className="flex items-center gap-1 text-[9px] font-black uppercase text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20"><AlertCircle className="h-2.5 w-2.5" /> Sin guardar</span>
+                                            ? <span className="flex items-center gap-1 text-[9px] font-black uppercase text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20"><CheckCircle className="h-2.5 w-2.5" /> Guardado</span>
+                                            : <span className="flex items-center gap-1 text-[9px] font-black uppercase text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20"><AlertCircle className="h-2.5 w-2.5" /> Sin guardar</span>
                                           }
                                           {cuadrado
-                                            ? <span className="text-[9px] font-black uppercase text-emerald-400">✓ Cuadrado</span>
-                                            : editLineas.length > 0 && <span className="text-[9px] font-black uppercase text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">⚠ Descuadre {formatCLP(Math.abs(tDebe-tHaber))}</span>
+                                            ? <span className="text-[9px] font-black uppercase text-emerald-600">✓ Cuadrado</span>
+                                            : editLineas.length > 0 && <span className="text-[9px] font-black uppercase text-red-500 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">⚠ Descuadre {formatCLP(Math.abs(tDebe-tHaber))}</span>
                                           }
                                         </div>
                                         <div className="flex items-center gap-2">
                                           <button onClick={e => { e.stopPropagation(); addLinea(rowId); }}
-                                            className="flex items-center gap-1 text-[9px] font-black uppercase text-blue-400 hover:text-blue-300 transition-colors px-2.5 py-1.5 rounded-lg hover:bg-blue-500/10 border border-transparent hover:border-blue-500/20">
+                                            className="flex items-center gap-1 text-[9px] font-black uppercase text-blue-600 hover:text-blue-700 transition-colors px-2.5 py-1.5 rounded-lg hover:bg-blue-500/10 border border-transparent hover:border-blue-500/20">
                                             <Plus className="h-3 w-3" /> Línea
                                           </button>
                                           <button
                                             onClick={e => { e.stopPropagation(); saveLineas(rowId, doc); }}
                                             disabled={!cuadrado || isSavingRow}
-                                            className="flex items-center gap-1.5 text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20">
+                                            className="flex items-center gap-1.5 text-[9px] font-black uppercase px-3 py-1.5 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20">
                                             {isSavingRow ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
                                             {isSavingRow ? 'Contabilizando...' : 'Contabilizar'}
                                           </button>
@@ -878,9 +878,9 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                                       <div className="px-5 py-3">
                                         {/* Header columnas */}
                                         <div className="grid grid-cols-[1fr_130px_130px_32px] gap-3 mb-2 px-1">
-                                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-600">Cuenta</span>
-                                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-600 text-right">Debe</span>
-                                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-600 text-right">Haber</span>
+                                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Cuenta</span>
+                                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 text-right">Debe</span>
+                                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 text-right">Haber</span>
                                           <span/>
                                         </div>
 
@@ -890,15 +890,15 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                                             <div key={li} className="grid grid-cols-[1fr_130px_130px_32px] gap-3 items-center" onClick={e => e.stopPropagation()}>
                                               <div>
                                                 <Select value={l.cuenta} onValueChange={val => updateLinea(rowId, li, 'cuenta', val)}>
-                                                  <SelectTrigger className="bg-slate-900/80 border-white/10 text-[10px] text-white h-8 w-full">
+                                                  <SelectTrigger className="bg-white border-[#efe8dd] text-[10px] text-slate-700 h-8 w-full">
                                                     <SelectValue placeholder="Seleccionar cuenta...">
-                                                      {l.cuenta ? <span className="font-mono">{l.cuenta} — {l.nombre || getNombre(l.cuenta)}</span> : <span className="text-gray-500">Seleccionar cuenta...</span>}
+                                                      {l.cuenta ? <span className="font-mono">{l.cuenta} — {l.nombre || getNombre(l.cuenta)}</span> : <span className="text-slate-400">Seleccionar cuenta...</span>}
                                                     </SelectValue>
                                                   </SelectTrigger>
-                                                  <SelectContent className="bg-slate-900 border-white/10 text-white max-h-[200px] overflow-y-auto z-50">
+                                                  <SelectContent className="bg-white border-[#efe8dd] text-slate-700 max-h-[200px] overflow-y-auto z-50">
                                                     {plan.map(c => (
                                                       <SelectItem key={c.codigo} value={c.codigo} className="text-[10px]">
-                                                        <span className="font-mono text-blue-400">{c.codigo}</span> — {c.descripcion}
+                                                        <span className="font-mono text-blue-600">{c.codigo}</span> — {c.descripcion}
                                                       </SelectItem>
                                                     ))}
                                                   </SelectContent>
@@ -906,14 +906,14 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                                               </div>
                                               <input type="number" min="0" value={l.debe || ''} placeholder="0"
                                                 onChange={e => updateLinea(rowId, li, 'debe', e.target.value)}
-                                                className="w-full bg-slate-900/80 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] text-emerald-400 font-mono text-right focus:outline-none focus:border-emerald-500 h-8" />
+                                                className="w-full bg-white border border-[#efe8dd] rounded-lg px-3 py-1.5 text-[10px] text-emerald-600 font-mono text-right focus:outline-none focus:border-emerald-500 h-8" />
                                               <input type="number" min="0" value={l.haber || ''} placeholder="0"
                                                 onChange={e => updateLinea(rowId, li, 'haber', e.target.value)}
-                                                className="w-full bg-slate-900/80 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] text-orange-400 font-mono text-right focus:outline-none focus:border-orange-500 h-8" />
+                                                className="w-full bg-white border border-[#efe8dd] rounded-lg px-3 py-1.5 text-[10px] text-orange-600 font-mono text-right focus:outline-none focus:border-orange-500 h-8" />
                                               <div className="flex justify-center">
                                                 {editLineas.length > 2 && (
                                                   <button onClick={e => { e.stopPropagation(); removeLinea(rowId, li); }}
-                                                    className="text-gray-700 hover:text-red-400 transition-colors">
+                                                    className="text-slate-600 hover:text-red-500 transition-colors">
                                                     <Trash2 className="h-3 w-3" />
                                                   </button>
                                                 )}
@@ -924,9 +924,9 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
 
                                         {/* Totales */}
                                         <div className="grid grid-cols-[1fr_130px_130px_32px] gap-3 mt-3 pt-3 border-t border-white/[0.06]">
-                                          <span className="text-[9px] font-black uppercase tracking-widest text-gray-500 px-1">Totales</span>
-                                          <span className="text-right font-mono text-[10px] font-black text-emerald-400">{tDebe > 0 ? formatCLP(tDebe) : '—'}</span>
-                                          <span className="text-right font-mono text-[10px] font-black text-orange-400">{tHaber > 0 ? formatCLP(tHaber) : '—'}</span>
+                                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 px-1">Totales</span>
+                                          <span className="text-right font-mono text-[10px] font-black text-emerald-600">{tDebe > 0 ? formatCLP(tDebe) : '—'}</span>
+                                          <span className="text-right font-mono text-[10px] font-black text-orange-600">{tHaber > 0 ? formatCLP(tHaber) : '—'}</span>
                                           <span/>
                                         </div>
                                       </div>
@@ -944,18 +944,18 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
               </table>
             </div>
 
-            <div className="flex items-center justify-between px-5 py-4 bg-black/20 border-t border-white/10">
-              <div className="text-[10px] text-gray-500 font-black uppercase tracking-widest">
+            <div className="flex items-center justify-between px-5 py-4 bg-slate-50 border-t border-[#efe8dd]">
+              <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
                 Mostrando {(currentPage-1)*ITEMS_PER_PAGE+1}–{Math.min(currentPage*ITEMS_PER_PAGE, docActivos.length)} de {docActivos.length}
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1,p-1))} disabled={currentPage===1}
-                  className="h-8 bg-black/40 border-white/10 text-gray-400 hover:text-white disabled:opacity-20 font-black text-xs uppercase">
+                  className="h-8 bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900 disabled:opacity-20 font-black text-xs uppercase">
                   <ChevronLeft size={14} className="mr-1" /> ANT
                 </Button>
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Pág {currentPage} de {totalPages}</span>
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">Pág {currentPage} de {totalPages}</span>
                 <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages,p+1))} disabled={currentPage===totalPages}
-                  className="h-8 bg-black/40 border-white/10 text-gray-400 hover:text-white disabled:opacity-20 font-black text-xs uppercase">
+                  className="h-8 bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900 disabled:opacity-20 font-black text-xs uppercase">
                   SIG <ChevronRight size={14} className="ml-1" />
                 </Button>
               </div>
@@ -966,9 +966,9 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
 
       {/* MODAL LIBRO DIARIO */}
       <Dialog open={isLibroModalOpen} onOpenChange={setIsLibroModalOpen}>
-        <DialogContent className="sm:max-w-[820px] bg-[#0f172a] border-white/10 text-white shadow-2xl">
+        <DialogContent className="sm:max-w-[820px] bg-white border-[#efe8dd] text-slate-700 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-3 text-lg font-black uppercase tracking-tight text-purple-400">
+            <DialogTitle className="flex items-center gap-3 text-lg font-black uppercase tracking-tight text-purple-600">
               <BookCopy className="h-5 w-5" />
               Centralización Contable
             </DialogTitle>
@@ -976,18 +976,18 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
 
           <div className="max-h-[65vh] overflow-y-auto custom-scrollbar pr-1 space-y-4 mt-2">
             {/* Resumen del período a centralizar */}
-            <div className="bg-black/40 border border-white/5 rounded-xl p-4 space-y-3">
+            <div className="bg-slate-50 border border-[#efe8dd] rounded-xl p-4 space-y-3">
               {/* Tipo de período: solo cuando NO hay rango global activo */}
               {!rango?.desde && (
                 <div>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-blue-300 mb-2 flex items-center gap-2">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-blue-700 mb-2 flex items-center gap-2">
                     <CalendarDays className="h-3.5 w-3.5" /> Tipo de Período
                   </p>
                   <div className="grid grid-cols-4 gap-2">
                     {[{v:'diario',l:'Diario'},{v:'mensual',l:'Mensual'},{v:'trimestral',l:'Trimestral'},{v:'anual',l:'Anual'}].map(({v,l}) => (
                       <button key={v} onClick={() => setTipoPeriodoLibro(v)}
                         className={`py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                          tipoPeriodoLibro === v ? 'bg-purple-600 text-white shadow-lg' : 'bg-slate-800/50 text-gray-500 hover:text-white hover:bg-slate-700/50 border border-white/5'
+                          tipoPeriodoLibro === v ? 'bg-purple-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-slate-100/50 border border-[#efe8dd]'
                         }`}>
                         {l}
                       </button>
@@ -995,10 +995,10 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                   </div>
                   {tipoPeriodoLibro === 'diario' && (
                     <div className="mt-3">
-                      <label className="text-[9px] font-bold uppercase text-gray-500 mb-1.5 block">Día</label>
+                      <label className="text-[9px] font-bold uppercase text-slate-400 mb-1.5 block">Día</label>
                       <select value={diaLibro} onChange={e => setDiaLibro(e.target.value)}
-                        className="w-28 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500">
-                        {diasDelMes.map(d => <option key={d} value={d} className="bg-slate-900">{d}</option>)}
+                        className="w-28 bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-purple-500">
+                        {diasDelMes.map(d => <option key={d} value={d} className="bg-white">{d}</option>)}
                       </select>
                     </div>
                   )}
@@ -1007,14 +1007,14 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
 
               {/* Chips de resumen */}
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1.5 rounded-lg">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-purple-700 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1.5 rounded-lg">
                   <CalendarDays className="h-3 w-3" /> {libroPeriodo}
                 </span>
-                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg">
                   <CheckCircle className="h-3 w-3" /> {libroVentasGuardadas.length + libroComprasGuardadas.length} contabilizado{(libroVentasGuardadas.length + libroComprasGuardadas.length) !== 1 ? 's' : ''} a centralizar
                 </span>
                 {libroPendientesTotal > 0 && (
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-amber-300 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-lg">
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-amber-700 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1.5 rounded-lg">
                     <AlertCircle className="h-3 w-3" /> {libroPendientesTotal} sin contabilizar (excluido{libroPendientesTotal !== 1 ? 's' : ''})
                   </span>
                 )}
@@ -1032,10 +1032,10 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
             {/* Tabla de asientos */}
             {libroAsientos.length === 0 ? (
               <div className="text-center py-12 flex flex-col items-center gap-2">
-                <AlertCircle className="h-8 w-8 text-amber-400/40" />
-                <p className="text-gray-300 font-black uppercase text-xs tracking-widest">Nada que centralizar</p>
-                <p className="text-gray-500 text-[10px] max-w-sm leading-relaxed">
-                  No hay documentos <span className="text-emerald-400">contabilizados</span> en este período.
+                <AlertCircle className="h-8 w-8 text-amber-600/40" />
+                <p className="text-slate-600 font-black uppercase text-xs tracking-widest">Nada que centralizar</p>
+                <p className="text-slate-400 text-[10px] max-w-sm leading-relaxed">
+                  No hay documentos <span className="text-emerald-600">contabilizados</span> en este período.
                   Contabiliza compras o ventas primero y vuelve a centralizar.
                 </p>
               </div>
@@ -1045,42 +1045,42 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
               const haber  = lineas.reduce((s,l) => s+(Number(l.haber)||0), 0);
               const cuadrado = lineas.length > 0 && Math.abs(debe-haber) < 1;
               return (
-                <div className="bg-black/20 rounded-xl border border-white/10 overflow-hidden">
-                  <div className="px-4 py-2.5 border-b border-white/5 flex items-center justify-between bg-purple-900/10">
-                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Asiento Centralizado</span>
+                <div className="bg-slate-50 rounded-xl border border-[#efe8dd] overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-[#efe8dd] flex items-center justify-between bg-purple-900/10">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Asiento Centralizado</span>
                     {cuadrado && (
-                      <span className="flex items-center gap-1 text-[9px] font-black uppercase text-emerald-400">
+                      <span className="flex items-center gap-1 text-[9px] font-black uppercase text-emerald-600">
                         <CheckCircle className="h-3 w-3" /> Cuadrado
                       </span>
                     )}
                   </div>
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-white/5">
+                      <tr className="bg-slate-50">
                         {['Código','Descripción','Debe','Haber'].map(h => (
-                          <th key={h} className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 ${h==='Debe'||h==='Haber'?'text-right':'text-left'}`}>{h}</th>
+                          <th key={h} className={`px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 ${h==='Debe'||h==='Haber'?'text-right':'text-left'}`}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
                       {libroAsientos.map((linea, idx) => linea.tipo === 'header' ? (
                         <tr key={idx} className="bg-purple-900/20">
-                          <td colSpan={4} className="px-4 py-2 text-xs font-black text-purple-400 uppercase">{linea.glosa}</td>
+                          <td colSpan={4} className="px-4 py-2 text-xs font-black text-purple-600 uppercase">{linea.glosa}</td>
                         </tr>
                       ) : (
-                        <tr key={idx} className="hover:bg-white/[0.02]">
-                          <td className="px-4 py-3 font-mono text-xs text-blue-300 font-bold">{linea.codigo}</td>
-                          <td className="px-4 py-3 text-xs text-white font-bold">{linea.descripcion}</td>
-                          <td className="px-4 py-3 text-right font-mono text-xs text-emerald-400 font-bold">{linea.debe>0?formatCLP(linea.debe):<span className="text-gray-700">—</span>}</td>
-                          <td className="px-4 py-3 text-right font-mono text-xs text-orange-400 font-bold">{linea.haber>0?formatCLP(linea.haber):<span className="text-gray-700">—</span>}</td>
+                        <tr key={idx} className="hover:bg-white">
+                          <td className="px-4 py-3 font-mono text-xs text-blue-700 font-bold">{linea.codigo}</td>
+                          <td className="px-4 py-3 text-xs text-slate-900 font-bold">{linea.descripcion}</td>
+                          <td className="px-4 py-3 text-right font-mono text-xs text-emerald-600 font-bold">{linea.debe>0?formatCLP(linea.debe):<span className="text-slate-600">—</span>}</td>
+                          <td className="px-4 py-3 text-right font-mono text-xs text-orange-600 font-bold">{linea.haber>0?formatCLP(linea.haber):<span className="text-slate-600">—</span>}</td>
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="bg-white/5">
+                    <tfoot className="bg-slate-50">
                       <tr>
-                        <td colSpan={2} className="px-4 py-3 text-[10px] font-black uppercase text-gray-400">Totales</td>
-                        <td className="px-4 py-3 text-right font-mono text-xs font-black text-emerald-400">{formatCLP(debe)}</td>
-                        <td className="px-4 py-3 text-right font-mono text-xs font-black text-orange-400">{formatCLP(haber)}</td>
+                        <td colSpan={2} className="px-4 py-3 text-[10px] font-black uppercase text-slate-500">Totales</td>
+                        <td className="px-4 py-3 text-right font-mono text-xs font-black text-emerald-600">{formatCLP(debe)}</td>
+                        <td className="px-4 py-3 text-right font-mono text-xs font-black text-orange-600">{formatCLP(haber)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1090,7 +1090,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
           </div>
 
           <DialogFooter className="mt-4">
-            <Button variant="ghost" onClick={() => setIsLibroModalOpen(false)} className="text-gray-400 hover:text-white">
+            <Button variant="ghost" onClick={() => setIsLibroModalOpen(false)} className="text-slate-500 hover:text-slate-900">
               Cancelar
             </Button>
             <Button onClick={handleEnviarLibroDiario} disabled={libroAsientos.length === 0}

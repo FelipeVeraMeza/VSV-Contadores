@@ -435,9 +435,9 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
     if (Number(dtAtrasados) > 0) recordatorios.push({ t: `${dtAtrasados} trámite(s) DT atrasado(s)`, tone: 'amber' });
     if (ticketsAbiertos > 0) recordatorios.push({ t: `${ticketsAbiertos} ticket(s) abierto(s)`, tone: 'sky' });
     const toneCls = {
-        red: 'text-red-300 bg-red-500/10 border-red-500/30',
-        amber: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
-        sky: 'text-sky-300 bg-sky-500/10 border-sky-500/30',
+        red: 'text-red-600 bg-red-500/10 border-red-500/30',
+        amber: 'text-amber-700 bg-amber-500/10 border-amber-500/30',
+        sky: 'text-sky-700 bg-sky-500/10 border-sky-500/30',
     };
 
     return (
@@ -455,14 +455,14 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ type: 'tween', duration: 0.2 }}
-            className="pointer-events-auto w-full max-w-3xl max-h-[88vh] bg-[#0f172a]/95 backdrop-blur-3xl border border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-2xl"
+            className="pointer-events-auto w-full max-w-3xl max-h-[88vh] bg-white backdrop-blur-3xl border border-[#efe8dd] rounded-2xl flex flex-col overflow-hidden shadow-2xl"
         >
             {/* CABECERA (Con Atajos Dinámicos) */}
-            <div className="p-5 border-b border-white/10 flex flex-col gap-4 bg-gradient-to-r from-blue-900/30 to-transparent shrink-0">
+            <div className="p-5 border-b border-[#efe8dd] flex flex-col gap-4 bg-gradient-to-r from-blue-900/30 to-transparent shrink-0">
                 
                 {/* 1. Nombre y Plan */}
                 <div className="flex gap-4 items-center">
-                    <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 overflow-hidden">
+                    <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-600 shrink-0 overflow-hidden">
                         {logoUrl ? (
                             <img src={logoUrl} alt="logo" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                         ) : (
@@ -470,18 +470,18 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                         )}
                     </div>
                     <div className="min-w-0">
-                        <h2 className="text-sm md:text-base font-black text-white uppercase tracking-tight leading-tight truncate">
+                        <h2 className="text-sm md:text-base font-black text-slate-900 uppercase tracking-tight leading-tight truncate">
                             {razonSocial}
                         </h2>
                         <div className="flex flex-wrap items-center gap-2 mt-1">
-                            <button onClick={() => copiar(rut, 'RUT')} title="Copiar RUT" className="group flex items-center gap-1 text-xs text-gray-400 font-mono bg-black/30 hover:bg-black/50 px-2 py-0.5 rounded border border-white/5 truncate transition-colors">
+                            <button onClick={() => copiar(rut, 'RUT')} title="Copiar RUT" className="group flex items-center gap-1 text-xs text-slate-500 font-mono bg-slate-50 hover:bg-black/50 px-2 py-0.5 rounded border border-[#efe8dd] truncate transition-colors">
                                 {rut} <Copy size={11} className="opacity-40 group-hover:opacity-100" />
                             </button>
-                            <span className="text-[10px] font-black px-2 py-0.5 rounded border border-blue-500/30 text-blue-400 bg-blue-500/10 uppercase shrink-0">
+                            <span className="text-[10px] font-black px-2 py-0.5 rounded border border-blue-500/30 text-blue-600 bg-blue-500/10 uppercase shrink-0">
                                 Plan: {plan}
                             </span>
                             {honorario > 0 && (
-                                <span className="text-[10px] font-black px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-300 bg-emerald-500/10 shrink-0">
+                                <span className="text-[10px] font-black px-2 py-0.5 rounded border border-emerald-500/30 text-emerald-700 bg-emerald-500/10 shrink-0">
                                     {fmt(honorario)}/mes
                                 </span>
                             )}
@@ -491,16 +491,16 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                         <div className="flex items-center gap-1.5 mt-2">
                             {telParaLink.length >= 8 && (
                                 <>
-                                    <a href={`https://wa.me/${telParaLink}`} target="_blank" rel="noreferrer" title="WhatsApp" className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 hover:text-white bg-emerald-500/10 hover:bg-emerald-600 border border-emerald-500/30 px-2 py-1 rounded-lg transition-colors">
+                                    <a href={`https://wa.me/${telParaLink}`} target="_blank" rel="noreferrer" title="WhatsApp" className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 hover:text-slate-900 bg-emerald-500/10 hover:bg-emerald-600 border border-emerald-500/30 px-2 py-1 rounded-lg transition-colors">
                                         <MessageSquare size={12} /> WhatsApp
                                     </a>
-                                    <a href={`tel:+${telParaLink}`} title="Llamar" className="flex items-center gap-1 text-[10px] font-bold text-sky-400 hover:text-white bg-sky-500/10 hover:bg-sky-600 border border-sky-500/30 px-2 py-1 rounded-lg transition-colors">
+                                    <a href={`tel:+${telParaLink}`} title="Llamar" className="flex items-center gap-1 text-[10px] font-bold text-sky-400 hover:text-slate-900 bg-sky-500/10 hover:bg-sky-600 border border-sky-500/30 px-2 py-1 rounded-lg transition-colors">
                                         <Phone size={12} /> Llamar
                                     </a>
                                 </>
                             )}
                             {correoLink && (
-                                <a href={`mailto:${correoLink}`} title="Enviar correo" className="flex items-center gap-1 text-[10px] font-bold text-purple-400 hover:text-white bg-purple-500/10 hover:bg-purple-600 border border-purple-500/30 px-2 py-1 rounded-lg transition-colors">
+                                <a href={`mailto:${correoLink}`} title="Enviar correo" className="flex items-center gap-1 text-[10px] font-bold text-purple-600 hover:text-slate-900 bg-purple-500/10 hover:bg-purple-600 border border-purple-500/30 px-2 py-1 rounded-lg transition-colors">
                                     <Mail size={12} /> Correo
                                 </a>
                             )}
@@ -520,7 +520,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                                     animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0, scale: 0.9 }}
                                     onClick={() => navigate('/facturacion')}
-                                    className="hidden md:flex items-center gap-1.5 px-3 py-1.5 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-600 hover:text-white transition-all shadow-lg"
+                                    className="hidden md:flex items-center gap-1.5 px-3 py-1.5 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-600 hover:text-slate-900 transition-all shadow-lg"
                                 >
                                     <Receipt size={14} /> Facturador
                                 </motion.button>
@@ -531,7 +531,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                                     animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0, scale: 0.9 }}
                                     onClick={() => navigate('/bancos')}
-                                    className="hidden md:flex items-center gap-1.5 px-3 py-1.5 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white transition-all shadow-lg"
+                                    className="hidden md:flex items-center gap-1.5 px-3 py-1.5 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 hover:bg-indigo-600 hover:text-slate-900 transition-all shadow-lg"
                                 >
                                     <Landmark size={14} /> Bancos
                                 </motion.button>
@@ -542,7 +542,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                     {/* Botón: Seleccionar / Empresa Activa */}
                     <button 
                         onClick={handleSelectCompany}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] transition-all ${isSelected ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-500/20'}`}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] transition-all ${isSelected ? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-blue-500/20'}`}
                     >
                         {isSelected ? (
                             <><CheckCircle2 size={14} /> Seleccionada</>
@@ -553,15 +553,15 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
 
                     {/* Controles de Ventana (Editar, Eliminar y Cerrar) */}
                     <div className="flex gap-1 ml-auto">
-                        <button onClick={() => setIsEditing(!isEditing)} aria-label={isEditing ? 'Salir de edición' : 'Editar cliente'} title="Editar" className={`p-1.5 md:p-2 rounded-xl border transition-colors ${isEditing ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'bg-white/5 border-transparent text-gray-400 hover:text-white'}`}>
+                        <button onClick={() => setIsEditing(!isEditing)} aria-label={isEditing ? 'Salir de edición' : 'Editar cliente'} title="Editar" className={`p-1.5 md:p-2 rounded-xl border transition-colors ${isEditing ? 'bg-blue-500/20 border-blue-500/50 text-blue-600' : 'bg-slate-50 border-transparent text-slate-500 hover:text-slate-900'}`}>
                             <Edit size={16} />
                         </button>
                         {onDelete && (
-                            <button onClick={() => setConfirmDelete(true)} title="Eliminar cliente" className="p-1.5 md:p-2 rounded-xl bg-white/5 border border-transparent text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                            <button onClick={() => setConfirmDelete(true)} title="Eliminar cliente" className="p-1.5 md:p-2 rounded-xl bg-slate-50 border border-transparent text-slate-500 hover:text-red-500 hover:bg-red-500/10 transition-colors">
                                 <Trash2 size={16} />
                             </button>
                         )}
-                        <button onClick={onClose} aria-label="Cerrar ficha" title="Cerrar" className="p-1.5 md:p-2 rounded-xl bg-white/5 text-gray-400 hover:text-red-400 transition-colors">
+                        <button onClick={onClose} aria-label="Cerrar ficha" title="Cerrar" className="p-1.5 md:p-2 rounded-xl bg-slate-50 text-slate-500 hover:text-red-500 transition-colors">
                             <X size={16} />
                         </button>
                     </div>
@@ -581,8 +581,8 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
 
                 {/* RECORDATORIOS / ALERTAS */}
                 {recordatorios.length > 0 && (
-                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-3">
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <div className="bg-white border border-[#efe8dd] rounded-2xl p-3">
+                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-2">
                             <Bell size={13} /> Recordatorios ({recordatorios.length})
                         </h3>
                         <div className="flex flex-wrap gap-1.5">
@@ -594,13 +594,13 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                 )}
 
                 {/* 0. ESTADO Y CLASIFICACIÓN */}
-                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+                <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
                     <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
                             <CheckCircle2 size={14} /> Estado y Clasificación
                         </h3>
                         {!isEditing && (
-                            <button onClick={() => setIsEditing(true)} className="text-[9px] font-black uppercase tracking-widest text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                            <button onClick={() => setIsEditing(true)} className="text-[9px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-700 flex items-center gap-1">
                                 <Edit size={11} /> Editar
                             </button>
                         )}
@@ -611,45 +611,45 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                                 <SelectField label="Estado de Pago" name="pagoServicio" value={formData.pagoServicio || pagoServicio} isEditing={true} onChange={handleInputChange} options={conActual(OPCIONES_PAGO, formData.pagoServicio || pagoServicio)} />
                                 <SelectField label="Estado F29" name="estadoFormulario" value={formData.estadoFormulario || estadoF29} isEditing={true} onChange={handleInputChange} options={conActual(OPCIONES_F29, formData.estadoFormulario || estadoF29)} />
                                 <div className="flex flex-col gap-1.5">
-                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Score (automático)</span>
-                                    <span className="text-[10px] text-gray-500 italic">Se recalcula según los estados</span>
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Score (automático)</span>
+                                    <span className="text-[10px] text-slate-400 italic">Se recalcula según los estados</span>
                                 </div>
                             </>
                         ) : (
                             <>
                                 <div className="flex flex-col gap-1.5">
-                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Estado de Pago</span>
-                                    <span className={`w-fit text-[10px] font-black px-2 py-0.5 rounded-full border uppercase ${(pagoServicio === 'PAGADO' || pagoServicio === 'AL DIA') ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30' : pagoServicio === 'NO PAGADO' ? 'text-red-300 bg-red-500/10 border-red-500/30' : 'text-slate-300 bg-slate-500/10 border-slate-500/30'}`}>{pagoServicio}</span>
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estado de Pago</span>
+                                    <span className={`w-fit text-[10px] font-black px-2 py-0.5 rounded-full border uppercase ${(pagoServicio === 'PAGADO' || pagoServicio === 'AL DIA') ? 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30' : pagoServicio === 'NO PAGADO' ? 'text-red-600 bg-red-500/10 border-red-500/30' : 'text-slate-600 bg-slate-500/10 border-slate-500/30'}`}>{pagoServicio}</span>
                                 </div>
                                 <div className="flex flex-col gap-1.5">
-                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Estado F29</span>
-                                    <span className={`w-fit text-[10px] font-black px-2 py-0.5 rounded-full border uppercase ${(estadoF29 === 'DECLARADO' || estadoF29 === 'NO DECLARAR') ? 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30' : estadoF29 === 'PENDIENTE' ? 'text-amber-300 bg-amber-500/10 border-amber-500/30' : 'text-orange-300 bg-orange-500/10 border-orange-500/30'}`}>{estadoF29}</span>
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estado F29</span>
+                                    <span className={`w-fit text-[10px] font-black px-2 py-0.5 rounded-full border uppercase ${(estadoF29 === 'DECLARADO' || estadoF29 === 'NO DECLARAR') ? 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30' : estadoF29 === 'PENDIENTE' ? 'text-amber-700 bg-amber-500/10 border-amber-500/30' : 'text-orange-700 bg-orange-500/10 border-orange-500/30'}`}>{estadoF29}</span>
                                 </div>
                                 <div className="flex flex-col gap-1.5">
-                                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Score</span>
-                                    <span className={`w-fit text-[10px] font-black px-2 py-0.5 rounded-md border ${score >= 80 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : score >= 50 ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'}`}>Score {score}</span>
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Score</span>
+                                    <span className={`w-fit text-[10px] font-black px-2 py-0.5 rounded-md border ${score >= 80 ? 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20' : score >= 50 ? 'text-amber-600 bg-amber-500/10 border-amber-500/20' : 'text-red-500 bg-red-500/10 border-red-500/20'}`}>Score {score}</span>
                                 </div>
                             </>
                         )}
                     </div>
 
                     {/* Estado del servicio: Activo / De baja (controla en qué pestaña aparece) */}
-                    <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between gap-3">
-                        <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Estado del servicio</span>
+                    <div className="mt-3 pt-3 border-t border-[#efe8dd] flex items-center justify-between gap-3">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estado del servicio</span>
                         {isEditing ? (
-                            <div className="flex bg-black/40 p-1 rounded-lg border border-white/10">
-                                <button type="button" onClick={() => setFormData(prev => ({ ...prev, activo: true }))} className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest transition-colors ${formData.activo !== false ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'}`}>Activo</button>
-                                <button type="button" onClick={() => setFormData(prev => ({ ...prev, activo: false }))} className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest transition-colors ${formData.activo === false ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'}`}>De baja</button>
+                            <div className="flex bg-slate-50 p-1 rounded-lg border border-[#efe8dd]">
+                                <button type="button" onClick={() => setFormData(prev => ({ ...prev, activo: true }))} className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest transition-colors ${formData.activo !== false ? 'bg-emerald-600 text-white' : 'text-slate-500 hover:text-slate-900'}`}>Activo</button>
+                                <button type="button" onClick={() => setFormData(prev => ({ ...prev, activo: false }))} className={`px-3 py-1 rounded text-[10px] font-black uppercase tracking-widest transition-colors ${formData.activo === false ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-900'}`}>De baja</button>
                             </div>
                         ) : (
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border uppercase ${formData.activo === false ? 'text-red-300 bg-red-500/10 border-red-500/30' : 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30'}`}>{formData.activo === false ? 'De baja' : 'Activo'}</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border uppercase ${formData.activo === false ? 'text-red-600 bg-red-500/10 border-red-500/30' : 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30'}`}>{formData.activo === false ? 'De baja' : 'Activo'}</span>
                         )}
                     </div>
                 </div>
 
                 {/* 1. INFO GENERAL */}
-                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
+                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <User size={14} /> Contacto y Representante
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
@@ -665,8 +665,8 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                 </div>
 
                 {/* DIRECCIÓN */}
-                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
+                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <Landmark size={14} /> Dirección (Casa Matriz)
                     </h3>
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -683,7 +683,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
 
                 {/* 2. CREDENCIALES */}
                 <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-4">
-                    <h3 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <Key size={14} /> Accesos y Credenciales
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
@@ -701,7 +701,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                         {planHistorial.length > 0 && (
                             <button
                                 onClick={() => setShowPlanHistory(!showPlanHistory)}
-                                className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-gray-400 hover:text-white transition-colors"
+                                className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-900 transition-colors"
                             >
                                 <History size={12} /> Historial ({planHistorial.length})
                             </button>
@@ -711,11 +711,11 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                     {/* Plan actual + selector */}
                     <div className="flex flex-wrap items-end gap-2 mb-2">
                         <div className="flex flex-col gap-1 flex-1 min-w-[120px]">
-                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Plan Actual</span>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Plan Actual</span>
                             <select
                                 value={selectedPlanId}
                                 onChange={(e) => setSelectedPlanId(e.target.value)}
-                                className="bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 cursor-pointer"
+                                className="bg-slate-50 border border-[#efe8dd] rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-indigo-500 cursor-pointer"
                             >
                                 <option value="">— Selecciona un plan —</option>
                                 {planes.map(p => {
@@ -730,12 +730,12 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                             onChange={(e) => setPlanMotivo(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter' && selectedPlanId && selectedPlanId !== formData.planId) setConfirmPlan(true); }}
                             placeholder="Motivo (opcional)"
-                            className="flex-1 min-w-[120px] bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 placeholder:text-gray-600"
+                            className="flex-1 min-w-[120px] bg-slate-50 border border-[#efe8dd] rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-indigo-500 placeholder:text-slate-400"
                         />
                         <Button
                             onClick={() => setConfirmPlan(true)}
                             disabled={isSavingPlan || !selectedPlanId || selectedPlanId === formData.planId}
-                            className="bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 h-9 text-[10px] font-black uppercase tracking-widest"
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 h-9 text-[10px] font-black uppercase tracking-widest"
                         >
                             Cambiar
                         </Button>
@@ -750,11 +750,11 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                             >
                                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
                                     <p className="text-[11px] text-amber-100 font-bold mb-2">
-                                        ¿Cambiar plan de <span className="text-white">{plan}</span> a <span className="text-white">{nombreDePlanId(selectedPlanId)}</span>?
-                                        {precioSeleccionado && <span className="text-emerald-300"> Nuevo valor: {fmt(precioSeleccionado.neto)} +IVA.</span>}
+                                        ¿Cambiar plan de <span className="text-slate-900 font-bold">{plan}</span> a <span className="text-slate-900 font-bold">{nombreDePlanId(selectedPlanId)}</span>?
+                                        {precioSeleccionado && <span className="text-emerald-700"> Nuevo valor: {fmt(precioSeleccionado.neto)} +IVA.</span>}
                                     </p>
                                     <div className="flex gap-2">
-                                        <Button onClick={() => setConfirmPlan(false)} disabled={isSavingPlan} className="flex-1 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg h-8 text-[10px] font-black uppercase tracking-widest">
+                                        <Button onClick={() => setConfirmPlan(false)} disabled={isSavingPlan} className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-lg h-8 text-[10px] font-black uppercase tracking-widest">
                                             Cancelar
                                         </Button>
                                         <Button onClick={handleCambiarPlan} disabled={isSavingPlan} className="flex-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg h-8 text-[10px] font-black uppercase tracking-widest">
@@ -767,39 +767,39 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                     </AnimatePresence>
                     {/* Precio del plan según facturación de la empresa */}
                     {precioSeleccionado && (
-                        <div className="bg-black/20 border border-indigo-500/20 rounded-xl p-3 mb-2">
+                        <div className="bg-slate-50 border border-indigo-500/20 rounded-xl p-3 mb-2">
                             <div className="flex items-center justify-between">
-                                <span className="text-[9px] text-gray-500 uppercase tracking-widest">Valor del plan</span>
-                                <span className="text-[9px] text-gray-500">
+                                <span className="text-[9px] text-slate-400 uppercase tracking-widest">Valor del plan</span>
+                                <span className="text-[9px] text-slate-400">
                                     {precioSeleccionado.fijo ? 'Precio fijo' : `Facturación: ${fmt(facturacionMensual)}`}
                                 </span>
                             </div>
                             <div className="flex items-baseline gap-2 mt-1">
-                                <span className="text-lg font-black text-white">{fmt(precioSeleccionado.neto)}</span>
-                                <span className="text-[10px] text-gray-400">neto</span>
-                                <span className="text-[10px] text-gray-500">+ IVA {fmt(precioSeleccionado.iva)}</span>
+                                <span className="text-lg font-black text-slate-900">{fmt(precioSeleccionado.neto)}</span>
+                                <span className="text-[10px] text-slate-500">neto</span>
+                                <span className="text-[10px] text-slate-400">+ IVA {fmt(precioSeleccionado.iva)}</span>
                             </div>
                             <div className="flex items-center justify-between mt-0.5">
-                                <span className="text-[11px] font-bold text-emerald-400">Total: {fmt(precioSeleccionado.total)}</span>
-                                {precioSeleccionado.rrhhGratis > 0 && <span className="text-[9px] font-black text-amber-400">🎁 {precioSeleccionado.rrhhGratis} RRHH gratis</span>}
+                                <span className="text-[11px] font-bold text-emerald-600">Total: {fmt(precioSeleccionado.total)}</span>
+                                {precioSeleccionado.rrhhGratis > 0 && <span className="text-[9px] font-black text-amber-600">🎁 {precioSeleccionado.rrhhGratis} RRHH gratis</span>}
                             </div>
                         </div>
                     )}
                     {fechaCambioPlan && (
-                        <p className="text-[9px] text-gray-500 mb-3">Último cambio de plan: <span className="text-gray-300 font-bold">{fechaCambioPlan}</span></p>
+                        <p className="text-[9px] text-slate-400 mb-3">Último cambio de plan: <span className="text-slate-600 font-bold">{fechaCambioPlan}</span></p>
                     )}
 
                     {/* Historial de cambios de plan */}
                     <AnimatePresence>
                         {showPlanHistory && planHistorial.length > 0 && (
                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-3">
-                                <div className="space-y-2 bg-black/20 rounded-xl p-3 border border-white/5 max-h-40 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
+                                <div className="space-y-2 bg-slate-50 rounded-xl p-3 border border-[#efe8dd] max-h-40 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
                                     {planHistorial.map((h, i) => (
-                                        <div key={i} className="text-[10px] border-b border-white/5 pb-1.5 last:border-0 last:pb-0">
-                                            <div className="flex items-center gap-1.5 text-gray-200 font-bold">
-                                                <span className="text-gray-500">{h.planAnterior}</span> → <span className="text-indigo-300">{h.planNuevo}</span>
+                                        <div key={i} className="text-[10px] border-b border-[#efe8dd] pb-1.5 last:border-0 last:pb-0">
+                                            <div className="flex items-center gap-1.5 text-slate-700 font-bold">
+                                                <span className="text-slate-400">{h.planAnterior}</span> → <span className="text-indigo-300">{h.planNuevo}</span>
                                             </div>
-                                            <div className="text-gray-500 flex flex-wrap gap-x-2">
+                                            <div className="text-slate-400 flex flex-wrap gap-x-2">
                                                 <span>{h.fecha}</span>
                                                 <span>· {h.autor}</span>
                                                 {h.motivo && <span className="italic">· {h.motivo}</span>}
@@ -812,41 +812,41 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                     </AnimatePresence>
 
                     {/* Servicios contratados (activos) */}
-                    <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Servicios Contratados</span>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Servicios Contratados</span>
                     <div className="flex flex-col gap-1.5 mt-2 mb-3">
                         {serviciosActivos.length > 0 ? serviciosActivos.map(s => (
-                            <div key={s.id} className="flex items-center justify-between gap-2 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5">
+                            <div key={s.id} className="flex items-center justify-between gap-2 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5">
                                 <div className="flex flex-col min-w-0">
-                                    <span className="text-[11px] font-bold text-gray-200 truncate">{s.nombre}</span>
-                                    {s.fechaInicio && <span className="text-[8px] text-gray-500">Desde {s.fechaInicio}</span>}
+                                    <span className="text-[11px] font-bold text-slate-700 truncate">{s.nombre}</span>
+                                    {s.fechaInicio && <span className="text-[8px] text-slate-400">Desde {s.fechaInicio}</span>}
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
-                                    {s.precioPactado ? <span className="text-[11px] font-black text-emerald-400">${Number(s.precioPactado).toLocaleString('es-CL')}</span> : <span className="text-[9px] text-gray-600 italic">sin precio</span>}
-                                    <button onClick={() => handleRemoveServicio(s)} title="Dar de baja" className="text-gray-500 hover:text-red-400 transition-colors">
+                                    {s.precioPactado ? <span className="text-[11px] font-black text-emerald-600">${Number(s.precioPactado).toLocaleString('es-CL')}</span> : <span className="text-[9px] text-slate-400 italic">sin precio</span>}
+                                    <button onClick={() => handleRemoveServicio(s)} title="Dar de baja" className="text-slate-400 hover:text-red-500 transition-colors">
                                         <Trash2 size={12} />
                                     </button>
                                 </div>
                             </div>
                         )) : (
-                            <span className="text-[10px] text-gray-500 italic">Sin servicios contratados.</span>
+                            <span className="text-[10px] text-slate-400 italic">Sin servicios contratados.</span>
                         )}
                     </div>
 
                     {/* Servicios suspendidos (con opción de reactivar) */}
                     {serviciosSuspendidos.length > 0 && (
                         <div className="mb-3">
-                            <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">Suspendidos</span>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Suspendidos</span>
                             <div className="flex flex-col gap-1.5 mt-2">
                                 {serviciosSuspendidos.map(s => (
-                                    <div key={s.id} className="flex items-center justify-between gap-2 bg-black/20 border border-white/5 rounded-lg px-2.5 py-1.5 opacity-70">
+                                    <div key={s.id} className="flex items-center justify-between gap-2 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 opacity-70">
                                         <div className="flex flex-col min-w-0">
-                                            <span className="text-[11px] font-bold text-gray-400 line-through truncate">{s.nombre}</span>
-                                            {s.fechaTermino && <span className="text-[8px] text-gray-600">Baja: {s.fechaTermino}</span>}
+                                            <span className="text-[11px] font-bold text-slate-500 line-through truncate">{s.nombre}</span>
+                                            {s.fechaTermino && <span className="text-[8px] text-slate-400">Baja: {s.fechaTermino}</span>}
                                         </div>
                                         <button
                                             onClick={() => handleReactivarServicio(s)}
                                             title="Reactivar servicio"
-                                            className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-emerald-400 hover:text-emerald-300 border border-emerald-400/30 bg-emerald-400/10 hover:bg-emerald-400/20 px-2 py-0.5 rounded-full transition-colors shrink-0"
+                                            className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700 border border-emerald-400/30 bg-emerald-400/10 hover:bg-emerald-400/20 px-2 py-0.5 rounded-full transition-colors shrink-0"
                                         >
                                             <RotateCcw size={10} /> Reactivar
                                         </button>
@@ -861,7 +861,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                         <select
                             value={newServicioId}
                             onChange={(e) => setNewServicioId(e.target.value)}
-                            className="flex-1 min-w-[120px] bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 cursor-pointer"
+                            className="flex-1 min-w-[120px] bg-slate-50 border border-[#efe8dd] rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-indigo-500 cursor-pointer"
                         >
                             <option value="">+ Sumar servicio…</option>
                             {serviciosParaAgregar.map(s => (
@@ -875,58 +875,58 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                             onChange={(e) => setNewServicioPrecio(formatMiles(e.target.value))}
                             onKeyDown={(e) => { if (e.key === 'Enter' && newServicioId) handleAddServicio(); }}
                             placeholder="Precio"
-                            className="w-24 bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-indigo-500 placeholder:text-gray-600"
+                            className="w-24 bg-slate-50 border border-[#efe8dd] rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-indigo-500 placeholder:text-slate-400"
                         />
                         <Button
                             onClick={handleAddServicio}
                             disabled={isSavingServicio || !newServicioId}
-                            className="bg-white/10 hover:bg-white/20 text-white rounded-lg px-3 h-9"
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg px-3 h-9"
                         >
                             <Plus size={16} />
                         </Button>
                     </div>
 
                     {/* Total de honorarios (plan + servicios) */}
-                    <div className="mt-3 bg-black/30 border border-emerald-500/20 rounded-xl p-3">
-                        <div className="flex items-center justify-between text-[10px] text-gray-400 mb-1">
+                    <div className="mt-3 bg-slate-50 border border-emerald-500/20 rounded-xl p-3">
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
                             <span>Honorario plan ({plan})</span>
-                            <span className="font-bold text-gray-200">{fmt(netoPlan)}</span>
+                            <span className="font-bold text-slate-700">{fmt(netoPlan)}</span>
                         </div>
-                        <div className="flex items-center justify-between text-[10px] text-gray-400 mb-1.5">
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1.5">
                             <span>Servicios activos ({serviciosActivos.length})</span>
-                            <span className="font-bold text-gray-200">{fmt(totalServicios)}</span>
+                            <span className="font-bold text-slate-700">{fmt(totalServicios)}</span>
                         </div>
-                        <div className="flex items-center justify-between border-t border-white/10 pt-1.5">
-                            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Total honorarios</span>
+                        <div className="flex items-center justify-between border-t border-[#efe8dd] pt-1.5">
+                            <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Total honorarios</span>
                             <div className="text-right">
-                                <div className="text-sm font-black text-white">{fmt(totalHonorariosNeto)} <span className="text-[9px] text-gray-500 font-normal">neto</span></div>
-                                <div className="text-[9px] text-emerald-400 font-bold">{fmt(totalHonorariosConIva)} c/IVA</div>
+                                <div className="text-sm font-black text-slate-900">{fmt(totalHonorariosNeto)} <span className="text-[9px] text-slate-400 font-normal">neto</span></div>
+                                <div className="text-[9px] text-emerald-600 font-bold">{fmt(totalHonorariosConIva)} c/IVA</div>
                             </div>
                         </div>
                     </div>
 
                     {/* Sugerido (matriz) vs. configurado (servicios) */}
                     {sugeridoVsCobrado && (
-                        <div className="mt-2 bg-black/20 border border-white/5 rounded-xl p-3">
-                            <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">Sugerido vs. configurado</span>
+                        <div className="mt-2 bg-slate-50 border border-[#efe8dd] rounded-xl p-3">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sugerido vs. configurado</span>
                             <div className="flex items-center justify-between mt-1.5 text-[11px]">
                                 <div className="flex flex-col">
-                                    <span className="text-gray-500 text-[9px]">Sugerido (plan/tramo)</span>
+                                    <span className="text-slate-400 text-[9px]">Sugerido (plan/tramo)</span>
                                     <span className="font-bold text-indigo-300">{fmt(sugeridoVsCobrado.sugerido)}</span>
                                 </div>
                                 <div className="flex flex-col text-center">
-                                    <span className="text-gray-500 text-[9px]">Cobrado (honorario)</span>
-                                    <span className="font-bold text-gray-200">{fmt(sugeridoVsCobrado.cobrado)}</span>
+                                    <span className="text-slate-400 text-[9px]">Cobrado (honorario)</span>
+                                    <span className="font-bold text-slate-700">{fmt(sugeridoVsCobrado.cobrado)}</span>
                                 </div>
                                 <div className="flex flex-col text-right">
-                                    <span className="text-gray-500 text-[9px]">Diferencia</span>
-                                    <span className={`font-black ${sugeridoVsCobrado.dif < 0 ? 'text-red-400' : sugeridoVsCobrado.dif > 0 ? 'text-emerald-400' : 'text-gray-400'}`}>
+                                    <span className="text-slate-400 text-[9px]">Diferencia</span>
+                                    <span className={`font-black ${sugeridoVsCobrado.dif < 0 ? 'text-red-500' : sugeridoVsCobrado.dif > 0 ? 'text-emerald-600' : 'text-slate-500'}`}>
                                         {sugeridoVsCobrado.dif > 0 ? '+' : ''}{fmt(sugeridoVsCobrado.dif)}
                                     </span>
                                 </div>
                             </div>
                             {sugeridoVsCobrado.dif < 0 && (
-                                <p className="text-[9px] text-red-300/80 mt-1.5">⚠️ Se está cobrando menos que el precio sugerido para su facturación.</p>
+                                <p className="text-[9px] text-red-600/80 mt-1.5">⚠️ Se está cobrando menos que el precio sugerido para su facturación.</p>
                             )}
                         </div>
                     )}
@@ -934,7 +934,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
 
                 {/* 3. OPERACIÓN MENSUAL (FINANZAS) */}
                 <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-4">
-                    <h3 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <h3 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <DollarSign size={14} /> Operación Mensual (F29)
                     </h3>
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-3">
@@ -952,7 +952,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
 
                 {/* 4. RENTA ANUAL */}
                 <div className="bg-purple-500/5 border border-purple-500/10 rounded-2xl p-4">
-                    <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <h3 className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <FileSpreadsheet size={14} /> Renta Anual (AT 2026)
                     </h3>
                     <div className="grid grid-cols-2 gap-3 mb-3">
@@ -972,29 +972,29 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="bg-red-500/10 border border-red-500/20 p-3 rounded-xl flex flex-col justify-center items-center">
-                            <span className="text-[9px] text-red-400 font-bold uppercase tracking-widest mb-1">Trámites Atrasados</span>
-                            <span className="text-2xl font-black text-white">{dtAtrasados}</span>
+                            <span className="text-[9px] text-red-500 font-bold uppercase tracking-widest mb-1">Trámites Atrasados</span>
+                            <span className="text-2xl font-black text-slate-900">{dtAtrasados}</span>
                         </div>
                         <div className="bg-amber-500/10 border border-amber-500/20 p-3 rounded-xl flex flex-col justify-center items-center">
-                            <span className="text-[9px] text-amber-400 font-bold uppercase tracking-widest mb-1">Pendientes de Firma</span>
-                            <span className="text-2xl font-black text-white">{dtPendientesFirma}</span>
+                            <span className="text-[9px] text-amber-600 font-bold uppercase tracking-widest mb-1">Pendientes de Firma</span>
+                            <span className="text-2xl font-black text-slate-900">{dtPendientesFirma}</span>
                         </div>
                     </div>
                 </div>
 
                 {/* 6. BITÁCORA: CONVERSACIONES Y TICKETS */}
-                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+                <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
                     {/* Pestañas */}
-                    <div className="flex bg-black/40 p-1 rounded-xl border border-white/10 w-full mb-3">
+                    <div className="flex bg-slate-50 p-1 rounded-xl border border-[#efe8dd] w-full mb-3">
                         <button
                             onClick={() => setBitacoraTab('conversacion')}
-                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${bitacoraTab === 'conversacion' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${bitacoraTab === 'conversacion' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-900'}`}
                         >
                             <MessageSquare size={13} /> Conversaciones ({conversaciones.length})
                         </button>
                         <button
                             onClick={() => setBitacoraTab('ticket')}
-                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${bitacoraTab === 'ticket' ? 'bg-amber-600 text-white' : 'text-gray-400 hover:text-white'}`}
+                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${bitacoraTab === 'ticket' ? 'bg-amber-600 text-white' : 'text-slate-500 hover:text-slate-900'}`}
                         >
                             <Ticket size={13} /> Tickets {ticketsAbiertos > 0 && <span className="bg-red-500/80 text-white px-1.5 rounded-full">{ticketsAbiertos}</span>}
                         </button>
@@ -1007,10 +1007,10 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                             value={newNote}
                             onChange={(e) => setNewNote(e.target.value)}
                             placeholder={bitacoraTab === 'ticket' ? 'Describe el ticket / incidencia...' : 'Escribe una conversación o gestión...'}
-                            className="flex-1 bg-black/40 border border-white/10 rounded-xl p-2.5 text-xs text-white outline-none focus:border-blue-500 transition-colors placeholder:text-gray-600"
+                            className="flex-1 bg-slate-50 border border-[#efe8dd] rounded-xl p-2.5 text-xs text-slate-900 outline-none focus:border-emerald-500 transition-colors placeholder:text-slate-400"
                             onKeyDown={(e) => e.key === 'Enter' && addNote()}
                         />
-                        <Button onClick={addNote} disabled={isSavingNote || !newNote.trim()} className={`${bitacoraTab === 'ticket' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-blue-600 hover:bg-blue-500'} text-white rounded-xl px-4 h-auto`}>
+                        <Button onClick={addNote} disabled={isSavingNote || !newNote.trim()} className={`${bitacoraTab === 'ticket' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-emerald-600 hover:bg-emerald-500'} text-white rounded-xl px-4 h-auto`}>
                             <Send size={16} />
                         </Button>
                     </div>
@@ -1022,7 +1022,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                                 value={ticketPrioridad}
                                 onChange={(e) => setTicketPrioridad(e.target.value)}
                                 title="Prioridad"
-                                className="bg-black/40 border border-white/10 rounded-lg p-2 text-[11px] text-white outline-none focus:border-amber-500 cursor-pointer"
+                                className="bg-slate-50 border border-[#efe8dd] rounded-lg p-2 text-[11px] text-slate-900 outline-none focus:border-amber-500 cursor-pointer"
                             >
                                 <option value="Alta">🔴 Alta</option>
                                 <option value="Media">🟡 Media</option>
@@ -1033,55 +1033,55 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                                 value={ticketResponsable}
                                 onChange={(e) => setTicketResponsable(e.target.value)}
                                 placeholder="Responsable"
-                                className="bg-black/40 border border-white/10 rounded-lg p-2 text-[11px] text-white outline-none focus:border-amber-500 placeholder:text-gray-600"
+                                className="bg-slate-50 border border-[#efe8dd] rounded-lg p-2 text-[11px] text-slate-900 outline-none focus:border-amber-500 placeholder:text-slate-400"
                             />
                             <input
                                 type="date"
                                 value={ticketVencimiento}
                                 onChange={(e) => setTicketVencimiento(e.target.value)}
                                 title="Vencimiento"
-                                className="bg-black/40 border border-white/10 rounded-lg p-2 text-[11px] text-white outline-none focus:border-amber-500"
+                                className="bg-slate-50 border border-[#efe8dd] rounded-lg p-2 text-[11px] text-slate-900 outline-none focus:border-amber-500"
                             />
                         </div>
                     )}
 
                     {/* Buscador en la bitácora */}
                     <div className="relative mb-3">
-                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
                             type="text"
                             value={bitacoraSearch}
                             onChange={(e) => setBitacoraSearch(e.target.value)}
                             placeholder="Buscar en la bitácora..."
-                            className="w-full bg-black/20 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-white outline-none focus:border-blue-500 placeholder:text-gray-600"
+                            className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg pl-8 pr-3 py-1.5 text-[11px] text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-400"
                         />
                     </div>
 
                     {notasVisibles.length > 0 ? (
                         <div className="space-y-3 max-h-56 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
                             {notasVisibles.map((nota, i) => (
-                                <div key={nota.id || i} className={`border border-white/5 rounded-xl p-2.5 ${nota.tipo === 'ticket' && nota.resuelto ? 'opacity-50' : ''} ${nota.tipo === 'ticket' ? 'bg-amber-500/5' : 'bg-black/20'}`}>
+                                <div key={nota.id || i} className={`border border-[#efe8dd] rounded-xl p-2.5 ${nota.tipo === 'ticket' && nota.resuelto ? 'opacity-50' : ''} ${nota.tipo === 'ticket' ? 'bg-amber-500/5' : 'bg-slate-50'}`}>
                                     <div className="flex items-center justify-between gap-2 mb-1">
-                                        <div className="flex items-center gap-1.5 text-gray-500 min-w-0">
+                                        <div className="flex items-center gap-1.5 text-slate-400 min-w-0">
                                             <Clock size={10} className="shrink-0" />
                                             <span className="text-[9px] font-black tracking-widest truncate">{nota.fecha}</span>
-                                            {nota.autor && <span className="text-[9px] text-gray-600 truncate">· {nota.autor}</span>}
-                                            {nota.editado && <span className="text-[9px] text-gray-600 italic">· editado</span>}
+                                            {nota.autor && <span className="text-[9px] text-slate-400 truncate">· {nota.autor}</span>}
+                                            {nota.editado && <span className="text-[9px] text-slate-400 italic">· editado</span>}
                                         </div>
                                         <div className="flex items-center gap-1 shrink-0">
                                             {nota.tipo === 'ticket' && (
                                                 <button
                                                     onClick={() => handleToggleTicket(nota)}
                                                     title={nota.resuelto ? 'Reabrir ticket' : 'Marcar como resuelto'}
-                                                    className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors ${nota.resuelto ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' : 'text-amber-400 border-amber-400/30 bg-amber-400/10 hover:bg-amber-400/20'}`}
+                                                    className={`flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border transition-colors ${nota.resuelto ? 'text-emerald-600 border-emerald-400/30 bg-emerald-400/10' : 'text-amber-600 border-amber-400/30 bg-amber-400/10 hover:bg-amber-400/20'}`}
                                                 >
                                                     {nota.resuelto ? <><CheckCircle2 size={10} /> Resuelto</> : <><RotateCcw size={10} /> Abierto</>}
                                                 </button>
                                             )}
-                                            <button onClick={() => startEditNote(nota)} title="Editar nota" className="p-1 text-gray-500 hover:text-blue-400 transition-colors">
+                                            <button onClick={() => startEditNote(nota)} title="Editar nota" className="p-1 text-slate-400 hover:text-blue-600 transition-colors">
                                                 <Edit size={11} />
                                             </button>
-                                            <button onClick={() => handleDeleteNote(nota)} title="Eliminar nota" className="p-1 text-gray-500 hover:text-red-400 transition-colors">
+                                            <button onClick={() => handleDeleteNote(nota)} title="Eliminar nota" className="p-1 text-slate-400 hover:text-red-500 transition-colors">
                                                 <Trash2 size={11} />
                                             </button>
                                         </div>
@@ -1091,17 +1091,17 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                                     {nota.tipo === 'ticket' && (nota.prioridad || nota.responsable || nota.fechaVencimiento) && (
                                         <div className="flex flex-wrap items-center gap-1.5 mb-1.5">
                                             {nota.prioridad && (
-                                                <span className={`flex items-center gap-1 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${nota.prioridad === 'Alta' ? 'text-red-300 border-red-400/30 bg-red-400/10' : nota.prioridad === 'Media' ? 'text-amber-300 border-amber-400/30 bg-amber-400/10' : 'text-emerald-300 border-emerald-400/30 bg-emerald-400/10'}`}>
+                                                <span className={`flex items-center gap-1 text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${nota.prioridad === 'Alta' ? 'text-red-600 border-red-400/30 bg-red-400/10' : nota.prioridad === 'Media' ? 'text-amber-700 border-amber-400/30 bg-amber-400/10' : 'text-emerald-700 border-emerald-400/30 bg-emerald-400/10'}`}>
                                                     <Flag size={9} /> {nota.prioridad}
                                                 </span>
                                             )}
                                             {nota.responsable && (
-                                                <span className="flex items-center gap-1 text-[8px] font-bold text-gray-300 px-1.5 py-0.5 rounded-full border border-white/10 bg-white/5">
+                                                <span className="flex items-center gap-1 text-[8px] font-bold text-slate-600 px-1.5 py-0.5 rounded-full border border-[#efe8dd] bg-slate-50">
                                                     <User size={9} /> {nota.responsable}
                                                 </span>
                                             )}
                                             {nota.fechaVencimiento && (
-                                                <span className="flex items-center gap-1 text-[8px] font-bold text-sky-300 px-1.5 py-0.5 rounded-full border border-sky-400/30 bg-sky-400/10">
+                                                <span className="flex items-center gap-1 text-[8px] font-bold text-sky-700 px-1.5 py-0.5 rounded-full border border-sky-400/30 bg-sky-400/10">
                                                     <CalendarClock size={9} /> {nota.fechaVencimiento}
                                                 </span>
                                             )}
@@ -1116,26 +1116,26 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                                                 onChange={(e) => setEditNoteText(e.target.value)}
                                                 onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEditNote(nota); if (e.key === 'Escape') setEditingNoteId(null); }}
                                                 autoFocus
-                                                className="flex-1 bg-black/40 border border-blue-500/50 rounded-lg p-1.5 text-xs text-white outline-none"
+                                                className="flex-1 bg-slate-50 border border-blue-500/50 rounded-lg p-1.5 text-xs text-slate-900 outline-none"
                                             />
-                                            <button onClick={() => handleSaveEditNote(nota)} className="p-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white"><Save size={12} /></button>
-                                            <button onClick={() => setEditingNoteId(null)} className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-400"><X size={12} /></button>
+                                            <button onClick={() => handleSaveEditNote(nota)} className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white"><Save size={12} /></button>
+                                            <button onClick={() => setEditingNoteId(null)} className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500"><X size={12} /></button>
                                         </div>
                                     ) : (
-                                        <p className="text-xs text-gray-200">{nota.texto}</p>
+                                        <p className="text-xs text-slate-700">{nota.texto}</p>
                                     )}
                                 </div>
                             ))}
                         </div>
                     ) : (
-                        <p className="text-xs text-gray-500 italic text-center py-2">
+                        <p className="text-xs text-slate-400 italic text-center py-2">
                             {bitacoraSearch ? 'Sin resultados para tu búsqueda.' : (bitacoraTab === 'ticket' ? 'Sin tickets registrados.' : 'Sin conversaciones registradas aún.')}
                         </p>
                     )}
                 </div>
 
                 {formData.ultimaModificacion && (
-                    <p className="text-[9px] text-gray-600 text-center pt-1">Última modificación: {formData.ultimaModificacion}</p>
+                    <p className="text-[9px] text-slate-400 text-center pt-1">Última modificación: {formData.ultimaModificacion}</p>
                 )}
 
             </div>
@@ -1149,22 +1149,22 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                     >
                         <motion.div
                             initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 10 }}
-                            className="bg-[#0f172a] border border-red-500/30 rounded-2xl p-5 w-full max-w-sm shadow-2xl"
+                            className="bg-white border border-red-500/30 rounded-2xl p-5 w-full max-w-sm shadow-2xl"
                         >
                             <div className="flex items-center gap-3 mb-3">
-                                <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-400 shrink-0">
+                                <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-500 shrink-0">
                                     <AlertTriangle size={20} />
                                 </div>
-                                <h3 className="text-sm font-black text-white uppercase tracking-tight">Eliminar cliente</h3>
+                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">Eliminar cliente</h3>
                             </div>
-                            <p className="text-xs text-gray-300 leading-relaxed mb-1">
-                                Vas a eliminar <span className="font-bold text-white">{razonSocial}</span> de forma <span className="text-red-400 font-bold">permanente</span>.
+                            <p className="text-xs text-slate-600 leading-relaxed mb-1">
+                                Vas a eliminar <span className="font-bold text-slate-900">{razonSocial}</span> de forma <span className="text-red-500 font-bold">permanente</span>.
                             </p>
-                            <p className="text-[10px] text-gray-500 mb-4">
+                            <p className="text-[10px] text-slate-400 mb-4">
                                 Se borrarán sus notas, servicios e historial de plan. Esta acción no se puede deshacer.
                             </p>
                             <div className="flex gap-2">
-                                <Button variant="ghost" onClick={() => setConfirmDelete(false)} disabled={isDeleting} className="flex-1 uppercase font-black text-[10px] tracking-widest text-gray-400 h-10 rounded-xl bg-white/5 hover:bg-white/10">
+                                <Button variant="ghost" onClick={() => setConfirmDelete(false)} disabled={isDeleting} className="flex-1 uppercase font-black text-[10px] tracking-widest text-slate-500 h-10 rounded-xl bg-slate-50 hover:bg-slate-100">
                                     Cancelar
                                 </Button>
                                 <Button onClick={handleDelete} disabled={isDeleting} className="flex-1 bg-red-600 hover:bg-red-500 text-white uppercase font-black text-[10px] tracking-widest h-10 rounded-xl flex items-center justify-center gap-2">
@@ -1178,11 +1178,11 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
 
             {/* FOOTER BOTÓN GUARDAR */}
             {isEditing && (
-                <div className="p-4 border-t border-white/10 bg-[#0f172a] flex gap-3 shrink-0 mt-auto">
-                    <Button variant="ghost" onClick={() => { setIsEditing(false); setFormData(client); }} className="flex-1 uppercase font-black text-[10px] tracking-widest text-gray-400 h-10 rounded-xl bg-white/5 hover:bg-white/10 transition-colors">
+                <div className="p-4 border-t border-[#efe8dd] bg-white flex gap-3 shrink-0 mt-auto">
+                    <Button variant="ghost" onClick={() => { setIsEditing(false); setFormData(client); }} className="flex-1 uppercase font-black text-[10px] tracking-widest text-slate-500 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
                         Cancelar
                     </Button>
-                    <Button onClick={handleSave} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white uppercase font-black text-[10px] tracking-widest h-10 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-500/20">
+                    <Button onClick={handleSave} className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white uppercase font-black text-[10px] tracking-widest h-10 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-blue-500/20">
                         <Save size={14} /> Guardar Cambios
                     </Button>
                 </div>

@@ -26,19 +26,19 @@ class CrmErrorBoundary extends React.Component {
                         <AlertTriangle size={26} />
                     </div>
                     <div>
-                        <h2 className="text-white font-black text-lg">Algo salió mal en el CRM</h2>
-                        <p className="text-gray-400 text-sm mt-1 max-w-md">
+                        <h2 className="text-slate-900 font-black text-lg">Algo salió mal en el CRM</h2>
+                        <p className="text-slate-500 text-sm mt-1 max-w-md">
                             Ocurrió un error al mostrar esta sección. Puedes reintentar o recargar la página.
                         </p>
                         {this.state.error?.message && (
-                            <p className="text-[10px] text-gray-600 mt-2 font-mono break-all max-w-md">{this.state.error.message}</p>
+                            <p className="text-[10px] text-slate-400 mt-2 font-mono break-all max-w-md">{this.state.error.message}</p>
                         )}
                     </div>
                     <div className="flex gap-2">
-                        <button onClick={this.handleReset} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
+                        <button onClick={this.handleReset} className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
                             <RotateCcw size={14} /> Reintentar
                         </button>
-                        <button onClick={() => window.location.reload()} className="bg-white/5 hover:bg-white/10 text-gray-300 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
+                        <button onClick={() => window.location.reload()} className="bg-slate-50 hover:bg-slate-100 text-slate-600 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
                             Recargar página
                         </button>
                     </div>

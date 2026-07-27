@@ -117,7 +117,7 @@ const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => 
             case 1:
                 return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <h3 className="col-span-full text-lg font-semibold text-white flex items-center"><User className="mr-2 h-5 w-5 text-cyan-400" />Datos Personales</h3>
+                        <h3 className="col-span-full text-lg font-semibold text-slate-900 flex items-center"><User className="mr-2 h-5 w-5 text-cyan-600" />Datos Personales</h3>
                         <div className="space-y-1"><Label>Nombre Completo</Label><Input name="nombre" value={formData.nombre} onChange={handleChange} /></div>
                         <div className="space-y-1"><Label>RUT</Label><Input name="rut" value={formData.rut} onChange={handleChange} placeholder="12345678-9" /></div>
                         <div className="space-y-1"><Label>Fecha de Nacimiento</Label><Input name="fechaNacimiento" type="date" value={formData.fechaNacimiento} onChange={handleChange} /></div>
@@ -139,7 +139,7 @@ const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => 
             case 2:
                 return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <h3 className="col-span-full text-lg font-semibold text-white flex items-center"><Briefcase className="mr-2 h-5 w-5 text-purple-400" />Datos Laborales</h3>
+                        <h3 className="col-span-full text-lg font-semibold text-slate-900 flex items-center"><Briefcase className="mr-2 h-5 w-5 text-purple-600" />Datos Laborales</h3>
                         <div className="space-y-1 col-span-full"><Label>Empresa</Label>
                             <ThemedSelect value={empresaSel} onChange={setEmpresaSel} placeholder="Selecciona la empresa…" options={opcionesEmpresa} />
                         </div>
@@ -155,7 +155,7 @@ const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => 
             case 3:
                 return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <h3 className="col-span-full text-lg font-semibold text-white flex items-center"><HeartPulse className="mr-2 h-5 w-5 text-rose-400" />Datos Previsionales</h3>
+                        <h3 className="col-span-full text-lg font-semibold text-slate-900 flex items-center"><HeartPulse className="mr-2 h-5 w-5 text-rose-400" />Datos Previsionales</h3>
                         <div className="space-y-3">
                             <Label>Previsión de Salud</Label>
                             <RadioGroup name="previsionSalud" value={formData.previsionSalud} onValueChange={(v) => handleRadioChange('previsionSalud', v)} className="flex space-x-4">
@@ -186,14 +186,14 @@ const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => 
 
     return (
         <Dialog open={isOpen} onOpenChange={(v) => { if (!v) reset(); setIsOpen(v); }}>
-            <DialogContent className="sm:max-w-3xl bg-black/50 backdrop-blur-xl border-white/20 text-white max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-3xl bg-slate-50 backdrop-blur-xl border-[#efe8dd] text-slate-700 max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="text-2xl">Registrar Nuevo Trabajador</DialogTitle>
                     <DialogDescription>Ingresa los datos del nuevo miembro del equipo. Paso {step} de 3.</DialogDescription>
                 </DialogHeader>
 
                 <div className="flex items-center justify-center my-4">
-                    <div className="w-full h-2 bg-white/10 rounded-full">
+                    <div className="w-full h-2 bg-slate-100 rounded-full">
                         <div className="h-2 bg-gradient-to-r from-cyan-500 to-purple-500 rounded-full transition-all duration-500" style={{ width: `${(step / 3) * 100}%` }}></div>
                     </div>
                 </div>
@@ -208,7 +208,7 @@ const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => 
                     ) : <div></div>}
 
                     {step < 3 ? (
-                        <Button type="button" onClick={() => setStep(s => s + 1)} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">Siguiente</Button>
+                        <Button type="button" onClick={() => setStep(s => s + 1)} className="bg-gradient-to-r from-emerald-500 to-green-600 text-white">Siguiente</Button>
                     ) : (
                         <Button type="submit" onClick={handleSubmit} disabled={crear.isPending} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white">
                             {crear.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Guardando...</> : 'Guardar Trabajador'}

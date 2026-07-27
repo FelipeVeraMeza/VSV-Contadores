@@ -9,9 +9,9 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchWithAuth } from '@/services/apiClient';
 
 const TIPOS = [
-  { value: 'ingreso',  label: 'Ingreso',  color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' },
-  { value: 'egreso',   label: 'Egreso',   color: 'text-red-400',     bg: 'bg-red-500/10 border-red-500/30' },
-  { value: 'traspaso', label: 'Traspaso', color: 'text-blue-400',    bg: 'bg-blue-500/10 border-blue-500/30' },
+  { value: 'ingreso',  label: 'Ingreso',  color: 'text-emerald-600', bg: 'bg-emerald-500/10 border-emerald-500/30' },
+  { value: 'egreso',   label: 'Egreso',   color: 'text-red-500',     bg: 'bg-red-500/10 border-red-500/30' },
+  { value: 'traspaso', label: 'Traspaso', color: 'text-blue-600',    bg: 'bg-blue-500/10 border-blue-500/30' },
 ];
 
 const TIPO_DB = { ingreso: 'INGRESO', egreso: 'EGRESO', traspaso: 'TRASPASO' };
@@ -105,13 +105,13 @@ const NuevoAsientoModal = ({ isOpen, setIsOpen, empresaId, onGuardadoExitoso }) 
 
   return (
     <Dialog open={isOpen} onOpenChange={(v) => { if (!v) reset(); setIsOpen(v); }}>
-      <DialogContent className="sm:max-w-[740px] bg-[#0f172a] border-white/10 text-white shadow-2xl">
+      <DialogContent className="sm:max-w-[740px] bg-white border-[#efe8dd] text-slate-700 shadow-2xl">
         <DialogHeader>
           <DialogTitle className={`text-xl font-black tracking-tight uppercase ${tipoActivo?.color}`}>
             Nuevo Comprobante — {tipoActivo?.label}
           </DialogTitle>
-          <DialogDescription className="text-gray-400 text-xs">
-            Ajustes contables, remuneraciones o traspasos. Se guardan en el <strong className="text-white">Libro Diario</strong>.
+          <DialogDescription className="text-slate-500 text-xs">
+            Ajustes contables, remuneraciones o traspasos. Se guardan en el <strong className="text-slate-700">Libro Diario</strong>.
           </DialogDescription>
         </DialogHeader>
 
@@ -121,12 +121,12 @@ const NuevoAsientoModal = ({ isOpen, setIsOpen, empresaId, onGuardadoExitoso }) 
           <div className="grid grid-cols-[auto_1fr_2fr] gap-4 items-start">
             {/* Tipo */}
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-2">Tipo</p>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">Tipo</p>
               <div className="flex flex-col gap-1.5">
                 {TIPOS.map(t => (
                   <button key={t.value} onClick={() => setTipo(t.value)}
                     className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest text-left border transition-all ${
-                      tipo === t.value ? `${t.color} ${t.bg}` : 'text-gray-500 border-transparent hover:border-white/10 hover:text-white'
+                      tipo === t.value ? `${t.color} ${t.bg}` : 'text-slate-400 border-transparent hover:border-[#efe8dd] hover:text-slate-900'
                     }`}>
                     {t.label}
                   </button>
@@ -136,44 +136,44 @@ const NuevoAsientoModal = ({ isOpen, setIsOpen, empresaId, onGuardadoExitoso }) 
 
             {/* Fecha */}
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-2">Fecha</p>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">Fecha</p>
               <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+                className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-emerald-500" />
             </div>
 
             {/* Glosa */}
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-2">Glosa</p>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">Glosa</p>
               <input type="text" placeholder="Ej: Centralización sueldos mayo 2026..."
                 value={glosa} onChange={e => setGlosa(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500" />
+                className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-emerald-500" />
             </div>
           </div>
 
           {/* LÍNEAS */}
-          <div className="bg-black/20 rounded-xl border border-white/5 p-4">
+          <div className="bg-slate-50 rounded-xl border border-[#efe8dd] p-4">
             <div className="grid grid-cols-[1fr_110px_110px_36px] gap-2 mb-2 px-1">
-              <span className="text-[10px] text-gray-600 font-black uppercase tracking-widest">Cuenta</span>
-              <span className="text-[10px] text-gray-600 font-black uppercase tracking-widest text-right">Debe</span>
-              <span className="text-[10px] text-gray-600 font-black uppercase tracking-widest text-right">Haber</span>
+              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Cuenta</span>
+              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest text-right">Debe</span>
+              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest text-right">Haber</span>
               <span />
             </div>
 
             {lineas.map(l => (
               <div key={l.id} className="grid grid-cols-[1fr_110px_110px_36px] gap-2 mb-2 items-center">
                 <Select value={l.cuenta} onValueChange={val => setCuenta(l.id, val)}>
-                  <SelectTrigger className="bg-slate-900/80 border-white/10 text-xs text-white h-9">
+                  <SelectTrigger className="bg-white border-[#efe8dd] text-xs text-slate-900 h-9">
                     <SelectValue placeholder="Seleccionar cuenta...">
                       {l.cuenta
                         ? <span className="font-mono">{l.cuenta} — {l.nombre || getNombre(l.cuenta)}</span>
-                        : <span className="text-gray-500">Seleccionar cuenta...</span>}
+                        : <span className="text-slate-400">Seleccionar cuenta...</span>}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-white/10 text-white max-h-[260px] overflow-y-auto z-50">
+                  <SelectContent className="bg-white border-[#efe8dd] text-slate-700 max-h-[260px] overflow-y-auto z-50">
                     {plan.map(c => (
                       <SelectItem key={c.codigo} value={c.codigo} className="text-xs">
-                        <span className="font-mono text-blue-400">{c.codigo}</span>
-                        <span className="ml-2 text-gray-300">{c.descripcion}</span>
+                        <span className="font-mono text-blue-600">{c.codigo}</span>
+                        <span className="ml-2 text-slate-600">{c.descripcion}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -181,55 +181,55 @@ const NuevoAsientoModal = ({ isOpen, setIsOpen, empresaId, onGuardadoExitoso }) 
 
                 <input type="number" min="0" placeholder="0" value={l.debe}
                   onChange={e => setMonto(l.id, 'debe', e.target.value)}
-                  className="w-full bg-slate-900/80 border border-white/10 rounded px-3 py-2 text-xs text-right text-emerald-400 font-mono focus:outline-none focus:border-emerald-500" />
+                  className="w-full bg-white border border-[#efe8dd] rounded px-3 py-2 text-xs text-right text-emerald-600 font-mono focus:outline-none focus:border-emerald-500" />
 
                 <input type="number" min="0" placeholder="0" value={l.haber}
                   onChange={e => setMonto(l.id, 'haber', e.target.value)}
-                  className="w-full bg-slate-900/80 border border-white/10 rounded px-3 py-2 text-xs text-right text-orange-400 font-mono focus:outline-none focus:border-orange-500" />
+                  className="w-full bg-white border border-[#efe8dd] rounded px-3 py-2 text-xs text-right text-orange-600 font-mono focus:outline-none focus:border-orange-500" />
 
                 <button onClick={() => eliminarLinea(l.id)} disabled={lineas.length <= 2}
-                  className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors disabled:opacity-20 flex items-center justify-center">
+                  className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-400/10 rounded transition-colors disabled:opacity-20 flex items-center justify-center">
                   <Trash2 size={13} />
                 </button>
               </div>
             ))}
 
             <Button onClick={agregarLinea} variant="outline" size="sm"
-              className="mt-3 bg-transparent border-dashed border-white/20 text-blue-400 hover:text-blue-300 hover:border-blue-400 w-full text-xs font-bold hover:bg-transparent">
+              className="mt-3 bg-transparent border-dashed border-[#efe8dd] text-blue-600 hover:text-blue-700 hover:border-blue-400 w-full text-xs font-bold hover:bg-transparent">
               <Plus size={13} className="mr-1" /> AÑADIR LÍNEA
             </Button>
           </div>
         </div>
 
         {/* FOOTER */}
-        <DialogFooter className="mt-4 flex-col sm:flex-row justify-between items-center bg-black/40 p-4 rounded-xl border border-white/5 gap-3">
+        <DialogFooter className="mt-4 flex-col sm:flex-row justify-between items-center bg-slate-50 p-4 rounded-xl border border-[#efe8dd] gap-3">
           <div className="flex items-center gap-6">
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Debe</p>
-              <p className="text-lg font-mono font-bold text-emerald-400">${totales.debe.toLocaleString('es-CL')}</p>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Debe</p>
+              <p className="text-lg font-mono font-bold text-emerald-600">${totales.debe.toLocaleString('es-CL')}</p>
             </div>
             <div>
-              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Haber</p>
-              <p className="text-lg font-mono font-bold text-orange-400">${totales.haber.toLocaleString('es-CL')}</p>
+              <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Haber</p>
+              <p className="text-lg font-mono font-bold text-orange-600">${totales.haber.toLocaleString('es-CL')}</p>
             </div>
             {totales.debe > 0 && !cuadrado && (
-              <div className="flex items-center gap-2 text-red-400 bg-red-400/10 px-3 py-1.5 rounded-lg border border-red-400/20">
+              <div className="flex items-center gap-2 text-red-500 bg-red-400/10 px-3 py-1.5 rounded-lg border border-red-400/20">
                 <AlertCircle size={13} />
                 <span className="text-xs font-bold">DESCUADRE ${Math.abs(totales.diff).toLocaleString('es-CL')}</span>
               </div>
             )}
             {cuadrado && (
-              <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20">
+              <span className="text-xs font-black text-emerald-600 bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-500/20">
                 ✓ CUADRADO
               </span>
             )}
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => { reset(); setIsOpen(false); }} className="text-gray-400 hover:text-white">
+            <Button variant="ghost" onClick={() => { reset(); setIsOpen(false); }} className="text-slate-500 hover:text-slate-900">
               Cancelar
             </Button>
             <Button onClick={guardar} disabled={!valido || isSaving}
-              className={`font-black uppercase text-xs tracking-widest ${valido ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-gray-800 text-gray-500'}`}>
+              className={`font-black uppercase text-xs tracking-widest ${valido ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-50 text-slate-400'}`}>
               {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
               GUARDAR ASIENTO
             </Button>

@@ -26,7 +26,7 @@ const SIILoginModal = ({ isOpen, setIsOpen, onConnect }) => {
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="sm:max-w-[425px] bg-black/50 backdrop-blur-xl border-white/20 text-white">
+            <DialogContent className="sm:max-w-[425px] bg-slate-50 backdrop-blur-xl border-[#efe8dd] text-slate-700">
                 <DialogHeader>
                     <DialogTitle className="text-2xl">Autenticación SII</DialogTitle>
                     <DialogDescription>Ingresa las credenciales de la empresa para conectar con el Servicio de Impuestos Internos.</DialogDescription>
@@ -35,21 +35,21 @@ const SIILoginModal = ({ isOpen, setIsOpen, onConnect }) => {
                     <div className="space-y-2">
                         <Label htmlFor="rut-sii">RUT Empresa</Label>
                         <div className="relative">
-                            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                             <Input id="rut-sii" value={rut} onChange={(e) => setRut(e.target.value)} className="pl-10" placeholder="76.123.456-7" />
                         </div>
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="clave-sii">Clave Tributaria</Label>
                         <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
                             <Input id="clave-sii" type="password" value={clave} onChange={(e) => setClave(e.target.value)} className="pl-10" placeholder="••••••••" />
                         </div>
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)} className="border-white/20 text-white hover:bg-white/10" disabled={isLoading}>Cancelar</Button>
-                    <Button onClick={handleLogin} disabled={isLoading} className="bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                    <Button type="button" variant="outline" onClick={() => setIsOpen(false)} className="border-[#efe8dd] text-slate-700 hover:bg-slate-100" disabled={isLoading}>Cancelar</Button>
+                    <Button onClick={handleLogin} disabled={isLoading} className="bg-gradient-to-r from-emerald-500 to-green-600 text-white">
                         {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {isLoading ? 'Conectando...' : 'Conectar'}
                     </Button>

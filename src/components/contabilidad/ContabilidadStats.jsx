@@ -73,7 +73,7 @@ const ContabilidadStats = ({ empresaId }) => {
         return (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="h-32 bg-white/5 animate-pulse rounded-2xl border border-white/10 flex items-center justify-center">
+                    <div key={i} className="h-32 bg-slate-50 animate-pulse rounded-2xl border border-[#efe8dd] flex items-center justify-center">
                         <Loader2 className="h-6 w-6 text-blue-500/20 animate-spin" />
                     </div>
                 ))}
@@ -93,7 +93,7 @@ const ContabilidadStats = ({ empresaId }) => {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5, delay: index * 0.1 }}
-                        className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-xl hover:bg-white/[0.12] transition-all group"
+                        className="bg-white backdrop-blur-xl rounded-2xl p-6 border border-[#efe8dd] shadow-xl hover:bg-slate-100 transition-all group"
                     >
                         <div className="flex items-center justify-between mb-4">
                             <div className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
@@ -101,18 +101,18 @@ const ContabilidadStats = ({ empresaId }) => {
                             </div>
                             <div className="text-right">
                                 <span className={`text-[10px] font-black uppercase tracking-widest ${
-                                    isNegative ? 'text-red-400' : 'text-emerald-400'
+                                    isNegative ? 'text-red-500' : 'text-emerald-600'
                                 }`}>
                                     {stat.change}
                                 </span>
-                                <p className="text-[8px] text-gray-500 uppercase font-bold tracking-tighter">vs mes anterior</p>
+                                <p className="text-[8px] text-slate-400 uppercase font-bold tracking-tighter">vs mes anterior</p>
                             </div>
                         </div>
                         
-                        <h3 className="text-2xl font-black text-white mb-1 tracking-tight">
+                        <h3 className="text-2xl font-black text-slate-900 mb-1 tracking-tight">
                             {stat.value}
                         </h3>
-                        <p className="text-gray-400 text-[11px] font-bold uppercase tracking-wider">
+                        <p className="text-slate-500 text-[11px] font-bold uppercase tracking-wider">
                             {stat.title}
                         </p>
                     </motion.div>

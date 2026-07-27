@@ -206,28 +206,28 @@ const EmpresaFormModal = ({ isOpen, setIsOpen, onSave, initialData = null }) => 
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative bg-slate-900 border border-white/10 rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+            className="relative bg-white border border-[#efe8dd] rounded-[2.5rem] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
           >
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600" />
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600 via-green-500 to-emerald-600" />
 
-            <div className="p-6 border-b border-white/5 bg-white/5 flex items-center justify-between shrink-0">
+            <div className="p-6 border-b border-[#efe8dd] bg-slate-50 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-500/20 rounded-xl">
-                  <Building2 className="h-5 w-5 text-blue-400" />
+                  <Building2 className="h-5 w-5 text-blue-600" />
                 </div>
-                <h2 className="text-xl font-bold text-white uppercase italic tracking-tighter">
+                <h2 className="text-xl font-bold text-slate-900 uppercase italic tracking-tighter">
                   {initialData ? 'Editar Entidad' : 'Nueva Entidad'}
                 </h2>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white rounded-full">
+              <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-slate-900 rounded-full">
                 <X className="h-5 w-5" />
               </Button>
             </div>
 
             <form onSubmit={handleSubmit} className="p-8 space-y-8 overflow-y-auto custom-scrollbar flex-1">
               
-              <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
-                <div className="text-xs font-bold text-white uppercase tracking-tighter">Estado Operativo en el Búnker</div>
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-[#efe8dd]">
+                <div className="text-xs font-bold text-slate-900 uppercase tracking-tighter">Estado Operativo en el Búnker</div>
                 <Switch 
                   checked={formData.activo} 
                   onCheckedChange={(checked) => setFormData(prev => ({ ...prev, activo: checked }))} 
@@ -237,38 +237,38 @@ const EmpresaFormModal = ({ isOpen, setIsOpen, onSave, initialData = null }) => 
               {/* SECCIÓN 1: Identidad Corporativa */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 mb-4">
-                   <Briefcase className="h-3 w-3 text-blue-400" />
-                   <span className="text-[10px] uppercase font-black text-blue-400 tracking-[0.2em]">Identidad Corporativa</span>
+                   <Briefcase className="h-3 w-3 text-blue-600" />
+                   <span className="text-[10px] uppercase font-black text-blue-600 tracking-[0.2em]">Identidad Corporativa</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="md:col-span-2 space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Razón Social *</Label>
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Razón Social *</Label>
                     <div className="relative">
-                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input id="razonSocial" value={formData.razonSocial} onChange={handleChange} className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-white" placeholder="Nombre Oficial de la Empresa" />
+                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <Input id="razonSocial" value={formData.razonSocial} onChange={handleChange} className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700" placeholder="Nombre Oficial de la Empresa" />
                     </div>
                   </div>
 
                   <div className="md:col-span-2 space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Giro Comercial *</Label>
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Giro Comercial *</Label>
                     <div className="relative">
-                      <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input id="giro" value={formData.giro} onChange={handleChange} className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-white" placeholder="Ej: Venta de artículos electrónicos" />
+                      <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <Input id="giro" value={formData.giro} onChange={handleChange} className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700" placeholder="Ej: Venta de artículos electrónicos" />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">RUT Empresa *</Label>
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">RUT Empresa *</Label>
                     <div className="relative">
-                      <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input id="rut" value={formData.rut} onChange={handleChange} className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-white font-mono uppercase" placeholder="12345678-9" />
+                      <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <Input id="rut" value={formData.rut} onChange={handleChange} className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700 font-mono uppercase" placeholder="12345678-9" />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Régimen Tributario *</Label>
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Régimen Tributario *</Label>
                     <div className="relative">
-                      <Info className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input id="regimenTributario" value={formData.regimenTributario} onChange={handleChange} className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-white" placeholder="Ej: ProPyme General" />
+                      <Info className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <Input id="regimenTributario" value={formData.regimenTributario} onChange={handleChange} className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700" placeholder="Ej: ProPyme General" />
                     </div>
                   </div>
                 </div>
@@ -277,46 +277,46 @@ const EmpresaFormModal = ({ isOpen, setIsOpen, onSave, initialData = null }) => 
               {/* SECCIÓN 2: Ubicación y Contacto */}
               <div className="space-y-4">
                 <div className="flex items-center gap-2 mb-4">
-                   <MapPin className="h-3 w-3 text-emerald-400" />
-                   <span className="text-[10px] uppercase font-black text-emerald-400 tracking-[0.2em]">Ubicación y Contacto</span>
+                   <MapPin className="h-3 w-3 text-emerald-600" />
+                   <span className="text-[10px] uppercase font-black text-emerald-600 tracking-[0.2em]">Ubicación y Contacto</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="md:col-span-2 space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Dirección Matriz *</Label>
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Dirección Matriz *</Label>
                     <div className="relative">
-                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input id="direccion" value={formData.direccion} onChange={handleChange} className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-white" placeholder="Avenida Siempre Viva 123" />
+                      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <Input id="direccion" value={formData.direccion} onChange={handleChange} className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700" placeholder="Avenida Siempre Viva 123" />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Input id="comuna" value={formData.comuna} onChange={handleChange} className="bg-white/5 border-white/10 rounded-xl h-12 text-white" placeholder="Comuna" />
+                    <Input id="comuna" value={formData.comuna} onChange={handleChange} className="bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700" placeholder="Comuna" />
                   </div>
                   <div className="space-y-2">
-                    <Input id="ciudad" value={formData.ciudad} onChange={handleChange} className="bg-white/5 border-white/10 rounded-xl h-12 text-white" placeholder="Ciudad" />
+                    <Input id="ciudad" value={formData.ciudad} onChange={handleChange} className="bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700" placeholder="Ciudad" />
                   </div>
                   
                   <div className="md:col-span-2 space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Teléfono Corporativo (Hasta 12 dígitos)</Label>
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Teléfono Corporativo (Hasta 12 dígitos)</Label>
                     <div className="flex gap-2">
                       <select 
                         value={formData.prefijo}
                         onChange={(e) => setFormData(p => ({...p, prefijo: e.target.value}))}
-                        className="bg-white/5 border border-white/10 rounded-xl px-4 text-white text-xs font-mono outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer"
+                        className="bg-slate-50 border border-[#efe8dd] rounded-xl px-4 text-slate-700 text-xs font-mono outline-none focus:ring-1 focus:ring-emerald-500 appearance-none cursor-pointer"
                       >
-                        <option value="+56" className="bg-slate-900">🇨🇱 +56</option>
-                        <option value="+54" className="bg-slate-900">🇦🇷 +54</option>
-                        <option value="+51" className="bg-slate-900">🇵🇪 +51</option>
-                        <option value="+52" className="bg-slate-900">🇲🇽 +52</option>
-                        <option value="+1" className="bg-slate-900">🇺🇸 +1</option>
-                        <option value="+34" className="bg-slate-900">🇪🇸 +34</option>
+                        <option value="+56" className="bg-white">🇨🇱 +56</option>
+                        <option value="+54" className="bg-white">🇦🇷 +54</option>
+                        <option value="+51" className="bg-white">🇵🇪 +51</option>
+                        <option value="+52" className="bg-white">🇲🇽 +52</option>
+                        <option value="+1" className="bg-white">🇺🇸 +1</option>
+                        <option value="+34" className="bg-white">🇪🇸 +34</option>
                       </select>
                       <div className="relative flex-1 group">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-blue-400" />
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-blue-600" />
                         <Input 
                           id="telefonoCorporativo" 
                           value={formData.telefonoCorporativo} 
                           onChange={handleChange} 
-                          className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-white font-mono" 
+                          className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700 font-mono" 
                           placeholder="9 1234 5678" 
                         />
                       </div>
@@ -324,34 +324,34 @@ const EmpresaFormModal = ({ isOpen, setIsOpen, onSave, initialData = null }) => 
                   </div>
 
                   <div className="md:col-span-2 space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Email Corporativo</Label>
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Email Corporativo</Label>
                     <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input id="emailCorporativo" type="email" value={formData.emailCorporativo} onChange={handleChange} className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-white" placeholder="administracion@empresa.cl" />
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <Input id="emailCorporativo" type="email" value={formData.emailCorporativo} onChange={handleChange} className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700" placeholder="administracion@empresa.cl" />
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* SECCIÓN 3: Representación Legal */}
-              <div className="space-y-4 pt-6 border-t border-white/5">
+              <div className="space-y-4 pt-6 border-t border-[#efe8dd]">
                 <div className="flex items-center gap-2 mb-4">
-                  <UserCheck className="h-4 w-4 text-purple-400" />
-                  <span className="text-[10px] uppercase font-black text-purple-400 tracking-[0.2em]">Representación Legal</span>
+                  <UserCheck className="h-4 w-4 text-purple-600" />
+                  <span className="text-[10px] uppercase font-black text-purple-600 tracking-[0.2em]">Representación Legal</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Nombre Representante</Label>
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Nombre Representante</Label>
                     <div className="relative">
-                      <UserCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input id="nombreRep" value={formData.nombreRep} onChange={handleChange} className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-white" placeholder="Juan Pérez" />
+                      <UserCheck className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <Input id="nombreRep" value={formData.nombreRep} onChange={handleChange} className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700" placeholder="Juan Pérez" />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">RUT Representante</Label>
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">RUT Representante</Label>
                     <div className="relative">
-                      <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input id="rutRep" value={formData.rutRep} onChange={handleChange} className="pl-10 bg-white/5 border-white/10 rounded-xl h-12 text-white font-mono uppercase" placeholder="12345678-K" />
+                      <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                      <Input id="rutRep" value={formData.rutRep} onChange={handleChange} className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700 font-mono uppercase" placeholder="12345678-K" />
                     </div>
                   </div>
                 </div>
@@ -365,29 +365,29 @@ const EmpresaFormModal = ({ isOpen, setIsOpen, onSave, initialData = null }) => 
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">RUT SII *</Label>
-                    <Input id="siiRut" value={formData.siiRut} onChange={handleChange} className="bg-white/5 border-white/10 rounded-xl h-12 text-white font-medium" placeholder="12345678-9" />
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">RUT SII *</Label>
+                    <Input id="siiRut" value={formData.siiRut} onChange={handleChange} className="bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700 font-medium" placeholder="12345678-9" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Email SII *</Label>
-                    <Input id="siiEmail" type="email" value={formData.siiEmail} onChange={handleChange} className="bg-white/5 border-white/10 rounded-xl h-12 text-white font-medium" />
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Email SII *</Label>
+                    <Input id="siiEmail" type="email" value={formData.siiEmail} onChange={handleChange} className="bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700 font-medium" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-gray-500 tracking-widest ml-1">Clave SII *</Label>
-                    <Input id="siiPassword" type="password" value={formData.siiPassword} onChange={handleChange} className="bg-white/5 border-white/10 rounded-xl h-12 text-white font-mono" placeholder={initialData ? "Sin cambios" : "Ingresa la clave"} />
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Clave SII *</Label>
+                    <Input id="siiPassword" type="password" value={formData.siiPassword} onChange={handleChange} className="bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700 font-mono" placeholder={initialData ? "Sin cambios" : "Ingresa la clave"} />
                   </div>
                 </div>
               </div>
             </form>
 
-            <div className="p-6 border-t border-white/5 bg-white/5 flex justify-end gap-3 shrink-0">
+            <div className="p-6 border-t border-[#efe8dd] bg-slate-50 flex justify-end gap-3 shrink-0">
               <Button type="button" variant="ghost" onClick={() => setIsOpen(false)} disabled={loading} className="uppercase text-[10px] font-black tracking-widest">
                 Cancelar
               </Button>
               <Button 
                 onClick={handleSubmit}
                 disabled={loading} 
-                className="bg-blue-600 hover:bg-blue-500 text-white px-10 h-12 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg active:scale-95 transition-all"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 h-12 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg active:scale-95 transition-all"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : (initialData ? 'Sincronizar Cambios' : 'Registrar Empresa')}
               </Button>

@@ -97,50 +97,50 @@ const CrmImportModal = ({ onClose, onImported }) => {
         >
             <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-full max-w-2xl bg-[#0f172a] border border-white/10 rounded-2xl shadow-2xl flex flex-col max-h-[90vh]"
+                className="w-full max-w-2xl bg-white border border-[#efe8dd] rounded-2xl shadow-2xl flex flex-col max-h-[90vh]"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="p-5 border-b border-white/10 flex items-center justify-between bg-gradient-to-r from-emerald-900/30 to-transparent shrink-0">
+                <div className="p-5 border-b border-[#efe8dd] flex items-center justify-between bg-gradient-to-r from-emerald-900/30 to-transparent shrink-0">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-emerald-600">
                             <FileSpreadsheet size={20} />
                         </div>
                         <div>
-                            <h2 className="text-sm font-black text-white uppercase tracking-tight">Importar Clientes</h2>
-                            <p className="text-[10px] text-gray-500">Desde Excel (.xlsx) o CSV — requiere columna RUT</p>
+                            <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight">Importar Clientes</h2>
+                            <p className="text-[10px] text-slate-400">Desde Excel (.xlsx) o CSV — requiere columna RUT</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 rounded-xl bg-white/5 text-gray-400 hover:text-red-400 transition-colors"><X size={18} /></button>
+                    <button onClick={onClose} className="p-2 rounded-xl bg-slate-50 text-slate-500 hover:text-red-500 transition-colors"><X size={18} /></button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
                     {/* Cargar archivo */}
                     <div
                         onClick={() => fileRef.current?.click()}
-                        className="border-2 border-dashed border-white/15 hover:border-emerald-500/50 rounded-2xl p-6 text-center cursor-pointer transition-colors"
+                        className="border-2 border-dashed border-[#e5ddd0] hover:border-emerald-500/50 rounded-2xl p-6 text-center cursor-pointer transition-colors"
                     >
                         <input ref={fileRef} type="file" accept=".csv,.xls,.xlsx" className="hidden" onChange={handleFile} />
                         {parsing ? (
-                            <Loader2 size={28} className="mx-auto text-emerald-400 animate-spin" />
+                            <Loader2 size={28} className="mx-auto text-emerald-600 animate-spin" />
                         ) : (
-                            <Upload size={28} className="mx-auto text-gray-500" />
+                            <Upload size={28} className="mx-auto text-slate-400" />
                         )}
-                        <p className="text-xs text-gray-300 mt-2 font-bold">{fileName || 'Haz clic para seleccionar un archivo'}</p>
-                        <p className="text-[10px] text-gray-600 mt-1">Columnas reconocidas: RUT, Razón Social, Giro, Correo, Teléfono, Representante, Comuna, Ciudad</p>
+                        <p className="text-xs text-slate-600 mt-2 font-bold">{fileName || 'Haz clic para seleccionar un archivo'}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">Columnas reconocidas: RUT, Razón Social, Giro, Correo, Teléfono, Representante, Comuna, Ciudad</p>
                     </div>
 
                     {/* Vista previa */}
                     {rows.length > 0 && !result && (
-                        <div className="bg-black/20 border border-white/5 rounded-xl p-3">
-                            <p className="text-[11px] text-gray-300 font-bold mb-2">{rows.length} fila(s) detectada(s). Primeras 5:</p>
+                        <div className="bg-slate-50 border border-[#efe8dd] rounded-xl p-3">
+                            <p className="text-[11px] text-slate-600 font-bold mb-2">{rows.length} fila(s) detectada(s). Primeras 5:</p>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-[10px] text-left">
-                                    <thead className="text-gray-500 uppercase">
+                                    <thead className="text-slate-400 uppercase">
                                         <tr><th className="pr-3 py-1">RUT</th><th className="pr-3 py-1">Razón Social</th><th className="pr-3 py-1">Correo</th></tr>
                                     </thead>
-                                    <tbody className="text-gray-300">
+                                    <tbody className="text-slate-600">
                                         {rows.slice(0, 5).map((r, i) => (
-                                            <tr key={i} className="border-t border-white/5"><td className="pr-3 py-1 font-mono">{r.rut || '—'}</td><td className="pr-3 py-1">{r.razonSocial || '—'}</td><td className="pr-3 py-1">{r.correo || '—'}</td></tr>
+                                            <tr key={i} className="border-t border-[#efe8dd]"><td className="pr-3 py-1 font-mono">{r.rut || '—'}</td><td className="pr-3 py-1">{r.razonSocial || '—'}</td><td className="pr-3 py-1">{r.correo || '—'}</td></tr>
                                         ))}
                                     </tbody>
                                 </table>
@@ -151,22 +151,22 @@ const CrmImportModal = ({ onClose, onImported }) => {
                     {/* Progreso */}
                     {importing && (
                         <div>
-                            <div className="h-2 bg-black/40 rounded-full overflow-hidden">
+                            <div className="h-2 bg-slate-50 rounded-full overflow-hidden">
                                 <div className="h-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
                             </div>
-                            <p className="text-[10px] text-gray-500 text-center mt-1">Importando… {progress}%</p>
+                            <p className="text-[10px] text-slate-400 text-center mt-1">Importando… {progress}%</p>
                         </div>
                     )}
 
                     {/* Resultado */}
                     {result && (
-                        <div className="bg-black/20 border border-white/5 rounded-xl p-4 space-y-2">
-                            <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold"><CheckCircle2 size={16} /> {result.creados} creados</div>
-                            <div className="flex items-center gap-2 text-amber-400 text-xs font-bold"><AlertTriangle size={16} /> {result.duplicados} duplicados (omitidos)</div>
+                        <div className="bg-slate-50 border border-[#efe8dd] rounded-xl p-4 space-y-2">
+                            <div className="flex items-center gap-2 text-emerald-600 text-xs font-bold"><CheckCircle2 size={16} /> {result.creados} creados</div>
+                            <div className="flex items-center gap-2 text-amber-600 text-xs font-bold"><AlertTriangle size={16} /> {result.duplicados} duplicados (omitidos)</div>
                             {result.errores.length > 0 && (
                                 <div>
-                                    <div className="flex items-center gap-2 text-red-400 text-xs font-bold mb-1"><X size={16} /> {result.errores.length} con error</div>
-                                    <div className="max-h-32 overflow-y-auto text-[10px] text-gray-400 space-y-0.5">
+                                    <div className="flex items-center gap-2 text-red-500 text-xs font-bold mb-1"><X size={16} /> {result.errores.length} con error</div>
+                                    <div className="max-h-32 overflow-y-auto text-[10px] text-slate-500 space-y-0.5">
                                         {result.errores.slice(0, 20).map((e, i) => (
                                             <div key={i}>Fila {e.fila} ({e.rut || 's/rut'}): {e.motivo}</div>
                                         ))}
@@ -177,8 +177,8 @@ const CrmImportModal = ({ onClose, onImported }) => {
                     )}
                 </div>
 
-                <div className="p-4 border-t border-white/10 flex gap-3 shrink-0 bg-[#0f172a]">
-                    <Button variant="ghost" onClick={onClose} className="flex-1 uppercase font-black text-[10px] tracking-widest text-gray-400 h-10 rounded-xl bg-white/5 hover:bg-white/10">
+                <div className="p-4 border-t border-[#efe8dd] flex gap-3 shrink-0 bg-white">
+                    <Button variant="ghost" onClick={onClose} className="flex-1 uppercase font-black text-[10px] tracking-widest text-slate-500 h-10 rounded-xl bg-slate-50 hover:bg-slate-100">
                         {result ? 'Cerrar' : 'Cancelar'}
                     </Button>
                     {!result && (

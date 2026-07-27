@@ -67,8 +67,8 @@ const AsistenciaRrhh = ({ empresaId }) => {
     // Función (no componente) para no remontar el input y perder el foco al tipear.
     const campo = (label, k, { max, step = '1' } = {}) => (
         <div key={k}>
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">{label}</label>
-            <Input type="number" min={0} max={max} step={step} value={form[k]} onChange={e => set(k, e.target.value)} className="bg-white/[0.04] border-white/10" />
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</label>
+            <Input type="number" min={0} max={max} step={step} value={form[k]} onChange={e => set(k, e.target.value)} className="bg-slate-50 border-[#efe8dd]" />
         </div>
     );
 
@@ -79,12 +79,12 @@ const AsistenciaRrhh = ({ empresaId }) => {
                 <div className="w-full lg:w-96">
                     <TrabajadorSelect value={trabajadorId} onChange={setTrabajadorId} empresaId={empresaId} placeholder="Todos (ver registro) o elige uno para editar…" />
                 </div>
-                <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-40 bg-white/[0.04] border-white/10" />
+                <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-40 bg-slate-50 border-[#efe8dd]" />
             </div>
 
             {/* Formulario (requiere trabajador) */}
             {trabajadorId && (
-                <div className="rounded-2xl bg-white/[0.02] border border-white/10 p-4 space-y-3">
+                <div className="rounded-2xl bg-white border border-[#efe8dd] p-4 space-y-3">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         {campo('Días trabajados', 'diasTrabajados', { max: 31 })}
                         {campo('Días ausente', 'diasAusente', { max: 31 })}
@@ -93,29 +93,29 @@ const AsistenciaRrhh = ({ empresaId }) => {
                     </div>
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
                         <div className="flex-1">
-                            <label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Observación</label>
-                            <Input value={form.obs} onChange={e => set('obs', e.target.value)} placeholder="Detalle…" className="bg-white/[0.04] border-white/10" />
+                            <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Observación</label>
+                            <Input value={form.obs} onChange={e => set('obs', e.target.value)} placeholder="Detalle…" className="bg-slate-50 border-[#efe8dd]" />
                         </div>
-                        <Button onClick={() => guardar.mutate()} disabled={guardar.isPending} className="bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white font-semibold h-10">
+                        <Button onClick={() => guardar.mutate()} disabled={guardar.isPending} className="bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-slate-900 font-semibold h-10">
                             {guardar.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}Guardar período
                         </Button>
                     </div>
-                    <div className="flex items-start gap-2.5 text-xs text-gray-400 bg-white/[0.03] border border-white/10 rounded-xl p-3">
-                        <Info className="h-4 w-4 flex-shrink-0 mt-0.5 text-purple-400/70" />
+                    <div className="flex items-start gap-2.5 text-xs text-slate-500 bg-white border border-[#efe8dd] rounded-xl p-3">
+                        <Info className="h-4 w-4 flex-shrink-0 mt-0.5 text-purple-600/70" />
                         <span>Registro de control. No modifica la liquidación automáticamente (los días de la liquidación se ajustan con <b>Licencias Médicas</b> y las horas extra con <b>Novedades del período</b>).</span>
                     </div>
                 </div>
             )}
 
             {/* Registro */}
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
+            <div className="rounded-2xl border border-[#efe8dd] bg-white overflow-hidden">
                 {isLoading ? (
                     <div className="flex items-center justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-purple-500" /></div>
                 ) : lista.length ? (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead>
-                                <tr className="border-b border-white/10 bg-white/[0.03] text-gray-500">
+                                <tr className="border-b border-[#efe8dd] bg-white text-slate-400">
                                     {!trabajadorId && <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider">Trabajador</th>}
                                     <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider">Período</th>
                                     <th className="px-5 py-3 text-right text-[10px] font-semibold uppercase tracking-wider">Días trab.</th>
@@ -127,15 +127,15 @@ const AsistenciaRrhh = ({ empresaId }) => {
                             </thead>
                             <tbody className="divide-y divide-white/[0.06]">
                                 {lista.map((a, i) => (
-                                    <motion.tr key={a.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, delay: i * 0.02 }} className="group hover:bg-white/[0.03]">
-                                        {!trabajadorId && <td className="px-5 py-3 text-white font-medium">{a.empleado}{a.empresa ? <span className="block text-[11px] text-gray-500">{a.empresa}</span> : null}</td>}
-                                        <td className="px-5 py-3 text-gray-400">{periodoTexto(a.periodo)}</td>
-                                        <td className="px-5 py-3 text-right text-gray-200">{a.diasTrabajados}</td>
-                                        <td className="px-5 py-3 text-right text-gray-400">{a.diasAusente}</td>
-                                        <td className="px-5 py-3 text-right text-gray-400">{a.atrasosMin} min</td>
-                                        <td className="px-5 py-3 text-right text-gray-400">{a.horasExtra}</td>
+                                    <motion.tr key={a.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, delay: i * 0.02 }} className="group hover:bg-white">
+                                        {!trabajadorId && <td className="px-5 py-3 text-slate-700 font-medium">{a.empleado}{a.empresa ? <span className="block text-[11px] text-slate-400">{a.empresa}</span> : null}</td>}
+                                        <td className="px-5 py-3 text-slate-500">{periodoTexto(a.periodo)}</td>
+                                        <td className="px-5 py-3 text-right text-slate-700">{a.diasTrabajados}</td>
+                                        <td className="px-5 py-3 text-right text-slate-500">{a.diasAusente}</td>
+                                        <td className="px-5 py-3 text-right text-slate-500">{a.atrasosMin} min</td>
+                                        <td className="px-5 py-3 text-right text-slate-500">{a.horasExtra}</td>
                                         <td className="px-5 py-3 text-right">
-                                            <button onClick={() => quitar.mutate(a.id)} className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-red-400 hover:bg-red-500/10 opacity-70 group-hover:opacity-100 transition"><Trash2 className="h-4 w-4" /></button>
+                                            <button onClick={() => quitar.mutate(a.id)} className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-red-500 hover:bg-red-500/10 opacity-70 group-hover:opacity-100 transition"><Trash2 className="h-4 w-4" /></button>
                                         </td>
                                     </motion.tr>
                                 ))}
@@ -143,9 +143,9 @@ const AsistenciaRrhh = ({ empresaId }) => {
                         </table>
                     </div>
                 ) : (
-                    <div className="flex flex-col items-center text-gray-500 py-20">
-                        <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center mb-4"><Clock className="h-6 w-6 text-purple-400/60" /></div>
-                        <h3 className="text-base font-semibold text-white">{trabajadorId ? 'Sin registros de este trabajador' : `Sin asistencia en ${periodoTexto(periodo)}`}</h3>
+                    <div className="flex flex-col items-center text-slate-400 py-20">
+                        <div className="w-14 h-14 rounded-2xl bg-white border border-[#efe8dd] flex items-center justify-center mb-4"><Clock className="h-6 w-6 text-purple-600/60" /></div>
+                        <h3 className="text-base font-semibold text-slate-900">{trabajadorId ? 'Sin registros de este trabajador' : `Sin asistencia en ${periodoTexto(periodo)}`}</h3>
                         <p className="text-sm mt-1">{trabajadorId ? 'Completa el formulario y guarda.' : 'Elige un trabajador para registrar su asistencia.'}</p>
                     </div>
                 )}

@@ -99,7 +99,7 @@ const NuevaLiquidacionModal = ({ isOpen, setIsOpen, empresaId }) => {
 
     return (
         <Dialog open={isOpen} onOpenChange={(v) => { if (!v) cerrar(); else setIsOpen(true); }}>
-            <DialogContent className="sm:max-w-4xl bg-black/60 backdrop-blur-xl border-white/20 text-white max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-4xl bg-slate-50 backdrop-blur-xl border-[#efe8dd] text-slate-700 max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="text-2xl">Generar Liquidación de Sueldo</DialogTitle>
                     <DialogDescription>Selecciona el trabajador y el período; agrega novedades del mes y calcula.</DialogDescription>
@@ -121,21 +121,21 @@ const NuevaLiquidacionModal = ({ isOpen, setIsOpen, empresaId }) => {
                         </div>
 
                         {trabajadorId && (
-                            <div className="bg-white/5 rounded-lg border border-white/10 p-3 space-y-3">
-                                <h4 className="text-[11px] font-black uppercase tracking-widest text-gray-300">Novedades del mes</h4>
+                            <div className="bg-slate-50 rounded-lg border border-[#efe8dd] p-3 space-y-3">
+                                <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-600">Novedades del mes</h4>
                                 {novedades.length > 0 ? (
                                     <div className="space-y-1">
                                         {novedades.map(n => (
-                                            <div key={n.id} className="flex items-center justify-between text-sm bg-white/5 rounded px-2 py-1">
-                                                <span className="text-gray-200">{n.codigo ? `${n.codigo} · ` : ''}{n.descripcion || n.glosa || 'Movimiento'}</span>
+                                            <div key={n.id} className="flex items-center justify-between text-sm bg-slate-50 rounded px-2 py-1">
+                                                <span className="text-slate-700">{n.codigo ? `${n.codigo} · ` : ''}{n.descripcion || n.glosa || 'Movimiento'}</span>
                                                 <span className="flex items-center gap-2">
-                                                    <span className={n.naturaleza === 'DESCUENTO' ? 'text-red-400' : 'text-green-400'}>{clp(n.monto)}</span>
-                                                    <button onClick={() => quitarNovedad(n.id)} className="text-red-400 hover:text-red-300"><Trash2 className="h-3.5 w-3.5" /></button>
+                                                    <span className={n.naturaleza === 'DESCUENTO' ? 'text-red-500' : 'text-green-400'}>{clp(n.monto)}</span>
+                                                    <button onClick={() => quitarNovedad(n.id)} className="text-red-500 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
                                                 </span>
                                             </div>
                                         ))}
                                     </div>
-                                ) : <p className="text-xs text-gray-500">Sin novedades. El cálculo usa solo la ficha.</p>}
+                                ) : <p className="text-xs text-slate-400">Sin novedades. El cálculo usa solo la ficha.</p>}
 
                                 <div className="flex items-end gap-2 pt-1">
                                     <div className="flex-1 min-w-0">
@@ -149,39 +149,39 @@ const NuevaLiquidacionModal = ({ isOpen, setIsOpen, empresaId }) => {
                             </div>
                         )}
 
-                        <Button type="button" onClick={calcular} disabled={!trabajadorId || calculando} className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+                        <Button type="button" onClick={calcular} disabled={!trabajadorId || calculando} className="w-full bg-gradient-to-r from-emerald-500 to-green-600 text-white">
                             {calculando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Calculator className="h-4 w-4 mr-2" />}Calcular
                         </Button>
                     </div>
 
                     {/* Columna derecha: desglose */}
-                    <div className="bg-white/5 rounded-lg border border-white/10 p-4">
+                    <div className="bg-slate-50 rounded-lg border border-[#efe8dd] p-4">
                         {!preview ? (
-                            <div className="h-full flex items-center justify-center text-gray-500 text-sm text-center py-16">
+                            <div className="h-full flex items-center justify-center text-slate-400 text-sm text-center py-16">
                                 Selecciona un trabajador para ver el desglose de la liquidación.
                             </div>
                         ) : (
                             <div className="space-y-3 text-sm">
                                 <div className="text-center">
-                                    <p className="font-bold text-white">{preview.trabajador?.nombre}</p>
-                                    <p className="text-[10px] uppercase tracking-widest text-gray-400">{periodo}</p>
+                                    <p className="font-bold text-slate-900">{preview.trabajador?.nombre}</p>
+                                    <p className="text-[10px] uppercase tracking-widest text-slate-500">{periodo}</p>
                                     {preview.diasLicencia > 0 && (
-                                        <p className="text-[11px] text-amber-400 mt-1">− {preview.diasLicencia} día(s) por licencia médica · {preview.diasTrabajados} días trabajados</p>
+                                        <p className="text-[11px] text-amber-600 mt-1">− {preview.diasLicencia} día(s) por licencia médica · {preview.diasTrabajados} días trabajados</p>
                                     )}
                                 </div>
                                 <Seccion titulo="Haberes" items={haberes} color="text-green-400" />
-                                <Seccion titulo="Descuentos" items={descuentos} color="text-red-400" signo="-" />
-                                <div className="border-t border-white/10 pt-2 space-y-1">
+                                <Seccion titulo="Descuentos" items={descuentos} color="text-red-500" signo="-" />
+                                <div className="border-t border-[#efe8dd] pt-2 space-y-1">
                                     <Fila label="Total imponible" val={preview.totales.total_imponible} />
                                     <Fila label="Total haberes" val={preview.totales.total_haberes} />
                                     <Fila label="Base tributable" val={preview.totales.base_tributable} />
-                                    <Fila label="Total descuentos" val={preview.totales.total_descuentos} color="text-red-400" signo="-" />
+                                    <Fila label="Total descuentos" val={preview.totales.total_descuentos} color="text-red-500" signo="-" />
                                 </div>
-                                <div className="flex justify-between text-lg font-black text-white bg-green-500/10 rounded-lg px-3 py-2 border border-green-500/20">
+                                <div className="flex justify-between text-lg font-black text-slate-900 bg-green-500/10 rounded-lg px-3 py-2 border border-green-500/20">
                                     <span>LÍQUIDO A PAGAR</span><span className="text-green-400">{clp(preview.totales.liquido_pagar)}</span>
                                 </div>
                                 {aportes.length > 0 && (
-                                    <details className="text-xs text-gray-400">
+                                    <details className="text-xs text-slate-500">
                                         <summary className="cursor-pointer">Aportes patronales: {clp(preview.totales.aportes_patronales)}</summary>
                                         <div className="pl-2 pt-1 space-y-0.5">
                                             {aportes.map((a, i) => <div key={i} className="flex justify-between"><span>{a.descripcion}</span><span>{clp(a.monto)}</span></div>)}
@@ -194,7 +194,7 @@ const NuevaLiquidacionModal = ({ isOpen, setIsOpen, empresaId }) => {
                 </div>
 
                 <DialogFooter>
-                    <Button type="button" variant="outline" onClick={cerrar} className="border-white/20 text-white hover:bg-white/10">Cancelar</Button>
+                    <Button type="button" variant="outline" onClick={cerrar} className="border-[#efe8dd] text-slate-700 hover:bg-slate-100">Cancelar</Button>
                     <Button type="button" onClick={guardar} disabled={!preview || guardando} className="bg-gradient-to-r from-green-500 to-emerald-600 text-white">
                         {guardando ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Guardando...</> : 'Guardar Liquidación'}
                     </Button>
@@ -205,15 +205,15 @@ const NuevaLiquidacionModal = ({ isOpen, setIsOpen, empresaId }) => {
 };
 
 const clpFmt = (v) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(Number(v) || 0);
-const Fila = ({ label, val, color = 'text-gray-200', signo = '' }) => (
-    <div className="flex justify-between"><span className="text-gray-400">{label}</span><span className={color}>{signo}{clpFmt(val)}</span></div>
+const Fila = ({ label, val, color = 'text-slate-700', signo = '' }) => (
+    <div className="flex justify-between"><span className="text-slate-500">{label}</span><span className={color}>{signo}{clpFmt(val)}</span></div>
 );
 const Seccion = ({ titulo, items, color, signo = '' }) => (
     items.length ? (
         <div className="space-y-1">
-            <h5 className="text-[10px] font-black uppercase tracking-widest text-gray-400">{titulo}</h5>
+            <h5 className="text-[10px] font-black uppercase tracking-widest text-slate-500">{titulo}</h5>
             {items.map((d, i) => (
-                <div key={i} className="flex justify-between"><span className="text-gray-300">{d.codigo ? `${d.codigo} · ` : ''}{d.descripcion}</span><span className={color}>{signo}{clpFmt(d.monto)}</span></div>
+                <div key={i} className="flex justify-between"><span className="text-slate-600">{d.codigo ? `${d.codigo} · ` : ''}{d.descripcion}</span><span className={color}>{signo}{clpFmt(d.monto)}</span></div>
             ))}
         </div>
     ) : null

@@ -13,11 +13,11 @@ import { Button } from '@/components/ui/button';
 // ===============================================================
 
 const TIPOS = {
-    correo:   { label: 'Correo',   icon: Mail,          color: 'text-blue-400',    chip: 'bg-blue-500/10 border-blue-500/30 text-blue-300' },
-    whatsapp: { label: 'WhatsApp', icon: MessageCircle, color: 'text-emerald-400', chip: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' },
-    llamada:  { label: 'Llamada',  icon: Phone,         color: 'text-amber-400',   chip: 'bg-amber-500/10 border-amber-500/30 text-amber-300' },
-    reunion:  { label: 'Reunión',  icon: Calendar,      color: 'text-purple-400',  chip: 'bg-purple-500/10 border-purple-500/30 text-purple-300' },
-    nota:     { label: 'Nota',     icon: StickyNote,    color: 'text-gray-300',    chip: 'bg-white/10 border-white/20 text-gray-200' },
+    correo:   { label: 'Correo',   icon: Mail,          color: 'text-blue-600',    chip: 'bg-blue-500/10 border-blue-500/30 text-blue-700' },
+    whatsapp: { label: 'WhatsApp', icon: MessageCircle, color: 'text-emerald-600', chip: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700' },
+    llamada:  { label: 'Llamada',  icon: Phone,         color: 'text-amber-600',   chip: 'bg-amber-500/10 border-amber-500/30 text-amber-700' },
+    reunion:  { label: 'Reunión',  icon: Calendar,      color: 'text-purple-600',  chip: 'bg-purple-500/10 border-purple-500/30 text-purple-700' },
+    nota:     { label: 'Nota',     icon: StickyNote,    color: 'text-slate-600',    chip: 'bg-slate-100 border-[#efe8dd] text-slate-700' },
 };
 
 const hace = (horas) => new Date(Date.now() - horas * 3600 * 1000);
@@ -79,31 +79,31 @@ const InteraccionesPanel = () => {
             {/* TOOLBAR */}
             <div className="flex flex-col lg:flex-row lg:items-center gap-3 flex-shrink-0">
                 <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
                     <input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Buscar por cliente o contenido..."
-                        className="w-full bg-black/30 border border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white outline-none focus:border-blue-500 placeholder:text-gray-600"
+                        className="w-full bg-slate-50 border border-[#efe8dd] rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-500"
                     />
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => abrirForm('llamada')} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/25"><Phone size={13} /> Llamada</button>
-                    <button onClick={() => abrirForm('reunion')} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[10px] font-black uppercase tracking-widest hover:bg-purple-500/25"><Calendar size={13} /> Reunión</button>
-                    <button onClick={() => abrirForm('nota')} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 text-[10px] font-black uppercase tracking-widest hover:bg-white/10"><StickyNote size={13} /> Nota</button>
+                    <button onClick={() => abrirForm('llamada')} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-700 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/25"><Phone size={13} /> Llamada</button>
+                    <button onClick={() => abrirForm('reunion')} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-700 text-[10px] font-black uppercase tracking-widest hover:bg-purple-500/25"><Calendar size={13} /> Reunión</button>
+                    <button onClick={() => abrirForm('nota')} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-50 border border-[#efe8dd] text-slate-600 text-[10px] font-black uppercase tracking-widest hover:bg-slate-100"><StickyNote size={13} /> Nota</button>
                 </div>
             </div>
 
             {/* CHIPS DE FILTRO POR TIPO */}
             <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
-                <button onClick={() => setTipoFiltro('todos')} className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider ${tipoFiltro === 'todos' ? 'bg-white/10 border-blue-500/50 text-white' : 'bg-white/[0.03] border-white/5 text-gray-400 hover:text-white'}`}>
-                    Todos <span className="ml-1 px-1.5 rounded bg-black/30">{conteos.todos}</span>
+                <button onClick={() => setTipoFiltro('todos')} className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider ${tipoFiltro === 'todos' ? 'bg-emerald-50 border-[#199b4d]/40 text-[#199b4d]' : 'bg-white border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
+                    Todos <span className="ml-1 px-1.5 rounded bg-slate-50">{conteos.todos}</span>
                 </button>
                 {Object.entries(TIPOS).map(([key, cfg]) => {
                     const Icon = cfg.icon;
                     return (
-                        <button key={key} onClick={() => setTipoFiltro(key)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider ${tipoFiltro === key ? 'bg-white/10 border-blue-500/50 text-white' : 'bg-white/[0.03] border-white/5 text-gray-400 hover:text-white'}`}>
-                            <Icon size={13} className={cfg.color} /> {cfg.label} <span className="ml-0.5 px-1.5 rounded bg-black/30">{conteos[key]}</span>
+                        <button key={key} onClick={() => setTipoFiltro(key)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider ${tipoFiltro === key ? 'bg-emerald-50 border-[#199b4d]/40 text-[#199b4d]' : 'bg-white border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
+                            <Icon size={13} className={cfg.color} /> {cfg.label} <span className="ml-0.5 px-1.5 rounded bg-slate-50">{conteos[key]}</span>
                         </button>
                     );
                 })}
@@ -111,28 +111,28 @@ const InteraccionesPanel = () => {
 
             {/* FORMULARIO DE REGISTRO */}
             {formTipo && (
-                <div className="bg-[#0f172a]/80 border border-white/10 rounded-2xl p-4 flex-shrink-0">
+                <div className="bg-white border border-[#efe8dd] rounded-2xl p-4 flex-shrink-0">
                     <div className="flex items-center justify-between mb-3">
                         <h3 className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 ${TIPOS[formTipo].color}`}>
                             {React.createElement(TIPOS[formTipo].icon, { size: 15 })} Registrar {TIPOS[formTipo].label}
                         </h3>
-                        <button onClick={() => setFormTipo(null)} className="text-gray-500 hover:text-white"><X size={16} /></button>
+                        <button onClick={() => setFormTipo(null)} className="text-slate-500 hover:text-slate-900"><X size={16} /></button>
                     </div>
                     <div className="flex flex-col md:flex-row gap-3">
                         <input
                             value={formCliente}
                             onChange={(e) => setFormCliente(e.target.value)}
                             placeholder="Cliente / empresa"
-                            className="md:w-64 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500 placeholder:text-gray-600"
+                            className="md:w-64 bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-500"
                         />
                         <input
                             value={formTexto}
                             onChange={(e) => setFormTexto(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && guardar()}
                             placeholder={formTipo === 'llamada' ? 'Resumen de la llamada (motivo, duración...)' : formTipo === 'reunion' ? 'Detalle de la reunión (asistentes, temas...)' : 'Nota interna...'}
-                            className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500 placeholder:text-gray-600"
+                            className="flex-1 bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-500"
                         />
-                        <Button onClick={guardar} disabled={!formCliente.trim() || !formTexto.trim()} className="bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-4 h-auto py-2 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
+                        <Button onClick={guardar} disabled={!formCliente.trim() || !formTexto.trim()} className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-4 h-auto py-2 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
                             <Plus size={14} /> Registrar
                         </Button>
                     </div>
@@ -140,7 +140,7 @@ const InteraccionesPanel = () => {
             )}
 
             {/* TIMELINE */}
-            <div className="flex-1 overflow-y-auto rounded-2xl border border-white/10 bg-[#0f172a]/50 p-4 scrollbar-thin scrollbar-thumb-white/10">
+            <div className="flex-1 overflow-y-auto rounded-2xl border border-[#efe8dd] bg-white p-4 scrollbar-thin scrollbar-thumb-white/10">
                 {lista.length > 0 ? (
                     <div className="space-y-3">
                         {lista.map(i => {
@@ -151,28 +151,28 @@ const InteraccionesPanel = () => {
                                     <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${cfg.chip}`}>
                                         <Icon size={16} className={cfg.color} />
                                     </div>
-                                    <div className="flex-1 min-w-0 bg-white/[0.02] border border-white/5 rounded-xl p-3">
+                                    <div className="flex-1 min-w-0 bg-white border border-[#efe8dd] rounded-xl p-3">
                                         <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
                                             <div className="flex items-center gap-2 min-w-0">
-                                                <span className="font-bold text-white text-xs truncate">{i.cliente}</span>
+                                                <span className="font-bold text-slate-900 text-xs truncate">{i.cliente}</span>
                                                 <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${cfg.chip}`}>{cfg.label}</span>
                                                 {i.direccion && (
-                                                    <span className={`flex items-center gap-0.5 text-[9px] font-bold ${i.direccion === 'out' ? 'text-emerald-400' : 'text-sky-400'}`}>
+                                                    <span className={`flex items-center gap-0.5 text-[9px] font-bold ${i.direccion === 'out' ? 'text-emerald-600' : 'text-sky-400'}`}>
                                                         {i.direccion === 'out' ? <><ArrowUpRight size={11} /> Enviado</> : <><ArrowDownLeft size={11} /> Recibido</>}
                                                     </span>
                                                 )}
                                             </div>
-                                            <span className="text-[9px] text-gray-500 shrink-0">{fmtFecha(i.ts)}</span>
+                                            <span className="text-[9px] text-slate-500 shrink-0">{fmtFecha(i.ts)}</span>
                                         </div>
-                                        <p className="text-xs text-gray-200 leading-relaxed">{i.texto}</p>
-                                        <p className="text-[9px] text-gray-600 mt-1">por {i.autor}</p>
+                                        <p className="text-xs text-slate-700 leading-relaxed">{i.texto}</p>
+                                        <p className="text-[9px] text-slate-500 mt-1">por {i.autor}</p>
                                     </div>
                                 </div>
                             );
                         })}
                     </div>
                 ) : (
-                    <p className="text-xs text-gray-500 italic text-center py-8">No hay interacciones para este filtro.</p>
+                    <p className="text-xs text-slate-500 italic text-center py-8">No hay interacciones para este filtro.</p>
                 )}
             </div>
         </div>

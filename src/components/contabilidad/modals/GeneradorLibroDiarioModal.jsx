@@ -161,9 +161,9 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, rawVentas = [], rawCompr
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="sm:max-w-[800px] bg-[#0f172a] border-white/10 text-white shadow-2xl backdrop-blur-xl">
+            <DialogContent className="sm:max-w-[800px] bg-white border-[#efe8dd] text-slate-700 shadow-2xl backdrop-blur-xl">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center text-xl font-black tracking-tight text-blue-400 uppercase">
+                    <DialogTitle className="flex items-center text-xl font-black tracking-tight text-blue-600 uppercase">
                         <BookCopy className="mr-3 h-6 w-6" />
                         Libro Diario Centralizado
                     </DialogTitle>
@@ -172,8 +172,8 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, rawVentas = [], rawCompr
                 <div className="max-h-[65vh] overflow-y-auto custom-scrollbar pr-2 mt-4 space-y-6">
 
                     {/* TIPO DE PERÍODO */}
-                    <div className="bg-black/40 border border-white/5 rounded-xl p-5">
-                        <h4 className="text-xs font-black uppercase text-blue-300 mb-4 tracking-widest flex items-center gap-2">
+                    <div className="bg-slate-50 border border-[#efe8dd] rounded-xl p-5">
+                        <h4 className="text-xs font-black uppercase text-blue-700 mb-4 tracking-widest flex items-center gap-2">
                             <CalendarDays className="h-3.5 w-3.5" /> Tipo de Período
                         </h4>
                         <div className="grid grid-cols-4 gap-2">
@@ -183,8 +183,8 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, rawVentas = [], rawCompr
                                     onClick={() => setTipoPeriodo(tipo.value)}
                                     className={`py-2.5 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                                         tipoPeriodo === tipo.value
-                                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30'
-                                            : 'bg-slate-800/50 text-gray-500 hover:text-white hover:bg-slate-700/50 border border-white/5'
+                                            ? 'bg-blue-600 text-white shadow-lg shadow-emerald-900/30'
+                                            : 'bg-slate-50 text-slate-400 hover:text-slate-900 hover:bg-slate-100/50 border border-[#efe8dd]'
                                     }`}
                                 >
                                     {tipo.label}
@@ -194,37 +194,37 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, rawVentas = [], rawCompr
 
                         {tipoPeriodo === 'diario' && (
                             <div className="mt-4">
-                                <label className="text-[9px] font-bold uppercase text-gray-500 mb-1.5 block">Día</label>
+                                <label className="text-[9px] font-bold uppercase text-slate-400 mb-1.5 block">Día</label>
                                 <select
                                     value={diaSeleccionado}
                                     onChange={(e) => setDiaSeleccionado(e.target.value)}
-                                    className="w-32 bg-slate-800 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                    className="w-32 bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-sm text-slate-900 focus:outline-none focus:border-emerald-500"
                                 >
-                                    {dias.map(d => <option key={d} value={d} className="bg-slate-900">{d}</option>)}
+                                    {dias.map(d => <option key={d} value={d} className="bg-white">{d}</option>)}
                                 </select>
                             </div>
                         )}
 
                         <div className="mt-3 flex items-center gap-4 text-[10px] font-black uppercase tracking-widest">
-                            <span className="text-blue-400">Período: {periodoLabel}</span>
-                            <span className="text-emerald-400">{ventasFiltradas.length} ventas</span>
-                            <span className="text-red-400">{comprasFiltradas.length} compras</span>
+                            <span className="text-blue-600">Período: {periodoLabel}</span>
+                            <span className="text-emerald-600">{ventasFiltradas.length} ventas</span>
+                            <span className="text-red-500">{comprasFiltradas.length} compras</span>
                         </div>
                     </div>
 
                     {/* CONFIGURACIÓN DE CUENTAS */}
                     {!isLoading && (
-                        <div className="bg-black/40 border border-white/5 rounded-xl p-5">
-                            <h4 className="text-xs font-black uppercase text-blue-300 mb-4 tracking-widest">Configuración de Cuentas</h4>
+                        <div className="bg-slate-50 border border-[#efe8dd] rounded-xl p-5">
+                            <h4 className="text-xs font-black uppercase text-blue-700 mb-4 tracking-widest">Configuración de Cuentas</h4>
                             <div className="grid grid-cols-2 gap-4">
                                 {Object.entries(CUENTAS_LABELS).map(([tipo, label]) => (
                                     <div key={tipo} className="space-y-1">
-                                        <label className="text-[9px] font-bold uppercase text-gray-500">{label}</label>
+                                        <label className="text-[9px] font-bold uppercase text-slate-400">{label}</label>
                                         <Select value={mapeo[tipo]} onValueChange={(val) => setMapeo(prev => ({ ...prev, [tipo]: val }))}>
-                                            <SelectTrigger className="bg-slate-900 border-white/10 text-xs text-white h-8">
+                                            <SelectTrigger className="bg-white border-[#efe8dd] text-xs text-slate-900 h-8">
                                                 <SelectValue />
                                             </SelectTrigger>
-                                            <SelectContent className="bg-slate-900 border-white/10 text-white max-h-[300px] overflow-y-auto">
+                                            <SelectContent className="bg-white border-[#efe8dd] text-slate-700 max-h-[300px] overflow-y-auto">
                                                 {plan.map(cta => (
                                                     <SelectItem key={cta.codigo} value={cta.codigo} className="text-xs">
                                                         {cta.codigo} - {cta.descripcion}
@@ -242,34 +242,34 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, rawVentas = [], rawCompr
                     {isLoading ? (
                         <div className="flex flex-col items-center py-10">
                             <Loader2 className="h-8 w-8 animate-spin text-blue-500 mb-4" />
-                            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Cruzando Plan de Cuentas...</p>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cruzando Plan de Cuentas...</p>
                         </div>
                     ) : asientos.length === 0 ? (
-                        <div className="text-center py-10 text-gray-500 font-bold uppercase text-xs tracking-widest">
+                        <div className="text-center py-10 text-slate-400 font-bold uppercase text-xs tracking-widest">
                             Sin movimientos para el período seleccionado.
                         </div>
                     ) : (
-                        <div className="bg-black/20 rounded-xl border border-white/10 overflow-hidden">
+                        <div className="bg-slate-50 rounded-xl border border-[#efe8dd] overflow-hidden">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="bg-white/5">
-                                        <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-gray-400">Cuenta</th>
-                                        <th className="px-4 py-3 text-right text-[10px] font-black uppercase tracking-widest text-gray-400">Debe</th>
-                                        <th className="px-4 py-3 text-right text-[10px] font-black uppercase tracking-widest text-gray-400">Haber</th>
+                                    <tr className="bg-slate-50">
+                                        <th className="px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-slate-500">Cuenta</th>
+                                        <th className="px-4 py-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">Debe</th>
+                                        <th className="px-4 py-3 text-right text-[10px] font-black uppercase tracking-widest text-slate-500">Haber</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {asientos.map((linea, index) => {
                                         if (linea.tipo === 'header') return (
                                             <tr key={index} className="bg-blue-900/20">
-                                                <td colSpan={3} className="px-4 py-2 text-xs font-black text-blue-400">{linea.glosa}</td>
+                                                <td colSpan={3} className="px-4 py-2 text-xs font-black text-blue-600">{linea.glosa}</td>
                                             </tr>
                                         );
                                         return (
-                                            <tr key={index} className="hover:bg-white/[0.02]">
+                                            <tr key={index} className="hover:bg-white">
                                                 <td className="px-4 py-2 text-xs">{getNombreCuenta(linea.codigo)}</td>
-                                                <td className="px-4 py-2 text-right font-mono text-xs text-emerald-400">{linea.debe > 0 ? formatCLP(linea.debe) : '-'}</td>
-                                                <td className="px-4 py-2 text-right font-mono text-xs text-orange-400">{linea.haber > 0 ? formatCLP(linea.haber) : '-'}</td>
+                                                <td className="px-4 py-2 text-right font-mono text-xs text-emerald-600">{linea.debe > 0 ? formatCLP(linea.debe) : '-'}</td>
+                                                <td className="px-4 py-2 text-right font-mono text-xs text-orange-600">{linea.haber > 0 ? formatCLP(linea.haber) : '-'}</td>
                                             </tr>
                                         );
                                     })}
@@ -280,13 +280,13 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, rawVentas = [], rawCompr
                 </div>
 
                 <DialogFooter className="mt-4">
-                    <Button variant="ghost" onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white">
+                    <Button variant="ghost" onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-slate-900">
                         Cancelar
                     </Button>
                     <Button
                         onClick={handleGenerar}
                         disabled={asientos.length === 0}
-                        className="bg-blue-600 hover:bg-blue-500 font-black uppercase text-xs tracking-widest disabled:opacity-40"
+                        className="bg-emerald-600 hover:bg-emerald-500 font-black uppercase text-xs tracking-widest disabled:opacity-40"
                     >
                         <BookCopy className="h-4 w-4 mr-2" />
                         Generar Borrador

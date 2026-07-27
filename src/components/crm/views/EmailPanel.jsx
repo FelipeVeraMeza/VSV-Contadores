@@ -49,15 +49,15 @@ const ThreadItem = ({ hilo, active, onClick }) => {
     return (
         <button
             onClick={onClick}
-            className={`w-full text-left p-3 rounded-xl border transition-all ${active ? 'bg-blue-500/10 border-blue-500/40' : 'bg-white/[0.02] border-white/5 hover:bg-white/5'}`}
+            className={`w-full text-left p-3 rounded-xl border transition-all ${active ? 'bg-blue-500/10 border-blue-500/40' : 'bg-white border-[#efe8dd] hover:bg-slate-100'}`}
         >
             <div className="flex items-center justify-between gap-2">
-                <span className={`text-xs truncate ${hilo.noLeidos > 0 ? 'font-black text-white' : 'font-bold text-gray-300'}`}>{hilo.nombre}</span>
-                <span className="text-[9px] text-gray-500 shrink-0">{ultimo?.fecha?.split(',')[0]}</span>
+                <span className={`text-xs truncate ${hilo.noLeidos > 0 ? 'font-black text-slate-900' : 'font-bold text-slate-600'}`}>{hilo.nombre}</span>
+                <span className="text-[9px] text-slate-500 shrink-0">{ultimo?.fecha?.split(',')[0]}</span>
             </div>
-            <p className="text-[11px] text-gray-300 truncate mt-0.5">{hilo.asunto}</p>
+            <p className="text-[11px] text-slate-600 truncate mt-0.5">{hilo.asunto}</p>
             <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] text-gray-500 truncate">{ultimo?.cuerpo}</span>
+                <span className="text-[10px] text-slate-500 truncate">{ultimo?.cuerpo}</span>
                 {hilo.noLeidos > 0 && <span className="bg-blue-500 text-white text-[9px] font-black rounded-full px-1.5 py-0.5 shrink-0">{hilo.noLeidos}</span>}
             </div>
         </button>
@@ -110,70 +110,70 @@ const EmailPanel = () => {
     return (
         <div className="flex-1 min-h-0 flex gap-3 lg:gap-4 h-full">
             {/* ===== COLUMNA 1: HILOS ===== */}
-            <div className="w-52 lg:w-64 xl:w-72 shrink-0 flex flex-col gap-3 bg-[#0f172a]/60 border border-white/10 rounded-2xl p-3">
-                <div className="flex items-center gap-2 text-blue-400 font-black text-xs uppercase tracking-widest px-1">
+            <div className="w-52 lg:w-64 xl:w-72 shrink-0 flex flex-col gap-3 bg-white border border-[#efe8dd] rounded-2xl p-3">
+                <div className="flex items-center gap-2 text-blue-600 font-black text-xs uppercase tracking-widest px-1">
                     <Mail size={16} /> Correo
                 </div>
                 <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={14} />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
                     <input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Buscar correo..."
-                        className="w-full bg-black/30 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white outline-none focus:border-blue-500 placeholder:text-gray-600"
+                        className="w-full bg-slate-50 border border-[#efe8dd] rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-500"
                     />
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-white/10">
                     {hilosFiltrados.map(h => (
                         <ThreadItem key={h.id} hilo={h} active={h.id === selectedId} onClick={() => handleSelect(h.id)} />
                     ))}
-                    {hilosFiltrados.length === 0 && <p className="text-[10px] text-gray-500 italic text-center py-4">Sin correos.</p>}
+                    {hilosFiltrados.length === 0 && <p className="text-[10px] text-slate-500 italic text-center py-4">Sin correos.</p>}
                 </div>
             </div>
 
             {/* ===== COLUMNA 2: HILO DE CORREO ===== */}
-            <div className="flex-1 min-w-0 flex flex-col bg-[#0f172a]/60 border border-white/10 rounded-2xl overflow-hidden">
+            <div className="flex-1 min-w-0 flex flex-col bg-white border border-[#efe8dd] rounded-2xl overflow-hidden">
                 {selected ? (
                     <>
-                        <div className="p-4 border-b border-white/10 bg-gradient-to-r from-blue-900/20 to-transparent shrink-0">
-                            <h3 className="font-black text-white text-sm truncate">{selected.asunto}</h3>
-                            <span className="text-[10px] text-gray-400">{selected.nombre} · {selected.email}</span>
+                        <div className="p-4 border-b border-[#efe8dd] bg-gradient-to-r from-blue-900/20 to-transparent shrink-0">
+                            <h3 className="font-black text-slate-900 text-sm truncate">{selected.asunto}</h3>
+                            <span className="text-[10px] text-slate-500">{selected.nombre} · {selected.email}</span>
                         </div>
 
                         {/* Cadena de correos */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin scrollbar-thumb-white/10">
                             {selected.mensajes.map(m => (
-                                <div key={m.id} className={`rounded-2xl border p-3 ${m.direccion === 'out' ? 'bg-blue-600/10 border-blue-500/20 ml-6' : 'bg-white/[0.03] border-white/10 mr-6'}`}>
+                                <div key={m.id} className={`rounded-2xl border p-3 ${m.direccion === 'out' ? 'bg-blue-600/10 border-blue-500/20 ml-6' : 'bg-white border-[#efe8dd] mr-6'}`}>
                                     <div className="flex items-center justify-between mb-1.5">
-                                        <span className={`text-[10px] font-black uppercase tracking-widest ${m.direccion === 'out' ? 'text-blue-400' : 'text-gray-400'}`}>
+                                        <span className={`text-[10px] font-black uppercase tracking-widest ${m.direccion === 'out' ? 'text-blue-600' : 'text-slate-500'}`}>
                                             {m.direccion === 'out' ? 'VSV Contadores' : selected.nombre}
                                         </span>
-                                        <span className="text-[9px] text-gray-500">{m.fecha}</span>
+                                        <span className="text-[9px] text-slate-500">{m.fecha}</span>
                                     </div>
-                                    <p className="text-xs text-gray-200 leading-relaxed whitespace-pre-line">{m.cuerpo}</p>
+                                    <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">{m.cuerpo}</p>
                                 </div>
                             ))}
                         </div>
 
                         {/* Responder */}
-                        <div className="p-3 border-t border-white/10 shrink-0 relative">
+                        <div className="p-3 border-t border-[#efe8dd] shrink-0 relative">
                             {showPlantillas && (
-                                <div className="absolute bottom-full left-3 mb-2 w-96 bg-[#0f172a] border border-white/10 rounded-xl shadow-2xl p-2 z-20 max-h-72 overflow-y-auto">
-                                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest px-2 py-1">Plantillas</p>
+                                <div className="absolute bottom-full left-3 mb-2 w-96 bg-white border border-[#efe8dd] rounded-xl shadow-2xl p-2 z-20 max-h-72 overflow-y-auto">
+                                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-2 py-1">Plantillas</p>
                                     {PLANTILLAS.map(p => (
-                                        <button key={p.id} onClick={() => aplicarPlantilla(p)} className="w-full text-left px-2 py-2 rounded-lg hover:bg-white/5 transition-colors">
-                                            <span className="block text-xs font-bold text-blue-400">{p.nombre}</span>
-                                            <span className="block text-[10px] text-gray-500 truncate">{p.asunto}</span>
+                                        <button key={p.id} onClick={() => aplicarPlantilla(p)} className="w-full text-left px-2 py-2 rounded-lg hover:bg-slate-100 transition-colors">
+                                            <span className="block text-xs font-bold text-blue-600">{p.nombre}</span>
+                                            <span className="block text-[10px] text-slate-500 truncate">{p.asunto}</span>
                                         </button>
                                     ))}
                                 </div>
                             )}
                             <div className="flex items-center gap-2 mb-2">
-                                <CornerUpLeft size={14} className="text-gray-500" />
-                                <span className="text-[10px] text-gray-400">Respondiendo a <span className="text-gray-200 font-bold">{selected.email}</span></span>
+                                <CornerUpLeft size={14} className="text-slate-500" />
+                                <span className="text-[10px] text-slate-500">Respondiendo a <span className="text-slate-700 font-bold">{selected.email}</span></span>
                                 <button
                                     onClick={() => setShowPlantillas(!showPlantillas)}
-                                    className="ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-gray-300 hover:text-white"
+                                    className="ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-50 border border-[#efe8dd] text-[10px] font-black uppercase tracking-widest text-slate-600 hover:text-slate-900"
                                 >
                                     Plantilla <ChevronDown size={12} />
                                 </button>
@@ -183,25 +183,25 @@ const EmailPanel = () => {
                                 onChange={(e) => setCuerpo(e.target.value)}
                                 placeholder="Escribe tu respuesta..."
                                 rows={3}
-                                className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-blue-500 placeholder:text-gray-600 resize-none"
+                                className="w-full bg-slate-50 border border-[#efe8dd] rounded-xl px-3 py-2.5 text-xs text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-500 resize-none"
                             />
                             <div className="flex items-center justify-between mt-2">
-                                <button className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300"><Paperclip size={13} /> Adjuntar</button>
-                                <Button onClick={handleSend} disabled={!cuerpo.trim()} className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 h-auto py-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                                <button className="flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-600"><Paperclip size={13} /> Adjuntar</button>
+                                <Button onClick={handleSend} disabled={!cuerpo.trim()} className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-4 h-auto py-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
                                     <Send size={14} /> Enviar
                                 </Button>
                             </div>
                         </div>
                     </>
                 ) : (
-                    <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">Selecciona un correo</div>
+                    <div className="flex-1 flex items-center justify-center text-slate-500 text-sm">Selecciona un correo</div>
                 )}
             </div>
 
             {/* ===== COLUMNA 3: IA / NOTAS ===== */}
             <div className="hidden lg:flex w-64 xl:w-72 2xl:w-80 shrink-0 flex-col gap-4 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/10">
                 <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4">
-                    <h3 className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <h3 className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <Sparkles size={14} /> Asistente IA
                     </h3>
                     <button
@@ -211,19 +211,19 @@ const EmailPanel = () => {
                         <Sparkles size={14} /> Generar nota con IA
                     </button>
                     {iaEstado === 'espera' && (
-                        <div className="mt-3 bg-black/30 border border-purple-500/20 rounded-xl p-3 text-center">
+                        <div className="mt-3 bg-slate-50 border border-purple-500/20 rounded-xl p-3 text-center">
                             <p className="text-2xl mb-1">🤖</p>
-                            <p className="text-xs font-black text-purple-300 uppercase tracking-widest">En espera de IA</p>
-                            <p className="text-[10px] text-gray-500 mt-1">Esta función se activará al conectar el proveedor de IA. Generará notas a partir de las conversaciones por correo.</p>
+                            <p className="text-xs font-black text-purple-700 uppercase tracking-widest">En espera de IA</p>
+                            <p className="text-[10px] text-slate-500 mt-1">Esta función se activará al conectar el proveedor de IA. Generará notas a partir de las conversaciones por correo.</p>
                         </div>
                     )}
                     {iaEstado === null && (
-                        <p className="text-[10px] text-gray-500 mt-2 text-center">La IA resumirá la conversación del correo en una nota automáticamente.</p>
+                        <p className="text-[10px] text-slate-500 mt-2 text-center">La IA resumirá la conversación del correo en una nota automáticamente.</p>
                     )}
                 </div>
 
-                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-4">
-                    <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
+                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
                         <StickyNote size={14} /> Notas
                     </h3>
                     <div className="flex gap-2 mb-3">
@@ -232,18 +232,18 @@ const EmailPanel = () => {
                             onChange={(e) => setNuevaNota(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && agregarNota()}
                             placeholder="Nueva nota..."
-                            className="flex-1 bg-black/30 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-blue-500 placeholder:text-gray-600"
+                            className="flex-1 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-500"
                         />
-                        <Button onClick={agregarNota} disabled={!nuevaNota.trim()} className="bg-blue-600 hover:bg-blue-500 text-white rounded-lg px-3 h-auto"><Plus size={14} /></Button>
+                        <Button onClick={agregarNota} disabled={!nuevaNota.trim()} className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 h-auto"><Plus size={14} /></Button>
                     </div>
                     <div className="space-y-2">
                         {notas.map(n => (
-                            <div key={n.id} className="p-2 rounded-lg bg-black/20 border border-white/5">
-                                <div className="flex items-center gap-1 text-gray-500 mb-1"><Clock size={9} /><span className="text-[9px] font-black tracking-widest">{n.hora}</span></div>
-                                <p className="text-xs text-gray-200">{n.texto}</p>
+                            <div key={n.id} className="p-2 rounded-lg bg-slate-50 border border-[#efe8dd]">
+                                <div className="flex items-center gap-1 text-slate-500 mb-1"><Clock size={9} /><span className="text-[9px] font-black tracking-widest">{n.hora}</span></div>
+                                <p className="text-xs text-slate-700">{n.texto}</p>
                             </div>
                         ))}
-                        {notas.length === 0 && <p className="text-[10px] text-gray-500 italic">Sin notas.</p>}
+                        {notas.length === 0 && <p className="text-[10px] text-slate-500 italic">Sin notas.</p>}
                     </div>
                 </div>
             </div>

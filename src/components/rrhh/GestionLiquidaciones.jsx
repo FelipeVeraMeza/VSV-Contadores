@@ -17,11 +17,11 @@ const mesActual = () => new Date().toISOString().slice(0, 7);
 const periodoTexto = (v) => { const d = String(v).slice(0, 7).split('-'); const M = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']; return d.length === 2 ? `${M[Number(d[1]) - 1]} ${d[0]}` : String(v); };
 
 const ESTADOS = {
-    borrador: { label: 'Borrador', pill: 'bg-gray-500/15 text-gray-300', dot: 'bg-gray-400' },
-    revisada: { label: 'Revisada', pill: 'bg-blue-500/15 text-blue-400', dot: 'bg-blue-400' },
+    borrador: { label: 'Borrador', pill: 'bg-gray-500/15 text-slate-600', dot: 'bg-gray-400' },
+    revisada: { label: 'Revisada', pill: 'bg-blue-500/15 text-blue-600', dot: 'bg-blue-400' },
     aprobada: { label: 'Aprobada', pill: 'bg-green-500/15 text-green-400', dot: 'bg-green-400' },
-    pagada: { label: 'Pagada', pill: 'bg-emerald-500/15 text-emerald-400', dot: 'bg-emerald-400' },
-    anulada: { label: 'Anulada', pill: 'bg-red-500/15 text-red-400', dot: 'bg-red-400' },
+    pagada: { label: 'Pagada', pill: 'bg-emerald-500/15 text-emerald-600', dot: 'bg-emerald-400' },
+    anulada: { label: 'Anulada', pill: 'bg-red-500/15 text-red-500', dot: 'bg-red-400' },
 };
 const iniciales = (n = '') => n.trim().split(/\s+/).slice(0, 2).map(p => p[0] || '').join('').toUpperCase() || '—';
 
@@ -132,17 +132,17 @@ const GestionLiquidaciones = ({ empresaId, onAddLiquidation }) => {
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="flex items-center gap-3">
-                    <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-44 bg-white/[0.04] border-white/10" />
-                    <span className="text-xs text-gray-500">
-                        <b className="text-gray-300">{periodoTexto(periodo)}</b>
+                    <Input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)} className="w-44 bg-slate-50 border-[#efe8dd]" />
+                    <span className="text-xs text-slate-400">
+                        <b className="text-slate-600">{periodoTexto(periodo)}</b>
                         {liquidaciones.length > 0 && <> · {liquidaciones.length} liquidación(es) · <span className="text-green-400 font-semibold">{clp(totalLiquido)}</span></>}
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => masivo.mutate()} disabled={masivo.isPending} className="border-white/10 bg-white/[0.03] text-gray-200 hover:bg-white/[0.06] hover:text-white h-10" title="Generar la liquidación de todos los trabajadores activos del período">
+                    <Button variant="outline" size="sm" onClick={() => masivo.mutate()} disabled={masivo.isPending} className="border-[#efe8dd] bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 h-10" title="Generar la liquidación de todos los trabajadores activos del período">
                         {masivo.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Layers className="h-4 w-4 mr-2" />}Generar masivo
                     </Button>
-                    {onAddLiquidation && <Button onClick={onAddLiquidation} className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold h-10 shadow-lg shadow-green-900/20"><Plus className="h-4 w-4 mr-2" />Nueva Liquidación</Button>}
+                    {onAddLiquidation && <Button onClick={onAddLiquidation} className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-slate-900 font-semibold h-10 shadow-lg shadow-green-900/20"><Plus className="h-4 w-4 mr-2" />Nueva Liquidación</Button>}
                 </div>
             </div>
 
@@ -151,9 +151,9 @@ const GestionLiquidaciones = ({ empresaId, onAddLiquidation }) => {
                 <div className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
                     <span className="text-sm text-purple-200 font-medium">{seleccionadas.length} seleccionada(s)</span>
                     <div className="flex items-center gap-2 ml-auto">
-                        <Button size="sm" variant="outline" disabled={accion} onClick={() => descargar(seleccionadas.map(l => l.id))} className="border-white/10 bg-white/[0.04] text-gray-200 hover:bg-white/[0.08] h-9"><Printer className="h-4 w-4 mr-2" />Descargar</Button>
-                        <Button size="sm" disabled={accion} onClick={() => enviar(seleccionadas.map(l => l.id))} className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white h-9"><Send className="h-4 w-4 mr-2" />Enviar</Button>
-                        <button onClick={() => setSel(new Set())} className="text-xs text-purple-300 hover:text-white px-2">Limpiar</button>
+                        <Button size="sm" variant="outline" disabled={accion} onClick={() => descargar(seleccionadas.map(l => l.id))} className="border-[#efe8dd] bg-slate-50 text-slate-700 hover:bg-slate-100 h-9"><Printer className="h-4 w-4 mr-2" />Descargar</Button>
+                        <Button size="sm" disabled={accion} onClick={() => enviar(seleccionadas.map(l => l.id))} className="bg-gradient-to-r from-emerald-500 to-green-600 text-white h-9"><Send className="h-4 w-4 mr-2" />Enviar</Button>
+                        <button onClick={() => setSel(new Set())} className="text-xs text-purple-700 hover:text-slate-900 px-2">Limpiar</button>
                     </div>
                 </div>
             )}
@@ -161,20 +161,20 @@ const GestionLiquidaciones = ({ empresaId, onAddLiquidation }) => {
             {isLoading ? (
                 <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-green-500" /></div>
             ) : (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
+                <div className="rounded-2xl border border-[#efe8dd] bg-white overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full">
                             <thead>
-                                <tr className="border-b border-white/10 bg-white/[0.03]">
+                                <tr className="border-b border-[#efe8dd] bg-white">
                                     <th className="pl-5 pr-2 py-3.5 w-10">
-                                        <input type="checkbox" checked={liquidaciones.length > 0 && sel.size === liquidaciones.length} onChange={toggleTodas} className="h-4 w-4 rounded border-white/20 bg-white/5 accent-purple-500" />
+                                        <input type="checkbox" checked={liquidaciones.length > 0 && sel.size === liquidaciones.length} onChange={toggleTodas} className="h-4 w-4 rounded border-[#efe8dd] bg-slate-50 accent-purple-500" />
                                     </th>
-                                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Empleado</th>
-                                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Cargo</th>
-                                    {consolidado && <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Empresa</th>}
-                                    <th className="px-5 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Líquido</th>
-                                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">Estado</th>
-                                    <th className="px-5 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-gray-500">Acciones</th>
+                                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Empleado</th>
+                                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Cargo</th>
+                                    {consolidado && <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Empresa</th>}
+                                    <th className="px-5 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400">Líquido</th>
+                                    <th className="px-5 py-3.5 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-400">Estado</th>
+                                    <th className="px-5 py-3.5 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-400">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/[0.06]">
@@ -183,29 +183,29 @@ const GestionLiquidaciones = ({ empresaId, onAddLiquidation }) => {
                                         const est = ESTADOS[l.estado] || ESTADOS.borrador;
                                         const checked = sel.has(l.id);
                                         return (
-                                            <motion.tr key={l.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25, delay: index * 0.03 }} className={`group transition-colors ${checked ? 'bg-purple-500/[0.06]' : 'hover:bg-white/[0.03]'}`}>
+                                            <motion.tr key={l.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.25, delay: index * 0.03 }} className={`group transition-colors ${checked ? 'bg-purple-500/[0.06]' : 'hover:bg-white'}`}>
                                                 <td className="pl-5 pr-2 py-3.5">
-                                                    <input type="checkbox" checked={checked} onChange={() => toggle(l.id)} className="h-4 w-4 rounded border-white/20 bg-white/5 accent-purple-500" />
+                                                    <input type="checkbox" checked={checked} onChange={() => toggle(l.id)} className="h-4 w-4 rounded border-[#efe8dd] bg-slate-50 accent-purple-500" />
                                                 </td>
                                                 <td className="px-5 py-3.5">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0">{iniciales(l.empleado)}</div>
-                                                        <span className="text-sm text-white font-medium">{l.empleado}</span>
+                                                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-[11px] font-bold text-slate-900 flex-shrink-0">{iniciales(l.empleado)}</div>
+                                                        <span className="text-sm text-slate-900 font-medium">{l.empleado}</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-5 py-3.5 text-sm text-gray-400">{l.cargo}</td>
-                                                {consolidado && <td className="px-5 py-3.5 text-sm text-gray-400 truncate max-w-[200px]">{l.empresa || '—'}</td>}
+                                                <td className="px-5 py-3.5 text-sm text-slate-500">{l.cargo}</td>
+                                                {consolidado && <td className="px-5 py-3.5 text-sm text-slate-500 truncate max-w-[200px]">{l.empresa || '—'}</td>}
                                                 <td className="px-5 py-3.5 text-right text-sm text-green-400 font-bold">{clp(l.liquido)}</td>
                                                 <td className="px-5 py-3.5">
                                                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold rounded-full ${est.pill}`}><span className={`w-1.5 h-1.5 rounded-full ${est.dot}`} />{est.label}</span>
                                                 </td>
                                                 <td className="px-5 py-3.5">
                                                     <div className="flex items-center justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-                                                        <Button variant="ghost" size="sm" onClick={() => setDetalleId(l.id)} className="h-8 w-8 p-0 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10" title="Ver detalle"><Eye className="h-4 w-4" /></Button>
-                                                        <Button variant="ghost" size="sm" disabled={accion} onClick={() => descargar([l.id])} className="h-8 w-8 p-0 text-gray-400 hover:text-white hover:bg-white/10" title="Descargar / imprimir"><Download className="h-4 w-4" /></Button>
-                                                        <Button variant="ghost" size="sm" disabled={accion} onClick={() => enviar([l.id])} className="h-8 w-8 p-0 text-gray-400 hover:text-indigo-400 hover:bg-indigo-500/10" title="Enviar al trabajador"><Send className="h-4 w-4" /></Button>
-                                                        {['borrador', 'revisada'].includes(l.estado) && <Button variant="ghost" size="sm" onClick={() => aprobar.mutate(l.id)} disabled={aprobar.isPending} className="h-8 w-8 p-0 text-gray-400 hover:text-green-400 hover:bg-green-500/10" title="Aprobar"><CheckCircle2 className="h-4 w-4" /></Button>}
-                                                        {!['aprobada', 'pagada'].includes(l.estado) && <Button variant="ghost" size="sm" onClick={() => { if (window.confirm(`¿Eliminar la liquidación de ${l.empleado}?`)) eliminar.mutate(l.id); }} disabled={eliminar.isPending} className="h-8 w-8 p-0 text-gray-400 hover:text-red-400 hover:bg-red-500/10" title="Eliminar"><Trash2 className="h-4 w-4" /></Button>}
+                                                        <Button variant="ghost" size="sm" onClick={() => setDetalleId(l.id)} className="h-8 w-8 p-0 text-slate-500 hover:text-blue-600 hover:bg-blue-500/10" title="Ver detalle"><Eye className="h-4 w-4" /></Button>
+                                                        <Button variant="ghost" size="sm" disabled={accion} onClick={() => descargar([l.id])} className="h-8 w-8 p-0 text-slate-500 hover:text-slate-900 hover:bg-slate-100" title="Descargar / imprimir"><Download className="h-4 w-4" /></Button>
+                                                        <Button variant="ghost" size="sm" disabled={accion} onClick={() => enviar([l.id])} className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10" title="Enviar al trabajador"><Send className="h-4 w-4" /></Button>
+                                                        {['borrador', 'revisada'].includes(l.estado) && <Button variant="ghost" size="sm" onClick={() => aprobar.mutate(l.id)} disabled={aprobar.isPending} className="h-8 w-8 p-0 text-slate-500 hover:text-green-400 hover:bg-green-500/10" title="Aprobar"><CheckCircle2 className="h-4 w-4" /></Button>}
+                                                        {!['aprobada', 'pagada'].includes(l.estado) && <Button variant="ghost" size="sm" onClick={() => { if (window.confirm(`¿Eliminar la liquidación de ${l.empleado}?`)) eliminar.mutate(l.id); }} disabled={eliminar.isPending} className="h-8 w-8 p-0 text-slate-500 hover:text-red-500 hover:bg-red-500/10" title="Eliminar"><Trash2 className="h-4 w-4" /></Button>}
                                                     </div>
                                                 </td>
                                             </motion.tr>
@@ -214,9 +214,9 @@ const GestionLiquidaciones = ({ empresaId, onAddLiquidation }) => {
                                 ) : (
                                     <tr>
                                         <td colSpan={consolidado ? 7 : 6} className="text-center py-16">
-                                            <div className="flex flex-col items-center text-gray-500">
-                                                <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center mb-4"><FileWarning className="h-6 w-6 opacity-40" /></div>
-                                                <h3 className="text-base font-semibold text-white">Sin liquidaciones en {periodoTexto(periodo)}</h3>
+                                            <div className="flex flex-col items-center text-slate-400">
+                                                <div className="w-14 h-14 rounded-2xl bg-white border border-[#efe8dd] flex items-center justify-center mb-4"><FileWarning className="h-6 w-6 opacity-40" /></div>
+                                                <h3 className="text-base font-semibold text-slate-900">Sin liquidaciones en {periodoTexto(periodo)}</h3>
                                                 <p className="text-sm mt-1">Usa "Nueva Liquidación" o "Generar masivo" para crear las del período.</p>
                                             </div>
                                         </td>

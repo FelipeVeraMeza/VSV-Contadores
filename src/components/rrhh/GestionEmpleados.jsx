@@ -22,16 +22,16 @@ const Menu = ({ items, trigger }) => {
     const [open, setOpen] = useState(false);
     return (
         <div className="relative inline-block">
-            <button onClick={() => setOpen(o => !o)} className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors">
+            <button onClick={() => setOpen(o => !o)} className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors">
                 {trigger || <MoreVertical className="h-4 w-4" />}
             </button>
             {open && (<>
                 <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-                <div className="absolute right-0 top-9 z-50 w-44 rounded-xl border border-white/10 bg-[#161425] shadow-2xl py-1">
+                <div className="absolute right-0 top-9 z-50 w-44 rounded-xl border border-[#efe8dd] bg-white shadow-2xl py-1">
                     {items.map((it, i) => {
                         const Icon = it.icon;
                         return (
-                            <button key={i} onClick={() => { setOpen(false); it.onClick(); }} className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2.5 hover:bg-white/5 transition-colors ${it.danger ? 'text-red-400' : 'text-gray-200'}`}>
+                            <button key={i} onClick={() => { setOpen(false); it.onClick(); }} className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2.5 hover:bg-slate-100 transition-colors ${it.danger ? 'text-red-500' : 'text-slate-700'}`}>
                                 {Icon && <Icon className="h-4 w-4" />}{it.label}
                             </button>
                         );
@@ -126,13 +126,13 @@ const GestionEmpleados = ({ empresaId, onNew }) => {
             {/* Búsqueda + acciones */}
             <div className="flex flex-col md:flex-row md:items-center gap-3">
                 <div className="relative flex-1">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar por nombre, RUT o cargo…"
-                        className="w-full bg-white/[0.04] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50" />
+                        className="w-full bg-slate-50 border border-[#efe8dd] rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50" />
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                    <Button onClick={nuevo} className="bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white font-semibold h-10 shadow-lg shadow-purple-900/20"><Plus className="h-4 w-4 mr-2" />Nuevo trabajador</Button>
-                    <Button variant="outline" onClick={() => toast({ title: 'Importar', description: 'Carga masiva desde Excel — próximamente.' })} className="border-white/10 bg-white/[0.03] text-gray-200 hover:bg-white/[0.06] hover:text-white h-10"><Upload className="h-4 w-4 mr-2" />Importar</Button>
+                    <Button onClick={nuevo} className="bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-slate-900 font-semibold h-10 shadow-lg shadow-purple-900/20"><Plus className="h-4 w-4 mr-2" />Nuevo trabajador</Button>
+                    <Button variant="outline" onClick={() => toast({ title: 'Importar', description: 'Carga masiva desde Excel — próximamente.' })} className="border-[#efe8dd] bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 h-10"><Upload className="h-4 w-4 mr-2" />Importar</Button>
                     <Menu items={[{ label: 'Exportar', icon: Download, onClick: () => toast({ title: 'Exportar', description: 'Próximamente.' }) }, { label: 'Limpiar filtros', icon: Filter, onClick: limpiar }]} />
                 </div>
             </div>
@@ -145,20 +145,20 @@ const GestionEmpleados = ({ empresaId, onNew }) => {
                     <Filtro label="Estado" value={fEstado} onChange={setFEstado} options={OPT_ESTADO} />
                     <Filtro label="Tipo de contrato" value={fTipo} onChange={setFTipo} options={OPT_TIPO} />
                     {(busqueda || fEmpresa || fDepto || fEstado || fTipo) && (
-                        <button onClick={limpiar} className="text-xs text-purple-400 hover:text-purple-300 font-medium px-2 py-1">Limpiar</button>
+                        <button onClick={limpiar} className="text-xs text-purple-600 hover:text-purple-700 font-medium px-2 py-1">Limpiar</button>
                     )}
                 </div>
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/10 text-xs text-gray-400 flex-shrink-0">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-[#efe8dd] text-xs text-slate-500 flex-shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />{filtrados.length} resultado{filtrados.length === 1 ? '' : 's'}
                 </div>
             </div>
 
             {/* Tabla */}
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
+            <div className="rounded-2xl border border-[#efe8dd] bg-white overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full">
                         <thead>
-                            <tr className="border-b border-white/10 bg-white/[0.03] text-gray-500">
+                            <tr className="border-b border-[#efe8dd] bg-white text-slate-400">
                                 {['Trabajador', 'RUT', 'Cargo', 'Departamento', ...(consolidado ? ['Empresa'] : []), 'Tipo contrato', 'Estado', 'Fecha ingreso'].map(h => (
                                     <th key={h} className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap">{h}</th>
                                 ))}
@@ -167,33 +167,33 @@ const GestionEmpleados = ({ empresaId, onNew }) => {
                         </thead>
                         <tbody className="divide-y divide-white/[0.06]">
                             {pageRows.length ? pageRows.map((e, i) => (
-                                <motion.tr key={e.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, delay: i * 0.02 }} className="group hover:bg-white/[0.03] transition-colors">
+                                <motion.tr key={e.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2, delay: i * 0.02 }} className="group hover:bg-white transition-colors">
                                     <td className="px-5 py-3">
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${colorAvatar(e.nombre)} flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0`}>{iniciales(e.nombre)}</div>
+                                            <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${colorAvatar(e.nombre)} flex items-center justify-center text-[11px] font-bold text-slate-900 flex-shrink-0`}>{iniciales(e.nombre)}</div>
                                             <div className="min-w-0">
-                                                <div className="text-sm text-white font-medium truncate">{e.nombre}</div>
-                                                {e.email && <div className="text-[11px] text-gray-500 truncate">{e.email}</div>}
+                                                <div className="text-sm text-slate-900 font-medium truncate">{e.nombre}</div>
+                                                {e.email && <div className="text-[11px] text-slate-400 truncate">{e.email}</div>}
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-5 py-3"><span className="inline-flex items-center gap-1.5 text-sm text-gray-300 font-mono text-xs"><Lock className="h-3 w-3 text-gray-600" />{e.rut}</span></td>
-                                    <td className="px-5 py-3 text-sm text-gray-300 whitespace-nowrap">{e.cargo}</td>
-                                    <td className="px-5 py-3 text-sm text-gray-400 whitespace-nowrap">{e.departamento}</td>
-                                    {consolidado && <td className="px-5 py-3 text-sm text-gray-400 truncate max-w-[160px]">{e.empresa || '—'}</td>}
+                                    <td className="px-5 py-3"><span className="inline-flex items-center gap-1.5 text-sm text-slate-600 font-mono text-xs"><Lock className="h-3 w-3 text-slate-400" />{e.rut}</span></td>
+                                    <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{e.cargo}</td>
+                                    <td className="px-5 py-3 text-sm text-slate-500 whitespace-nowrap">{e.departamento}</td>
+                                    {consolidado && <td className="px-5 py-3 text-sm text-slate-500 truncate max-w-[160px]">{e.empresa || '—'}</td>}
                                     <td className="px-5 py-3">
-                                        {e.tipoContrato ? <span className={`inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-md ${e.tipoContrato === 'indefinido' ? 'bg-emerald-500/10 text-emerald-400' : e.tipoContrato === 'plazo_fijo' ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'}`}>{e.tipoContratoLabel}</span> : <span className="text-gray-600">—</span>}
+                                        {e.tipoContrato ? <span className={`inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-md ${e.tipoContrato === 'indefinido' ? 'bg-emerald-500/10 text-emerald-600' : e.tipoContrato === 'plazo_fijo' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>{e.tipoContratoLabel}</span> : <span className="text-slate-400">—</span>}
                                     </td>
                                     <td className="px-5 py-3">
-                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold rounded-full ${e.estado === 'Activo' ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+                                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-semibold rounded-full ${e.estado === 'Activo' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-red-500/15 text-red-500'}`}>
                                             <span className={`w-1.5 h-1.5 rounded-full ${e.estado === 'Activo' ? 'bg-emerald-400' : 'bg-red-400'}`} />{e.estado}
                                         </span>
                                     </td>
-                                    <td className="px-5 py-3 text-sm text-gray-400 whitespace-nowrap">{fmtFecha(e.fechaIngreso)}</td>
+                                    <td className="px-5 py-3 text-sm text-slate-500 whitespace-nowrap">{fmtFecha(e.fechaIngreso)}</td>
                                     <td className="px-5 py-3">
                                         <div className="flex items-center justify-end gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => setEditId(e.id)} title="Ver / editar" className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-blue-400 hover:bg-blue-500/10"><Eye className="h-4 w-4" /></button>
-                                            <button onClick={() => setEditId(e.id)} title="Editar" className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:text-yellow-400 hover:bg-yellow-500/10"><Pencil className="h-4 w-4" /></button>
+                                            <button onClick={() => setEditId(e.id)} title="Ver / editar" className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-500/10"><Eye className="h-4 w-4" /></button>
+                                            <button onClick={() => setEditId(e.id)} title="Editar" className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-yellow-400 hover:bg-yellow-500/10"><Pencil className="h-4 w-4" /></button>
                                             <Menu items={[
                                                 { label: 'Editar ficha', icon: Pencil, onClick: () => setEditId(e.id) },
                                                 { label: 'Eliminar', icon: Trash2, danger: true, onClick: () => { if (window.confirm(`¿Eliminar a ${e.nombre}?`)) eliminar.mutate(e.id); } },
@@ -203,9 +203,9 @@ const GestionEmpleados = ({ empresaId, onNew }) => {
                                 </motion.tr>
                             )) : (
                                 <tr><td colSpan={consolidado ? 9 : 8} className="text-center py-16">
-                                    <div className="flex flex-col items-center text-gray-500">
-                                        <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/10 flex items-center justify-center mb-4"><FileWarning className="h-6 w-6 opacity-40" /></div>
-                                        <h3 className="text-base font-semibold text-white">{empleadosData.length ? 'Sin resultados con esos filtros' : 'No hay trabajadores registrados'}</h3>
+                                    <div className="flex flex-col items-center text-slate-400">
+                                        <div className="w-14 h-14 rounded-2xl bg-white border border-[#efe8dd] flex items-center justify-center mb-4"><FileWarning className="h-6 w-6 opacity-40" /></div>
+                                        <h3 className="text-base font-semibold text-slate-900">{empleadosData.length ? 'Sin resultados con esos filtros' : 'No hay trabajadores registrados'}</h3>
                                         <p className="text-sm mt-1">{empleadosData.length ? 'Ajusta o limpia los filtros.' : 'Agrega un trabajador para comenzar.'}</p>
                                     </div>
                                 </td></tr>
@@ -218,19 +218,19 @@ const GestionEmpleados = ({ empresaId, onNew }) => {
             {/* Paginación */}
             {filtrados.length > 0 && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-sm">
-                    <div className="flex items-center gap-2 text-gray-400">
+                    <div className="flex items-center gap-2 text-slate-500">
                         <span>Mostrar</span>
                         <div className="w-20"><ThemedSelect value={String(porPagina)} onChange={(v) => setPorPagina(Number(v))} options={[10, 20, 50, 100].map(n => ({ value: String(n), label: String(n) }))} /></div>
                         <span>por página</span>
                     </div>
                     <div className="flex items-center gap-1">
-                        <button onClick={() => setPagina(p => Math.max(1, p - 1))} disabled={page === 1} className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:bg-white/10 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button>
+                        <button onClick={() => setPagina(p => Math.max(1, p - 1))} disabled={page === 1} className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button>
                         {pageItems().map((it, i) => it === '…'
-                            ? <span key={i} className="px-2 text-gray-600">…</span>
-                            : <button key={i} onClick={() => setPagina(it)} className={`h-8 min-w-8 px-2 rounded-lg text-sm font-medium transition-colors ${it === page ? 'bg-gradient-to-r from-purple-500 to-violet-600 text-white' : 'text-gray-400 hover:bg-white/10'}`}>{it}</button>)}
-                        <button onClick={() => setPagina(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-gray-400 hover:bg-white/10 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
+                            ? <span key={i} className="px-2 text-slate-400">…</span>
+                            : <button key={i} onClick={() => setPagina(it)} className={`h-8 min-w-8 px-2 rounded-lg text-sm font-medium transition-colors ${it === page ? 'bg-gradient-to-r from-purple-500 to-violet-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>{it}</button>)}
+                        <button onClick={() => setPagina(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button>
                     </div>
-                    <div className="text-gray-500 text-xs">Mostrando {desde + 1} a {Math.min(desde + porPagina, filtrados.length)} de {filtrados.length} resultados</div>
+                    <div className="text-slate-400 text-xs">Mostrando {desde + 1} a {Math.min(desde + porPagina, filtrados.length)} de {filtrados.length} resultados</div>
                 </div>
             )}
 

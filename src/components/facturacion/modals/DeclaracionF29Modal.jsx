@@ -8,7 +8,7 @@ import { toast } from '@/components/ui/use-toast';
 const DeclaracionF29Modal = ({ isOpen, setIsOpen }) => {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-[700px] bg-black/50 backdrop-blur-xl border-white/20 text-white">
+      <DialogContent className="sm:max-w-[700px] bg-slate-50 backdrop-blur-xl border-[#efe8dd] text-slate-700">
         <DialogHeader>
           <DialogTitle className="text-2xl">Propuesta Declaración F29</DialogTitle>
           <DialogDescription>Período Tributario: Mayo 2025</DialogDescription>
@@ -16,38 +16,38 @@ const DeclaracionF29Modal = ({ isOpen, setIsOpen }) => {
         <div className="max-h-[60vh] overflow-y-auto p-4 space-y-6">
           <div>
             <h3 className="text-lg font-semibold mb-2 text-green-400">Débitos (Ventas)</h3>
-            <div className="p-4 bg-white/5 rounded-lg space-y-2">
+            <div className="p-4 bg-slate-50 rounded-lg space-y-2">
                 <div className="flex justify-between"><span>[502] Ventas afectas a IVA</span><span>$12,547,890</span></div>
                 <div className="flex justify-between font-bold"><span>[503] IVA Débito Fiscal (19%)</span><span>$2,384,100</span></div>
             </div>
           </div>
            <div>
-            <h3 className="text-lg font-semibold mb-2 text-red-400">Créditos (Compras)</h3>
-            <div className="p-4 bg-white/5 rounded-lg space-y-2">
+            <h3 className="text-lg font-semibold mb-2 text-red-500">Créditos (Compras)</h3>
+            <div className="p-4 bg-slate-50 rounded-lg space-y-2">
                 <div className="flex justify-between"><span>[519] Compras afectas a IVA</span><span>$8,234,567</span></div>
                 <div className="flex justify-between font-bold"><span>[520] IVA Crédito Fiscal (19%)</span><span>$1,564,568</span></div>
             </div>
           </div>
-          <Separator className="bg-white/20" />
+          <Separator className="bg-slate-200" />
            <div>
-            <h3 className="text-lg font-semibold mb-2 text-blue-400">Resumen Impuesto</h3>
-            <div className="p-4 bg-white/5 rounded-lg space-y-2">
+            <h3 className="text-lg font-semibold mb-2 text-blue-600">Resumen Impuesto</h3>
+            <div className="p-4 bg-slate-50 rounded-lg space-y-2">
                 <div className="flex justify-between"><span>[89] IVA a Pagar</span><span>$819,532</span></div>
                 <div className="flex justify-between"><span>[537] PPM Pagos Provisionales (1%)</span><span>$125,479</span></div>
-                 <Separator className="bg-white/10 my-2" />
-                <div className="flex justify-between text-xl font-bold text-blue-300">
+                 <Separator className="bg-slate-100 my-2" />
+                <div className="flex justify-between text-xl font-bold text-blue-700">
                     <span>[91] TOTAL A PAGAR</span>
                     <span>$945,011</span>
                 </div>
             </div>
           </div>
-          <p className="text-xs text-center text-gray-400">Esta es una propuesta basada en los DTE del período. Verifique la información antes de declarar.</p>
+          <p className="text-xs text-center text-slate-500">Esta es una propuesta basada en los DTE del período. Verifique la información antes de declarar.</p>
         </div>
         <DialogFooter>
-          <Button variant="outline" className="border-white/20 text-white hover:bg-white/10" onClick={() => toast({title:"Próximamente"})}>
+          <Button variant="outline" className="border-[#efe8dd] text-slate-700 hover:bg-slate-100" onClick={() => toast({title:"Próximamente"})}>
             <Download className="mr-2 h-4 w-4" /> Exportar
           </Button>
-          <Button type="button" onClick={() => setIsOpen(false)} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white">Cerrar</Button>
+          <Button type="button" onClick={() => setIsOpen(false)} className="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white">Cerrar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

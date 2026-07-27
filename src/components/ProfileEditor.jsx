@@ -15,10 +15,10 @@ const getStrength = (pw) => {
   if (/[0-9]/.test(pw)) score++;
   if (/[^A-Za-z0-9]/.test(pw)) score++;
   const map = [
-    { pct: 25, label: 'Débil',  bar: 'bg-red-500',     text: 'text-red-400' },
-    { pct: 50, label: 'Media',  bar: 'bg-amber-500',   text: 'text-amber-400' },
-    { pct: 75, label: 'Buena',  bar: 'bg-blue-500',    text: 'text-blue-400' },
-    { pct: 100, label: 'Fuerte', bar: 'bg-emerald-500', text: 'text-emerald-400' },
+    { pct: 25, label: 'Débil',  bar: 'bg-red-500',     text: 'text-red-500' },
+    { pct: 50, label: 'Media',  bar: 'bg-amber-500',   text: 'text-amber-600' },
+    { pct: 75, label: 'Buena',  bar: 'bg-blue-500',    text: 'text-blue-600' },
+    { pct: 100, label: 'Fuerte', bar: 'bg-emerald-500', text: 'text-emerald-600' },
   ];
   return map[Math.max(0, score - 1)];
 };
@@ -26,12 +26,12 @@ const getStrength = (pw) => {
 // Campo de texto reutilizable con icono
 const Campo = ({ icon: Icon, label, ...props }) => (
   <div>
-    <label className="block text-[9px] font-black uppercase tracking-widest text-gray-500 mb-1.5">{label}</label>
+    <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">{label}</label>
     <div className="relative">
-      <Icon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={15} />
+      <Icon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
       <input
         {...props}
-        className="w-full pl-10 pr-4 py-2.5 bg-black/30 border border-white/10 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/60 focus:bg-black/40 transition-all"
+        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-[#efe8dd] rounded-xl text-sm text-slate-900 placeholder-gray-600 focus:outline-none focus:border-emerald-500/60 focus:bg-slate-50 transition-all"
       />
     </div>
   </div>
@@ -161,20 +161,20 @@ const ProfileEditor = () => {
       className="max-w-5xl mx-auto space-y-6"
     >
       {/* HERO: avatar + identidad */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-zinc-900 to-black rounded-3xl border border-white/10 shadow-2xl p-6 sm:p-8">
+      <div className="relative overflow-hidden bg-gradient-to-br from-white to-[#f4eee3] rounded-3xl border border-[#efe8dd] shadow-2xl p-6 sm:p-8">
         <div className="absolute -top-10 -right-10 opacity-[0.04]"><ShieldCheck size={180} /></div>
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-5">
-          <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-purple-900/40 shrink-0">
+          <div className="h-20 w-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-emerald-900/40 shrink-0">
             {iniciales}
           </div>
           <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight truncate">{formData.nombre || 'Mi Perfil'}</h1>
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight truncate">{formData.nombre || 'Mi Perfil'}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/15 text-amber-300 text-[10px] font-black uppercase tracking-widest rounded-full border border-amber-500/30">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/15 text-amber-700 text-[10px] font-black uppercase tracking-widest rounded-full border border-amber-500/30">
                 <BadgeCheck size={12} /> {user?.rol || 'Usuario'}
               </span>
               {formData.email && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/5 text-gray-300 text-[10px] font-bold tracking-wider rounded-full border border-white/10">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 text-slate-600 text-[10px] font-bold tracking-wider rounded-full border border-[#efe8dd]">
                   <Mail size={11} /> {formData.email}
                 </span>
               )}
@@ -185,9 +185,9 @@ const ProfileEditor = () => {
 
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* INFORMACIÓN PERSONAL */}
-        <div className="bg-zinc-900/60 border border-white/10 rounded-3xl p-6 space-y-5">
-          <h2 className="text-white font-black uppercase tracking-widest text-xs flex items-center gap-2">
-            <span className="p-1.5 bg-blue-500/15 rounded-lg"><User className="h-4 w-4 text-blue-400" /></span>
+        <div className="bg-slate-50/60 border border-[#efe8dd] rounded-3xl p-6 space-y-5">
+          <h2 className="text-slate-900 font-black uppercase tracking-widest text-xs flex items-center gap-2">
+            <span className="p-1.5 bg-blue-500/15 rounded-lg"><User className="h-4 w-4 text-blue-600" /></span>
             Información Personal
           </h2>
           <div className="space-y-4">
@@ -198,30 +198,30 @@ const ProfileEditor = () => {
         </div>
 
         {/* SEGURIDAD */}
-        <div className="bg-zinc-900/60 border border-white/10 rounded-3xl p-6 space-y-5">
+        <div className="bg-slate-50/60 border border-[#efe8dd] rounded-3xl p-6 space-y-5">
           <div>
-            <h2 className="text-white font-black uppercase tracking-widest text-xs flex items-center gap-2">
-              <span className="p-1.5 bg-purple-500/15 rounded-lg"><Lock className="h-4 w-4 text-purple-400" /></span>
+            <h2 className="text-slate-900 font-black uppercase tracking-widest text-xs flex items-center gap-2">
+              <span className="p-1.5 bg-purple-500/15 rounded-lg"><Lock className="h-4 w-4 text-purple-600" /></span>
               Cambiar Contraseña
             </h2>
-            <p className="text-[11px] text-gray-500 mt-2 font-medium">Deja estos campos vacíos si no deseas cambiarla.</p>
+            <p className="text-[11px] text-slate-400 mt-2 font-medium">Deja estos campos vacíos si no deseas cambiarla.</p>
           </div>
 
           <div className="space-y-4">
             {/* Contraseña Actual */}
             <div>
-              <label className="block text-[9px] font-black uppercase tracking-widest text-gray-500 mb-1.5">Contraseña Actual</label>
+              <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Contraseña Actual</label>
               <div className="relative">
-                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={15} />
+                <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   name="claveActual"
                   value={formData.claveActual}
                   onChange={handleChange}
-                  className="w-full pl-10 pr-10 py-2.5 bg-black/30 border border-white/10 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/60 transition-all"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-[#efe8dd] rounded-xl text-sm text-slate-900 placeholder-gray-600 focus:outline-none focus:border-emerald-500/60 transition-all"
                   placeholder="••••••••"
                 />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors">
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 transition-colors">
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
@@ -229,25 +229,25 @@ const ProfileEditor = () => {
 
             {/* Nueva Contraseña */}
             <div>
-              <label className="block text-[9px] font-black uppercase tracking-widest text-gray-500 mb-1.5">Nueva Contraseña (mín. 8)</label>
+              <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Nueva Contraseña (mín. 8)</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={15} />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
                 <input
                   type={showNewPassword ? 'text' : 'password'}
                   name="claveNueva"
                   value={formData.claveNueva}
                   onChange={handleChange}
-                  className="w-full pl-10 pr-10 py-2.5 bg-black/30 border border-white/10 rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/60 transition-all"
+                  className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-[#efe8dd] rounded-xl text-sm text-slate-900 placeholder-gray-600 focus:outline-none focus:border-emerald-500/60 transition-all"
                   placeholder="••••••••"
                 />
-                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors">
+                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 transition-colors">
                   {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
               {/* Medidor de fuerza */}
               {formData.claveNueva && (
                 <div className="flex items-center gap-2 mt-2">
-                  <div className="h-1.5 flex-1 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
                     <div className={`h-full rounded-full transition-all duration-300 ${strength.bar}`} style={{ width: `${strength.pct}%` }} />
                   </div>
                   <span className={`text-[9px] font-black uppercase tracking-widest ${strength.text}`}>{strength.label}</span>
@@ -258,23 +258,23 @@ const ProfileEditor = () => {
             {/* Confirmar */}
             {formData.claveNueva && (
               <div>
-                <label className="block text-[9px] font-black uppercase tracking-widest text-gray-500 mb-1.5">Confirmar Nueva Contraseña</label>
+                <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Confirmar Nueva Contraseña</label>
                 <div className="relative">
-                  <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={15} />
+                  <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
                   <input
                     type="password"
                     name="claveConfirm"
                     value={formData.claveConfirm}
                     onChange={handleChange}
-                    className={`w-full pl-10 pr-4 py-2.5 bg-black/30 border rounded-xl text-sm text-white placeholder-gray-600 focus:outline-none transition-all ${
+                    className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 border rounded-xl text-sm text-slate-900 placeholder-gray-600 focus:outline-none transition-all ${
                       formData.claveConfirm && formData.claveConfirm !== formData.claveNueva
-                        ? 'border-red-500/60' : 'border-white/10 focus:border-blue-500/60'
+                        ? 'border-red-500/60' : 'border-[#efe8dd] focus:border-emerald-500/60'
                     }`}
                     placeholder="••••••••"
                   />
                 </div>
                 {formData.claveConfirm && formData.claveConfirm !== formData.claveNueva && (
-                  <p className="text-[10px] text-red-400 font-bold mt-1.5">Las contraseñas no coinciden</p>
+                  <p className="text-[10px] text-red-500 font-bold mt-1.5">Las contraseñas no coinciden</p>
                 )}
               </div>
             )}
@@ -284,9 +284,9 @@ const ProfileEditor = () => {
         {/* AVISO + GUARDAR (ancho completo) */}
         <div className="lg:col-span-2 space-y-5">
           <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-2xl p-4 flex gap-3">
-            <ShieldCheck className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-gray-300 leading-relaxed">
-              <p className="font-black uppercase tracking-widest text-blue-300 text-[10px] mb-0.5">Seguridad</p>
+            <ShieldCheck className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-slate-600 leading-relaxed">
+              <p className="font-black uppercase tracking-widest text-blue-700 text-[10px] mb-0.5">Seguridad</p>
               Tus datos se encriptan automáticamente en la base de datos. Nunca compartas tu contraseña con nadie.
             </div>
           </div>
@@ -294,7 +294,7 @@ const ProfileEditor = () => {
           <Button
             type="submit"
             disabled={loading}
-            className="w-full sm:w-auto sm:min-w-[220px] sm:ml-auto flex bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-black uppercase tracking-widest text-xs py-6 rounded-xl transition-all items-center justify-center gap-2 shadow-lg shadow-purple-900/30 disabled:opacity-60"
+            className="w-full sm:w-auto sm:min-w-[220px] sm:ml-auto flex bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-black uppercase tracking-widest text-xs py-6 rounded-xl transition-all items-center justify-center gap-2 shadow-lg shadow-emerald-900/30 disabled:opacity-60"
           >
             <Save size={16} />
             {loading ? 'Guardando...' : 'Guardar Cambios'}

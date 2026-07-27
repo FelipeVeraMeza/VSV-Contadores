@@ -5,6 +5,7 @@ import path from 'path';
 import pkg from 'pg'; 
 import crypto from 'crypto'; 
 import { encrypt } from '../../../utils/crypto.js';
+import { pool } from '../../../database/db.js';
 import { enviarCorreoFacturaEnSesion } from './revisar para envios/mensajes_facturador_masivo.mjs';
 
 const { Client } = pkg;
@@ -20,7 +21,8 @@ export const estadoRobot = {
     actual: 0,
     rutActual: "",
     exitos: 0,
-    errores: 0
+    errores: 0,
+    resultados: []   // detalle por empresa: { rut, razonSocial, estado, folio | error }
 };
 
 // 🔥 NUEVO: Función para apretar el botón de pánico desde afuera
@@ -272,18 +274,38 @@ async function cerrarSesionSII(page, browser) {
 export async function emitirLotePuppeteer(facturasFront) {
     console.log('\n==================================================');
     console.log('[INFO] AUDITORÍA: Iniciando Motor Masivo por Lotes...');
-    
-    const logText = fs.readFileSync(RUTA_LOG, 'utf-8').toUpperCase();
-    const logLineas = logText.split('\n');
-    const pendientes = [];
-    
-    facturasFront.forEach((f) => {
-        const rutCuerpo = f.rutReceptor;
-        const nombrePlan = (f.producto.nombre || '').toUpperCase();
-        const emitidoEnLog = logLineas.some(linea => linea.includes(rutCuerpo) && !linea.includes('FALLO') && !linea.includes('ERROR'));
-        const esExclusion = nombrePlan.includes('HAMABU') || nombrePlan.includes('ANITA MARIA VEAS');
 
-        if (!emitidoEnLog && !esExclusion) pendientes.push(f);
+    // ==========================================================================
+    // 🔒 CANDADO ANTI-DUPLICADOS DESDE LA BASE DE DATOS (por periodo del mes).
+    // Antes se leía el archivo facturas_emitidas_nombres_log.txt, que NO se
+    // reiniciaba por mes y arrastraba RUTs de meses anteriores. Ahora se consulta
+    // documentos_emitidos del mes en curso: "ya facturado" es real y por periodo.
+    // Si la BD falla, se cae al log .txt (mismo criterio de antes) para no bloquear.
+    // ==========================================================================
+    const yaEmitidos = new Set();   // RUT (cuerpo, sin DV) ya facturados este mes
+    let fallbackLineas = null;      // se llena solo si la BD no responde
+    try {
+        const { rows } = await pool.query(
+            `SELECT rut_cliente FROM documentos_emitidos
+             WHERE tipo_dte = 33 AND fecha_emision >= date_trunc('month', CURRENT_DATE)`
+        );
+        rows.forEach(r => yaEmitidos.add(String(r.rut_cliente).split('-')[0].toUpperCase().trim()));
+        console.log(`[DEDUP BD] ${yaEmitidos.size} RUT(s) ya facturados este mes (documentos_emitidos).`);
+    } catch (e) {
+        console.log(`⚠️ [DEDUP BD] No se pudo consultar documentos_emitidos (${e.message}). Uso el log .txt como respaldo.`);
+        fallbackLineas = fs.readFileSync(RUTA_LOG, 'utf-8').toUpperCase().split('\n');
+    }
+
+    const pendientes = [];
+    facturasFront.forEach((f) => {
+        const rutCuerpo = String(f.rutReceptor || '').toUpperCase().trim();
+        const nombrePlan = (f.producto?.nombre || '').toUpperCase();
+        const esExclusion = nombrePlan.includes('HAMABU') || nombrePlan.includes('ANITA MARIA VEAS');
+        const yaFacturado = fallbackLineas
+            ? fallbackLineas.some(linea => linea.includes(rutCuerpo) && !linea.includes('FALLO') && !linea.includes('ERROR'))
+            : yaEmitidos.has(rutCuerpo);
+
+        if (!yaFacturado && !esExclusion) pendientes.push(f);
     });
 
     if (pendientes.length === 0) return { ok: true, mensaje: "No hay facturas pendientes." };
@@ -295,6 +317,7 @@ export async function emitirLotePuppeteer(facturasFront) {
     estadoRobot.actual = 0;
     estadoRobot.exitos = 0;
     estadoRobot.errores = 0;
+    estadoRobot.resultados = [];  // se llena con el detalle por empresa
 
     const resultados = [];
     const TAMANO_LOTE = 3;
@@ -668,6 +691,11 @@ export async function emitirLotePuppeteer(facturasFront) {
                         console.log(`🎉 ¡ÉXITO! Folio N°: ${folio}`);
                         fs.appendFileSync(RUTA_LOG, `${f.rutReceptor} - Folio: ${folio}\n`);
                         resultados.push({ rut: f.rutReceptor, nombre: razonSocialCapturadaDelSII, estado: 'exito', folio: folio });
+                        estadoRobot.resultados.push({
+                            rut: `${f.rutReceptor}-${f.dvReceptor}`,
+                            razonSocial: razonSocialCapturadaDelSII || f.datosCorreo?.razonSocial || '',
+                            estado: 'exito', folio
+                        });
 
                         estadoRobot.exitos++;
                         facturaCompletada = true;
@@ -769,7 +797,12 @@ export async function emitirLotePuppeteer(facturasFront) {
                              }
                         }
                         resultados.push({ rut: f.rutReceptor, estado: 'error', error: e.message });
-                        estadoRobot.errores++; 
+                        estadoRobot.resultados.push({
+                            rut: `${f.rutReceptor}-${f.dvReceptor}`,
+                            razonSocial: f.datosCorreo?.razonSocial || '',
+                            estado: 'error', error: e.message
+                        });
+                        estadoRobot.errores++;
                     }
                 }
             } // Fin del While de reintentos

@@ -138,24 +138,24 @@ const CargaCartolaModal = ({ isOpen, setIsOpen, onCartolaCargada, isUploading })
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !isLoading && setIsOpen(open)}>
-            <DialogContent className="sm:max-w-[500px] bg-[#0f172a]/95 backdrop-blur-3xl border-white/10 text-white shadow-2xl">
+            <DialogContent className="sm:max-w-[500px] bg-white backdrop-blur-3xl border-[#efe8dd] text-slate-700 shadow-2xl">
                 <DialogHeader>
                     <DialogTitle className="text-2xl font-black uppercase tracking-tighter">Cargar Cartola</DialogTitle>
-                    <DialogDescription className="text-gray-400">Sube tu Excel o CSV.</DialogDescription>
+                    <DialogDescription className="text-slate-500">Sube tu Excel o CSV.</DialogDescription>
                 </DialogHeader>
                 
-                <div className="mt-2 flex justify-center rounded-2xl border border-dashed border-white/20 px-6 py-12 hover:bg-white/[0.02] bg-black/20 cursor-pointer relative">
+                <div className="mt-2 flex justify-center rounded-2xl border border-dashed border-[#efe8dd] px-6 py-12 hover:bg-white bg-slate-50 cursor-pointer relative">
                     <div className="text-center">
-                        <FileSpreadsheet className="mx-auto h-16 w-16 text-blue-400/80 mb-4" />
+                        <FileSpreadsheet className="mx-auto h-16 w-16 text-blue-600/80 mb-4" />
                         <Input id="cartola-file" type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileChange} accept=".csv, .xls, .xlsx" disabled={isLoading} ref={fileInputRef} />
-                        <p className="text-sm font-bold text-blue-400">Seleccionar archivo</p>
-                        <p className="text-[10px] text-gray-500 mt-2 font-black uppercase tracking-widest">{file ? file.name : 'Click aquí'}</p>
+                        <p className="text-sm font-bold text-blue-600">Seleccionar archivo</p>
+                        <p className="text-[10px] text-slate-400 mt-2 font-black uppercase tracking-widest">{file ? file.name : 'Click aquí'}</p>
                     </div>
                 </div>
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isLoading} className="border-white/10 text-gray-300">Cancelar</Button>
-                    <Button onClick={handleUpload} disabled={isLoading || !file} className="bg-blue-600 text-white font-black shadow-lg shadow-blue-500/20">
+                    <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isLoading} className="border-[#efe8dd] text-slate-600">Cancelar</Button>
+                    <Button onClick={handleUpload} disabled={isLoading || !file} className="bg-blue-600 text-slate-900 font-black shadow-lg shadow-blue-500/20">
                         {isLoading ? <><Loader2 className="animate-spin h-4 w-4 mr-2" /> Procesando...</> : 'Guardar Datos'}
                     </Button>
                 </DialogFooter>

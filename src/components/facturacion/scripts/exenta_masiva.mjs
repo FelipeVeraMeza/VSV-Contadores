@@ -4,7 +4,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import pkg from 'pg'; 
 import crypto from 'crypto'; 
-import { encrypt } from '../../../utils/crypto.js'; 
+import { encrypt } from '../../../utils/crypto.js';
+import { pool } from '../../../database/db.js';
 
 const { Client } = pkg;
 dotenv.config();
@@ -74,18 +75,35 @@ const limpiarYTipar = async (page, selector, texto) => {
 export async function emitirLoteExentaPuppeteer(facturasFront) {
     console.log('\n==================================================');
     console.log('[INFO] AUDITORÍA: Iniciando Motor Masivo EXENTAS...');
-    
-    const logText = fs.readFileSync(RUTA_LOG, 'utf-8').toUpperCase();
-    const logLineas = logText.split('\n');
-    const pendientes = [];
-    
-    facturasFront.forEach((f) => {
-        const rutCuerpo = f.rutReceptor;
-        const nombrePlan = (f.producto.nombre || '').toUpperCase();
-        const emitidoEnLog = logLineas.some(linea => linea.includes(rutCuerpo) && !linea.includes('FALLO') && !linea.includes('ERROR'));
-        const esExclusion = nombrePlan.includes('HAMABU') || nombrePlan.includes('ANITA MARIA VEAS');
 
-        if (!emitidoEnLog && !esExclusion) pendientes.push(f);
+    // 🔒 Candado anti-duplicados desde la BD (por periodo del mes), igual que el
+    // robot de afectas. Antes se leía facturas_exentas_emitidas_log.txt (no se
+    // reiniciaba por mes). Ahora se consulta documentos_emitidos tipo 34 del mes.
+    // Si la BD falla, se cae al log .txt para no bloquear la emisión.
+    const yaEmitidos = new Set();
+    let fallbackLineas = null;
+    try {
+        const { rows } = await pool.query(
+            `SELECT rut_cliente FROM documentos_emitidos
+             WHERE tipo_dte = 34 AND fecha_emision >= date_trunc('month', CURRENT_DATE)`
+        );
+        rows.forEach(r => yaEmitidos.add(String(r.rut_cliente).split('-')[0].toUpperCase().trim()));
+        console.log(`[DEDUP BD] ${yaEmitidos.size} RUT(s) ya facturados (exenta) este mes.`);
+    } catch (e) {
+        console.log(`⚠️ [DEDUP BD] No se pudo consultar documentos_emitidos (${e.message}). Uso el log .txt como respaldo.`);
+        fallbackLineas = fs.readFileSync(RUTA_LOG, 'utf-8').toUpperCase().split('\n');
+    }
+
+    const pendientes = [];
+    facturasFront.forEach((f) => {
+        const rutCuerpo = String(f.rutReceptor || '').toUpperCase().trim();
+        const nombrePlan = (f.producto?.nombre || '').toUpperCase();
+        const esExclusion = nombrePlan.includes('HAMABU') || nombrePlan.includes('ANITA MARIA VEAS');
+        const yaFacturado = fallbackLineas
+            ? fallbackLineas.some(linea => linea.includes(rutCuerpo) && !linea.includes('FALLO') && !linea.includes('ERROR'))
+            : yaEmitidos.has(rutCuerpo);
+
+        if (!yaFacturado && !esExclusion) pendientes.push(f);
     });
 
     if (pendientes.length === 0) return { ok: true, mensaje: "No hay facturas exentas pendientes." };
