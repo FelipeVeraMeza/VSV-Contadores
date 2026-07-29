@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 // Database
 import { pool } from "./database/db.js";
+import { requireSession, requireAdmin } from './middleware/auth.js';
 
 // Routes
 import authRoutes from './routes/auth.routes.js';
@@ -167,28 +168,14 @@ const ejecutarSincronizacion = async (tipo) => {
 // ============================================================================
 // 🌐 RUTA API (Sincronización Manual - SOLO ADMINISTRADOR)
 // ============================================================================
-app.post('/api/sincronizar-sii', apiLimiter, async (req, res) => {
-    const { tipo, rut, clave, mes, anio, mesDesde, anioDesde, mesHasta, anioHasta, empresaId, sessionId } = req.body;
+// La sesión se valida con el mismo middleware que el resto de la API, leyendo
+// la cabecera 'x-session-id'. Antes se buscaba `sessionId` DENTRO del cuerpo del
+// POST, pero ninguno de los tres botones que llaman a esta ruta lo enviaba: la
+// consulta no encontraba sesión y devolvía siempre 403 "Solo administradores",
+// incluso a un administrador legítimo. La sincronización nunca funcionó.
+app.post('/api/sincronizar-sii', apiLimiter, requireSession, requireAdmin, async (req, res) => {
+    const { tipo, rut, clave, mes, anio, mesDesde, anioDesde, mesHasta, anioHasta, empresaId } = req.body;
 
-    // 🔒 VALIDACIÓN: Solo administradores pueden sincronizar
-    try {
-        const userResult = await pool.query(
-            `SELECT u.rol FROM usuario u
-             JOIN sessions s ON s.usuario_id = u.id
-             WHERE s.session_id = $1 AND s.expires_at > NOW()`,
-            [sessionId]
-        );
-
-        if (userResult.rows.length === 0 || userResult.rows[0].rol !== 'Administrador') {
-            return res.status(403).json({
-                success: false,
-                message: '❌ Acceso denegado: Solo administradores pueden sincronizar datos del SII.'
-            });
-        }
-    } catch (error) {
-        return res.status(401).json({ success: false, message: 'Sesión inválida.' });
-    }
-    
     // 1. MODO MANUAL: Extracción por rango de fechas para una empresa específica
     if (rut && clave && empresaId) {
         console.log(`\n👨‍💻 [MODO MANUAL] Sincronizando para RUT: ${rut} | Rango: ${mesDesde}/${anioDesde} → ${mesHasta}/${anioHasta}`);

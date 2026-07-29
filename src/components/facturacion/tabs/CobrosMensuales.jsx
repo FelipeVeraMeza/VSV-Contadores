@@ -18,6 +18,8 @@ const mesActual = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 
 // Etiqueta y color por estado del cobro
 const estiloEstado = (c) => {
+  // Anulada por nota de crédito: no se cobra y no cuenta como mora.
+  if (c.estado === 'ANULADA')          return { label: 'Anulada',      c: 'text-slate-500 bg-slate-500/10 border-slate-400/30' };
   if (c.estado === 'POR_EMITIR')       return { label: 'Por emitir',   c: 'text-blue-700 bg-blue-500/10 border-blue-500/30' };
   if (c.estado === 'PAGADA')           return { label: 'Pagada',       c: 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30' };
   if (c.estado === 'PENDIENTE_RECIBO') return { label: 'Pend. recibo', c: 'text-sky-700 bg-sky-500/10 border-sky-500/30' };
@@ -295,6 +297,7 @@ const CobrosMensuales = () => {
     { id: 'PENDIENTE_PAGO', label: 'Pend. pago' },
     { id: 'VENCIDOS', label: 'Vencidos' },
     { id: 'PAGADA', label: 'Pagadas' },
+    { id: 'ANULADA', label: 'Anuladas' },
   ];
 
   // Lo que realmente se emitiría en la facturación masiva: por emitir con monto > 0
@@ -510,6 +513,12 @@ const CobrosMensuales = () => {
                         {c.montoFacturado !== null && !c.montoCoincide && c.estado !== 'POR_EMITIR' && (
                           <p className="text-[9px] font-black text-red-500 uppercase">Facturado {clp(c.montoFacturado)} ⚠</p>
                         )}
+                        {c.montoAnulado > 0 && (
+                          <p className="text-[9px] font-black text-slate-500 uppercase">
+                            NC −{clp(c.montoAnulado)}
+                            {c.estado !== 'ANULADA' && <> · queda {clp(c.montoCobrable)}</>}
+                          </p>
+                        )}
                       </td>
                       <td className="px-4 py-2.5">
                         <span className="text-[10px] font-mono text-slate-500">{c.folio || '—'}</span>
@@ -519,7 +528,7 @@ const CobrosMensuales = () => {
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex items-center justify-end gap-1.5">
-                          {c.estado !== 'PAGADA' && c.estado !== 'POR_EMITIR' && (
+                          {c.estado !== 'PAGADA' && c.estado !== 'POR_EMITIR' && c.estado !== 'ANULADA' && (
                             <button onClick={() => marcar(c, 'PAGADA')} title="Marcar como pagada"
                               className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-emerald-700 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-lg transition-colors">
                               <CheckCircle2 size={11} /> Pagada

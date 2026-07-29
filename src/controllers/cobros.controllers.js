@@ -77,6 +77,7 @@ export const listarCobros = async (req, res) => {
 
         const { rows } = await pool.query(
             `SELECT cm.id, cm.empresa_id, cm.periodo, cm.monto_esperado, cm.monto_facturado,
+                    cm.monto_anulado,
                     cm.folio, cm.tipo_dte, cm.estado, cm.fecha_emision, cm.fecha_vencimiento, cm.fecha_pago,
                     e.razon_social, p.nombre AS plan
              FROM cobro_mensual cm
@@ -90,6 +91,8 @@ export const listarCobros = async (req, res) => {
         const hoy = new Date();
         const cobros = rows.map(r => {
             const vence = r.fecha_vencimiento ? new Date(r.fecha_vencimiento) : null;
+            const facturado = r.monto_facturado === null ? null : parseFloat(r.monto_facturado);
+            const anulado = parseFloat(r.monto_anulado) || 0;
             return {
                 id: r.id,
                 empresaId: r.empresa_id,
@@ -97,14 +100,19 @@ export const listarCobros = async (req, res) => {
                 plan: r.plan || 'Sin plan',
                 periodo: r.periodo,
                 montoEsperado: parseFloat(r.monto_esperado) || 0,
-                montoFacturado: r.monto_facturado === null ? null : parseFloat(r.monto_facturado),
+                montoFacturado: facturado,
+                // Lo devuelto por notas de crédito y lo que queda realmente por cobrar
+                montoAnulado: anulado,
+                montoCobrable: facturado === null ? null : Math.max(0, facturado - anulado),
                 folio: r.folio,
                 tipoDte: r.tipo_dte,
                 estado: r.estado,
+                anulada: r.estado === 'ANULADA',
                 fechaEmision: r.fecha_emision,
                 fechaVencimiento: r.fecha_vencimiento,
                 fechaPago: r.fecha_pago,
-                // Derivado: pendiente de pago y ya pasó el vencimiento
+                // Derivado: pendiente de pago y ya pasó el vencimiento.
+                // Una anulada nunca vence: no hay nada que cobrar.
                 vencido: r.estado === 'PENDIENTE_PAGO' && !!vence && vence < hoy,
                 // El monto emitido coincide con el esperado
                 montoCoincide: r.monto_facturado !== null &&
@@ -141,8 +149,13 @@ export const resumenCobros = async (req, res) => {
                 COUNT(*) FILTER (WHERE estado = 'PENDIENTE_RECIBO')        AS pendiente_recibo,
                 COUNT(*) FILTER (WHERE estado = 'PENDIENTE_PAGO'
                                    AND fecha_vencimiento < CURRENT_DATE)   AS vencidos,
+                COUNT(*) FILTER (WHERE estado = 'ANULADA')                 AS anuladas,
                 COALESCE(SUM(monto_esperado), 0)                           AS monto_esperado,
-                COALESCE(SUM(monto_esperado) FILTER (WHERE estado = 'POR_EMITIR'), 0) AS monto_por_emitir
+                COALESCE(SUM(monto_esperado) FILTER (WHERE estado = 'POR_EMITIR'), 0) AS monto_por_emitir,
+                COALESCE(SUM(monto_anulado), 0)                            AS monto_anulado,
+                -- Lo realmente facturado del período: emitido menos lo devuelto por notas
+                COALESCE(SUM(COALESCE(monto_facturado,0) - COALESCE(monto_anulado,0))
+                         FILTER (WHERE estado <> 'ANULADA'), 0)            AS monto_neto
              FROM cobro_mensual
              ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`,
             params
@@ -182,6 +195,11 @@ export const resumenCobros = async (req, res) => {
             montoVencido: parseFloat(glob.monto) || 0,
             vencidoMasAntiguo: glob.mas_antiguo || null,
             vencidosDelPeriodo: parseInt(r.vencidos) || 0,
+            // Facturas dadas de baja con nota de crédito: no son mora, no se cobran.
+            anuladas: parseInt(r.anuladas) || 0,
+            montoAnulado: parseFloat(r.monto_anulado) || 0,
+            // Ingreso real del período = lo emitido menos lo anulado
+            montoNeto: parseFloat(r.monto_neto) || 0,
             montoEsperado: parseFloat(r.monto_esperado) || 0,
             montoPorEmitir: parseFloat(r.monto_por_emitir) || 0,
             // Aviso: desde el día 26 y mientras queden facturas por emitir
@@ -359,7 +377,9 @@ export const emitirCobro = async (req, res) => {
 };
 
 // Cambia el estado del cobro (marcar pagada, pendiente de recibo, revertir a pendiente de pago)
-const ESTADOS_MANUALES = ['PENDIENTE_PAGO', 'PAGADA', 'PENDIENTE_RECIBO'];
+// POR_EMITIR permite reabrir un cobro anulado para volver a facturarlo (pasa cuando
+// una factura se anula por error de monto y hay que reemitirla).
+const ESTADOS_MANUALES = ['PENDIENTE_PAGO', 'PAGADA', 'PENDIENTE_RECIBO', 'ANULADA', 'POR_EMITIR'];
 
 export const cambiarEstadoCobro = async (req, res) => {
     try {
@@ -606,9 +626,102 @@ export const vincularFoliosDeOrganizacion = async (organizacionId) => {
 export const vincularFolios = async (req, res) => {
     try {
         const vinculados = await vincularFoliosDeOrganizacion(req.user?.organizacionId || null);
-        return res.json({ success: true, vinculados, message: `${vinculados} cobro(s) pasaron a Pendiente de pago.` });
+        const anulados = await sincronizarAnulaciones(req.user?.organizacionId || null);
+        return res.json({
+            success: true, vinculados, anulados,
+            message: `${vinculados} cobro(s) pasaron a Pendiente de pago.`
+                + (anulados ? ` ${anulados} quedaron anulados por nota de crédito.` : '')
+        });
     } catch (err) {
         console.error('❌ Error vinculando folios:', err.message);
         return res.status(500).json({ success: false, message: 'Error al vincular los folios emitidos.' });
+    }
+};
+
+// Descuenta del ciclo de cobro las notas de crédito emitidas.
+//
+// Una nota de crédito (DTE 61) anula o rebaja una factura. Sin esto, un cobro cuya
+// factura se anuló seguía figurando como cobrado y los ingresos salían inflados.
+// La nota apunta a su factura por folio_ref + tipo_dte_ref (nunca por folio solo:
+// los folios de nota son una serie aparte que arranca en 1 y choca con los de factura).
+//
+//   anulada del todo  → estado ANULADA, no se le puede cobrar nada al cliente
+//   rebajada en parte → sigue cobrable, pero por monto_facturado - monto_anulado
+//
+// Es idempotente: recalcula siempre desde los documentos, así que se puede correr
+// las veces que sea. Y va en los dos sentidos — si un cobro se repunta a otro folio
+// que no está anulado, hay que devolverle el estado, no dejarlo ANULADA para siempre.
+export const sincronizarAnulaciones = async (organizacionId = null) => {
+    // 1. Revertir: quedó marcado como anulado pero ya no hay nota que lo respalde.
+    const { rowCount: revertidos } = await pool.query(
+        `UPDATE cobro_mensual cm
+            SET monto_anulado = 0,
+                estado = CASE
+                    WHEN cm.fecha_pago IS NOT NULL THEN 'PAGADA'
+                    WHEN cm.folio IS NOT NULL      THEN 'PENDIENTE_PAGO'
+                    ELSE 'POR_EMITIR'
+                END,
+                updated_at = NOW()
+          WHERE (cm.estado = 'ANULADA' OR cm.monto_anulado > 0)
+            AND ($1::uuid IS NULL OR cm.organizacion_id = $1)
+            AND NOT EXISTS (
+                SELECT 1 FROM documentos_emitidos nc
+                 WHERE nc.tipo_dte = 61 AND nc.folio_ref IS NOT NULL
+                   AND nc.empresa_id = cm.empresa_id
+                   AND nc.folio_ref::text = cm.folio)`,
+        [organizacionId]
+    );
+
+    // 2. Aplicar: descontar las notas vigentes.
+    const { rowCount } = await pool.query(
+        `WITH creditos AS (
+             SELECT nc.empresa_id,
+                    nc.folio_ref,
+                    SUM(nc.monto_neto) AS anulado
+               FROM documentos_emitidos nc
+              WHERE nc.tipo_dte = 61 AND nc.folio_ref IS NOT NULL
+                AND nc.tipo_dte_ref IN (33, 34)
+              GROUP BY nc.empresa_id, nc.folio_ref
+         )
+         UPDATE cobro_mensual cm
+            SET monto_anulado = c.anulado,
+                estado = CASE
+                    -- Anulación total: el cobro deja de existir comercialmente.
+                    WHEN c.anulado >= COALESCE(cm.monto_facturado, 0) - 1 THEN 'ANULADA'
+                    -- Anulación parcial sobre una que ya se había pagado: se respeta.
+                    WHEN cm.estado = 'PAGADA' THEN 'PAGADA'
+                    ELSE 'PENDIENTE_PAGO'
+                END,
+                -- Una anulada no puede arrastrar la fecha de pago que traía de antes:
+                -- si la factura se dio de baja, ese pago no corresponde a nada.
+                fecha_pago = CASE
+                    WHEN c.anulado >= COALESCE(cm.monto_facturado, 0) - 1 THEN NULL
+                    ELSE cm.fecha_pago
+                END,
+                updated_at = NOW()
+           FROM creditos c
+          WHERE cm.empresa_id = c.empresa_id
+            AND cm.folio = c.folio_ref::text
+            AND ($1::uuid IS NULL OR cm.organizacion_id = $1)
+            AND (cm.monto_anulado IS DISTINCT FROM c.anulado
+                 OR (c.anulado >= COALESCE(cm.monto_facturado, 0) - 1
+                     AND (cm.estado <> 'ANULADA' OR cm.fecha_pago IS NOT NULL)))`,
+        [organizacionId]
+    );
+    return rowCount + revertidos;
+};
+
+export const sincronizarNotasCredito = async (req, res) => {
+    try {
+        const anulados = await sincronizarAnulaciones(req.user?.organizacionId || null);
+        return res.json({
+            success: true, anulados,
+            message: anulados
+                ? `${anulados} cobro(s) actualizados por notas de crédito.`
+                : 'No hay notas de crédito nuevas que descontar.'
+        });
+    } catch (err) {
+        console.error('❌ Error sincronizando notas de crédito:', err.message);
+        return res.status(500).json({ success: false, message: 'Error al descontar las notas de crédito.' });
     }
 };

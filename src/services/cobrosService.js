@@ -65,3 +65,9 @@ export const progresoFacturacionApi = (sessionId) => {
 export const vincularFoliosApi = (sessionId) => {
   return fetchWithAuth('/cobros/vincular-folios', sessionId, { method: 'POST' });
 };
+
+// Descuenta las notas de crédito: las anulaciones totales pasan el cobro a ANULADA
+// y las parciales le rebajan el monto cobrable.
+export const sincronizarNotasCreditoApi = (sessionId) => {
+  return fetchWithAuth('/cobros/sincronizar-notas-credito', sessionId, { method: 'POST' });
+};

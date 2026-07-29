@@ -4,11 +4,15 @@ import {
   ArrowUpRight, ArrowDownRight, Eye, Plus, Loader2, FileCheck,
   CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Award,
   DownloadCloud, RefreshCcw, BookCopy, ChevronUp, Send,
-  CheckCircle, AlertCircle, Trash2, Save, Bot, Search
+  CheckCircle, AlertCircle, Trash2, Undo2, Save, Bot, Search
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { getChartOfAccountsApi } from '@/services/accountingService';
+// getDocumentosAfectablesApi faltaba: se usaba sin importar, y como la llamada
+// vive dentro de un try/catch el ReferenceError se tragaba en silencio. Efecto:
+// la sugerencia automática del documento afectado SIEMPRE fallaba y toda nota
+// de crédito exigía abrir el modal.
+import { getChartOfAccountsApi, getDocumentosAfectablesApi } from '@/services/accountingService';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -34,6 +38,67 @@ const MESES = [
 ];
 const ANIOS = ['2024', '2025', '2026', '2027'];
 const ITEMS_PER_PAGE = 12;
+
+// Selector del documento que afecta una nota de crédito/débito, para elegirlo
+// SIN salir de la fila. Antes solo existía dentro de AsientoDocumentoModal: si
+// el monto no calzaba con un único candidato, contabilizar desde la lista era
+// imposible y había que abrir el modal solo para esto.
+const SelectorDocAfectado = ({ doc, clase, empresaId, sessionId, valor, onChange }) => {
+  const { data, isFetching } = useQuery({
+    queryKey: ['documentos-afectables', empresaId, clase, doc.rut_cliente || doc.rut_proveedor, doc.fecha_emision],
+    queryFn: async () => {
+      const res = await getDocumentosAfectablesApi(sessionId, {
+        empresaId,
+        clase,
+        rut: clase === 'compras' ? doc.rut_proveedor : doc.rut_cliente,
+        fecha: doc.fecha_emision,
+      });
+      if (!res.ok) return [];
+      return (await res.json()).documentos || [];
+    },
+    enabled: !!sessionId,
+  });
+  const afectables = data || [];
+
+  // Preselección: solo si hay UN candidato del mismo monto. Con varios no se
+  // elige, porque adivinar sería inventar contabilidad.
+  React.useEffect(() => {
+    if (valor || afectables.length === 0) return;
+    const total = calcularMontos(doc).total;
+    const exactos = afectables.filter(d => Number(d.monto_total) === total);
+    if (exactos.length === 1) onChange(exactos[0]);
+  }, [afectables, valor, doc, onChange]);
+
+  return (
+    <div className="px-5 py-3 border-b border-[#efe8dd] bg-amber-500/[0.04]" onClick={e => e.stopPropagation()}>
+      <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1.5">
+        ¿A qué documento afecta esta nota?
+      </label>
+      <select
+        value={valor?.id ?? ''}
+        disabled={isFetching}
+        onChange={e => onChange(afectables.find(d => String(d.id) === String(e.target.value)) || null)}
+        className={`w-full bg-white border rounded-lg px-2.5 py-2 text-xs text-slate-900 focus:outline-none disabled:opacity-50 ${
+          valor ? 'border-emerald-500/50 focus:border-emerald-500' : 'border-amber-500/50 focus:border-amber-500'
+        }`}
+      >
+        <option value="">{isFetching ? 'Buscando documentos…' : 'Seleccionar el documento afectado…'}</option>
+        {afectables.map(d => (
+          <option key={d.id} value={d.id}>
+            {(TIPO_DTE_MAP[d.tipo_dte] || `Tipo ${d.tipo_dte}`)} #{d.folio}
+            {' · '}{new Intl.NumberFormat('es-CL', { style:'currency', currency:'CLP', minimumFractionDigits:0 }).format(Number(d.monto_total) || 0)}
+            {d.fecha_emision ? ` · ${String(d.fecha_emision).substring(0, 10)}` : ''}
+          </option>
+        ))}
+      </select>
+      {!isFetching && afectables.length === 0 && (
+        <p className="text-[10px] text-amber-600/80 mt-1.5">
+          No hay documentos anteriores de este mismo RUT para afectar.
+        </p>
+      )}
+    </div>
+  );
+};
 
 const formatText = (str) => str ? str.toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase() : '';
 const formatCLP = (val) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(val || 0);
@@ -62,15 +127,21 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   const [honorarios]                        = useState([]);
   const [currentPage, setCurrentPage]       = useState(1);
   const [busqueda, setBusqueda]             = useState('');
-  // 'todos' por defecto: con 'contabilizado' la pantalla arrancaba vacía y parecía
-  // que no había documentos, cuando en realidad estaban todos pendientes de contabilizar.
-  const [filtroEstado, setFiltroEstado]     = useState('todos'); // contabilizado | pendiente | todos
+  // 'pendiente' por defecto: el trabajo del día es contabilizar lo que falta, así
+  // que la pantalla abre mostrando eso. Si no queda nada pendiente, el aviso de
+  // lista vacía ofrece el enlace para ver todas.
+  const [filtroEstado, setFiltroEstado]     = useState('pendiente'); // contabilizado | pendiente | todos
   const [isNuevoModalOpen, setIsNuevoModalOpen]   = useState(false);
   const [isAsientoModalOpen, setIsAsientoModalOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen]     = useState(false);
   const [selectedDocumento, setSelectedDocumento] = useState(null);
   const [expandedRows, setExpandedRows]           = useState(new Set());
   const [rowEdits, setRowEdits]                   = useState({});
+  // rowId → documento afectado elegido a mano para una nota de crédito/débito
+  const [refPorFila, setRefPorFila]               = useState({});
+  // rowId → { activo, medio } para marcar el documento como cobrado/pagado
+  // en el mismo acto de contabilizarlo.
+  const [pagoPorFila, setPagoPorFila]             = useState({});
   const [savingRows, setSavingRows]               = useState(new Set());
   const [isLibroModalOpen, setIsLibroModalOpen]   = useState(false);
   const [tipoPeriodoLibro, setTipoPeriodoLibro]   = useState('mensual');
@@ -156,8 +227,9 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
         contabilizadoPor: comp.contabilizadoPor ?? comp.contabilizado_por,
         contabilizadoAt: comp.contabilizadoAt ?? comp.contabilizado_at,
         lineas: comp.lineas || [],
-        refFolio: comp.ref_folio,
-        refTipoDte: comp.ref_tipo_dte,
+        // Mismo motivo que en claveDeComprobante: la respuesta llega camelizada.
+        refFolio: comp.refFolio ?? comp.ref_folio,
+        refTipoDte: comp.refTipoDte ?? comp.ref_tipo_dte,
       };
     });
     return map;
@@ -204,10 +276,11 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   const totalPages = Math.ceil(docActivos.length / ITEMS_PER_PAGE) || 1;
   const currentData = docActivos.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
+  // Los totales salen de calcularMontos, igual que el asiento y el cobro. Antes
+  // acá se calculaba aparte y con otra regla, así que la cabecera y el asiento
+  // del mismo documento mostraban cifras distintas.
   const totales = useMemo(() => docActivos.reduce((acc, doc) => {
-    const neto = Number(doc.monto_neto) || 0;
-    const iva  = Number(doc.monto_iva)  || Math.round(neto * 0.19);
-    const total = neto + iva;
+    const { neto, iva, total } = calcularMontos(doc);
     return { count: acc.count + 1, total: acc.total + total, neto: acc.neto + neto, iva: acc.iva + iva };
   }, { count: 0, total: 0, neto: 0, iva: 0 }), [docActivos]);
 
@@ -350,11 +423,19 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
 
   // Payload de contabilización de un documento. `clase` y `tipoDte` viajan
   // separados: el tipo de DTE no se deduce de si es venta o compra.
-  const construirPayload = (doc, clase, lineas, referencia) => {
+  const construirPayload = (doc, clase, lineas, referencia, pago = null) => {
     const isCompra = clase === 'compras' || clase === 'compra';
     const rut = isCompra ? doc.rut_proveedor : doc.rut_cliente;
     const razon = formatText(isCompra ? doc.razon_social_proveedor : doc.razon_social);
     return {
+      // El backend registra el movimiento de caja en la MISMA transacción del
+      // asiento: si uno falla, no queda ninguno de los dos.
+      pago: pago && {
+        medio: pago.medio,
+        fecha: doc.fecha_emision,
+        monto: calcularMontos(doc).total,
+        nombre: razon,
+      },
       empresaId: (!targetId || targetId === 'ALL') ? null : targetId,
       clase,
       tipoDte: doc.tipo_dte,
@@ -402,34 +483,38 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     }
     setSavingRows(prev => new Set(prev).add(rowId));
     try {
-      // Una nota necesita saber a qué documento pertenece. Si no se puede
-      // deducir sin ambigüedad, se manda al modal a elegirlo a mano.
+      // Una nota necesita saber a qué documento pertenece. Manda lo elegido en
+      // el selector de la fila; si no se tocó, se intenta deducir por monto.
       let referencia = null;
       if (esNota(doc.tipo_dte)) {
-        referencia = await sugerirReferencia(doc, activeTab);
+        referencia = refPorFila[rowId] || await sugerirReferencia(doc, activeTab);
         if (!referencia) {
           toast({
             variant: 'destructive',
             title: 'Falta el documento afectado',
-            description: `Abrí el detalle de la ${esNotaCredito(doc.tipo_dte) ? 'nota de crédito' : 'nota de débito'} #${doc.folio} para indicar a qué documento pertenece.`,
+            description: `Elegí a qué documento afecta la ${esNotaCredito(doc.tipo_dte) ? 'nota de crédito' : 'nota de débito'} #${doc.folio} en el selector de arriba.`,
           });
           return;
         }
       }
+      const pago = pagoPorFila[rowId]?.activo ? pagoPorFila[rowId] : null;
       const res = await fetchWithAuth('/accounting/comprobantes', user.sessionId, {
         method: 'POST',
-        body: construirPayload(doc, activeTab, lineas, referencia),
+        body: construirPayload(doc, activeTab, lineas, referencia, pago),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message);
       const accion = data.accion === 'actualizado' ? 'Asiento actualizado' : 'Asiento guardado';
+      const detalle = referencia
+        ? `Comprobante N° ${data.numero} — folio #${doc.folio}, afecta #${referencia.folio}`
+        : `Comprobante N° ${data.numero} — folio #${doc.folio}`;
       toast({
-        title:`✅ ${accion}`,
-        description: referencia
-          ? `Comprobante N° ${data.numero} — folio #${doc.folio}, afecta #${referencia.folio}`
-          : `Comprobante N° ${data.numero} — folio #${doc.folio}`,
+        title: `✅ ${accion}${data.recaudacion ? ' + pago registrado' : ''}`,
+        description: data.recaudacion
+          ? `${detalle}. Se registró el ${activeTab === 'compras' ? 'pago' : 'cobro'} por ${formatCLP(Number(data.recaudacion.monto))}.`
+          : detalle,
       });
-      queryClient.invalidateQueries(['comprobantes', targetId]);
+      queryClient.invalidateQueries({ queryKey: ['comprobantes', targetId] });
     } catch (err) {
       toast({ variant:'destructive', title:'Error', description: err.message });
     } finally {
@@ -443,25 +528,26 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     setIsAsientoModalOpen(true);
   };
 
-  // ── Eliminar movimiento (documento + su asiento) ──────────────
+  // ── Descontabilizar: borra el asiento y devuelve el documento a Pendiente ──
+  // Antes este botón llamaba a DELETE /movimiento/:id, que borra el documento
+  // ADEMÁS del asiento. Como el ícono es un basurero en la columna "Asiento",
+  // se leía como "borrar el asiento" y en realidad hacía perder una factura
+  // traída del SII, que después hay que volver a extraer.
   const [deletingDocId, setDeletingDocId] = useState(null);
-  const handleEliminarMovimiento = async (doc) => {
+  const handleDescontabilizar = async (doc) => {
     if (!doc.id) {
-      toast({ variant: 'destructive', title: 'No se puede eliminar', description: 'El documento no tiene identificador.' });
+      toast({ variant: 'destructive', title: 'No se puede deshacer', description: 'El documento no tiene identificador.' });
       return;
     }
-    if (!confirm(`¿Eliminar el documento folio #${doc.folio}? Se borrará también su asiento contable.`)) return;
+    if (!confirm(`¿Quitar el asiento del folio #${doc.folio}?\n\nEl documento NO se borra: vuelve a quedar como Pendiente y lo puedes contabilizar de nuevo.`)) return;
     setDeletingDocId(doc.id);
     try {
-      // El folio ya no viaja: el backend lee la identidad completa del
-      // documento antes de borrarlo, para no llevarse comprobantes ajenos.
       const params = new URLSearchParams({ tipo_movimiento: activeTab, empresa_id: String(targetId) });
-      const res = await fetchWithAuth(`/dte-consulta/movimiento/${doc.id}?${params}`, user.sessionId, { method: 'DELETE' });
+      const res = await fetchWithAuth(`/dte-consulta/movimiento/${doc.id}/asiento?${params}`, user.sessionId, { method: 'DELETE' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al eliminar');
-      toast({ title: '🗑️ Movimiento eliminado', description: `Folio #${doc.folio} y su asiento.` });
-      cargarDatos();
-      queryClient.invalidateQueries(['comprobantes', targetId]);
+      if (!res.ok) throw new Error(data.error || 'Error al quitar el asiento');
+      toast({ title: '↩️ Asiento eliminado', description: `Folio #${doc.folio} volvió a Pendiente.` });
+      queryClient.invalidateQueries({ queryKey: ['comprobantes', targetId] });
     } catch (err) {
       toast({ variant: 'destructive', title: 'Error', description: err.message });
     } finally {
@@ -563,7 +649,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     toast({ title:'🤖 Robot SII Iniciado', description:`Extrayendo ${mesDesde}/${anioDesde} → ${mesHasta}/${anioHasta}...` });
     try {
       const result = await (await fetch(`${API_BASE_URL}/sincronizar-sii`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
+        method:'POST', headers:{'Content-Type':'application/json', 'x-session-id': user?.sessionId},
         body: JSON.stringify({ rut: selectedCompany.rut, clave: selectedCompany.claveSII, mesDesde, anioDesde, mesHasta, anioHasta, empresaId: targetId }),
       })).json();
       if (result.success) {
@@ -757,9 +843,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                 </thead>
                 <tbody>
                   {currentData.map((doc, idx) => {
-                    const neto  = Number(doc.monto_neto) || 0;
-                    const iva   = Number(doc.monto_iva)  || Math.round(neto * 0.19);
-                    const total = neto + iva;
+                    const { neto, iva, total } = calcularMontos(doc);
                     const rut   = activeTab === 'compras' ? doc.rut_proveedor : doc.rut_cliente;
                     const razon = formatText(activeTab === 'compras' ? doc.razon_social_proveedor : doc.razon_social);
                     const fecha = doc.fecha_emision ? new Date(doc.fecha_emision).toLocaleDateString('es-CL', { timeZone:'UTC' }) : 'N/A';
@@ -830,13 +914,17 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                                 className="p-1.5 text-slate-400 hover:text-slate-900 rounded transition-colors">
                                 {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                               </button>
-                              <button
-                                onClick={e => { e.stopPropagation(); handleEliminarMovimiento(doc); }}
-                                disabled={deletingDocId === doc.id}
-                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-500/20 rounded transition-colors disabled:opacity-40"
-                                title="Eliminar movimiento">
-                                {deletingDocId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                              </button>
+                              {/* Solo aparece si hay algo que deshacer: sin asiento
+                                  contabilizado, el botón no tiene sentido. */}
+                              {comp && (
+                                <button
+                                  onClick={e => { e.stopPropagation(); handleDescontabilizar(doc); }}
+                                  disabled={deletingDocId === doc.id}
+                                  className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-500/20 rounded transition-colors disabled:opacity-40"
+                                  title="Quitar el asiento (el documento vuelve a Pendiente)">
+                                  {deletingDocId === doc.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
+                                </button>
+                              )}
                             </div>
                           </td>
                         </motion.tr>
@@ -884,6 +972,57 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                                           </button>
                                         </div>
                                       </div>
+
+                                      {/* Una nota de crédito/débito debe declarar a qué
+                                          documento afecta. Se elige acá mismo, sin abrir el modal. */}
+                                      {esNota(doc.tipo_dte) && (
+                                        <SelectorDocAfectado
+                                          doc={doc}
+                                          clase={activeTab}
+                                          empresaId={targetId}
+                                          sessionId={user.sessionId}
+                                          valor={refPorFila[rowId] || null}
+                                          onChange={ref => setRefPorFila(prev => ({ ...prev, [rowId]: ref }))}
+                                        />
+                                      )}
+
+                                      {/* Marcar cobrado/pagado en el mismo acto de contabilizar.
+                                          El movimiento y su asiento se crean en la misma
+                                          transacción del servidor: o quedan los dos, o ninguno. */}
+                                      {!comp && (() => {
+                                        const pago = pagoPorFila[rowId] || { activo: false, medio: 'transferencia' };
+                                        const esVentaTab = activeTab !== 'compras';
+                                        const setPago = (patch) => setPagoPorFila(prev => ({ ...prev, [rowId]: { ...pago, ...patch } }));
+                                        return (
+                                          <div className="px-5 py-3 border-b border-[#efe8dd] bg-emerald-500/[0.04] flex flex-wrap items-center gap-3" onClick={e => e.stopPropagation()}>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                              <input type="checkbox" checked={pago.activo}
+                                                onChange={e => setPago({ activo: e.target.checked })}
+                                                className="h-3.5 w-3.5 accent-emerald-600 cursor-pointer" />
+                                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
+                                                {esVentaTab ? 'Pago recibido' : 'Pago efectuado'}
+                                              </span>
+                                            </label>
+                                            {pago.activo && (
+                                              <>
+                                                <select value={pago.medio} onChange={e => setPago({ medio: e.target.value })}
+                                                  className="bg-white border border-[#efe8dd] rounded-lg px-2 py-1.5 text-[11px] text-slate-900 focus:outline-none focus:border-emerald-500">
+                                                  <option value="transferencia">Transferencia</option>
+                                                  <option value="efectivo">Efectivo</option>
+                                                  <option value="cheque">Cheque</option>
+                                                </select>
+                                                <span className="text-[10px] text-slate-500">
+                                                  {formatCLP(calcularMontos(doc).total)} a{' '}
+                                                  <span className="font-bold text-slate-700">
+                                                    {pago.medio === 'efectivo' ? 'Caja (1101-01)' : 'Banco (1101-02)'}
+                                                  </span>
+                                                  {esVentaTab ? ' contra Deudores Clientes' : ' contra Facturas por Pagar'}
+                                                </span>
+                                              </>
+                                            )}
+                                          </div>
+                                        );
+                                      })()}
 
                                       {/* Tabla editable */}
                                       <div className="px-5 py-3">

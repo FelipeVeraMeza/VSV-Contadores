@@ -114,6 +114,10 @@ function MainPage() {
     if (user?.rol === 'Administrador') {
       modules.push({ id: 'admin', path: '/admin', name: 'Administración', icon: ShieldCheck, color: 'from-yellow-500 to-amber-500' });
     }
+    // "Mi Perfil" va al final para todos los roles: la ruta /perfil siempre existió,
+    // pero solo el Cliente la tenía enlazada. Un Administrador o Consultor no tenía
+    // cómo cambiar su nombre, email o contraseña sin escribir la URL a mano.
+    modules.push({ id: 'perfil', path: '/perfil', name: 'Mi Perfil', icon: UserCircle, color: 'from-cyan-500 to-blue-600' });
   }
 
   // El modo "rail" (solo íconos) aplica únicamente en escritorio.

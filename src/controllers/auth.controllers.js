@@ -10,7 +10,7 @@ export const loginUser = async (req, res) => {
         const emailHash = generateHash(email);
 
         const userResult = await pool.query(
-            'SELECT id, nombre, email_encrypted, rol, clave, activo, organizacion_id FROM usuario WHERE email_hash = $1',
+            'SELECT id, nombre, rut_encrypted, email_encrypted, rol, clave, activo, organizacion_id FROM usuario WHERE email_hash = $1',
             [emailHash]
         );
 
@@ -75,6 +75,9 @@ export const loginUser = async (req, res) => {
             id: user.id,
             nombre: user.nombre,
             email: decrypt(user.email_encrypted),
+            // El perfil ("Mi Perfil") muestra el RUT; sin esto el campo salía vacío
+            // y el usuario creía que no lo tenía registrado.
+            rut: decrypt(user.rut_encrypted),
             rol: user.rol,
             assignedCompanies,
             sessionId,

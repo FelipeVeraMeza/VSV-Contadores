@@ -1,65 +1,11 @@
 import { pool } from '../database/db.js';
-import { siguienteNumeroComprobante } from '../utils/comprobantes.js';
+// La lógica de movimientos + asiento vive en utils/caja.js porque también la usa
+// el interruptor "pago recibido" al contabilizar un documento, y ambas entradas
+// deben generar exactamente el mismo movimiento y el mismo asiento.
+import { crearAsientoCaja, borrarAsientoCaja } from '../utils/caja.js';
 
 const normEmp = (empresaId) =>
   (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
-
-// ── Cuentas para la centralización de cobranzas y pagos ──────────────────────
-const CTA_CAJA        = '1101-01'; // CUENTA CAJA
-const CTA_BANCO       = '1101-02'; // BANCO
-const CTA_CLIENTES    = '1104-01'; // DEUDORES CLIENTES (por cobrar)
-const CTA_PROVEEDORES = '2116-01'; // FACTURAS POR PAGAR (proveedores)
-
-// El medio de pago decide la cuenta de dinero: efectivo → Caja, resto → Banco
-const cuentaDinero = (medio) => (medio === 'efectivo' ? CTA_CAJA : CTA_BANCO);
-
-// Genera el asiento contable de un movimiento de caja y devuelve el id del comprobante.
-//   Recaudación (cobro): Debe Banco/Caja · Haber Deudores Clientes
-//   Pago:                Debe Facturas por pagar · Haber Banco/Caja
-async function crearAsientoCaja(client, { empId, tipo, fecha, folio, rut, nombre, monto, medio, usuario }) {
-  const esRecaudacion = tipo === 'recaudacion';
-  const ctaDinero = cuentaDinero(medio);
-  const ctaContraparte = esRecaudacion ? CTA_CLIENTES : CTA_PROVEEDORES;
-
-  // Líneas del asiento (siempre cuadrado: debe = haber = monto)
-  const lineas = esRecaudacion
-    ? [ { cuenta: ctaDinero,      debe: monto, haber: 0     },
-        { cuenta: ctaContraparte, debe: 0,     haber: monto } ]
-    : [ { cuenta: ctaContraparte, debe: monto, haber: 0     },
-        { cuenta: ctaDinero,      debe: 0,     haber: monto } ];
-
-  // Un movimiento de caja no es un documento tributario: se deja `folio` en NULL
-  // para que no entre en la deduplicación por documento (el índice único es
-  // parcial, sobre folio NOT NULL). El folio del documento cobrado o pagado va
-  // en la glosa como referencia legible.
-  const glosa = `${esRecaudacion ? 'Cobro' : 'Pago'} folio #${folio || 's/f'}${nombre ? ` — ${nombre}` : ''}`;
-  const tipoDb = esRecaudacion ? 'INGRESO' : 'EGRESO';
-
-  const numero = await siguienteNumeroComprobante(client, empId);
-
-  const { rows: [comp] } = await client.query(
-    `INSERT INTO comprobantes (id, empresa_id, numero_comprobante, fecha, tipo, glosa, estado,
-            clase, contabilizado_por, contabilizado_por_id, contabilizado_at)
-     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'Contabilizado', 'caja', $6, $7, NOW()) RETURNING id`,
-    [empId, numero, fecha, tipoDb, glosa, usuario?.nombre || null, usuario?.usuarioId || null]
-  );
-
-  for (const l of lineas) {
-    await client.query(
-      `INSERT INTO comprobantes_detalle (id, comprobante_id, cuenta_codigo, rut_asociado, debe, haber)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)`,
-      [comp.id, l.cuenta, rut || null, l.debe, l.haber]
-    );
-  }
-  return comp.id;
-}
-
-// Borra el asiento vinculado a un movimiento (detalle + comprobante).
-async function borrarAsientoCaja(client, comprobanteId) {
-  if (!comprobanteId) return;
-  await client.query(`DELETE FROM comprobantes_detalle WHERE comprobante_id = $1`, [comprobanteId]);
-  await client.query(`DELETE FROM comprobantes WHERE id = $1`, [comprobanteId]);
-}
 
 // Registrar recaudación (cobro a cliente) o pago (a proveedor)
 export const crearMovimientoCaja = async (req, res) => {

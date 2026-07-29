@@ -218,6 +218,62 @@ export const eliminarMovimiento = async (req, res) => {
 };
 
 // ========================================================
+// 0c. DESCONTABILIZAR (borra SOLO el asiento, conserva el documento)
+// --------------------------------------------------------
+// Deshace la contabilización: el documento vuelve a la lista como "Pendiente"
+// y se puede contabilizar de nuevo. Es la operación que la gente espera del
+// botón de la fila; `eliminarMovimiento` borra además el documento y eso hace
+// perder una factura que vino del SII.
+// ========================================================
+export const descontabilizarMovimiento = async (req, res) => {
+    const { id } = req.params;
+    const { tipo_movimiento, empresa_id } = req.query;
+    const empId = (!empresa_id || empresa_id === 'ALL' || empresa_id === 'null') ? null : empresa_id;
+
+    const esVenta = tipo_movimiento === 'ventas';
+    const tabla = tablaDocumentos(esVenta, await esLibroDeLaFirma(empId));
+    const colRut = esVenta ? 'rut_cliente' : 'rut_proveedor';
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const { rows: [doc] } = await client.query(
+            `SELECT folio, tipo_dte, ${colRut} AS rut FROM ${tabla} WHERE id = $1`, [id]
+        );
+        if (!doc) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ ok: false, error: 'Documento no encontrado.' });
+        }
+
+        // Misma identidad completa que usa el borrado: (empresa, clase, tipo_dte,
+        // folio, rut). El documento NO se toca.
+        const borrados = await eliminarComprobanteDeDocumento(client, {
+            empresaId: empId,
+            clase: tipo_movimiento,
+            tipoDte: doc.tipo_dte,
+            folio: doc.folio,
+            rutContraparte: doc.rut,
+        });
+
+        await client.query('COMMIT');
+        return res.json({
+            ok: true,
+            borrados,
+            message: borrados > 0
+                ? 'Asiento eliminado. El documento volvió a Pendiente.'
+                : 'El documento no tenía asiento contabilizado.',
+        });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error descontabilizando:', error.message);
+        return res.status(500).json({ ok: false, error: 'Error al eliminar el asiento.' });
+    } finally {
+        client.release();
+    }
+};
+
+// ========================================================
 // 0c. EDITAR DATOS DEL DOCUMENTO (rut, razón, tipo, folio, fecha)
 // ========================================================
 export const editarMovimiento = async (req, res) => {

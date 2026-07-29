@@ -166,6 +166,7 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-session-id': user?.sessionId,
         },
         body: JSON.stringify({
           rut,

@@ -3,7 +3,8 @@ import { requireSession, requireAdmin } from '../middleware/auth.js';
 import {
   listarCobros, resumenCobros, generarCobros, emitirCobro, cambiarEstadoCobro,
   recalcularMontos, editarMontoCobro,
-  previsualizarFacturacion, facturarCobrosMasivo, progresoFacturacion, vincularFolios
+  previsualizarFacturacion, facturarCobrosMasivo, progresoFacturacion, vincularFolios,
+  sincronizarNotasCredito
 } from '../controllers/cobros.controllers.js';
 
 const router = Router();
@@ -24,5 +25,8 @@ router.get('/previsualizar-facturacion', previsualizarFacturacion);
 router.post('/facturar-masivo', facturarCobrosMasivo);
 router.get('/progreso', progresoFacturacion);
 router.post('/vincular-folios', vincularFolios);
+
+// Descuenta del ciclo las notas de crédito emitidas (anulaciones y rebajas)
+router.post('/sincronizar-notas-credito', sincronizarNotasCredito);
 
 export default router;

@@ -4,6 +4,7 @@ import {
     consultarComprasBunkerController,
     crearMovimientoManual,
     eliminarMovimiento,
+    descontabilizarMovimiento,
     editarMovimiento,
 } from "../controllers/dteConsulta.controllers.js";
 import { requireSession } from "../middleware/auth.js";
@@ -17,5 +18,7 @@ dteConsultaRoutes.get('/compras', requireSession, consultarComprasBunkerControll
 dteConsultaRoutes.post('/movimiento', requireSession, crearMovimientoManual);
 dteConsultaRoutes.put('/movimiento/:id', requireSession, editarMovimiento);
 dteConsultaRoutes.delete('/movimiento/:id', requireSession, eliminarMovimiento);
+// Deshace la contabilización sin borrar el documento (vuelve a "Pendiente").
+dteConsultaRoutes.delete('/movimiento/:id/asiento', requireSession, descontabilizarMovimiento);
 
 export default dteConsultaRoutes;

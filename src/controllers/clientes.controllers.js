@@ -352,9 +352,12 @@ export const getClientesCRM = async (req, res) => {
                 ultimaModificacion: cliente.updated_at ? new Date(cliente.updated_at).toLocaleString('es-CL') : null,
 
                 // --- Ciclo de cobro mensual ---
-                // facturadoMesPasado: hubo cobro del mes pasado y NO quedó en "por emitir"
-                facturadoMesPasado: !!cliente.cobro_mes_pasado && cliente.cobro_mes_pasado !== 'POR_EMITIR',
-                cobroMesPasado: cliente.cobro_mes_pasado || null,   // PENDIENTE_PAGO | PAGADA | PENDIENTE_RECIBO
+                // facturadoMesPasado: hubo cobro del mes pasado y NO quedó en "por emitir".
+                // ANULADA tampoco cuenta: su factura se dio de baja con nota de crédito,
+                // así que a efectos de la regla de suspensión ese mes NO se facturó.
+                facturadoMesPasado: !!cliente.cobro_mes_pasado
+                    && !['POR_EMITIR', 'ANULADA'].includes(cliente.cobro_mes_pasado),
+                cobroMesPasado: cliente.cobro_mes_pasado || null,   // PENDIENTE_PAGO | PAGADA | PENDIENTE_RECIBO | ANULADA
                 cobroActual: cliente.cobro_actual || null,          // POR_EMITIR | PENDIENTE_PAGO | ...
                 montoEsperado: parseFloat(cliente.monto_esperado) || 0,
                 vencimientoMesPasado: cliente.vencimiento_mes_pasado || null,

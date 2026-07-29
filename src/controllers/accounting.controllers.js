@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
 import { decrypt } from '../utils/crypto.js';
 import { clienteSinEmpresa } from '../utils/scope.js';
+import { registrarMovimientoCaja } from '../utils/caja.js';
 import {
     upsertComprobante, construirGlosa, buscarDocumentosAfectables,
     normalizarClase, normalizarTipoDte, normalizarFolio, esNota, TIPO_DTE_LABEL,
@@ -129,6 +130,9 @@ export const guardarComprobante = async (req, res) => {
     const {
         empresaId, tipo, clase, tipoDte, fecha, glosa, lineas, folio, rutAsociado,
         refFolio, refTipoDte, refRazon,
+        // Opcional: marcar el documento como cobrado/pagado en el mismo acto.
+        // { medio, fecha, monto, nombre } — ver más abajo.
+        pago,
     } = req.body;
     const usuario = req.user || {};
     const empId = (empresaId === 'ALL' || empresaId === 'undefined') ? null : (empresaId || null);
@@ -177,8 +181,38 @@ export const guardarComprobante = async (req, res) => {
             usuario,
             refFolio, refTipoDte, refRazon,
         });
+
+        // ── Pago recibido / efectuado en el mismo acto ───────────────────────
+        // Va DENTRO de la misma transacción a propósito: si el movimiento de
+        // caja falla, el asiento del documento tampoco queda. Nunca se guarda
+        // media operación.
+        let recaudacion = null;
+        if (pago && Number(pago.monto) > 0) {
+            if (claseFinal !== 'venta' && claseFinal !== 'compra') {
+                throw new Error('Solo una venta o una compra se puede marcar como pagada.');
+            }
+            const { movimiento } = await registrarMovimientoCaja(client, {
+                empId,
+                tipo: claseFinal === 'venta' ? 'recaudacion' : 'pago',
+                fecha: pago.fecha || fecha,
+                rut: rutAsociado,
+                nombre: pago.nombre || null,
+                folioAsociado: folioFinal,
+                monto: Number(pago.monto),
+                medio: pago.medio,
+                usuario,
+            });
+            recaudacion = movimiento;
+        }
+
         await client.query('COMMIT');
-        res.json({ success: true, comprobanteId: resultado.id, numero: resultado.numero, accion: resultado.accion });
+        res.json({
+            success: true,
+            comprobanteId: resultado.id,
+            numero: resultado.numero,
+            accion: resultado.accion,
+            recaudacion,
+        });
     } catch (err) {
         await client.query('ROLLBACK');
         console.error("❌ Error guardando comprobante:", err.message);

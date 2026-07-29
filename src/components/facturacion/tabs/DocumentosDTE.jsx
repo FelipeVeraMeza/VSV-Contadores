@@ -125,7 +125,7 @@ const DocumentosDTE = () => {
 
       const responseVentas = await fetch(`${API_BASE_URL}/sincronizar-sii`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-session-id': user?.sessionId },
           body: JSON.stringify({ tipo: 'VENTAS' }) 
       });
       const dataVentas = await responseVentas.json();
@@ -140,7 +140,7 @@ const DocumentosDTE = () => {
 
       const responseCompras = await fetch(`${API_BASE_URL}/sincronizar-sii`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-session-id': user?.sessionId },
           body: JSON.stringify({ tipo: 'COMPRAS' }) 
       });
       const dataCompras = await responseCompras.json();

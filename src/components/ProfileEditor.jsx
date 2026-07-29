@@ -302,10 +302,14 @@ const ProfileEditor = () => {
         </div>
       </form>
 
-      {/* CREDENCIALES SII: cada usuario tiene su propia credencial global de facturación */}
-      <div className="pt-2">
-        <CredencialesSII embedded />
-      </div>
+      {/* CREDENCIALES SII: solo para el rol Cliente, que emite sus propios documentos.
+          Los Administradores y Consultores facturan con las credenciales de la firma,
+          que se configuran desde el módulo de Facturación, no desde el perfil. */}
+      {user?.rol === 'Cliente' && (
+        <div className="pt-2">
+          <CredencialesSII embedded />
+        </div>
+      )}
     </motion.div>
   );
 };

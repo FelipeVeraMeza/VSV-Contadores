@@ -96,7 +96,8 @@ export const AuthProvider = ({ children }) => {
                 rut: cleanRut(userData.rut),
                 email: userData.email?.toLowerCase().trim()
             };
-            const res = await saveUserApi(cleanData, user?.sessionId, user?.rol);
+            const esPerfilPropio = !!userData.id && user?.id === userData.id;
+            const res = await saveUserApi(cleanData, user?.sessionId, esPerfilPropio);
             const result = await handleResponse(res);
             if (result && !result.error) {
                 // Si es el perfil propio, actualizar el estado local

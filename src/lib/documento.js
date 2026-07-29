@@ -51,14 +51,33 @@ export const normalizarClase = (valor) => {
 export const claveDocumento = (clase, tipoDte, folio, rut) =>
     [normalizarClase(clase), Number(tipoDte) || '', String(folio ?? ''), cleanRut(rut || '')].join('|');
 
+// Ambas claves aceptan snake_case y camelCase a propósito: los documentos se
+// piden con `fetch` plano (conservan tipo_dte / rut_proveedor) y los comprobantes
+// con `fetchWithAuth`, que pasa la respuesta por `mapperToCamel` y los entrega
+// como tipoDte / rutContraparte. Leyendo un solo formato, el lado convertido
+// quedaba en undefined y la clave degeneraba a "compra||88054|": ningún documento
+// llegaba a cruzar con su comprobante y todos se veían "Pendiente" para siempre.
+const campo = (obj, snake, camel) => obj?.[snake] ?? obj?.[camel];
+
 // Clave a partir de un comprobante ya guardado (viene con columnas propias).
 export const claveDeComprobante = (comp) =>
-    claveDocumento(comp.clase, comp.tipo_dte, comp.folio, comp.rut_contraparte);
+    claveDocumento(
+        comp.clase,
+        campo(comp, 'tipo_dte', 'tipoDte'),
+        comp.folio,
+        campo(comp, 'rut_contraparte', 'rutContraparte')
+    );
 
 // Clave a partir de un documento del listado.
 export const claveDeDocumento = (doc, clase) =>
-    claveDocumento(clase, doc.tipo_dte, doc.folio, clase === 'compras' || clase === 'compra'
-        ? doc.rut_proveedor : doc.rut_cliente);
+    claveDocumento(
+        clase,
+        campo(doc, 'tipo_dte', 'tipoDte'),
+        doc.folio,
+        clase === 'compras' || clase === 'compra'
+            ? campo(doc, 'rut_proveedor', 'rutProveedor')
+            : campo(doc, 'rut_cliente', 'rutCliente')
+    );
 
 export const CUENTAS = {
     CLIENTES: '1104-01', VENTAS: '5101-01', IVA_DEBITO: '2108-02',
@@ -75,15 +94,24 @@ export const CUENTAS_NOMBRE = {
 const linea = (cuenta, debe, haber) => ({ cuenta, nombre: CUENTAS_NOMBRE[cuenta] || cuenta, debe, haber });
 
 /**
- * Montos del documento. Se respeta el IVA que trae el documento en vez de
- * calcular siempre 19%: una factura exenta no lleva IVA, y forzarlo inventaba
- * un crédito fiscal inexistente.
+ * Montos del documento. Fuente ÚNICA: la usan el asiento, la columna "Monto" de
+ * la lista, los totales del período y el monto del cobro/pago.
+ *
+ * Regla del IVA:
+ *   - Documento exento o de exportación → 0. Forzar 19% ahí inventaría un
+ *     crédito fiscal inexistente.
+ *   - Documento afecto con IVA > 0 → se respeta el declarado.
+ *   - Documento afecto con IVA en 0 o vacío y neto > 0 → se deriva al 19%.
+ *     Es dato faltante, no una venta sin IVA: los documentos que llegan del SII
+ *     vienen con `monto_iva = 0` (1.175 de 1.176 ventas al 2026-07-29). Antes se
+ *     respetaba ese cero y el asiento salía sin la línea de IVA débito, así que
+ *     la lista mostraba $11.900 y el asiento cuadraba en $10.000.
  */
 export const calcularMontos = (doc) => {
     const neto = Number(doc?.monto_neto) || 0;
-    const ivaDeclarado = doc?.monto_iva === null || doc?.monto_iva === undefined || doc?.monto_iva === ''
-        ? null : Number(doc.monto_iva);
-    const iva = esExento(doc?.tipo_dte) ? 0 : (ivaDeclarado ?? Math.round(neto * 0.19));
+    if (esExento(doc?.tipo_dte)) return { neto, iva: 0, total: neto };
+    const ivaDeclarado = Number(doc?.monto_iva) || 0;
+    const iva = ivaDeclarado > 0 ? ivaDeclarado : Math.round(neto * 0.19);
     return { neto, iva, total: neto + iva };
 };
 

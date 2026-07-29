@@ -292,9 +292,12 @@ export async function emitirNotaCDPuppeteer(datos) {
         if (!empresaIdFinal || empresaIdFinal === 'EXTERNO' || empresaIdFinal === 'SIN_ID') {
             console.log("🔍 ID de empresa no recibido desde React. Buscando en la base de datos...");
             try {
-                // 1. Intentamos sacar el ID buscando la factura original que acabamos de afectar
+                // 1. Intentamos sacar el ID buscando la factura original que acabamos de afectar.
+                //    Hay que filtrar por tipo_dte: los folios de nota de crédito son una serie
+                //    aparte que arranca en 1 y choca con los folios de factura.
                 const busquedaOriginal = await client.query(
-                    `SELECT empresa_id FROM documentos_emitidos WHERE folio = $1 LIMIT 1`, 
+                    `SELECT empresa_id FROM documentos_emitidos
+                      WHERE folio = $1 AND tipo_dte IN (33, 34) LIMIT 1`,
                     [datos.referencia.folio]
                 );
                 
@@ -324,21 +327,32 @@ export async function emitirNotaCDPuppeteer(datos) {
                 // Calculamos Neto si es DTE 61 (Nota Crédito), le sacamos el IVA al monto rescatado
                 const montoNetoFinal = Math.round(montoRescatado / 1.19); 
 
+                // El folio que estamos afectando lo sabemos con certeza: es el que el
+                // usuario eligió y el que acabamos de encontrar en el historial del SII.
+                // Guardarlo es lo que permite después descontar la nota del cobro.
+                const folioAfectado = parseInt(datos.referencia.folio, 10);
+                const tipoAfectado = Number(datos.referencia.tipo_dte) || 33;
+                const codRef = parseInt(datos.referencia.codigo, 10) || null;
+
                 const queryInsert = `
-                    INSERT INTO documentos_emitidos 
-                    (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, fecha_emision)
-                    VALUES ($1, $2, $3, $4, $5, $6)
+                    INSERT INTO documentos_emitidos
+                    (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, fecha_emision,
+                     folio_ref, tipo_dte_ref, cod_ref, ref_origen)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'robot')
                     ON CONFLICT ON CONSTRAINT unique_empresa_tipo_folio DO NOTHING
                     RETURNING id;
                 `;
-                
+
                 const dbRes = await client.query(queryInsert, [
-                    empresaIdFinal, 
-                    rutClienteLimpio, 
-                    tipoFinal, 
-                    folioGenerado, 
-                    montoNetoFinal, 
-                    fechaHoy
+                    empresaIdFinal,
+                    rutClienteLimpio,
+                    tipoFinal,
+                    folioGenerado,
+                    montoNetoFinal,
+                    fechaHoy,
+                    Number.isFinite(folioAfectado) ? folioAfectado : null,
+                    Number.isFinite(folioAfectado) ? tipoAfectado : null,
+                    codRef
                 ]);
 
                 if (dbRes.rowCount > 0) {
