@@ -31,6 +31,57 @@ export const getAssignedCompanies = async (req, res) => {
     }
 };
 
+// ============================================================================
+// LISTA CANÓNICA DE EMPRESAS DE LA ORGANIZACIÓN
+// ----------------------------------------------------------------------------
+// Fuente ÚNICA para todo selector de empresa del sistema (header, RRHH,
+// contabilidad, modales). Antes cada módulo armaba su propia lista y cada una
+// devolvía un conjunto distinto:
+//   /clientes/crm            → solo cartera vigente (excluía la empresa principal)
+//   /companies               → paginada de a 10
+//   /personas/empresas-lista → cortada a 50
+// Por eso la empresa principal "no aparecía" en unos lados y sí en otros.
+//
+// Reglas: siempre acotado a la organización del usuario; el rol Cliente solo ve
+// las empresas que tiene asignadas en `audita`; la principal va primero.
+// ============================================================================
+export const listCompaniesLista = async (req, res) => {
+    try {
+        const organizacionId = req.user?.organizacionId || null;
+        const esCliente = req.user?.rol === 'Cliente';
+
+        const params = [organizacionId];
+        let auditaJoin = '';
+        if (esCliente && req.user?.usuarioId) {
+            params.push(req.user.usuarioId);
+            auditaJoin = ` JOIN audita a ON a.empresa_id = e.id AND a.usuario_id = $${params.length} `;
+        }
+
+        const { rows } = await pool.query(
+            `SELECT DISTINCT e.id, e.razon_social, e.es_principal, e.en_cartera, e.activo
+             FROM empresa e
+             ${auditaJoin}
+             WHERE e.organizacion_id IS NOT DISTINCT FROM $1::uuid
+             ORDER BY e.es_principal DESC, e.razon_social ASC`,
+            params
+        );
+
+        return res.status(200).json({
+            success: true,
+            empresas: rows.map(e => ({
+                id: e.id,
+                razonSocial: e.razon_social,
+                esPrincipal: e.es_principal === true,
+                enCartera: e.en_cartera !== false,
+                activo: e.activo !== false,
+            })),
+        });
+    } catch (error) {
+        console.error('❌ listCompaniesLista:', error.message);
+        return res.status(500).json({ success: false, message: 'Error al listar las empresas de la organización' });
+    }
+};
+
 export const getCompanies = async (req, res) => {
     try {
         const { usuarioId, search, page = 0, limit = 10 } = req.query;

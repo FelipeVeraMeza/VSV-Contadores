@@ -370,7 +370,8 @@ async function enviarPorResend(mailOptions) {
     const from = process.env.RESEND_FROM || mailOptions.from || 'Simple Pyme <onboarding@resend.dev>';
     const payload = {
         from,
-        to: Array.isArray(mailOptions.to) ? mailOptions.to : [mailOptions.to],
+        // Resend exige un arreglo de direcciones, no una cadena con varias.
+        to: normalizarDestinatarios(mailOptions.to),
         subject: mailOptions.subject,
         html,
         attachments
@@ -388,10 +389,32 @@ async function enviarPorResend(mailOptions) {
     return true;
 }
 
+// Varios clientes tienen más de un correo en su ficha, separados por ";", "," o
+// simplemente por un espacio. Tal cual, esa cadena viaja como UNA dirección y el
+// envío falla (Resend la rechaza y el MIME queda mal formado). Aquí se separa en
+// una lista de direcciones limpias.
+const normalizarDestinatarios = (to) => {
+    const lista = (Array.isArray(to) ? to : [to])
+        .flatMap(x => String(x || '').split(/[;,\s]+/))
+        .map(x => x.trim())
+        .filter(x => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+    return [...new Set(lista)];
+};
+
 // Envía el correo: si hay RESEND_API_KEY usa Resend (HTTPS, sirve en Railway);
 // si no, o si Resend falla, cae a Gmail SMTP (587 → 465, 2 rondas).
 // 📤 Exportada para reutilizarla en otros envíos (ej: recordatorios de pago).
 export async function enviarConReintentos(mailOptions) {
+    const destinatarios = normalizarDestinatarios(mailOptions.to);
+    if (destinatarios.length === 0) {
+        console.log(`   ⚠️ Sin destinatario válido (${mailOptions.to || 'vacío'}), no se envía.`);
+        return false;
+    }
+    // nodemailer y la API de Gmail entienden la lista separada por comas;
+    // a Resend se le pasa el arreglo (ver enviarPorResend).
+    mailOptions = { ...mailOptions, to: destinatarios.join(', ') };
+    if (destinatarios.length > 1) console.log(`   📧 ${destinatarios.length} destinatarios: ${destinatarios.join(', ')}`);
+
     // 1) API de GMAIL por HTTPS (el correo sale de tu Gmail; no bloqueado por Railway).
     if (process.env.GMAIL_REFRESH_TOKEN && process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET) {
         try {
@@ -450,49 +473,43 @@ async function enviarCorreo(datosFactura, datosExtraidos, rutaPDF) {
             || parseInt(String(datosExtraidos.total ?? "").replace(/[^0-9]/g, ""), 10)
             || Math.round(netoNum * 1.19);
 
-        const compras = fmtMoneda(datosFactura.compras);
-        const ventas = fmtMoneda(datosFactura.ventas);
-        const totalFact = datosFactura.totalFacturacion
-            ? fmtMoneda(datosFactura.totalFacturacion)
-            : fmtMoneda((parseInt(String(datosFactura.compras ?? "").replace(/[^0-9]/g, ""), 10) || 0) +
-                        (parseInt(String(datosFactura.ventas ?? "").replace(/[^0-9]/g, ""), 10) || 0));
-        const tramo = datosFactura.tramo || "—";
-        const trabajadores = datosFactura.trabajadores || "0";
+        const ivaNum = Math.max(0, brutoNum - netoNum);
+        // Vencimiento: el 5 del mes siguiente al de la emisión (las facturas del
+        // Cobro del Mes se emiten a fin de mes).
+        const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                       'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+        const hoy = new Date();
+        const mesVencimiento = MESES[(hoy.getMonth() + 1) % 12];
 
-        const asunto = `Envío de factura servicio contable`;
+        const asunto = `Factura N°${datosFactura.folio} - Servicio Contabilidad ${plan} - Simple Pyme`;
 
-        const textoCorreo = `Estimados ${razonSocial}${rutEmpresa ? `, RUT ${rutEmpresa}` : ""}:
+        const textoCorreo = `Estimados ${razonSocial}${rutEmpresa ? `, RUT ${rutEmpresa}` : ""}
 
-Junto con saludar, adjunto factura correspondiente al servicio de contabilidad mensual contratado por la empresa.
+Junto con saludar, informamos que ya hemos emitido la factura N°${datosFactura.folio} correspondiente al servicio de contabilidad ${plan}, la cual se encuentra disponible para pago.
 
-El plan contable vigente corresponde a ${plan}, cuyo valor es de $${fmtMoneda(netoNum)} + IVA, dando un total bruto a pagar de $${fmtMoneda(brutoNum)}.
+📅 Fecha de vencimiento: 5 de ${mesVencimiento}
 
-Este valor se encuentra calculado de acuerdo con el nivel de facturación mensual de la empresa, considerando la siguiente información:
+Solicitamos realizar el pago antes de esa fecha para evitar la suspensión del servicio y asegurar la continuidad normal de tus procesos contables y tributarios.
 
-Compras del período: $${compras}
-Ventas del período: $${ventas}
-Facturación total del período, correspondiente a compras + ventas: $${totalFact}
-Tramo de facturación aplicable: ${tramo}
-Cantidad de trabajadores informados: ${trabajadores}
-El pago debe realizarse a más tardar el 5 de Julio
+VALOR: $${fmtMoneda(netoNum)} + IVA ($${fmtMoneda(ivaNum)}) = $${fmtMoneda(brutoNum)}
 
-Medios de pago:
+🔄 Mecanismos de pago
 
-TRANSFERENCIA BANCARIA
+Transferencia bancaria:
 VOLLAIRE & OLIVOS SIMPLE PYME LTDA
 Banco BCI
-Cuenta corriente
-Rut 78.306.207-0
-Numero de cuenta: 70809538
-MATIAS.OLIVOS@VSVCONSULTORES.COM
+Cuenta Corriente
+RUT: 78.306.207-0
+N° Cuenta: 70809538
+Correo: MATIAS.OLIVOS@VSVCONSULTORES.COM
 
-LINK DE PAGO DEBITO O CREDITO
-
+🌐 Pago en línea:
 https://www.flow.cl/btn.php?token=xe78c9acb73c3eff5e917d5c932a4a2f7f971abe
 
-Solicito enviar el comprobante de pago por este medio.
+Una vez realizado el pago, agradecemos enviar el comprobante para su registro.
 
-Saludos cordiales,`;
+Saludos cordiales,
+Simple Pyme`;
 
         const mailOptions = {
             from: `"Simple Pyme" <matias.olivos@vsvconsultores.com>`,

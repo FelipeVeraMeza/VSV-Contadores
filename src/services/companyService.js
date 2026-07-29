@@ -9,6 +9,12 @@ export const getCompanyRazonsApi = (sessionId) =>
 export const getAllCompaniesApi = (sessionId) => 
     fetchWithAuth('/companies/all', sessionId);
 
+// Lista canónica de empresas de la organización — fuente ÚNICA de todos los
+// selectores de empresa (header, RRHH, modales). Devuelve { success, empresas },
+// con la empresa principal primero y marcada con esPrincipal.
+export const getEmpresasListaApi = (sessionId) =>
+    fetchWithAuth('/companies/lista', sessionId);
+
 export const getCompaniesApi = (sessionId, params = {}) => {
     const { page = 0, limit = 10, search = '' } = params;
     const query = `page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`;

@@ -58,10 +58,11 @@ export const cambiarPlanApi = (sessionId, empresaId, planId, motivo = '') => {
   });
 };
 
-export const addServicioApi = (sessionId, empresaId, servicioId, precioPactado) => {
+export const addServicioApi = (sessionId, empresaId, data) => {
+  // data: { servicioId, precioPactado, periodicidad, primeraFacturacion }
   return fetchWithAuth(`/clientes/crm/${empresaId}/servicios`, sessionId, {
     method: 'POST',
-    body: { servicioId, precioPactado }
+    body: data
   });
 };
 
@@ -120,3 +121,40 @@ export const completarTareaApi = (sessionId, id) =>
 
 export const eliminarTareaApi = (sessionId, id) =>
   fetchWithAuth(`/crm/tareas/${id}`, sessionId, { method: 'DELETE' });
+
+export const limpiarTareasCompletadasApi = (sessionId, scope = '') =>
+  fetchWithAuth(`/crm/tareas/completadas${scope ? `?scope=${scope}` : ''}`, sessionId, { method: 'DELETE' });
+
+// ---- Módulo de Tareas: detalle, subtareas, comentarios ----
+export const obtenerTareaApi = (sessionId, id) =>
+  fetchWithAuth(`/crm/tareas/${id}`, sessionId);
+
+export const agregarComentarioApi = (sessionId, tareaId, texto) =>
+  fetchWithAuth(`/crm/tareas/${tareaId}/comentarios`, sessionId, { method: 'POST', body: { texto } });
+
+export const eliminarComentarioApi = (sessionId, comentarioId) =>
+  fetchWithAuth(`/crm/comentarios/${comentarioId}`, sessionId, { method: 'DELETE' });
+
+// ---- Adjuntos (binario en la base) ----
+export const subirAdjuntoApi = (sessionId, tareaId, data) =>
+  fetchWithAuth(`/crm/tareas/${tareaId}/adjuntos`, sessionId, { method: 'POST', body: data });
+
+// Devuelve la Response cruda; el llamador hace .blob() para descargar.
+export const descargarAdjuntoApi = (sessionId, adjuntoId) =>
+  fetchWithAuth(`/crm/adjuntos/${adjuntoId}`, sessionId);
+
+export const eliminarAdjuntoApi = (sessionId, adjuntoId) =>
+  fetchWithAuth(`/crm/adjuntos/${adjuntoId}`, sessionId, { method: 'DELETE' });
+
+// ---- Proyectos ----
+export const listarProyectosApi = (sessionId) =>
+  fetchWithAuth('/crm/proyectos', sessionId);
+
+export const crearProyectoApi = (sessionId, data) =>
+  fetchWithAuth('/crm/proyectos', sessionId, { method: 'POST', body: data });
+
+export const actualizarProyectoApi = (sessionId, id, data) =>
+  fetchWithAuth(`/crm/proyectos/${id}`, sessionId, { method: 'PUT', body: data });
+
+export const eliminarProyectoApi = (sessionId, id) =>
+  fetchWithAuth(`/crm/proyectos/${id}`, sessionId, { method: 'DELETE' });

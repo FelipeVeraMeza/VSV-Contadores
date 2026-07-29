@@ -5,13 +5,13 @@ import {
     AlertTriangle, ChevronLeft, ChevronRight, Phone, MessageCircle, Mail,
     Users, CalendarDays, Pencil, X, Trash2, UserPlus, Building2, FileText,
     Bell, Download, Printer, Sliders, CheckCircle2, Ticket, Activity,
-    TrendingDown, Award, Zap, DollarSign as Money, ArrowRight, Check
+    Award, Check, Search
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { toast } from '@/components/ui/use-toast';
 import {
     getMetricasCrmApi, guardarMetaCrmApi, listarTareasApi,
-    crearTareaApi, completarTareaApi, eliminarTareaApi
+    crearTareaApi, completarTareaApi, eliminarTareaApi, limpiarTareasCompletadasApi
 } from '@/services/crmService';
 
 const getUser = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
@@ -87,6 +87,14 @@ const Mini = ({ icon: Icon, label, value, color }) => (
             <div className="text-lg font-black text-slate-900 leading-none truncate">{value}</div>
             <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{label}</div>
         </div>
+    </div>
+);
+
+// Encabezado de sección para agrupar widgets y dar orden visual.
+const SectionLabel = ({ children }) => (
+    <div className="flex items-center gap-3 pt-2">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{children}</span>
+        <div className="flex-1 h-px bg-[#efe8dd]" />
     </div>
 );
 
@@ -196,6 +204,10 @@ const CrmDashboard = ({ onCrear }) => {
     const [showPers, setShowPers] = useState(false);
     const [showNotis, setShowNotis] = useState(false);
     const [showAcciones, setShowAcciones] = useState(false);
+    // Tareas: pestaña pendientes / completadas (para ver, buscar y eliminar de la BD)
+    const [tab, setTab] = useState('pendientes');
+    const [completadas, setCompletadas] = useState([]);
+    const [busqCompl, setBusqCompl] = useState('');
 
     const cargar = useCallback(async (silencioso = false) => {
         if (!silencioso) setLoading(true);
@@ -230,6 +242,33 @@ const CrmDashboard = ({ onCrear }) => {
         setTareas(prev => prev.filter(x => x.id !== t.id));
         try { await eliminarTareaApi(getSessionId(), t.id); cargar(true); } catch { cargar(true); }
     };
+
+    // ---- Tareas completadas: ver, buscar y eliminar de la BD ----
+    const cargarCompletadas = useCallback(async () => {
+        try {
+            const r = await listarTareasApi(getSessionId(), { estado: 'completada', scope: esAdmin && scope === 'equipo' ? 'equipo' : '' });
+            const d = await r.json(); if (d.success) setCompletadas(d.tareas || []);
+        } catch { /* */ }
+    }, [esAdmin, scope]);
+    useEffect(() => { if (tab === 'completadas') cargarCompletadas(); }, [tab, cargarCompletadas]);
+
+    const borrarCompletada = async (t) => {
+        setCompletadas(prev => prev.filter(x => x.id !== t.id));
+        try { await eliminarTareaApi(getSessionId(), t.id); } catch { cargarCompletadas(); }
+    };
+    const limpiarCompletadas = async () => {
+        if (!window.confirm(`¿Eliminar definitivamente ${completadas.length} tarea(s) completada(s)? Esta acción no se puede deshacer.`)) return;
+        try {
+            const r = await limpiarTareasCompletadasApi(getSessionId(), esAdmin && scope === 'equipo' ? '' : 'mias');
+            const d = await r.json(); if (!d.success) throw new Error(d.message);
+            setCompletadas([]);
+            toast({ title: `${d.eliminadas} tarea(s) eliminada(s)` });
+        } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); cargarCompletadas(); }
+    };
+    const completadasFiltradas = useMemo(() => {
+        const q = busqCompl.trim().toLowerCase();
+        return q ? completadas.filter(t => (t.titulo || '').toLowerCase().includes(q)) : completadas;
+    }, [completadas, busqCompl]);
     const guardarMeta = async () => {
         const v = Number(String(metaInput).replace(/\D/g, ''));
         try {
@@ -391,6 +430,7 @@ const CrmDashboard = ({ onCrear }) => {
                 <div className="flex items-center justify-center py-20 text-slate-400"><Loader2 size={24} className="animate-spin" /></div>
             ) : (
                 <>
+                    <SectionLabel>Resumen</SectionLabel>
                     {/* ===== KPIs principales (RF-001) ===== */}
                     <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
                         <Kpi icon={DollarSign} label="Ventas del mes" value={fmt(m.ventasMes)} sub="Recaudado este mes" color="text-emerald-600" bg="bg-emerald-500/15" />
@@ -421,8 +461,8 @@ const CrmDashboard = ({ onCrear }) => {
                             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
                                 <Mini icon={Clock} label="Tareas pendientes" value={m.tareasPendientes || 0} color="text-blue-600" />
                                 <Mini icon={CalendarDays} label="Reuniones hoy" value={m.reunionesHoy || 0} color="text-amber-600" />
-                                <Mini icon={Users} label="Sin seguimiento" value={m.sinSeguimiento || 0} color="text-purple-600" />
-                                <Mini icon={AlertTriangle} label="Cobros vencidos" value={m.cobrosVencidos || 0} color="text-red-600" />
+                                <Mini icon={AlertTriangle} label="Vencen hoy" value={m.vencenHoy || 0} color="text-red-600" />
+                                <Mini icon={DollarSign} label="Cobrado hoy" value={fmtK(m.cobradoHoy)} color="text-emerald-600" />
                                 <Mini icon={Target} label="Cumplimiento meta" value={`${m.avance || 0}%`} color="text-emerald-600" />
                             </div>
                         </Card>
@@ -441,13 +481,55 @@ const CrmDashboard = ({ onCrear }) => {
                     )}
 
                     {/* ===== Tareas / vencidas / calendario ===== */}
-                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+                    {(widgets.tareas || widgets.vencidas || widgets.calendario) && <SectionLabel>Tareas y agenda</SectionLabel>}
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
                         {widgets.tareas && (
-                            <Card title="Tareas pendientes" icon={Clock} className="xl:col-span-4" action={<span className="text-[10px] font-bold text-slate-500">{proximas.length}</span>}>
-                                {proximas.length === 0
-                                    ? <p className="text-xs text-slate-400 italic text-center py-6">Sin tareas pendientes 🎉</p>
-                                    : <div className="max-h-[320px] overflow-y-auto pr-1">{proximas.map(t => <TareaRow key={t.id} t={t} onComplete={completar} onDelete={borrar} />)}</div>}
-                            </Card>
+                            <div className="bg-white border border-[#efe8dd] rounded-2xl p-4 xl:col-span-4">
+                                <div className="flex items-center justify-between mb-3 gap-2">
+                                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
+                                        <button onClick={() => setTab('pendientes')} className={`flex items-center gap-1 ${tab === 'pendientes' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}><Clock size={13} /> Pendientes ({proximas.length})</button>
+                                        <span className="text-slate-300">·</span>
+                                        <button onClick={() => setTab('completadas')} className={`flex items-center gap-1 ${tab === 'completadas' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}><CheckCircle2 size={13} /> Completadas</button>
+                                    </div>
+                                    {tab === 'completadas' && completadas.length > 0 && (
+                                        <button onClick={limpiarCompletadas} className="text-[9px] font-black uppercase tracking-widest text-red-600 hover:text-red-700 flex items-center gap-1"><Trash2 size={11} /> Limpiar todas</button>
+                                    )}
+                                </div>
+                                {tab === 'pendientes' ? (
+                                    proximas.length === 0
+                                        ? <p className="text-xs text-slate-400 italic text-center py-6">Sin tareas pendientes 🎉</p>
+                                        : <div className="max-h-[320px] overflow-y-auto pr-1">{proximas.map(t => <TareaRow key={t.id} t={t} onComplete={completar} onDelete={borrar} />)}</div>
+                                ) : (
+                                    <>
+                                        {completadas.length > 0 && (
+                                            <div className="relative mb-2">
+                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                                                <input value={busqCompl} onChange={(e) => setBusqCompl(e.target.value)} placeholder="Buscar en completadas..." className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-400" />
+                                            </div>
+                                        )}
+                                        {completadasFiltradas.length === 0 ? (
+                                            <p className="text-xs text-slate-400 italic text-center py-6">{busqCompl ? 'Sin coincidencias.' : 'Aún no hay tareas completadas.'}</p>
+                                        ) : (
+                                            <div className="max-h-[300px] overflow-y-auto pr-1">
+                                                {completadasFiltradas.map(t => {
+                                                    const Icon = TIPO_ICON[t.tipo] || Check;
+                                                    return (
+                                                        <div key={t.id} className="flex items-center gap-2.5 py-2 border-b border-[#efe8dd] last:border-0 group">
+                                                            <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${TIPO_COLOR[t.tipo] || TIPO_COLOR.tarea}`}><Icon size={13} /></div>
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="text-xs font-bold text-slate-500 line-through truncate">{t.titulo}</p>
+                                                                <p className="text-[10px] text-slate-400 truncate">{t.completedAt ? `Completada ${relativo(t.completedAt)}` : ''}{t.personaNombre ? ` · ${t.personaNombre}` : ''}</p>
+                                                            </div>
+                                                            <button onClick={() => borrarCompletada(t)} title="Eliminar de la base" className="text-slate-300 hover:text-red-500 shrink-0"><Trash2 size={13} /></button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
                         )}
                         {widgets.vencidas && (
                             <Card title="Tareas vencidas" icon={AlertTriangle} className="xl:col-span-4" action={<span className={`text-[10px] font-black ${vencidas.length ? 'text-red-600' : 'text-slate-400'}`}>{vencidas.length}</span>}>
@@ -482,7 +564,8 @@ const CrmDashboard = ({ onCrear }) => {
                     </div>
 
                     {/* ===== Pipeline / Seguimiento / Productividad ===== */}
-                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+                    {(widgets.pipeline || widgets.seguimiento || widgets.productividad) && <SectionLabel>Embudo y productividad</SectionLabel>}
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
                         {widgets.pipeline && (
                             <Card title="Pipeline comercial" icon={TrendingUp} className="xl:col-span-5">
                                 <div className="space-y-1.5">
@@ -520,7 +603,8 @@ const CrmDashboard = ({ onCrear }) => {
                     </div>
 
                     {/* ===== Recaudación / Ranking / Actividad ===== */}
-                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+                    {(widgets.recaudacion || (widgets.ranking && esAdmin) || widgets.actividad) && <SectionLabel>Análisis y actividad</SectionLabel>}
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
                         {widgets.recaudacion && (
                             <Card title="Recaudación (6 meses)" icon={TrendingUp} className="xl:col-span-5">
                                 {(m.serieRecaudado || []).some(s => s.recaudado > 0) ? (

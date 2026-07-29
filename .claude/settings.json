@@ -114,7 +114,23 @@
       "Bash(node --check src/controllers/clientes.controllers.js)",
       "Bash(node \"C:/Users/felip/AppData/Local/Temp/claude/c--Users-felip-OneDrive-Documentos-VS-VSV-Contadores/9704bab7-33a4-4985-9950-9a61def4eced/scratchpad/test_notas2.mjs\")",
       "Bash(node \"C:/Users/felip/AppData/Local/Temp/claude/c--Users-felip-OneDrive-Documentos-VS-VSV-Contadores/9704bab7-33a4-4985-9950-9a61def4eced/scratchpad/test_dash.mjs\")",
-      "Bash(curl -s -o /dev/null -w \"GET /api/crm/metricas → HTTP %{http_code} \\(401=ruta viva, pide sesión\\)\\\\n\" \"http://localhost:4000/api/crm/metricas?periodo=mes\")"
+      "Bash(curl -s -o /dev/null -w \"GET /api/crm/metricas → HTTP %{http_code} \\(401=ruta viva, pide sesión\\)\\\\n\" \"http://localhost:4000/api/crm/metricas?periodo=mes\")",
+      "Bash(node \"C:/Users/felip/AppData/Local/Temp/claude/c--Users-felip-OneDrive-Documentos-VS-VSV-Contadores/9704bab7-33a4-4985-9950-9a61def4eced/scratchpad/test_completadas.mjs\")",
+      "Bash(node src/DatabaseThings/migrations/aplicar_migracion.mjs src/DatabaseThings/migrations/2026-07-27_empresa_servicio_periodicidad.sql)",
+      "Bash(node \"C:/Users/felip/AppData/Local/Temp/claude/c--Users-felip-OneDrive-Documentos-VS-VSV-Contadores/9704bab7-33a4-4985-9950-9a61def4eced/scratchpad/test_servicio.mjs\")",
+      "Bash(node src/DatabaseThings/migrations/aplicar_migracion.mjs src/DatabaseThings/migrations/2026-07-27_tareas_modulo.sql)",
+      "Bash(node \"C:/Users/felip/AppData/Local/Temp/claude/c--Users-felip-OneDrive-Documentos-VS-VSV-Contadores/9704bab7-33a4-4985-9950-9a61def4eced/scratchpad/test_modulo_tareas.mjs\")",
+      "Bash(node src/DatabaseThings/migrations/aplicar_migracion.mjs src/DatabaseThings/migrations/2026-07-27_tarea_adjunto.sql)",
+      "Bash(node \"C:/Users/felip/AppData/Local/Temp/claude/c--Users-felip-OneDrive-Documentos-VS-VSV-Contadores/9704bab7-33a4-4985-9950-9a61def4eced/scratchpad/test_adjuntos.mjs\")",
+      "Bash(node -e \"import\\('./src/database/db.js'\\).then\\(async \\({pool}\\)=>{const a=await pool.query\\('SELECT count\\(*\\) FROM rem_trabajador'\\);const b=await pool.query\\('SELECT count\\(*\\) FROM rem_liquidacion'\\);console.log\\('trabajadores:',a.rows[0].count,'| liquidaciones:',b.rows[0].count\\);await pool.end\\(\\);}\\)\")",
+      "Bash(node -e \"import\\('./src/database/db.js'\\).then\\(async \\({pool}\\)=>{const r=await pool.query\\(\\\\\"SELECT id, razon_social, length\\(razon_social\\) AS len FROM empresa WHERE razon_social ILIKE '%VOLLAIRE%'\\\\\"\\);console.log\\(JSON.stringify\\(r.rows,null,2\\)\\);await pool.end\\(\\);}\\)\")",
+      "Bash(node -e \"import\\('./src/database/db.js'\\).then\\(async \\({pool}\\)=>{const r=await pool.query\\(\\\\\"SELECT count\\(*\\) FROM empresa WHERE organizacion_id='e5815fad-7ecb-4903-a28c-0c2188583e24'\\\\\"\\);console.log\\('empresas de la org:',r.rows[0].count\\);await pool.end\\(\\);}\\)\")",
+      "Bash(node -e \"import\\('./src/database/db.js'\\).then\\(async \\({pool}\\)=>{const r=await pool.query\\(\\\\\"SELECT razon_social, en_cartera FROM empresa WHERE id='1c8456e5-bd9b-4a2f-af3f-c2d568a9269d'\\\\\"\\);console.log\\(r.rows[0]\\);await pool.end\\(\\);}\\)\")",
+      "Bash(curl -s -o /tmp/emp.json -w \"HTTP %{http_code}\\\\n\" -H \"x-session-id: fb1f53d2-2976-4e15-99a8-2a6bdd6b77db\" http://localhost:4000/api/rrhh/empresas)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" -H \"x-session-id: fb1f53d2-2976-4e15-99a8-2a6bdd6b77db\" http://localhost:4000/api/rrhh/catalogos)",
+      "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./package.json'\\).scripts,null,2\\)\\)\")",
+      "Bash(curl -s -w '\\\\nHTTP %{http_code}\\\\n' -H 'x-session-id: __TRACKED_VAR__' http://localhost:4000/api/personas/empresas-lista)"
     ]
   }
 }

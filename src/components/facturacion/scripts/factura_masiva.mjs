@@ -22,7 +22,9 @@ export const estadoRobot = {
     rutActual: "",
     exitos: 0,
     errores: 0,
-    resultados: []   // detalle por empresa: { rut, razonSocial, estado, folio | error }
+    resultados: [],  // detalle por empresa: { rut, razonSocial, estado, folio | error }
+    detenidoPorSii: false,   // el SII cortó la sesión y se abortó el lote
+    motivoDetencion: ""      // texto para mostrarle al usuario
 };
 
 // 🔥 NUEVO: Función para apretar el botón de pánico desde afuera
@@ -285,9 +287,20 @@ export async function emitirLotePuppeteer(facturasFront) {
     const yaEmitidos = new Set();   // RUT (cuerpo, sin DV) ya facturados este mes
     let fallbackLineas = null;      // se llena solo si la BD no responde
     try {
+        // Se excluyen los folios que ya pertenecen al cobro de OTRO período: una
+        // factura de junio emitida en julio (cliente atrasado) aparecía como
+        // "ya facturado este mes" y dejaba al cliente sin su factura del mes en
+        // curso. Le pasó a VIMAGU TRUCKS el 2026-07-28.
         const { rows } = await pool.query(
-            `SELECT rut_cliente FROM documentos_emitidos
-             WHERE tipo_dte = 33 AND fecha_emision >= date_trunc('month', CURRENT_DATE)`
+            `SELECT de.rut_cliente FROM documentos_emitidos de
+             WHERE de.tipo_dte = 33
+               AND de.fecha_emision >= date_trunc('month', CURRENT_DATE)
+               AND NOT EXISTS (
+                     -- folio es bigint acá y varchar en cobro_mensual: se castea.
+                     SELECT 1 FROM cobro_mensual cm
+                     WHERE cm.folio = de.folio::text
+                       AND cm.periodo < date_trunc('month', CURRENT_DATE)::date
+               )`
         );
         rows.forEach(r => yaEmitidos.add(String(r.rut_cliente).split('-')[0].toUpperCase().trim()));
         console.log(`[DEDUP BD] ${yaEmitidos.size} RUT(s) ya facturados este mes (documentos_emitidos).`);
@@ -318,6 +331,8 @@ export async function emitirLotePuppeteer(facturasFront) {
     estadoRobot.exitos = 0;
     estadoRobot.errores = 0;
     estadoRobot.resultados = [];  // se llena con el detalle por empresa
+    estadoRobot.detenidoPorSii = false;
+    estadoRobot.motivoDetencion = "";
 
     const resultados = [];
     const TAMANO_LOTE = 3;
@@ -360,8 +375,20 @@ export async function emitirLotePuppeteer(facturasFront) {
             let intentoRealizado = 0;
             const MAX_INTENTOS = 3;
             let facturaCompletada = false;
+            let fallosLoginSeguidos = 0;   // ver el corte por bloqueo del SII, más abajo
+
+            // ⏱️ Tope de tiempo por empresa. Sin esto, si el SII deja de responder
+            // el robot se queda esperando indefinidamente: el 2026-07-28 estuvo 13
+            // minutos detenido en una sola empresa sin rendirse ni pasar a la
+            // siguiente, y hubo que matar el proceso a mano.
+            const TOPE_POR_EMPRESA_MS = 4 * 60 * 1000;
+            const inicioEmpresa = Date.now();
 
             while (intentoRealizado < MAX_INTENTOS && !facturaCompletada && !estadoRobot.cancelar) {
+                if (Date.now() - inicioEmpresa > TOPE_POR_EMPRESA_MS) {
+                    console.log(`⏱️ [TIMEOUT] ${f.rutReceptor} lleva más de 4 minutos sin completarse. Se marca como error y se pasa a la siguiente.`);
+                    break;
+                }
                 intentoRealizado++;
                 let razonSocialCapturadaDelSII = null;
 
@@ -766,7 +793,24 @@ export async function emitirLotePuppeteer(facturasFront) {
 
                 } catch (e) {
                     console.log(`❌ [ERROR] Intento ${intentoRealizado} falló en ${f.rutReceptor}: ${e.message}`);
-                    
+
+                    // 🛑 EL SII CORTÓ LA SESIÓN.
+                    // Tras ~60 facturas seguidas el SII empieza a rechazar el login.
+                    // Insistir no sirve: son 3 logins por intento × 3 intentos = 9
+                    // por empresa, y el lote se queda pegado (pasó el 2026-07-28,
+                    // 13 minutos detenido en una sola empresa). Se corta el lote
+                    // ordenadamente para que lo ya emitido se vincule y se pueda
+                    // retomar más tarde.
+                    if (/no permitió iniciar sesión/i.test(e.message)) {
+                        fallosLoginSeguidos++;
+                        if (fallosLoginSeguidos >= 2) {
+                            estadoRobot.cancelar = true;
+                            estadoRobot.detenidoPorSii = true;
+                            estadoRobot.motivoDetencion = 'El SII cortó la sesión y dejó de aceptar el ingreso. Se detuvo la emisión; las facturas ya emitidas quedaron registradas. Retoma en un rato con las que faltan.';
+                            console.log(`\n🛑 [SII] ${fallosLoginSeguidos} fallos de login seguidos. Se detiene el lote para no quemar intentos.`);
+                        }
+                    }
+
                     if (estadoRobot.cancelar || intentoRealizado >= MAX_INTENTOS) {
                         if(!estadoRobot.cancelar) {
                              console.log(`🚫 Se agotaron los 3 reintentos. Saltando a la siguiente factura.`);

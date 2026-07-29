@@ -31,7 +31,7 @@ const ConciliacionBancaria = ({ empresaId }) => {
   const { data: docData, isLoading: loadingDoc } = useQuery({
     queryKey: ['ventas-conciliar', targetId],
     queryFn: async () => {
-      const res = await obtenerHistorialBunker(targetId);
+      const res = await obtenerHistorialBunker(targetId, user?.sessionId);
       return res.ok ? (res.documentos || []) : [];
     },
     enabled: !!user?.sessionId,

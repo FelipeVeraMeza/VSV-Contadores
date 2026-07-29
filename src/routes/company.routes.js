@@ -1,9 +1,10 @@
 import { Router } from 'express';
 
-import { 
-  getAssignedCompanies, 
-  getCompanies, 
-  getCompanyById, 
+import {
+  getAssignedCompanies,
+  getCompanies,
+  listCompaniesLista,
+  getCompanyById,
   createCompany, 
   updateCompany, 
   deleteCompany 
@@ -21,6 +22,9 @@ import {
 const router = Router();
 
 router.get('/assigned', requireSession, getAssignedCompanies);
+// Lista canónica de empresas de la organización (fuente única de los selectores).
+// Va ANTES de '/:id' para que no la capture la ruta con parámetro.
+router.get('/lista', requireSession, listCompaniesLista);
 router.get('/', requireSession, getCompanies);
 router.get('/:id', requireSession, requireAdmin, getCompanyById);
 

@@ -36,6 +36,32 @@ async function asegurarEmpresa(client, rut, nombre, organizacionId) {
     return nueva.id;
 }
 
+// ============================================================================
+// DÓNDE VIVE CADA LIBRO DE COMPRAS Y VENTAS
+// ----------------------------------------------------------------------------
+// La firma (VOLLAIRE & OLIVOS SIMPLE PYME LTDA, empresa.es_principal = true)
+// lleva SU propio libro en las tablas base:
+//     documentos_emitidos   → sus ventas.   empresa_id = el CLIENTE al que le
+//                             factura (así lo enlaza el Cobro del Mes), no ella.
+//     documentos_recibidos  → sus compras.  empresa_id = la firma.
+//
+// Las demás empresas llevan el suyo en:
+//     documentos_emitidos_empresa / documentos_recibidos_empresa
+//     con empresa_id = la empresa dueña del documento.
+//
+// Por eso el libro se elige por QUÉ empresa está seleccionada (la principal o
+// no), y no por si hay o no una seleccionada.
+// ============================================================================
+const esLibroDeLaFirma = async (empId, ejecutor = pool) => {
+    if (!empId) return true; // consolidado / sin empresa → libro de la firma
+    const { rows } = await ejecutor.query('SELECT es_principal FROM empresa WHERE id = $1', [empId]);
+    return rows[0]?.es_principal === true;
+};
+
+const tablaDocumentos = (esVenta, libroFirma) => esVenta
+    ? (libroFirma ? 'documentos_emitidos'  : 'documentos_emitidos_empresa')
+    : (libroFirma ? 'documentos_recibidos' : 'documentos_recibidos_empresa');
+
 // ========================================================
 // 0. CREAR MOVIMIENTO MANUAL
 // ========================================================
@@ -79,43 +105,32 @@ export const crearMovimientoManual = async (req, res) => {
         await client.query('BEGIN');
 
         // ── 0. Alta automática: si el RUT no existe en `empresa`, se crea ─────
-        await asegurarEmpresa(client, rut, nombre, usuario.organizacionId);
+        const contraparteId = await asegurarEmpresa(client, rut, nombre, usuario.organizacionId);
 
-        // ── 1. Guardar el DOCUMENTO en la tabla que corresponde ──────────────
-        //    Sin empresa (global) → documentos_emitidos / documentos_recibidos
-        //    Con empresa          → documentos_emitidos_empresa / documentos_recibidos_empresa
-        if (tipo_movimiento === 'ventas') {
-            if (empId === null) {
-                await client.query(
-                    `INSERT INTO documentos_emitidos
-                     (id, empresa_id, rut_cliente, razon_social_cliente, tipo_dte, folio, monto_neto, fecha_emision)
-                     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)`,
-                    [empId, rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, monto_neto, fecha_emision]
-                );
-            } else {
-                await client.query(
-                    `INSERT INTO documentos_emitidos_empresa
-                     (id, empresa_id, rut_cliente, razon_social_cliente, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision)
-                     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-                    [empId, rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, monto_neto, monto_iva, monto_total, fecha_emision]
-                );
-            }
+        // ── 1. Guardar el DOCUMENTO en el libro que corresponde ──────────────
+        const libroFirma = await esLibroDeLaFirma(empId, client);
+        const esVenta = tipo_movimiento === 'ventas';
+        const tabla = tablaDocumentos(esVenta, libroFirma);
+
+        // En el libro de la firma, empresa_id de una VENTA identifica al cliente
+        // facturado (igual que las que carga el robot); en todo lo demás es la
+        // empresa dueña del documento.
+        const empresaDelDocumento = (libroFirma && esVenta) ? contraparteId : empId;
+
+        if (esVenta) {
+            await client.query(
+                `INSERT INTO ${tabla}
+                 (id, empresa_id, rut_cliente, razon_social_cliente, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                [empresaDelDocumento, rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, monto_neto, monto_iva, monto_total, fecha_emision]
+            );
         } else {
-            if (empId === null) {
-                await client.query(
-                    `INSERT INTO documentos_recibidos
-                     (id, empresa_id, rut_proveedor, razon_social_proveedor, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision)
-                     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-                    [empId, rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, monto_neto, monto_iva, monto_total, fecha_emision]
-                );
-            } else {
-                await client.query(
-                    `INSERT INTO documentos_recibidos_empresa
-                     (id, empresa_id, rut_proveedor, razon_social_proveedor, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision)
-                     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-                    [empId, rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, monto_neto, monto_iva, monto_total, fecha_emision]
-                );
-            }
+            await client.query(
+                `INSERT INTO ${tabla}
+                 (id, empresa_id, rut_proveedor, razon_social_proveedor, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                [empresaDelDocumento, rut || '', nombre || '', tipo_dte, parseInt(folio) || 0, monto_neto, monto_iva, monto_total, fecha_emision]
+            );
         }
 
         // ── 2. Guardar el ASIENTO como comprobante (→ Libro Diario / reportes) ─
@@ -151,9 +166,8 @@ export const eliminarMovimiento = async (req, res) => {
     const empId = (!empresa_id || empresa_id === 'ALL' || empresa_id === 'null') ? null : empresa_id;
 
     const esVenta = tipo_movimiento === 'ventas';
-    const tabla = esVenta
-        ? (empId === null ? 'documentos_emitidos'  : 'documentos_emitidos_empresa')
-        : (empId === null ? 'documentos_recibidos' : 'documentos_recibidos_empresa');
+    // El libro de la firma vive en las tablas base; el de las demás empresas en _empresa.
+    const tabla = tablaDocumentos(esVenta, await esLibroDeLaFirma(empId));
     const colRut = esVenta ? 'rut_cliente' : 'rut_proveedor';
 
     const client = await pool.connect();
@@ -210,9 +224,8 @@ export const editarMovimiento = async (req, res) => {
     const total = Number(monto_total) || (neto + iva);
 
     const esVenta = tipo_movimiento === 'ventas';
-    const tabla = esVenta
-        ? (empId === null ? 'documentos_emitidos'  : 'documentos_emitidos_empresa')
-        : (empId === null ? 'documentos_recibidos' : 'documentos_recibidos_empresa');
+    // El libro de la firma vive en las tablas base; el de las demás empresas en _empresa.
+    const tabla = tablaDocumentos(esVenta, await esLibroDeLaFirma(empId));
     const colRut   = esVenta ? 'rut_cliente' : 'rut_proveedor';
     const colRazon = esVenta ? 'razon_social_cliente' : 'razon_social_proveedor';
 
@@ -275,27 +288,37 @@ export const consultarHistorialBunkerController = async (req, res) => {
             return res.status(400).json({ ok: false, error: "Falta el identificador de la empresa." });
         }
 
-        let query = "";
-        let values = [];
+        const organizacionId = req.user?.organizacionId || null;
+        const empId = empresa_id === 'ALL' ? null : empresa_id;
+        const libroFirma = await esLibroDeLaFirma(empId);
 
-        // 🌐 BÓVEDA GLOBAL: Consulta la tabla general antigua
-        if (empresa_id === 'ALL') {
+        let query, values;
+        if (libroFirma) {
+            // Libro de VENTAS de la firma: son todas las facturas que emitió.
+            // empresa_id apunta al cliente facturado, así que NO se filtra por él;
+            // solo se acota a la organización (y se admiten los sin empresa).
+            values = [organizacionId];
             query = `
-                SELECT d.id, d.folio, d.tipo_dte, d.monto_neto, d.monto_iva, d.monto_total, d.fecha_emision, d.url_pdf,
-                       d.rut_cliente, COALESCE(d.razon_social_cliente, e.razon_social) AS razon_social
+                SELECT d.id, d.empresa_id, d.folio, d.tipo_dte, d.monto_neto, d.monto_iva, d.monto_total,
+                       d.fecha_emision, d.url_pdf, d.rut_cliente,
+                       COALESCE(d.razon_social_cliente, e.razon_social) AS razon_social
                 FROM documentos_emitidos d
                 LEFT JOIN empresa e ON d.empresa_id = e.id
+                WHERE d.empresa_id IS NULL OR e.organizacion_id IS NOT DISTINCT FROM $1::uuid
                 ORDER BY d.fecha_emision DESC;
             `;
         } else {
-            // 🏢 EMPRESA ESPECÍFICA: Consulta la tabla NUEVA que llena el robot
+            // Libro de VENTAS de una empresa cliente: sus propias facturas emitidas.
+            values = [empId, organizacionId];
             query = `
-                SELECT *, razon_social_cliente AS razon_social
-                FROM documentos_emitidos_empresa
-                WHERE empresa_id = $1
-                ORDER BY fecha_emision DESC;
+                SELECT d.id, d.empresa_id, d.folio, d.tipo_dte, d.monto_neto, d.monto_iva, d.monto_total,
+                       d.fecha_emision, d.url_pdf, d.rut_cliente,
+                       d.razon_social_cliente AS razon_social
+                FROM documentos_emitidos_empresa d
+                JOIN empresa e ON d.empresa_id = e.id
+                WHERE d.empresa_id = $1 AND e.organizacion_id IS NOT DISTINCT FROM $2::uuid
+                ORDER BY d.fecha_emision DESC;
             `;
-            values = [empresa_id];
         }
 
         const result = await pool.query(query, values);
@@ -316,25 +339,33 @@ export const consultarComprasBunkerController = async (req, res) => {
             return res.status(400).json({ ok: false, error: "Falta el identificador de la empresa." });
         }
 
-        let query = "";
-        let values = [];
+        const organizacionId = req.user?.organizacionId || null;
+        const empId = empresa_id === 'ALL' ? null : empresa_id;
+        const libroFirma = await esLibroDeLaFirma(empId);
 
-        // 🌐 BÓVEDA GLOBAL: Consulta la tabla general antigua
-        if (empresa_id === 'ALL') {
+        let query, values;
+        if (libroFirma) {
+            // Libro de COMPRAS de la firma (empresa_id = la firma).
+            values = [organizacionId];
             query = `
-                SELECT id, rut_proveedor, razon_social_proveedor, tipo_dte, folio, 
-                       monto_neto, monto_iva, monto_total, fecha_emision, url_pdf
-                FROM documentos_recibidos
-                ORDER BY fecha_emision DESC;
+                SELECT d.id, d.empresa_id, d.rut_proveedor, d.razon_social_proveedor, d.tipo_dte, d.folio,
+                       d.monto_neto, d.monto_iva, d.monto_total, d.fecha_emision, d.url_pdf
+                FROM documentos_recibidos d
+                LEFT JOIN empresa e ON d.empresa_id = e.id
+                WHERE d.empresa_id IS NULL OR e.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                ORDER BY d.fecha_emision DESC;
             `;
         } else {
-            // 🏢 EMPRESA ESPECÍFICA: Consulta la tabla NUEVA que llena el robot
+            // Libro de COMPRAS de una empresa cliente.
+            values = [empId, organizacionId];
             query = `
-                SELECT * FROM documentos_recibidos_empresa
-                WHERE empresa_id = $1
-                ORDER BY fecha_emision DESC;
+                SELECT d.id, d.empresa_id, d.rut_proveedor, d.razon_social_proveedor, d.tipo_dte, d.folio,
+                       d.monto_neto, d.monto_iva, d.monto_total, d.fecha_emision, d.url_pdf
+                FROM documentos_recibidos_empresa d
+                JOIN empresa e ON d.empresa_id = e.id
+                WHERE d.empresa_id = $1 AND e.organizacion_id IS NOT DISTINCT FROM $2::uuid
+                ORDER BY d.fecha_emision DESC;
             `;
-            values = [empresa_id];
         }
 
         const result = await pool.query(query, values);

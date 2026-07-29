@@ -133,6 +133,8 @@ export const getClientesCRM = async (req, res) => {
                 s.categoria,
                 es.estado,
                 es.precio_pactado,
+                es.periodicidad,
+                es.primera_facturacion,
                 es.fecha_inicio,
                 es.fecha_termino
             FROM empresa_servicio es
@@ -223,6 +225,8 @@ export const getClientesCRM = async (req, res) => {
                 categoria: srv.categoria,
                 estado: srv.estado,
                 precioPactado: parseFloat(srv.precio_pactado) || 0,
+                periodicidad: srv.periodicidad || 'mensual',
+                primeraFacturacion: srv.primera_facturacion ? new Date(srv.primera_facturacion).toLocaleDateString('es-CL') : null,
                 fechaInicio: srv.fecha_inicio ? new Date(srv.fecha_inicio).toLocaleDateString('es-CL') : null,
                 fechaTermino: srv.fecha_termino ? new Date(srv.fecha_termino).toLocaleDateString('es-CL') : null
             });
@@ -792,11 +796,17 @@ export const cambiarPlanCRM = async (req, res) => {
 // =========================================================
 // SERVICIOS CONTRATADOS (agregar / quitar)
 // =========================================================
+const PERIODICIDADES = ['mensual', 'bimensual', 'trimestral', 'cuatrimestral', 'semestral', 'anual'];
+
 export const addServicioCRM = async (req, res) => {
     try {
         const { empresaId } = req.params;
-        const { servicioId, precioPactado } = req.body;
+        const { servicioId, precioPactado, periodicidad, primeraFacturacion } = req.body;
         if (!servicioId) return res.status(400).json({ success: false, message: 'Debe indicar el servicio.' });
+        // La empresa debe ser de la organización del usuario.
+        if (!await empresaEnOrg(empresaId, req.user?.organizacionId || null)) {
+            return res.status(404).json({ success: false, message: 'Cliente no encontrado.' });
+        }
 
         // Evita duplicar un servicio ya activo
         const dup = await pool.query(
@@ -807,19 +817,24 @@ export const addServicioCRM = async (req, res) => {
             return res.status(409).json({ success: false, message: 'El cliente ya tiene contratado ese servicio.' });
         }
 
-        const parsedPrecio = (precioPactado === undefined || precioPactado === null || precioPactado === '')
+        // El peso chileno no usa decimales y el frontend envía el precio con
+        // punto de miles ("45.000"). Se toman solo los dígitos → 45000.
+        const soloDigitos = (precioPactado === undefined || precioPactado === null || String(precioPactado).trim() === '')
             ? null
-            : parseFloat(String(precioPactado).replace(/[^0-9.-]+/g, ''));
+            : parseInt(String(precioPactado).replace(/[^\d]/g, ''), 10);
+        const parsedPrecio = Number.isNaN(soloDigitos) ? null : soloDigitos;
+        const per = PERIODICIDADES.includes(periodicidad) ? periodicidad : 'mensual';
+        const primera = primeraFacturacion || null;
 
         const result = await pool.query(
-            `INSERT INTO empresa_servicio (empresa_id, servicio_id, estado, precio_pactado, fecha_inicio)
-             VALUES ($1, $2, 'Activo', $3, NOW())
+            `INSERT INTO empresa_servicio (empresa_id, servicio_id, estado, precio_pactado, periodicidad, primera_facturacion, fecha_inicio)
+             VALUES ($1, $2, 'Activo', $3, $4, $5, NOW())
              RETURNING id`,
-            [empresaId, servicioId, isNaN(parsedPrecio) ? null : parsedPrecio]
+            [empresaId, servicioId, isNaN(parsedPrecio) ? null : parsedPrecio, per, primera]
         );
 
         const srv = await pool.query(
-            `SELECT es.id, s.nombre, s.categoria, es.estado, es.precio_pactado
+            `SELECT es.id, s.nombre, s.categoria, es.estado, es.precio_pactado, es.periodicidad, es.primera_facturacion
              FROM empresa_servicio es JOIN servicio s ON es.servicio_id = s.id
              WHERE es.id = $1`,
             [result.rows[0].id]
@@ -832,7 +847,9 @@ export const addServicioCRM = async (req, res) => {
                 nombre: row.nombre,
                 categoria: row.categoria,
                 estado: row.estado,
-                precioPactado: parseFloat(row.precio_pactado) || 0
+                precioPactado: parseFloat(row.precio_pactado) || 0,
+                periodicidad: row.periodicidad || 'mensual',
+                primeraFacturacion: row.primera_facturacion || null,
             }
         });
     } catch (error) {

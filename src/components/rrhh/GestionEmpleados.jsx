@@ -140,7 +140,7 @@ const GestionEmpleados = ({ empresaId, onNew }) => {
             {/* Filtros + contador */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2">
-                    {consolidado && <Filtro label="Empresa" allLabel="Todas las empresas" value={fEmpresa} onChange={setFEmpresa} options={empresas.map(e => ({ value: e, label: e }))} />}
+                    <Filtro label="Empresa" allLabel="Todas las empresas" value={fEmpresa} onChange={setFEmpresa} options={empresas.map(e => ({ value: e, label: e }))} />
                     <Filtro label="Departamento" allLabel="Todos los deptos." value={fDepto} onChange={setFDepto} options={departamentos.map(d => ({ value: d, label: d }))} />
                     <Filtro label="Estado" value={fEstado} onChange={setFEstado} options={OPT_ESTADO} />
                     <Filtro label="Tipo de contrato" value={fTipo} onChange={setFTipo} options={OPT_TIPO} />
@@ -159,7 +159,7 @@ const GestionEmpleados = ({ empresaId, onNew }) => {
                     <table className="w-full">
                         <thead>
                             <tr className="border-b border-[#efe8dd] bg-white text-slate-400">
-                                {['Trabajador', 'RUT', 'Cargo', 'Departamento', ...(consolidado ? ['Empresa'] : []), 'Tipo contrato', 'Estado', 'Fecha ingreso'].map(h => (
+                                {['Trabajador', 'RUT', 'Cargo', 'Departamento', 'Empresa', 'Tipo contrato', 'Estado', 'Fecha ingreso'].map(h => (
                                     <th key={h} className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap">{h}</th>
                                 ))}
                                 <th className="px-5 py-3 text-right text-[10px] font-semibold uppercase tracking-wider">Acciones</th>
@@ -180,7 +180,7 @@ const GestionEmpleados = ({ empresaId, onNew }) => {
                                     <td className="px-5 py-3"><span className="inline-flex items-center gap-1.5 text-sm text-slate-600 font-mono text-xs"><Lock className="h-3 w-3 text-slate-400" />{e.rut}</span></td>
                                     <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">{e.cargo}</td>
                                     <td className="px-5 py-3 text-sm text-slate-500 whitespace-nowrap">{e.departamento}</td>
-                                    {consolidado && <td className="px-5 py-3 text-sm text-slate-500 truncate max-w-[160px]">{e.empresa || '—'}</td>}
+                                    <td className="px-5 py-3 text-sm text-slate-500 truncate max-w-[160px]">{e.empresa || '—'}</td>
                                     <td className="px-5 py-3">
                                         {e.tipoContrato ? <span className={`inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-md ${e.tipoContrato === 'indefinido' ? 'bg-emerald-500/10 text-emerald-600' : e.tipoContrato === 'plazo_fijo' ? 'bg-blue-500/10 text-blue-600' : 'bg-amber-500/10 text-amber-600'}`}>{e.tipoContratoLabel}</span> : <span className="text-slate-400">—</span>}
                                     </td>
@@ -202,7 +202,7 @@ const GestionEmpleados = ({ empresaId, onNew }) => {
                                     </td>
                                 </motion.tr>
                             )) : (
-                                <tr><td colSpan={consolidado ? 9 : 8} className="text-center py-16">
+                                <tr><td colSpan={9} className="text-center py-16">
                                     <div className="flex flex-col items-center text-slate-400">
                                         <div className="w-14 h-14 rounded-2xl bg-white border border-[#efe8dd] flex items-center justify-center mb-4"><FileWarning className="h-6 w-6 opacity-40" /></div>
                                         <h3 className="text-base font-semibold text-slate-900">{empleadosData.length ? 'Sin resultados con esos filtros' : 'No hay trabajadores registrados'}</h3>

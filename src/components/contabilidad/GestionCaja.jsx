@@ -57,7 +57,9 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
   const { data: docsData, isLoading: loadingDocs } = useQuery({
     queryKey: ['caja-docs', tipo, targetId],
     queryFn: async () => {
-      const res = esRecaudacion ? await obtenerHistorialBunker(targetId) : await obtenerComprasBunker(targetId);
+      const res = esRecaudacion
+        ? await obtenerHistorialBunker(targetId, user?.sessionId)
+        : await obtenerComprasBunker(targetId, user?.sessionId);
       return res.ok ? (res.documentos || []) : [];
     },
     enabled: !!user?.sessionId,

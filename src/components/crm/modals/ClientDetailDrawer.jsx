@@ -76,6 +76,8 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
     // Servicios contratados
     const [newServicioId, setNewServicioId] = useState('');
     const [newServicioPrecio, setNewServicioPrecio] = useState('');
+    const [newServicioPeriod, setNewServicioPeriod] = useState('mensual');
+    const [newServicioPrimera, setNewServicioPrimera] = useState('');
     const [isSavingServicio, setIsSavingServicio] = useState(false);
 
     // =========================================
@@ -271,12 +273,19 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
         }
         setIsSavingServicio(true);
         try {
-            const response = await addServicioApi(getSessionId(), formData.id, newServicioId, newServicioPrecio);
+            const response = await addServicioApi(getSessionId(), formData.id, {
+                servicioId: newServicioId,
+                precioPactado: newServicioPrecio,
+                periodicidad: newServicioPeriod,
+                primeraFacturacion: newServicioPrimera || null,
+            });
             const payload = await response.json();
             if (!payload.success) throw new Error(payload.message);
             setFormData(prev => ({ ...prev, servicios: [...(prev.servicios || []), payload.servicio] }));
             setNewServicioId('');
             setNewServicioPrecio('');
+            setNewServicioPeriod('mensual');
+            setNewServicioPrimera('');
             toast({ title: "Servicio agregado", description: payload.servicio?.nombre });
             if (onRefresh) onRefresh();
         } catch (error) {
@@ -378,6 +387,11 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
 
     // --- Precio de plan según tramo de facturación de la empresa ---
     const facturacionMensual = Number(ventas) || 0; // ventas mensuales = facturación mensual
+    // Lista de precios predefinida (netos de los tramos de plan) para sugerir al asignar un servicio.
+    const preciosSugeridos = React.useMemo(
+        () => [...new Set((preciosPlanTramo || []).map(r => Number(r.precioNeto)).filter(n => n > 0))].sort((a, b) => a - b),
+        [preciosPlanTramo]
+    );
     const nombreDePlanId = (id) => planes.find(p => p.id === id)?.nombre;
     const precioDePlan = (planNombre) => {
         const rows = (preciosPlanTramo || []).filter(r => r.plan === planNombre);
@@ -818,7 +832,10 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                             <div key={s.id} className="flex items-center justify-between gap-2 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5">
                                 <div className="flex flex-col min-w-0">
                                     <span className="text-[11px] font-bold text-slate-700 truncate">{s.nombre}</span>
-                                    {s.fechaInicio && <span className="text-[8px] text-slate-400">Desde {s.fechaInicio}</span>}
+                                    <span className="text-[8px] text-slate-400">
+                                        {s.periodicidad ? <span className="capitalize">{s.periodicidad}</span> : 'Mensual'}
+                                        {s.primeraFacturacion ? ` · 1ª fact. ${s.primeraFacturacion}` : (s.fechaInicio ? ` · desde ${s.fechaInicio}` : '')}
+                                    </span>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                     {s.precioPactado ? <span className="text-[11px] font-black text-emerald-600">${Number(s.precioPactado).toLocaleString('es-CL')}</span> : <span className="text-[9px] text-slate-400 italic">sin precio</span>}
@@ -856,34 +873,59 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                         </div>
                     )}
 
-                    {/* Agregar servicio */}
-                    <div className="flex flex-wrap items-center gap-2">
-                        <select
-                            value={newServicioId}
-                            onChange={(e) => setNewServicioId(e.target.value)}
-                            className="flex-1 min-w-[120px] bg-slate-50 border border-[#efe8dd] rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-indigo-500 cursor-pointer"
-                        >
-                            <option value="">+ Sumar servicio…</option>
-                            {serviciosParaAgregar.map(s => (
-                                <option key={s.id} value={s.id}>{s.nombre}</option>
-                            ))}
-                        </select>
-                        <input
-                            type="text"
-                            inputMode="numeric"
-                            value={newServicioPrecio}
-                            onChange={(e) => setNewServicioPrecio(formatMiles(e.target.value))}
-                            onKeyDown={(e) => { if (e.key === 'Enter' && newServicioId) handleAddServicio(); }}
-                            placeholder="Precio"
-                            className="w-24 bg-slate-50 border border-[#efe8dd] rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-indigo-500 placeholder:text-slate-400"
-                        />
-                        <Button
-                            onClick={handleAddServicio}
-                            disabled={isSavingServicio || !newServicioId}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg px-3 h-9"
-                        >
-                            <Plus size={16} />
-                        </Button>
+                    {/* Agregar servicio: catálogo + precio (lista) + periodicidad + 1ª facturación */}
+                    <div className="bg-slate-50 border border-[#efe8dd] rounded-lg p-2.5 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <select
+                                value={newServicioId}
+                                onChange={(e) => setNewServicioId(e.target.value)}
+                                className="flex-1 min-w-[120px] bg-white border border-[#efe8dd] rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-indigo-500 cursor-pointer"
+                            >
+                                <option value="">+ Sumar servicio…</option>
+                                {serviciosParaAgregar.map(s => (
+                                    <option key={s.id} value={s.id}>{s.nombre}</option>
+                                ))}
+                            </select>
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                list="precios-sugeridos"
+                                value={newServicioPrecio}
+                                onChange={(e) => setNewServicioPrecio(formatMiles(e.target.value))}
+                                onKeyDown={(e) => { if (e.key === 'Enter' && newServicioId) handleAddServicio(); }}
+                                placeholder="Precio"
+                                className="w-24 bg-white border border-[#efe8dd] rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-indigo-500 placeholder:text-slate-400"
+                            />
+                            <datalist id="precios-sugeridos">
+                                {preciosSugeridos.map(p => <option key={p} value={Number(p).toLocaleString('es-CL')} />)}
+                            </datalist>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <select
+                                value={newServicioPeriod}
+                                onChange={(e) => setNewServicioPeriod(e.target.value)}
+                                title="Periodicidad de facturación"
+                                className="flex-1 min-w-[110px] bg-white border border-[#efe8dd] rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-indigo-500 cursor-pointer capitalize"
+                            >
+                                {['mensual', 'bimensual', 'trimestral', 'cuatrimestral', 'semestral', 'anual'].map(p => (
+                                    <option key={p} value={p}>{p}</option>
+                                ))}
+                            </select>
+                            <input
+                                type="date"
+                                value={newServicioPrimera}
+                                onChange={(e) => setNewServicioPrimera(e.target.value)}
+                                title="Fecha de la primera facturación"
+                                className="flex-1 min-w-[130px] bg-white border border-[#efe8dd] rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-indigo-500"
+                            />
+                            <Button
+                                onClick={handleAddServicio}
+                                disabled={isSavingServicio || !newServicioId}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 h-9 flex items-center gap-1 text-[10px] font-black uppercase"
+                            >
+                                <Plus size={14} /> Agregar
+                            </Button>
+                        </div>
                     </div>
 
                     {/* Total de honorarios (plan + servicios) */}

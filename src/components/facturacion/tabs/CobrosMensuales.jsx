@@ -173,6 +173,17 @@ const CobrosMensuales = () => {
       }
       toast({ title: '🚀 Facturación masiva iniciada', description: d.message });
 
+      // La pantalla manda la lista que tenía cargada. Si mientras tanto se creó un
+      // cobro nuevo, queda fuera del lote sin que nadie se entere (le pasó a VIMAGU
+      // TRUCKS dos veces el 2026-07-28). El backend los detecta y los devuelve.
+      if (Array.isArray(d.noIncluidas) && d.noIncluidas.length > 0) {
+        toast({
+          variant: 'destructive',
+          title: `⚠️ ${d.noIncluidas.length} cobro(s) quedaron fuera`,
+          description: `${d.noIncluidas.join(', ')}. Se crearon después de abrir esta pantalla: refresca y factúralos aparte.`,
+        });
+      }
+
       // Sondea el progreso cada 3s. Solo damos por terminado tras haber visto
       // el robot activo (evita el falso "terminó" del arranque). Si nunca se
       // activa (p.ej. todo ya emitido), cortamos tras unos ciclos de gracia.
@@ -190,11 +201,24 @@ const CobrosMensuales = () => {
         const detalle = Array.isArray(p?.resultados) ? p.resultados : [];
         const exitos = p?.exitos ?? detalle.filter(r => r.estado === 'exito').length;
         const errores = p?.errores ?? detalle.filter(r => r.estado === 'error').length;
+
+        // El robot corta el lote cuando el SII deja de aceptar el ingreso; hay que
+        // decirlo, si no parece que "terminó" con la mitad de las facturas.
+        if (p?.detenidoPorSii) {
+          toast({
+            variant: 'destructive',
+            title: '🛑 El SII cortó la sesión',
+            description: p.motivoDetencion || 'Se detuvo la emisión. Las facturas ya emitidas quedaron registradas; retoma con las que faltan.',
+          });
+        }
+
         // Resumen final para mostrar al usuario
         setResultado({
           enviadas, exitos, errores,
           noProcesadas: Math.max(0, enviadas - exitos - errores),
-          detalle, vinc
+          detalle, vinc,
+          detenidoPorSii: Boolean(p?.detenidoPorSii),
+          motivoDetencion: p?.motivoDetencion || '',
         });
         setFacturando(false);
         setProgreso(null);

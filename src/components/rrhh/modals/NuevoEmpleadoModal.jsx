@@ -9,10 +9,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCatalogosApi, createTrabajadorApi } from '@/services/rrhhService';
+import { useEmpresasLista } from '@/hooks/useEmpresasLista';
 import { ThemedSelect } from '@/components/ui/ThemedSelect';
-import { useBunkerData } from '@/components/crm/crmData';
-
-const LABEL_PRINCIPAL = 'VOLLAIRE & OLIVOS SIMPLE PYME LTDA';
 
 const ESTADO_INICIAL = {
     nombre: '', rut: '', fechaNacimiento: '', direccion: '', comuna: '', telefono: '', email: '',
@@ -24,22 +22,24 @@ const ESTADO_INICIAL = {
 const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => {
     const { user } = useAuth();
     const queryClient = useQueryClient();
-    const { clients } = useBunkerData();
     const [step, setStep] = useState(1);
     const [formData, setFormData] = useState(ESTADO_INICIAL);
-    // La empresa se elige en el modal: SimplePyme es una empresa más. Arranca con
-    // la empresa global si hay una seleccionada, pero se puede cambiar aquí.
-    const [empresaSel, setEmpresaSel] = useState(empresaId || '');
-    useEffect(() => { setEmpresaSel(empresaId || ''); }, [empresaId]);
 
-    const nombreEmp = (c) => c.razon_social || c.razonSocial || '';
-    const opcionesEmpresa = useMemo(() => {
-        const lista = clients || [];
-        const principal = lista.find(c => nombreEmp(c).trim().toUpperCase() === LABEL_PRINCIPAL);
-        const resto = lista.filter(c => c !== principal).sort((a, b) => nombreEmp(a).localeCompare(nombreEmp(b)));
-        const orden = principal ? [principal, ...resto] : resto;
-        return orden.map(c => ({ value: c.id, label: nombreEmp(c) + (c === principal ? ' — principal' : '') }));
-    }, [clients]);
+    // Fuente única: todas las empresas de la organización, con la principal primero.
+    const { empresas, principal, error: errorEmpresas } = useEmpresasLista({ enabled: isOpen });
+
+    const opcionesEmpresa = useMemo(
+        () => empresas.map(e => ({ value: e.id, label: e.esPrincipal ? `${e.razonSocial} — principal` : e.razonSocial })),
+        [empresas]
+    );
+
+    // Empresa por defecto: la del selector global; si no hay, la principal; si no, la primera.
+    const empresaPorDefecto = () => empresaId || principal?.id || empresas[0]?.id || '';
+    const [empresaSel, setEmpresaSel] = useState(empresaId || '');
+    useEffect(() => { setEmpresaSel(prev => prev || empresaPorDefecto()); }, [empresaId, empresas, principal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Nombre de la empresa elegida (para indicar dónde se guarda).
+    const empresaLabel = empresas.find(e => e.id === empresaSel)?.razonSocial || '';
 
     // Catálogos reales (AFP + isapres) desde la BD.
     const { data: catalogos } = useQuery({
@@ -63,7 +63,7 @@ const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => 
     };
     const handleRadioChange = (name, value) => setFormData(prev => ({ ...prev, [name]: value }));
 
-    const reset = () => { setFormData(ESTADO_INICIAL); setStep(1); setEmpresaSel(empresaId || ''); };
+    const reset = () => { setFormData(ESTADO_INICIAL); setStep(1); setEmpresaSel(empresaPorDefecto()); };
 
     const crear = useMutation({
         mutationFn: async () => {
@@ -94,7 +94,7 @@ const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => 
             return data;
         },
         onSuccess: (data) => {
-            toast({ title: "Trabajador registrado", description: `${formData.nombre} fue agregado.` });
+            toast({ title: "Trabajador registrado", description: `${formData.nombre} fue agregado${empresaLabel ? ` a ${empresaLabel}` : ''}.` });
             // Refresca tanto la vista consolidada como la de la empresa elegida.
             queryClient.invalidateQueries({ queryKey: ['trabajadores'] });
             onAddEmpleado?.(data?.trabajador);
@@ -142,6 +142,13 @@ const NuevoEmpleadoModal = ({ isOpen, setIsOpen, onAddEmpleado, empresaId }) => 
                         <h3 className="col-span-full text-lg font-semibold text-slate-900 flex items-center"><Briefcase className="mr-2 h-5 w-5 text-purple-600" />Datos Laborales</h3>
                         <div className="space-y-1 col-span-full"><Label>Empresa</Label>
                             <ThemedSelect value={empresaSel} onChange={setEmpresaSel} placeholder="Selecciona la empresa…" options={opcionesEmpresa} />
+                            <p className="text-xs text-slate-500 mt-1">
+                                {errorEmpresas
+                                    ? <span className="text-amber-700">No se pudo cargar la lista de empresas. Reinicia el backend e inténtalo de nuevo.</span>
+                                    : empresaLabel
+                                        ? <>El trabajador se guardará en <b className="text-slate-700">{empresaLabel}</b>.</>
+                                        : 'Elige la empresa a la que pertenece el trabajador.'}
+                            </p>
                         </div>
                         <div className="space-y-1"><Label>Fecha Inicio Contrato</Label><Input name="fechaInicio" type="date" value={formData.fechaInicio} onChange={handleChange} /></div>
                         <div className="space-y-1"><Label>Cargo</Label><Input name="cargo" value={formData.cargo} onChange={handleChange} /></div>

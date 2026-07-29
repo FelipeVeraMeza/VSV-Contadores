@@ -92,7 +92,7 @@ export default function NotaCreditoDebitoModal({ isOpen, setIsOpen, prefillData 
       
       Promise.all([
         getCrmDataApi(user.sessionId, null).then(r => r.json()).catch(() => null),
-        obtenerHistorialBunker(targetId).catch(() => null)
+        obtenerHistorialBunker(targetId, user?.sessionId).catch(() => null)
       ]).then(([crm, hist]) => {
         if (crm?.clients) setAllClientes(crm.clients);
         if (hist?.ok && hist.documentos) {

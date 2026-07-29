@@ -48,6 +48,7 @@ function MainPage() {
     { id: 'dashboard',     name: 'Dashboard',     icon: LayoutDashboard },
     { id: 'list',          name: 'Clientes',      icon: Building2 },
     { id: 'prospectos',    name: 'Prospectos',    icon: UserPlus },
+    { id: 'tareas',        name: 'Tareas',        icon: ListChecks },
     { id: 'whatsapp',      name: 'WhatsApp',      icon: MessageCircle },
     { id: 'correo',        name: 'Correo',        icon: Mail },
     { id: 'interacciones', name: 'Interacciones', icon: Activity },

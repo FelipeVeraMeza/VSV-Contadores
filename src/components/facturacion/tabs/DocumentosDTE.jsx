@@ -4,6 +4,7 @@ import { Download, FileWarning, Loader2, Search, Filter, Building2, FileText, Ha
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth.jsx';
+import { useEmpresasLista } from '@/hooks/useEmpresasLista';
 import { obtenerHistorialBunker, obtenerComprasBunker } from '@/services/dteConsultasService';
 import { API_BASE_URL } from '../../../../config.js'; 
 
@@ -35,7 +36,13 @@ const formatDisplay = (str) => {
 };
 
 const DocumentosDTE = () => {
-  const { selectedCompany } = useAuth();
+  const { user, selectedCompany } = useAuth();
+  const { principal } = useEmpresasLista();
+  // Con la empresa principal seleccionada el backend devuelve el libro de la firma
+  // —sus facturas a TODOS los clientes—, que es la vista global de facturación.
+  // Se compara contra la lista y no solo contra la marca guardada, porque una
+  // selección vieja en localStorage puede no traer el campo.
+  const esPrincipal = Boolean(selectedCompany && (selectedCompany.esPrincipal || (principal && selectedCompany.id === principal.id)));
   const [documentos, setDocumentos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false); 
@@ -74,6 +81,7 @@ const DocumentosDTE = () => {
   }, [currentPage]);
 
   const cargarHistorial = useCallback(async () => {
+    // Con la principal se manda su id: el backend responde con el libro de la firma.
     const isGlobal = !selectedCompany || vistaGlobal;
     const targetId = isGlobal ? 'ALL' : selectedCompany.id;
 
@@ -83,9 +91,9 @@ const DocumentosDTE = () => {
     try {
       let data;
       if (tipoVista === 'VENTAS') {
-        data = await obtenerHistorialBunker(targetId);
+        data = await obtenerHistorialBunker(targetId, user?.sessionId);
       } else {
-        data = await obtenerComprasBunker(targetId);
+        data = await obtenerComprasBunker(targetId, user?.sessionId);
       }
 
       if (data.ok) {
@@ -96,7 +104,7 @@ const DocumentosDTE = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompany, tipoVista, vistaGlobal]);
+  }, [selectedCompany, esPrincipal, tipoVista, vistaGlobal, user?.sessionId]);
 
   useEffect(() => {
     cargarHistorial();
@@ -231,7 +239,7 @@ const DocumentosDTE = () => {
     currentPage * ITEMS_PER_PAGE
   );
 
-  const isModoGlobalActivo = !selectedCompany || vistaGlobal;
+  const isModoGlobalActivo = !selectedCompany || esPrincipal || vistaGlobal;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -250,9 +258,10 @@ const DocumentosDTE = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3">
-            {selectedCompany && (
-              <Button 
-                  onClick={() => setVistaGlobal(!vistaGlobal)} 
+            {/* Con la principal el modo global ya está activo, el botón no aplica. */}
+            {selectedCompany && !esPrincipal && (
+              <Button
+                  onClick={() => setVistaGlobal(!vistaGlobal)}
                   variant="outline" 
                   className={`h-10 text-[10px] font-black uppercase tracking-widest ${vistaGlobal ? 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' : 'bg-slate-50 border-[#efe8dd] text-slate-500'}`}
               >

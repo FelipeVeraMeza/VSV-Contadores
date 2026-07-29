@@ -126,7 +126,10 @@ const Contabilidad = () => {
         <div>
           <h1 className="text-3xl font-bold text-slate-900 mb-1 tracking-tight">{TITULOS[sub] || 'Contabilidad'}</h1>
           <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">
-            {selectedCompany?.razon_social || selectedCompany?.razonSocial || 'VOLLAIRE & OLIVOS SIMPLE PYME LTDA'}
+            {/* Sin empresa seleccionada la vista es el consolidado de TODAS las empresas.
+                Antes decía "VOLLAIRE & OLIVOS SIMPLE PYME LTDA", que era falso: mostraba
+                las compras y ventas de todas las empresas bajo el nombre de una sola. */}
+            {selectedCompany?.razon_social || selectedCompany?.razonSocial || 'Todas las empresas (consolidado)'}
           </p>
         </div>
         {usaRango && <SelectorRango rango={rango} setRango={setRango} />}

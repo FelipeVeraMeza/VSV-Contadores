@@ -481,18 +481,54 @@ export const facturarCobrosMasivo = async (req, res) => {
             return res.status(400).json({ success: false, message: `No hay facturas válidas para emitir (${omitidas} omitida(s) por monto $0 o RUT inválido).` });
         }
 
+        // Cobros que quedaron fuera: la pantalla manda la lista que tenía cargada,
+        // así que si se creó un cobro después de abrirla, no viaja en el body y no
+        // se factura. Se avisa en la respuesta en vez de dejarlo pasar en silencio.
+        const enviados = new Set(origen.map(it => it.cobroId).filter(Boolean));
+        const { rows: pendientesBD } = await pool.query(
+            `SELECT cm.id, e.razon_social
+             FROM cobro_mensual cm JOIN empresa e ON e.id = cm.empresa_id
+             WHERE cm.periodo = date_trunc('month', CURRENT_DATE)::date
+               AND cm.estado = 'POR_EMITIR'
+               AND ($1::uuid IS NULL OR cm.organizacion_id = $1)`,
+            [organizacionId]
+        );
+        const noIncluidas = pendientesBD.filter(c => !enviados.has(c.id)).map(c => c.razon_social);
+
         // Respondemos de inmediato y disparamos el robot en segundo plano.
         res.json({
             success: true,
             total: facturas.length,
             omitidas,
-            message: `Emisión iniciada para ${facturas.length} factura(s).` + (omitidas ? ` ${omitidas} omitida(s).` : '')
+            noIncluidas,
+            message: `Emisión iniciada para ${facturas.length} factura(s).`
+                + (omitidas ? ` ${omitidas} omitida(s).` : '')
+                + (noIncluidas.length ? ` ⚠️ ${noIncluidas.length} cobro(s) creados después de abrir la pantalla quedaron fuera: ${noIncluidas.join(', ')}. Refresca y vuelve a facturar para incluirlos.` : '')
         });
 
-        emitirLotePuppeteer(facturas).catch(err => {
-            console.error('❌ Error en facturación masiva de cobros:', err);
-            estadoRobot.activo = false;
-        });
+        // La vinculación de folios la hace el BACKEND al terminar, no el navegador.
+        // Antes dependía de que la pestaña siguiera abierta sondeando el progreso:
+        // si el usuario la cerraba —o si el robot se colgaba y nunca "terminaba"—
+        // las facturas quedaban emitidas en el SII pero marcadas POR_EMITIR, listas
+        // para volver a emitirse. El frontend la sigue llamando como respaldo.
+        emitirLotePuppeteer(facturas)
+            .then(async () => {
+                try {
+                    const n = await vincularFoliosDeOrganizacion(organizacionId);
+                    console.log(`🔗 [COBROS] ${n} cobro(s) vinculados a su folio tras el lote.`);
+                } catch (e) {
+                    console.error('⚠️ [COBROS] No se pudieron vincular los folios:', e.message);
+                }
+            })
+            .catch(async err => {
+                console.error('❌ Error en facturación masiva de cobros:', err);
+                estadoRobot.activo = false;
+                // Aunque el lote falle a medias, lo ya emitido debe quedar vinculado.
+                try {
+                    const n = await vincularFoliosDeOrganizacion(organizacionId);
+                    console.log(`🔗 [COBROS] ${n} cobro(s) vinculados tras el fallo del lote.`);
+                } catch { /* se puede reintentar desde la pantalla */ }
+            });
     } catch (err) {
         console.error('❌ Error en facturarCobrosMasivo:', err.message);
         if (!res.headersSent) res.status(500).json({ success: false, message: 'Error al iniciar la facturación masiva.' });
@@ -502,32 +538,49 @@ export const facturarCobrosMasivo = async (req, res) => {
 // Progreso en vivo del robot masivo (para la barra en Cobro del Mes).
 export const progresoFacturacion = (req, res) => res.status(200).json(estadoRobot);
 
-// Vincula los folios recién emitidos (documentos_emitidos de este mes) con sus
-// cobros POR_EMITIR, pasándolos a PENDIENTE_PAGO. Se llama al terminar el robot.
+// Vincula los folios recién emitidos con sus cobros POR_EMITIR, pasándolos a
+// PENDIENTE_PAGO.
+//
+// Un folio solo sirve para UN cobro. Antes se tomaba cualquier documento emitido
+// dentro del mes, sin mirar si ese folio ya estaba asignado a otro período: si una
+// factura de junio se emitía en julio (pasa cuando el cliente se atrasa), ese folio
+// se volvía a enganchar al cobro de julio y el cliente quedaba marcado como
+// facturado sin estarlo. Por eso se excluyen los folios ya usados por otro cobro.
+export const vincularFoliosDeOrganizacion = async (organizacionId) => {
+    const { rowCount } = await pool.query(
+        `UPDATE cobro_mensual cm
+         SET folio = de.folio,
+             monto_facturado = de.monto_neto,
+             tipo_dte = '33',
+             estado = 'PENDIENTE_PAGO',
+             fecha_emision = de.fecha_emision,
+             updated_at = NOW()
+         FROM (
+            SELECT DISTINCT ON (de.empresa_id) de.empresa_id, de.folio, de.monto_neto, de.fecha_emision
+            FROM documentos_emitidos de
+            WHERE de.tipo_dte = 33
+              AND de.fecha_emision >= date_trunc('month', CURRENT_DATE)
+              AND NOT EXISTS (
+                    -- documentos_emitidos.folio es bigint y cobro_mensual.folio es
+                    -- varchar: hay que castear o Postgres no compara.
+                    SELECT 1 FROM cobro_mensual usado
+                    WHERE usado.folio = de.folio::text AND usado.empresa_id = de.empresa_id
+              )
+            ORDER BY de.empresa_id, de.fecha_emision DESC
+         ) de
+         WHERE cm.empresa_id = de.empresa_id
+           AND cm.periodo = date_trunc('month', CURRENT_DATE)::date
+           AND cm.estado = 'POR_EMITIR'
+           AND ($1::uuid IS NULL OR cm.organizacion_id = $1)`,
+        [organizacionId]
+    );
+    return rowCount;
+};
+
 export const vincularFolios = async (req, res) => {
     try {
-        const organizacionId = req.user?.organizacionId || null;
-        const { rowCount } = await pool.query(
-            `UPDATE cobro_mensual cm
-             SET folio = de.folio,
-                 monto_facturado = de.monto_neto,
-                 tipo_dte = '33',
-                 estado = 'PENDIENTE_PAGO',
-                 fecha_emision = de.fecha_emision,
-                 updated_at = NOW()
-             FROM (
-                SELECT DISTINCT ON (empresa_id) empresa_id, folio, monto_neto, fecha_emision
-                FROM documentos_emitidos
-                WHERE tipo_dte = 33 AND fecha_emision >= date_trunc('month', CURRENT_DATE)
-                ORDER BY empresa_id, fecha_emision DESC
-             ) de
-             WHERE cm.empresa_id = de.empresa_id
-               AND cm.periodo = date_trunc('month', CURRENT_DATE)::date
-               AND cm.estado = 'POR_EMITIR'
-               AND ($1::uuid IS NULL OR cm.organizacion_id = $1)`,
-            [organizacionId]
-        );
-        return res.json({ success: true, vinculados: rowCount, message: `${rowCount} cobro(s) pasaron a Pendiente de pago.` });
+        const vinculados = await vincularFoliosDeOrganizacion(req.user?.organizacionId || null);
+        return res.json({ success: true, vinculados, message: `${vinculados} cobro(s) pasaron a Pendiente de pago.` });
     } catch (err) {
         console.error('❌ Error vinculando folios:', err.message);
         return res.status(500).json({ success: false, message: 'Error al vincular los folios emitidos.' });

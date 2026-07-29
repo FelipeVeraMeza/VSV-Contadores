@@ -36,9 +36,11 @@ const ITEMS_PER_PAGE = 10;
 
 // RECIBIMOS LA PROP DEL PADRE
 const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial }) => {
-  const { selectedCompany } = useAuth();
-  
-  // Garantizar que targetId sea 'ALL' o el ID de la empresa real
+  const { user, selectedCompany } = useAuth();
+
+  // Garantizar que targetId sea 'ALL' o el ID de la empresa real.
+  // En Contabilidad la empresa principal se trata como cualquier otra: al elegirla
+  // se muestran SUS compras y ventas, no el consolidado.
   const targetId = propEmpresaId || selectedCompany?.id || 'ALL';
 
   const [activeView, setActiveView] = useState('compras'); 
@@ -74,8 +76,8 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
     try {
       // Le pasamos el targetId (que es 'ALL' o el UUID de la empresa)
       const [resVentas, resCompras] = await Promise.all([
-        obtenerHistorialBunker(targetId),
-        obtenerComprasBunker(targetId)
+        obtenerHistorialBunker(targetId, user?.sessionId),
+        obtenerComprasBunker(targetId, user?.sessionId)
       ]);
 
       const dataVentas = resVentas.ok ? (resVentas.documentos || []) : [];
@@ -90,7 +92,7 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
     } finally {
       setIsLoadingDB(false);
     }
-  }, [targetId]);
+  }, [targetId, user?.sessionId]);
 
   // Disparar carga de datos cuando cambia targetId
   useEffect(() => {

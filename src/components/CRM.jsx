@@ -18,6 +18,7 @@ import InteraccionesPanel from './crm/views/InteraccionesPanel';
 import CrearClienteModal from './crm/modals/CrearClienteModal';
 import CrearEmpresaModal from './crm/modals/CrearEmpresaModal';
 import PersonasPanel from './crm/views/PersonasPanel';
+import TareasPanel from './crm/views/TareasPanel';
 import CrmDashboard from './crm/views/CrmDashboard';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -401,6 +402,12 @@ const CRM = () => {
       {activeTab === 'prospectos' && (
         <div className="flex-1 min-h-0">
           <PersonasPanel reloadKey={personasReload} onCrear={() => setShowCrearCliente(true)} />
+        </div>
+      )}
+
+      {activeTab === 'tareas' && (
+        <div className="flex-1 min-h-0">
+          <TareasPanel />
         </div>
       )}
 

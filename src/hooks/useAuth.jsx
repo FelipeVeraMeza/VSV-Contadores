@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { loginApi } from '../services/authService.js';
 import { saveUserApi, deleteUserApi } from '../services/userService.js';
-import { saveCompanyApi, deleteCompanyApi } from '../services/companyService.js';
+import { saveCompanyApi, deleteCompanyApi, getEmpresasListaApi } from '../services/companyService.js';
 import { cleanRut } from '../lib/rut';
 
 const AuthContext = createContext(null);
@@ -72,6 +72,9 @@ export const AuthProvider = ({ children }) => {
                 setSelectedCompany(null);
                 localStorage.removeItem('selectedCompany');
                 localStorage.removeItem('empresaActivaCRM');
+                // Sesión nueva: no hay elección previa de "consolidado", así que el
+                // efecto de abajo dejará puesta la empresa principal.
+                localStorage.removeItem('companyScope');
 
                 setLoading(false);
                 navigate('/dashboard', { replace: true });
@@ -152,6 +155,40 @@ export const AuthProvider = ({ children }) => {
         }
         return false;
     };
+
+    // Empresa por defecto: la principal de la organización (VOLLAIRE & OLIVOS SIMPLE
+    // PYME LTDA). Es una empresa más del sistema, pero es la primera y la que queda
+    // puesta si el usuario todavía no eligió otra. Sin esto la app arrancaba "sin
+    // empresa", que en la práctica significa consolidado de TODAS: los módulos
+    // mostraban datos de todas las empresas bajo el rótulo de la principal.
+    // Si el usuario elige el consolidado a propósito, queda marcado en companyScope
+    // y no se le vuelve a imponer la principal.
+    useEffect(() => {
+        if (!user?.sessionId || selectedCompany) return;
+        if (localStorage.getItem('companyScope') === 'ALL') return;
+
+        let cancelado = false;
+        (async () => {
+            try {
+                const res = await getEmpresasListaApi(user.sessionId);
+                if (!res.ok) return;
+                const payload = await res.json();
+                const principal = (payload?.empresas || []).find(e => e.esPrincipal);
+                if (!principal || cancelado) return;
+                const empresa = {
+                    id: principal.id,
+                    razon_social: principal.razonSocial,
+                    razonSocial: principal.razonSocial,
+                    esPrincipal: true,
+                };
+                setSelectedCompany(empresa);
+                localStorage.setItem('selectedCompany', JSON.stringify(empresa));
+            } catch {
+                // Sin lista disponible se mantiene el comportamiento anterior (consolidado).
+            }
+        })();
+        return () => { cancelado = true; };
+    }, [user?.sessionId, selectedCompany]);
 
     // Mantiene los datos sincronizados en LocalStorage para que al F5 no se pierda nada
     useEffect(() => {

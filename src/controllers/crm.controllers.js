@@ -9,7 +9,8 @@ import { pool } from '../database/db.js';
 const esAdmin = (req) => req.user?.rol === 'Administrador';
 const TIPOS = ['tarea', 'reunion', 'llamada', 'whatsapp', 'correo', 'ticket'];
 const PRIORIDADES = ['alta', 'media', 'baja'];
-const ESTADOS = ['pendiente', 'completada', 'cancelada'];
+// 'en_proceso' añade el estado intermedio del módulo de tareas.
+const ESTADOS = ['pendiente', 'en_proceso', 'completada', 'cancelada'];
 
 // ------------------------------------------------------------
 // LISTAR TAREAS
@@ -34,16 +35,27 @@ export const listarTareas = async (req, res) => {
         if (personaId) { params.push(personaId); where.push(`t.persona_id = $${params.length}`); }
         if (desde) { params.push(desde); where.push(`t.vence_at >= $${params.length}::timestamptz`); }
         if (hasta) { params.push(hasta); where.push(`t.vence_at <= $${params.length}::timestamptz`); }
+        // Filtros del módulo de tareas.
+        if (req.query.proyectoId) { params.push(req.query.proyectoId); where.push(`t.proyecto_id = $${params.length}`); }
+        if (req.query.soloRaiz === '1') where.push(`t.parent_id IS NULL`);
 
         const { rows } = await pool.query(
             `SELECT t.*, u.nombre AS responsable_nombre,
-                    (p.nombre || ' ' || COALESCE(p.apellidos,'')) AS persona_nombre
+                    (p.nombre || ' ' || COALESCE(p.apellidos,'')) AS persona_nombre,
+                    pr.nombre AS proyecto_nombre, pr.color AS proyecto_color,
+                    (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id) AS subtareas_total,
+                    (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.estado='completada') AS subtareas_hechas,
+                    (SELECT COUNT(*)::int FROM tarea_comentario tc WHERE tc.tarea_id = t.id) AS comentarios,
+                    COALESCE((SELECT json_agg(json_build_object('id', cu.id, 'nombre', cu.nombre))
+                              FROM tarea_colaborador tcol JOIN usuario cu ON cu.id = tcol.usuario_id
+                              WHERE tcol.tarea_id = t.id), '[]') AS colaboradores
              FROM tarea t
              LEFT JOIN usuario u ON u.id = t.responsable_id
              LEFT JOIN persona p ON p.id = t.persona_id
+             LEFT JOIN proyecto pr ON pr.id = t.proyecto_id
              WHERE ${where.join(' AND ')}
              ORDER BY
-                CASE t.estado WHEN 'pendiente' THEN 0 ELSE 1 END,
+                CASE t.estado WHEN 'pendiente' THEN 0 WHEN 'en_proceso' THEN 1 ELSE 2 END,
                 t.vence_at ASC NULLS LAST,
                 CASE t.prioridad WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END`,
             params
@@ -71,34 +83,80 @@ const mapTarea = (t) => ({
     origen: t.origen,
     createdAt: t.created_at,
     completedAt: t.completed_at,
+    // Módulo de tareas
+    proyectoId: t.proyecto_id,
+    proyectoNombre: t.proyecto_nombre || null,
+    proyectoColor: t.proyecto_color || null,
+    parentId: t.parent_id,
+    subtareasTotal: t.subtareas_total ?? 0,
+    subtareasHechas: t.subtareas_hechas ?? 0,
+    comentarios: t.comentarios ?? 0,
+    colaboradores: t.colaboradores || [],
 });
+
+// Colaboradores: reemplaza la lista de una tarea.
+const setColaboradores = async (tareaId, ids) => {
+    if (!Array.isArray(ids)) return;
+    await pool.query(`DELETE FROM tarea_colaborador WHERE tarea_id = $1`, [tareaId]);
+    for (const uid of [...new Set(ids.filter(Boolean))]) {
+        await pool.query(`INSERT INTO tarea_colaborador (tarea_id, usuario_id) VALUES ($1,$2) ON CONFLICT DO NOTHING`, [tareaId, uid]);
+    }
+};
+
+// Devuelve una tarea enriquecida (nombres, contadores, colaboradores) por id.
+const tareaCompleta = async (id) => {
+    const { rows } = await pool.query(
+        `SELECT t.*, u.nombre AS responsable_nombre,
+                (p.nombre || ' ' || COALESCE(p.apellidos,'')) AS persona_nombre,
+                pr.nombre AS proyecto_nombre, pr.color AS proyecto_color,
+                (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id) AS subtareas_total,
+                (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.estado='completada') AS subtareas_hechas,
+                (SELECT COUNT(*)::int FROM tarea_comentario tc WHERE tc.tarea_id = t.id) AS comentarios,
+                COALESCE((SELECT json_agg(json_build_object('id', cu.id, 'nombre', cu.nombre))
+                          FROM tarea_colaborador tcol JOIN usuario cu ON cu.id = tcol.usuario_id
+                          WHERE tcol.tarea_id = t.id), '[]') AS colaboradores
+         FROM tarea t
+         LEFT JOIN usuario u ON u.id = t.responsable_id
+         LEFT JOIN persona p ON p.id = t.persona_id
+         LEFT JOIN proyecto pr ON pr.id = t.proyecto_id
+         WHERE t.id = $1`, [id]);
+    return rows[0] ? mapTarea(rows[0]) : null;
+};
 
 // ------------------------------------------------------------
 // CREAR TAREA
 // ------------------------------------------------------------
 export const crearTarea = async (req, res) => {
     try {
-        const { titulo, descripcion, tipo, prioridad, personaId, empresaId, responsableId, venceAt, origen } = req.body;
+        const { titulo, descripcion, tipo, prioridad, personaId, empresaId, responsableId, venceAt, origen,
+            proyectoId, parentId, colaboradores, estado } = req.body;
         if (!titulo?.trim()) return res.status(400).json({ success: false, message: 'El título es obligatorio.' });
 
         const { rows } = await pool.query(
             `INSERT INTO tarea
-                (organizacion_id, persona_id, empresa_id, titulo, descripcion, tipo, prioridad,
-                 responsable_id, vence_at, origen, creado_por)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+                (organizacion_id, persona_id, empresa_id, titulo, descripcion, tipo, prioridad, estado,
+                 responsable_id, vence_at, origen, creado_por, proyecto_id, parent_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
             [
                 req.user?.organizacionId || null,
                 personaId || null, empresaId || null,
                 titulo.trim(), descripcion?.trim() || null,
                 TIPOS.includes(tipo) ? tipo : 'tarea',
                 PRIORIDADES.includes(prioridad) ? prioridad : 'media',
+                ESTADOS.includes(estado) ? estado : 'pendiente',
                 responsableId || req.user?.usuarioId || null,
                 venceAt || null,
                 origen === 'ia' ? 'ia' : 'manual',
                 req.user?.usuarioId || null,
+                proyectoId || null,
+                parentId || null,
             ]
         );
-        return res.status(201).json({ success: true, tarea: mapTarea(rows[0]) });
+        const nuevaId = rows[0].id;
+        if (Array.isArray(colaboradores)) await setColaboradores(nuevaId, colaboradores);
+        // Devuelve la tarea ya enriquecida (con nombres, contadores, colaboradores).
+        const full = await tareaCompleta(nuevaId);
+        return res.status(201).json({ success: true, tarea: full });
     } catch (error) {
         console.error('❌ Error creando tarea:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo crear la tarea.' });
@@ -116,9 +174,9 @@ export const actualizarTarea = async (req, res) => {
         const chk = await pool.query(`SELECT id FROM tarea WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`, [id, org]);
         if (chk.rows.length === 0) return res.status(404).json({ success: false, message: 'Tarea no encontrada.' });
 
-        const { titulo, descripcion, tipo, prioridad, estado, responsableId, venceAt } = req.body;
+        const { titulo, descripcion, tipo, prioridad, estado, responsableId, venceAt, proyectoId, colaboradores } = req.body;
         const completedAt = estado === 'completada' ? 'NOW()' : (estado ? 'NULL' : 'completed_at');
-        const { rows } = await pool.query(
+        await pool.query(
             `UPDATE tarea SET
                 titulo = COALESCE($2, titulo),
                 descripcion = COALESCE($3, descripcion),
@@ -127,17 +185,19 @@ export const actualizarTarea = async (req, res) => {
                 estado = COALESCE($6, estado),
                 responsable_id = COALESCE($7, responsable_id),
                 vence_at = COALESCE($8, vence_at),
+                proyecto_id = COALESCE($9, proyecto_id),
                 completed_at = ${completedAt}
-             WHERE id = $1 RETURNING *`,
+             WHERE id = $1`,
             [
                 id, titulo?.trim() || null, descripcion?.trim() || null,
                 (tipo && TIPOS.includes(tipo)) ? tipo : null,
                 (prioridad && PRIORIDADES.includes(prioridad)) ? prioridad : null,
                 (estado && ESTADOS.includes(estado)) ? estado : null,
-                responsableId || null, venceAt || null,
+                responsableId || null, venceAt || null, proyectoId || null,
             ]
         );
-        return res.json({ success: true, tarea: mapTarea(rows[0]) });
+        if (Array.isArray(colaboradores)) await setColaboradores(id, colaboradores);
+        return res.json({ success: true, tarea: await tareaCompleta(id) });
     } catch (error) {
         console.error('❌ Error actualizando tarea:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo actualizar la tarea.' });
@@ -154,6 +214,27 @@ export const eliminarTarea = async (req, res) => {
     } catch (error) {
         console.error('❌ Error eliminando tarea:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo eliminar la tarea.' });
+    }
+};
+
+// Limpiar (borrar definitivamente) las tareas ya completadas.
+// Respeta el alcance: un usuario normal solo borra las suyas; el admin puede
+// borrar las del equipo o solo las suyas con ?scope=mias.
+export const eliminarTareasCompletadas = async (req, res) => {
+    try {
+        const org = req.user?.organizacionId || null;
+        const uid = req.user?.usuarioId || null;
+        const soloMias = !esAdmin(req) || req.query.scope === 'mias';
+        const scope = soloMias ? ' AND (responsable_id = $2 OR creado_por = $2) ' : '';
+        const params = soloMias ? [org, uid] : [org];
+        const r = await pool.query(
+            `DELETE FROM tarea
+             WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid AND estado = 'completada' ${scope}
+             RETURNING id`, params);
+        return res.json({ success: true, eliminadas: r.rows.length });
+    } catch (error) {
+        console.error('❌ Error limpiando tareas completadas:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudieron limpiar las tareas.' });
     }
 };
 
@@ -362,5 +443,242 @@ export const guardarMeta = async (req, res) => {
     } catch (error) {
         console.error('❌ Error guardando meta:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo guardar la meta.' });
+    }
+};
+
+// ============================================================
+// MÓDULO DE TAREAS · detalle, subtareas y comentarios
+// ============================================================
+
+// Verifica que la tarea sea de la organización del usuario.
+const tareaEnOrg = async (id, org) => {
+    const { rows } = await pool.query(`SELECT id FROM tarea WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`, [id, org]);
+    return rows.length > 0;
+};
+
+// GET /crm/tareas/:id  → tarea + subtareas + comentarios
+export const obtenerTarea = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const org = req.user?.organizacionId || null;
+        if (!await tareaEnOrg(id, org)) return res.status(404).json({ success: false, message: 'Tarea no encontrada.' });
+
+        const [tarea, subRes, comRes, adjRes] = await Promise.all([
+            tareaCompleta(id),
+            pool.query(
+                `SELECT t.*, u.nombre AS responsable_nombre, NULL AS persona_nombre, NULL AS proyecto_nombre, NULL AS proyecto_color,
+                        0 AS subtareas_total, 0 AS subtareas_hechas, 0 AS comentarios, '[]'::json AS colaboradores
+                 FROM tarea t LEFT JOIN usuario u ON u.id = t.responsable_id
+                 WHERE t.parent_id = $1 ORDER BY t.created_at ASC`, [id]),
+            pool.query(
+                `SELECT id, usuario_id, usuario_nombre, texto, created_at
+                 FROM tarea_comentario WHERE tarea_id = $1 ORDER BY created_at ASC`, [id]),
+            // Solo metadatos (nunca el binario en el listado).
+            pool.query(
+                `SELECT id, nombre, mime, tamano, usuario_nombre, created_at
+                 FROM tarea_adjunto WHERE tarea_id = $1 ORDER BY created_at ASC`, [id]),
+        ]);
+        return res.json({
+            success: true,
+            tarea,
+            subtareas: subRes.rows.map(mapTarea),
+            comentarios: comRes.rows.map(c => ({
+                id: c.id, usuarioId: c.usuario_id, autor: c.usuario_nombre || 'Sistema',
+                texto: c.texto, fecha: c.created_at ? new Date(c.created_at).toLocaleString('es-CL') : '',
+            })),
+            adjuntos: adjRes.rows.map(a => ({
+                id: a.id, nombre: a.nombre, mime: a.mime, tamano: a.tamano,
+                autor: a.usuario_nombre || 'Sistema', fecha: a.created_at ? new Date(a.created_at).toLocaleString('es-CL') : '',
+            })),
+        });
+    } catch (error) {
+        console.error('❌ Error obteniendo tarea:', error.message);
+        return res.status(500).json({ success: false, message: 'Error al obtener la tarea.' });
+    }
+};
+
+// POST /crm/tareas/:id/comentarios
+export const agregarComentario = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { texto } = req.body;
+        if (!texto?.trim()) return res.status(400).json({ success: false, message: 'El comentario no puede estar vacío.' });
+        if (!await tareaEnOrg(id, req.user?.organizacionId || null)) return res.status(404).json({ success: false, message: 'Tarea no encontrada.' });
+        const { rows } = await pool.query(
+            `INSERT INTO tarea_comentario (tarea_id, usuario_id, usuario_nombre, texto)
+             VALUES ($1,$2,$3,$4) RETURNING id, usuario_id, usuario_nombre, texto, created_at`,
+            [id, req.user?.usuarioId || null, req.user?.nombre || null, texto.trim()]
+        );
+        const c = rows[0];
+        return res.status(201).json({ success: true, comentario: { id: c.id, usuarioId: c.usuario_id, autor: c.usuario_nombre || 'Sistema', texto: c.texto, fecha: new Date(c.created_at).toLocaleString('es-CL') } });
+    } catch (error) {
+        console.error('❌ Error agregando comentario:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo agregar el comentario.' });
+    }
+};
+
+// DELETE /crm/comentarios/:comentarioId
+export const eliminarComentario = async (req, res) => {
+    try {
+        const { comentarioId } = req.params;
+        const org = req.user?.organizacionId || null;
+        const r = await pool.query(
+            `DELETE FROM tarea_comentario tc USING tarea t
+             WHERE tc.id = $1 AND tc.tarea_id = t.id AND t.organizacion_id IS NOT DISTINCT FROM $2::uuid
+             RETURNING tc.id`, [comentarioId, org]);
+        if (r.rows.length === 0) return res.status(404).json({ success: false, message: 'Comentario no encontrado.' });
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('❌ Error eliminando comentario:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo eliminar el comentario.' });
+    }
+};
+
+// ============================================================
+// ADJUNTOS de tarea (guardados como binario EN LA BASE)
+// ============================================================
+const MAX_ADJUNTO = 7 * 1024 * 1024; // 7 MB por archivo
+
+// POST /crm/tareas/:id/adjuntos   body: { nombre, mime, dataBase64 }
+export const subirAdjunto = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { nombre, mime, dataBase64 } = req.body;
+        if (!nombre?.trim() || !dataBase64) return res.status(400).json({ success: false, message: 'Falta el archivo.' });
+        if (!await tareaEnOrg(id, req.user?.organizacionId || null)) return res.status(404).json({ success: false, message: 'Tarea no encontrada.' });
+
+        // Acepta "data:...;base64,XXXX" o el base64 pelado.
+        const base64 = String(dataBase64).includes(',') ? String(dataBase64).split(',').pop() : dataBase64;
+        const buffer = Buffer.from(base64, 'base64');
+        if (buffer.length === 0) return res.status(400).json({ success: false, message: 'Archivo vacío o inválido.' });
+        if (buffer.length > MAX_ADJUNTO) return res.status(413).json({ success: false, message: 'El archivo supera el máximo de 7 MB.' });
+
+        const { rows } = await pool.query(
+            `INSERT INTO tarea_adjunto (tarea_id, nombre, mime, tamano, contenido, subido_por, usuario_nombre)
+             VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, nombre, mime, tamano, usuario_nombre, created_at`,
+            [id, String(nombre).slice(0, 255), (mime || 'application/octet-stream').slice(0, 120), buffer.length, buffer, req.user?.usuarioId || null, req.user?.nombre || null]
+        );
+        const a = rows[0];
+        return res.status(201).json({ success: true, adjunto: { id: a.id, nombre: a.nombre, mime: a.mime, tamano: a.tamano, autor: a.usuario_nombre || 'Sistema', fecha: new Date(a.created_at).toLocaleString('es-CL') } });
+    } catch (error) {
+        console.error('❌ Error subiendo adjunto:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo subir el archivo.' });
+    }
+};
+
+// GET /crm/adjuntos/:adjuntoId  → descarga el binario
+export const descargarAdjunto = async (req, res) => {
+    try {
+        const { adjuntoId } = req.params;
+        const org = req.user?.organizacionId || null;
+        const { rows } = await pool.query(
+            `SELECT a.nombre, a.mime, a.contenido
+             FROM tarea_adjunto a JOIN tarea t ON t.id = a.tarea_id
+             WHERE a.id = $1 AND t.organizacion_id IS NOT DISTINCT FROM $2::uuid`, [adjuntoId, org]);
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Archivo no encontrado.' });
+        const a = rows[0];
+        res.setHeader('Content-Type', a.mime || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(a.nombre)}"`);
+        return res.send(a.contenido); // Buffer → binario
+    } catch (error) {
+        console.error('❌ Error descargando adjunto:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo descargar el archivo.' });
+    }
+};
+
+// DELETE /crm/adjuntos/:adjuntoId
+export const eliminarAdjunto = async (req, res) => {
+    try {
+        const { adjuntoId } = req.params;
+        const org = req.user?.organizacionId || null;
+        const r = await pool.query(
+            `DELETE FROM tarea_adjunto a USING tarea t
+             WHERE a.id = $1 AND a.tarea_id = t.id AND t.organizacion_id IS NOT DISTINCT FROM $2::uuid
+             RETURNING a.id`, [adjuntoId, org]);
+        if (r.rows.length === 0) return res.status(404).json({ success: false, message: 'Archivo no encontrado.' });
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('❌ Error eliminando adjunto:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo eliminar el archivo.' });
+    }
+};
+
+// ============================================================
+// PROYECTOS
+// ============================================================
+export const listarProyectos = async (req, res) => {
+    try {
+        const org = req.user?.organizacionId || null;
+        const { rows } = await pool.query(
+            `SELECT pr.*, u.nombre AS creador,
+                    (SELECT COUNT(*)::int FROM tarea t WHERE t.proyecto_id = pr.id) AS tareas_total,
+                    (SELECT COUNT(*)::int FROM tarea t WHERE t.proyecto_id = pr.id AND t.estado='completada') AS tareas_hechas
+             FROM proyecto pr LEFT JOIN usuario u ON u.id = pr.creado_por
+             WHERE pr.organizacion_id IS NOT DISTINCT FROM $1::uuid
+             ORDER BY pr.estado ASC, pr.created_at DESC`, [org]);
+        return res.json({
+            success: true,
+            proyectos: rows.map(p => ({
+                id: p.id, nombre: p.nombre, descripcion: p.descripcion, color: p.color, estado: p.estado,
+                creador: p.creador || null,
+                tareasTotal: p.tareas_total, tareasHechas: p.tareas_hechas,
+                avance: p.tareas_total > 0 ? Math.round((p.tareas_hechas / p.tareas_total) * 100) : 0,
+            })),
+        });
+    } catch (error) {
+        console.error('❌ Error listando proyectos:', error.message);
+        return res.status(500).json({ success: false, message: 'Error al listar proyectos.' });
+    }
+};
+
+export const crearProyecto = async (req, res) => {
+    try {
+        const { nombre, descripcion, color } = req.body;
+        if (!nombre?.trim()) return res.status(400).json({ success: false, message: 'El nombre es obligatorio.' });
+        const { rows } = await pool.query(
+            `INSERT INTO proyecto (organizacion_id, nombre, descripcion, color, creado_por)
+             VALUES ($1,$2,$3,$4,$5) RETURNING id, nombre, descripcion, color, estado`,
+            [req.user?.organizacionId || null, nombre.trim(), descripcion?.trim() || null, color?.trim() || '#199b4d', req.user?.usuarioId || null]
+        );
+        const p = rows[0];
+        return res.status(201).json({ success: true, proyecto: { ...p, tareasTotal: 0, tareasHechas: 0, avance: 0 } });
+    } catch (error) {
+        console.error('❌ Error creando proyecto:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo crear el proyecto.' });
+    }
+};
+
+export const actualizarProyecto = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const org = req.user?.organizacionId || null;
+        const { nombre, descripcion, color, estado } = req.body;
+        const r = await pool.query(
+            `UPDATE proyecto SET
+                nombre = COALESCE($2, nombre), descripcion = COALESCE($3, descripcion),
+                color = COALESCE($4, color), estado = COALESCE($5, estado)
+             WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $6::uuid RETURNING id`,
+            [id, nombre?.trim() || null, descripcion?.trim() || null, color?.trim() || null,
+             ['activo', 'archivado'].includes(estado) ? estado : null, org]
+        );
+        if (r.rows.length === 0) return res.status(404).json({ success: false, message: 'Proyecto no encontrado.' });
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('❌ Error actualizando proyecto:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo actualizar el proyecto.' });
+    }
+};
+
+export const eliminarProyecto = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const org = req.user?.organizacionId || null;
+        // Las tareas del proyecto quedan sin proyecto (proyecto_id → NULL por la FK).
+        const r = await pool.query(`DELETE FROM proyecto WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid RETURNING id`, [id, org]);
+        if (r.rows.length === 0) return res.status(404).json({ success: false, message: 'Proyecto no encontrado.' });
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('❌ Error eliminando proyecto:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo eliminar el proyecto.' });
     }
 };

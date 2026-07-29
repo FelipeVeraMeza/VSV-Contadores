@@ -62,7 +62,9 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   const [honorarios]                        = useState([]);
   const [currentPage, setCurrentPage]       = useState(1);
   const [busqueda, setBusqueda]             = useState('');
-  const [filtroEstado, setFiltroEstado]     = useState('contabilizado'); // contabilizado | pendiente | todos
+  // 'todos' por defecto: con 'contabilizado' la pantalla arrancaba vacía y parecía
+  // que no había documentos, cuando en realidad estaban todos pendientes de contabilizar.
+  const [filtroEstado, setFiltroEstado]     = useState('todos'); // contabilizado | pendiente | todos
   const [isNuevoModalOpen, setIsNuevoModalOpen]   = useState(false);
   const [isAsientoModalOpen, setIsAsientoModalOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen]     = useState(false);
@@ -96,8 +98,8 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     setIsLoading(true);
     try {
       const [resV, resC] = await Promise.all([
-        obtenerHistorialBunker(targetId),
-        obtenerComprasBunker(targetId),
+        obtenerHistorialBunker(targetId, user?.sessionId),
+        obtenerComprasBunker(targetId, user?.sessionId),
       ]);
       setRawVentas(resV.ok ? (resV.documentos || []) : []);
       setRawCompras(resC.ok ? (resC.documentos || []) : []);
@@ -106,10 +108,10 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     } finally {
       setIsLoading(false);
     }
-  }, [targetId]);
+  }, [targetId, user?.sessionId]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  React.useEffect(() => { cargarDatos(); }, [targetId]);
+  React.useEffect(() => { cargarDatos(); }, [targetId, user?.sessionId]);
   React.useEffect(() => { setCurrentPage(1); }, [activeTab, busqueda, periodoAplicado, filtroEstado]);
   React.useEffect(() => { if (tipoInicial) setActiveTab(tipoInicial); }, [tipoInicial]);
 
@@ -720,7 +722,16 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
               <FileCheck className="h-8 w-8 text-slate-400" />
             </div>
             <h4 className="text-slate-900 font-black tracking-wide uppercase text-sm">Sin Registros</h4>
-            <p className="text-slate-400 text-[10px] mt-2 uppercase tracking-widest font-black">No hay {activeTab} para este período.</p>
+            {/* Distingue "no hay documentos" de "los hay, pero el filtro los esconde":
+                antes ambos casos decían lo mismo y parecía que faltaban los datos. */}
+            {docPorTab.length > 0 ? (
+              <p className="text-slate-500 text-[10px] mt-2 uppercase tracking-widest font-black">
+                Hay {docPorTab.length} {activeTab} en el período, pero el filtro «{filtroEstado}» las oculta.{' '}
+                <button onClick={() => setFiltroEstado('todos')} className="text-emerald-600 underline">Ver todas</button>
+              </p>
+            ) : (
+              <p className="text-slate-400 text-[10px] mt-2 uppercase tracking-widest font-black">No hay {activeTab} para este período.</p>
+            )}
             <Button onClick={abrirSyncModal} disabled={isSyncing || targetId === 'ALL'}
               className="mt-4 bg-emerald-600 hover:bg-emerald-500 text-slate-900 font-black uppercase text-[10px] tracking-widest disabled:opacity-50">
               {isSyncing ? <RefreshCcw className="h-3.5 w-3.5 mr-2 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5 mr-2" />}

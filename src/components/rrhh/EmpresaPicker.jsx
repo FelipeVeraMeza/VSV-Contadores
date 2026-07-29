@@ -2,24 +2,36 @@ import React, { useState } from 'react';
 import { Building2, ChevronDown, Search, Check } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useBunkerData } from '@/components/crm/crmData';
-
-const LABEL_PRINCIPAL = 'VOLLAIRE & OLIVOS SIMPLE PYME LTDA';
+import { useEmpresasLista } from '@/hooks/useEmpresasLista';
 
 // Selector de empresa compacto (inline). Fija la empresa global del sistema.
 export default function EmpresaPicker({ className = '' }) {
-    const { user, selectedCompany, setSelectedCompany } = useAuth();
-    const { clients, loading } = useBunkerData();
+    const { selectedCompany, setSelectedCompany } = useAuth();
+    // Misma fuente única que el selector del header: todas las empresas de la
+    // organización, con la principal marcada y primera.
+    const { empresas, principal, isLoading: loading } = useEmpresasLista();
+    // El CRM aporta los datos ricos (RUT, credenciales SII) de la cartera vigente.
+    const { clients } = useBunkerData();
     const [open, setOpen] = useState(false);
     const [q, setQ] = useState('');
     const nombre = (c) => c.razon_social || c.razonSocial || '';
     const query = q.trim().toLowerCase();
-    const esAdmin = user?.rol === 'Administrador';
-    const principal = esAdmin ? (clients || []).find(c => nombre(c).trim().toUpperCase() === LABEL_PRINCIPAL) : null;
-    const lista = (clients || []).filter(c => c !== principal && nombre(c).toLowerCase().includes(query)).slice(0, 100);
-    const mostrarPrincipal = principal && nombre(principal).toLowerCase().includes(query);
+
+    const porId = new Map((clients || []).map(c => [c.id, c]));
+    const completar = (e) => ({
+        ...(porId.get(e.id) || {}),
+        id: e.id,
+        razon_social: e.razonSocial,
+        razonSocial: e.razonSocial,
+        esPrincipal: e.esPrincipal,
+    });
+
+    const lista = empresas.filter(e => !e.esPrincipal && e.razonSocial.toLowerCase().includes(query)).slice(0, 100);
+    const mostrarPrincipal = principal && principal.razonSocial.toLowerCase().includes(query);
     const elegir = (c) => {
         setSelectedCompany(c);
         try { localStorage.setItem('selectedCompany', JSON.stringify(c)); } catch { /* ignore */ }
+        localStorage.removeItem('companyScope');
         setOpen(false); setQ('');
     };
 
@@ -40,18 +52,18 @@ export default function EmpresaPicker({ className = '' }) {
                     </div>
                     <div className="max-h-72 overflow-y-auto space-y-0.5">
                         {mostrarPrincipal && (
-                            <button onClick={() => elegir(principal)} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left hover:bg-purple-500/10 border-b border-[#efe8dd] mb-1">
+                            <button onClick={() => elegir(completar(principal))} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left hover:bg-purple-500/10 border-b border-[#efe8dd] mb-1">
                                 <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center flex-shrink-0"><Building2 className="h-3.5 w-3.5 text-white" /></div>
-                                <span className="flex-1 text-sm text-slate-900 font-medium truncate">{nombre(principal)}</span>
+                                <span className="flex-1 text-sm text-slate-900 font-medium truncate">{principal.razonSocial}</span>
                                 <span className="text-[9px] uppercase tracking-widest text-purple-700">Principal</span>
                             </button>
                         )}
                         {loading ? <div className="py-6 text-center text-slate-400 text-sm">Cargando…</div>
-                            : lista.length ? lista.map(c => (
-                                <button key={c.id} onClick={() => elegir(c)} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left hover:bg-slate-100">
+                            : lista.length ? lista.map(e => (
+                                <button key={e.id} onClick={() => elegir(completar(e))} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left hover:bg-slate-100">
                                     <div className="w-7 h-7 rounded-lg bg-slate-50 border border-[#efe8dd] flex items-center justify-center flex-shrink-0"><Building2 className="h-3.5 w-3.5 text-slate-500" /></div>
-                                    <span className="flex-1 text-sm text-slate-700 truncate">{nombre(c)}</span>
-                                    {selectedCompany?.id === c.id && <Check className="h-4 w-4 text-emerald-600" />}
+                                    <span className="flex-1 text-sm text-slate-700 truncate">{e.razonSocial}</span>
+                                    {selectedCompany?.id === e.id && <Check className="h-4 w-4 text-emerald-600" />}
                                 </button>
                             )) : <div className="py-6 text-center text-slate-400 text-sm">Sin resultados</div>}
                     </div>

@@ -66,6 +66,9 @@ export const getCatalogosApi = (sessionId) => {
     return fetchWithAuth(`/rrhh/catalogos`, sessionId);
 };
 
+// La lista de empresas vive en companyService.getEmpresasListaApi (fuente única);
+// usa el hook useEmpresasLista en vez de pedirla aquí.
+
 // Dashboard agregado del módulo. Sin empresaId → consolidado de toda la organización.
 export const getDashboardApi = (sessionId, empresaId, periodo) => {
     const params = new URLSearchParams();

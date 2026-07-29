@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ThemedSelect } from '@/components/ui/ThemedSelect';
 import { getTrabajadoresApi, getCausalesApi, previewFiniquitoApi, guardarFiniquitoApi, listFiniquitosApi, getFiniquitoApi } from '@/services/rrhhService';
+import { numeroALetras } from '@/lib/numeroALetras';
 
 const clp = (v) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(Number(v) || 0);
 const hoy = () => new Date().toISOString().slice(0, 10);
@@ -120,23 +121,49 @@ const DetalleModal = ({ id, onClose }) => {
 
     const imprimir = () => {
         if (!f) return;
-        const row = (l, v) => `<tr><td>${l}</td><td style="text-align:right">${clp(v)}</td></tr>`;
-        const html = `<!doctype html><html><head><meta charset="utf-8"><title>Finiquito ${f.empleado}</title>
-        <style>body{font-family:Arial,sans-serif;color:#111;max-width:640px;margin:24px auto;padding:0 16px;font-size:13px}h1{font-size:18px;margin:0 0 2px}.sub{color:#555;margin:0 0 16px}table{width:100%;border-collapse:collapse}td{padding:4px 0}.tot{border-top:2px solid #333;font-weight:bold;font-size:15px}</style>
-        </head><body>
-          <h1>Finiquito de Trabajo</h1>
-          <p class="sub">${f.empleado} — ${f.rut} · ${f.empresa || ''}<br/>Ingreso: ${String(f.fechaIngreso||'').slice(0,10)} · Término: ${String(f.fechaTermino||'').slice(0,10)} · ${f.causalLabel}</p>
+        const nf = (v) => new Intl.NumberFormat('es-CL').format(Math.round(Number(v) || 0));
+        const fch = (d) => String(d || '').slice(0, 10).split('-').reverse().join('/');
+        const row = (l, v) => `<tr><td>${l}</td><td class="n">${nf(v)}</td></tr>`;
+        const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Finiquito ${f.empleado}</title>
+        <style>
+          @page{size:A4;margin:16mm}
+          *{box-sizing:border-box} body{font-family:'Times New Roman',Georgia,serif;color:#111;max-width:720px;margin:0 auto;padding:24px;font-size:13px;line-height:1.7}
+          h1{text-align:center;font-size:16px;text-transform:uppercase;letter-spacing:1px;margin:0 0 20px}
+          p{text-align:justify;margin:12px 0}
+          table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13px}
+          th,td{border:1px solid #999;padding:5px 10px} th{background:#f0f0f0;text-align:left}
+          td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+          .tot td{font-weight:bold;border-top:2px solid #333}
+          .son{font-weight:bold;margin:14px 0}
+          .firmas{display:flex;justify-content:space-between;gap:60px;margin-top:70px;text-align:center}
+          .firmas div{flex:1;border-top:1px solid #000;padding-top:5px;font-size:12px}
+          .pie{margin-top:28px;font-size:11px;color:#666;text-align:center}
+        </style></head><body>
+          <h1>Finiquito de Contrato de Trabajo</h1>
+          <p>En Chile, con fecha <b>${fch(f.fechaTermino)}</b>, entre <b>${f.empresa || ''}</b>, en adelante
+          "el empleador", y don(ña) <b>${f.empleado}</b>, cédula de identidad N° <b>${f.rut}</b>, en adelante
+          "el trabajador", se deja constancia del <b>término de la relación laboral</b> que los vinculaba
+          (ingreso el ${fch(f.fechaIngreso)}), por la causal legal: <b>${f.causalLabel}</b>.</p>
+          <p>El empleador paga al trabajador las siguientes sumas por los conceptos que se indican:</p>
           <table>
-            ${row('Vacaciones proporcionales (' + f.diasVacPendientes + ' días)', f.vacProporcional)}
-            ${row('Indemnización por años de servicio', f.indemAnos)}
-            ${row('Indemnización sustitutiva aviso previo', f.indemAviso)}
-            ${f.otrosHaberes ? row('Otros haberes', f.otrosHaberes) : ''}
-            ${f.descuentos ? row('Descuentos', -f.descuentos) : ''}
-            <tr class="tot"><td>TOTAL A PAGAR</td><td style="text-align:right">${clp(f.total)}</td></tr>
+            <thead><tr><th>Concepto</th><th class="n">Monto</th></tr></thead>
+            <tbody>
+              ${row('Vacaciones proporcionales (' + f.diasVacPendientes + ' días)', f.vacProporcional)}
+              ${f.indemAnos ? row('Indemnización por años de servicio', f.indemAnos) : ''}
+              ${f.indemAviso ? row('Indemnización sustitutiva del aviso previo', f.indemAviso) : ''}
+              ${f.otrosHaberes ? row('Otros haberes', f.otrosHaberes) : ''}
+              ${f.descuentos ? `<tr><td>Descuentos</td><td class="n">- ${nf(f.descuentos)}</td></tr>` : ''}
+              <tr class="tot"><td>TOTAL A PAGAR</td><td class="n">${nf(f.total)}</td></tr>
+            </tbody>
           </table>
-          <p style="margin-top:40px;color:#666;font-size:11px">Documento base referencial — sujeto a validación legal.</p>
+          <p class="son">SON: ${numeroALetras(f.total)} PESOS.</p>
+          <p>El trabajador declara recibir conforme la suma total indicada y, una vez pagada, no tener
+          cargo ni cobro alguno que hacer al empleador por concepto de remuneraciones, indemnizaciones,
+          feriados u otro derivado de la relación laboral, otorgándole el más amplio y total finiquito.</p>
+          <div class="firmas"><div>FIRMA DEL EMPLEADOR</div><div>FIRMA DEL TRABAJADOR</div></div>
+          <p class="pie">Documento base referencial — sujeto a validación legal antes de su suscripción.</p>
         </body></html>`;
-        const w = window.open('', '_blank', 'width=760,height=900');
+        const w = window.open('', '_blank', 'width=800,height=1000');
         if (!w) return toast({ title: 'Permite ventanas emergentes para imprimir', variant: 'destructive' });
         w.document.write(html); w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
     };

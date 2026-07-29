@@ -649,13 +649,43 @@ const periodoLargo = (d) => {
   return s.length === 3 ? `${MESES[Number(s[1]) - 1]} ${s[0]}` : String(d);
 };
 const clpFmt = (v) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', minimumFractionDigits: 0 }).format(Number(v) || 0);
+const nfmt = (v) => new Intl.NumberFormat('es-CL').format(Math.round(Number(v) || 0)); // 350000 → "350.000"
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Convierte un entero a palabras en español (para la línea "SON: … PESOS").
+const numeroALetras = (n) => {
+  n = Math.round(Math.abs(Number(n) || 0));
+  if (n === 0) return 'CERO';
+  const U = ['', 'UNO', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE', 'DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISEIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE', 'VEINTE'];
+  const D = ['', '', '', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
+  const C = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+  const centena = (x) => {
+    if (x === 0) return '';
+    if (x === 100) return 'CIEN';
+    const c = Math.floor(x / 100), dd = x % 100, d = Math.floor(dd / 10), u = dd % 10;
+    let r = c ? C[c] + ' ' : '';
+    if (dd <= 20) r += U[dd];
+    else if (dd < 30) r += 'VEINTI' + U[u];
+    else { r += D[d]; if (u) r += ' Y ' + U[u]; }
+    return r.trim();
+  };
+  const grupo = (x, sing, plur) => x === 1 ? sing : centena(x) + ' ' + plur;
+  const millones = Math.floor(n / 1000000), miles = Math.floor((n % 1000000) / 1000), resto = n % 1000;
+  let r = '';
+  if (millones) r += grupo(millones, 'UN MILLON', 'MILLONES') + ' ';
+  if (miles) r += grupo(miles, 'MIL', 'MIL') + ' ';
+  if (resto) r += centena(resto);
+  return r.trim().replace(/UNO MIL/g, 'UN MIL').replace(/UNO MILLON/g, 'UN MILLON');
+};
 
 // Carga todos los datos que necesita una liquidación imprimible.
 const cargarPayslip = async (id, orgId) => {
   const { rows } = await pool.query(
     `SELECT l.*, t.nombres, t.apellido_paterno, t.apellido_materno, t.cargo, t.rut_encrypted,
-            af.nombre AS afp_nombre, s.nombre AS salud_nombre,
+            t.cargas_normales, t.cargas_maternales, t.cargas_invalidas,
+            t.plan_isapre_monto, t.plan_isapre_moneda,
+            af.nombre AS afp_nombre, af.tasa_comision AS afp_comision,
+            s.nombre AS salud_nombre, s.tipo AS salud_tipo,
             e.razon_social AS empresa_nombre, e.rut_encrypted AS empresa_rut_enc
      FROM rem_liquidacion l JOIN rem_trabajador t ON t.id = l.trabajador_id
      LEFT JOIN rem_afp af ON af.id = t.afp_id
@@ -667,21 +697,28 @@ const cargarPayslip = async (id, orgId) => {
   const l = rows[0];
   if (!l || (l.organizacion_id || null) !== (orgId || null)) return null;
   const det = await pool.query(
-    'SELECT codigo, descripcion, naturaleza, monto FROM rem_liquidacion_detalle WHERE liquidacion_id = $1 ORDER BY orden',
+    'SELECT codigo, descripcion, naturaleza, imponible, monto FROM rem_liquidacion_detalle WHERE liquidacion_id = $1 ORDER BY orden',
     [id]
   );
   const rutClaro = decrypt(l.rut_encrypted);
+  // Último día del período (para la fecha del documento).
+  const p = String(l.periodo).slice(0, 10).split('-');
+  const ultimoDia = p.length === 3 ? new Date(Number(p[0]), Number(p[1]), 0).getDate() : 30;
   return {
     id: l.id,
     periodo: l.periodo,
     periodoTexto: periodoLargo(l.periodo),
+    fechaDoc: p.length === 3 ? `${String(ultimoDia).padStart(2, '0')}/${p[1]}/${p[0]}` : '',
     estado: l.estado,
     empleado: [l.nombres, l.apellido_paterno, l.apellido_materno].filter(Boolean).join(' ').trim(),
     rut: rutClaro ? formatRut(rutClaro) : '—',
     cargo: l.cargo || '—',
     empresa: l.empresa_nombre || '',
     empresaRut: l.empresa_rut_enc ? (formatRut(decrypt(l.empresa_rut_enc)) || '') : '',
-    afp: l.afp_nombre || '', salud: l.salud_nombre || '',
+    afp: l.afp_nombre || '', afpComision: Number(l.afp_comision) || 0,
+    salud: l.salud_nombre || '', saludTipo: l.salud_tipo || '',
+    planIsapre: Number(l.plan_isapre_monto) || 0, planIsapreMoneda: l.plan_isapre_moneda || 'UF',
+    cargas: (Number(l.cargas_normales) || 0) + (Number(l.cargas_maternales) || 0) + (Number(l.cargas_invalidas) || 0),
     diasTrabajados: Number(l.dias_trabajados),
     totales: {
       total_imponible: Number(l.total_imponible),
@@ -692,54 +729,90 @@ const cargarPayslip = async (id, orgId) => {
       liquido_pagar: Number(l.liquido_pagar),
       aportes_patronales: Number(l.aportes_patronales),
     },
-    haberes: det.rows.filter(d => d.naturaleza === 'HABER').map(d => ({ ...d, monto: Number(d.monto) })),
+    haberes: det.rows.filter(d => d.naturaleza === 'HABER').map(d => ({ ...d, monto: Number(d.monto), imponible: !!d.imponible })),
     descuentos: det.rows.filter(d => d.naturaleza === 'DESCUENTO').map(d => ({ ...d, monto: Number(d.monto) })),
   };
 };
 
-// Genera el HTML autocontenido de la liquidación (sirve para imprimir y para correo).
+// Genera el HTML de la liquidación en formato clásico chileno (imprimir / correo).
 const payslipHtml = (d) => {
-  const filas = (items, color) => items.map(i =>
-    `<tr><td class="cod">${esc(i.codigo || '')}</td><td>${esc(i.descripcion)}</td><td class="num" style="color:${color}">${clpFmt(i.monto)}</td></tr>`
-  ).join('');
+  const t = d.totales;
+  const habImp = d.haberes.filter(h => h.imponible);
+  const habNoImp = d.haberes.filter(h => !h.imponible);
+  const CODS_LEGALES = ['200', '201', '202', 'AFC', '205'];
+  const totLegales = d.descuentos.filter(x => CODS_LEGALES.includes(x.codigo)).reduce((s, x) => s + x.monto, 0);
+  const totOtros = d.descuentos.filter(x => !CODS_LEGALES.includes(x.codigo)).reduce((s, x) => s + x.monto, 0);
+
+  const linea = (desc, monto) => `<tr><td>${esc(desc)}</td><td class="n">${nfmt(monto)}</td></tr>`;
+  const habImpHtml = habImp.map(h => linea(h.descripcion, h.monto)).join('') || '<tr><td colspan="2">&nbsp;</td></tr>';
+  const habNoImpHtml = habNoImp.map(h => linea(h.descripcion, h.monto)).join('');
+  const descHtml = d.descuentos.map(x => linea(x.descripcion, x.monto)).join('') || '<tr><td colspan="2">&nbsp;</td></tr>';
+
+  const isapre = d.saludTipo === 'ISAPRE';
+  const planTxt = isapre && d.planIsapre > 0
+    ? (d.planIsapreMoneda === 'CLP' ? nfmt(d.planIsapre) : `${d.planIsapre} UF`) + ' · 7%'
+    : '7%';
+
   return `<!doctype html><html lang="es"><head><meta charset="utf-8">
 <title>Liquidación ${esc(d.empleado)} — ${esc(d.periodoTexto)}</title>
 <style>
-  *{box-sizing:border-box} body{font-family:Arial,Helvetica,sans-serif;color:#1e293b;margin:0;padding:24px;background:#fff}
-  .doc{max-width:720px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
-  .hd{background:#4f46e5;color:#fff;padding:20px 24px}
-  .hd h1{margin:0;font-size:18px} .hd p{margin:4px 0 0;font-size:12px;opacity:.9}
-  .meta{display:flex;flex-wrap:wrap;gap:8px 32px;padding:16px 24px;background:#f8fafc;font-size:13px;border-bottom:1px solid #e2e8f0}
-  .meta b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#64748b;font-weight:700}
-  table{width:100%;border-collapse:collapse;font-size:13px} th,td{padding:7px 24px;text-align:left}
-  thead th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#64748b;border-bottom:1px solid #e2e8f0}
-  tbody td{border-bottom:1px solid #f1f5f9} .cod{color:#94a3b8;font-family:monospace;font-size:11px;width:52px}
-  .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums} th.num{text-align:right}
-  .sec{padding:12px 24px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#475569;background:#f8fafc}
-  .tot{display:flex;justify-content:space-between;padding:10px 24px;font-size:13px} .tot span:last-child{font-variant-numeric:tabular-nums}
-  .liq{display:flex;justify-content:space-between;align-items:center;margin:12px 24px 20px;padding:14px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px}
-  .liq b{font-size:15px} .liq .v{font-size:20px;font-weight:800;color:#059669}
-  .ft{padding:12px 24px 20px;font-size:11px;color:#94a3b8;text-align:center}
+  @page{size:A4;margin:14mm}
+  *{box-sizing:border-box} body{font-family:'Courier New',monospace;color:#111;margin:0;padding:20px;background:#fff;font-size:12px;line-height:1.35}
+  .doc{max-width:720px;margin:0 auto}
+  h1{text-align:center;font-size:15px;letter-spacing:1px;margin:0 0 2px}
+  .mes{margin:0 0 8px}
+  .hr{border:0;border-top:1.5px solid #000;margin:6px 0}
+  .row{display:flex;justify-content:space-between;gap:20px} .k{font-weight:bold} .mut{color:#333}
+  table.grid{width:100%;border-collapse:collapse;margin:2px 0} table.grid td{padding:1px 4px}
+  .cols{display:flex;border-top:1.5px solid #000;border-bottom:1.5px solid #000}
+  .col{flex:1;padding:6px 10px} .col.l{border-right:1px solid #000}
+  .col h2{font-size:12px;text-align:center;margin:0 0 6px}
+  table.d{width:100%;border-collapse:collapse} table.d td{padding:1px 2px}
+  table.d td.n{text-align:right;white-space:nowrap} .tot td{font-weight:bold;border-top:1px solid #000}
+  .big{display:flex;justify-content:space-between;font-weight:bold;font-size:13px;margin-top:8px}
+  .son{margin:10px 0;font-weight:bold}
+  .leg{font-size:11px;margin:14px 0 0;line-height:1.5}
+  .firmas{display:flex;justify-content:space-between;gap:60px;margin-top:70px;text-align:center}
+  .firmas div{flex:1;border-top:1px solid #000;padding-top:4px;font-size:11px}
 </style></head><body><div class="doc">
-  <div class="hd"><h1>Liquidación de Sueldo</h1><p>${esc(d.empresa)}${d.empresaRut ? ' · ' + esc(d.empresaRut) : ''} · ${esc(d.periodoTexto)}</p></div>
-  <div class="meta">
-    <div><b>Trabajador</b>${esc(d.empleado)}</div>
-    <div><b>RUT</b>${esc(d.rut)}</div>
-    <div><b>Cargo</b>${esc(d.cargo)}</div>
-    <div><b>Días trabajados</b>${d.diasTrabajados}</div>
-    <div><b>AFP</b>${esc(d.afp || '—')}</div>
-    <div><b>Salud</b>${esc(d.salud || '—')}</div>
+  <h1>LIQUIDACION DE SUELDO</h1>
+  <p class="mes">REMUNERACIONES MES DE: ${esc(d.periodoTexto.toUpperCase())}</p>
+  <hr class="hr">
+  <div class="row"><span><span class="k">RAZON SOCIAL:</span> ${esc(d.empresa)}</span><span><span class="k">RUT EMPRESA:</span> ${esc(d.empresaRut || '—')}</span></div>
+  <hr class="hr">
+  <div class="row"><span><span class="k">R.U.T.:</span> ${esc(d.rut)}</span><span><span class="k">TRABAJADOR:</span> ${esc(d.empleado)}</span></div>
+  <hr class="hr">
+  <div class="row"><span><span class="k">A.F.P.:</span> ${esc(d.afp || '—')} <span class="mut">${d.afpComision ? d.afpComision + '%' : ''}</span></span><span><span class="k">${isapre ? 'ISAPRE' : 'SALUD'}:</span> ${esc(d.salud || '—')} <span class="mut">${planTxt}</span></span></div>
+  <hr class="hr">
+  <table class="grid"><tr>
+    <td class="k">DIAS</td><td>${d.diasTrabajados}</td>
+    <td class="k">CARGAS</td><td>${d.cargas}</td>
+    <td class="k">IMPONIBLE</td><td style="text-align:right">${nfmt(t.total_imponible)}</td>
+    <td class="k">TRIBUTABLE</td><td style="text-align:right">${nfmt(t.base_tributable)}</td>
+  </tr></table>
+  <div class="cols">
+    <div class="col l">
+      <h2>HABERES</h2>
+      <table class="d">${habImpHtml}
+        <tr class="tot"><td>TOTAL IMPONIBLE</td><td class="n">${nfmt(t.total_imponible)}</td></tr>
+        ${habNoImpHtml}
+        <tr class="tot"><td>TOTAL NO IMPONIBLE</td><td class="n">${nfmt(t.total_no_imponible)}</td></tr>
+      </table>
+    </div>
+    <div class="col">
+      <h2>DESCUENTOS</h2>
+      <table class="d">${descHtml}
+        <tr class="tot"><td>TOTAL DESC. LEGALES</td><td class="n">${nfmt(totLegales)}</td></tr>
+        <tr><td>TOTAL OTROS DESC.</td><td class="n">${nfmt(totOtros)}</td></tr>
+      </table>
+    </div>
   </div>
-  <div class="sec">Haberes</div>
-  <table><tbody>${filas(d.haberes, '#059669') || '<tr><td colspan="3" style="color:#94a3b8">Sin haberes</td></tr>'}</tbody></table>
-  <div class="sec">Descuentos</div>
-  <table><tbody>${filas(d.descuentos, '#dc2626') || '<tr><td colspan="3" style="color:#94a3b8">Sin descuentos</td></tr>'}</tbody></table>
-  <div style="border-top:1px solid #e2e8f0;margin-top:8px">
-    <div class="tot"><span>Total haberes</span><span>${clpFmt(d.totales.total_haberes)}</span></div>
-    <div class="tot"><span>Total descuentos</span><span style="color:#dc2626">− ${clpFmt(d.totales.total_descuentos)}</span></div>
-  </div>
-  <div class="liq"><b>LÍQUIDO A PAGAR</b><span class="v">${clpFmt(d.totales.liquido_pagar)}</span></div>
-  <div class="ft">Documento generado por VS Consultores · Remuneraciones${d.estado ? ' · ' + esc(d.estado) : ''}</div>
+  <div class="big"><span>TOTAL HABERES: ${nfmt(t.total_haberes)}</span><span>TOTAL DESCUENTOS: ${nfmt(t.total_descuentos)}</span></div>
+  <div class="big"><span>FECHA: ${esc(d.fechaDoc)}</span><span>ALCANCE LIQUIDO: ${nfmt(t.liquido_pagar)}</span></div>
+  <p class="son">SON: ${numeroALetras(t.liquido_pagar)} PESOS.</p>
+  <hr class="hr">
+  <p class="leg">Recibí conforme el alcance líquido de la presente liquidación, no teniendo cargo o cobro alguno que hacer por otro concepto.</p>
+  <div class="firmas"><div>FIRMA DEL EMPLEADOR</div><div>FIRMA DEL TRABAJADOR</div></div>
 </div></body></html>`;
 };
 

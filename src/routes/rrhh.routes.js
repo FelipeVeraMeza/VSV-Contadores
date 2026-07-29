@@ -63,6 +63,7 @@ import {
     listFiniquitos,
     getFiniquito,
 } from '../controllers/finiquitos.controllers.js';
+import { listCompaniesLista } from '../controllers/companies.controllers.js';
 import { requireSession, requireAdmin } from "../middleware/auth.js";
 
 const router = Router();
@@ -109,6 +110,8 @@ router.get('/finiquitos/:id', getFiniquito);
 
 // ── Remuneraciones (Fase 1: ficha de trabajadores) ──────────────────────────
 router.get('/catalogos', getCatalogos);
+// Alias de la lista canónica (misma respuesta que GET /api/companies/lista).
+router.get('/empresas', listCompaniesLista);
 router.get('/trabajadores', listTrabajadores);
 router.get('/trabajadores/:id', getTrabajador);
 router.post('/trabajadores', createTrabajador);
