@@ -103,10 +103,47 @@ const CrmTableList = ({
     };
 
     // Estilo (color + punto) para estado de pago
-    const pagoStyle = (pago) => {
-        if (pago === 'PAGADO' || pago === 'AL DIA') return { c: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500' };
-        if (pago === 'NO PAGADO') return { c: 'text-red-600 bg-red-50 border-red-200', dot: 'bg-red-500' };
-        return { c: 'text-slate-500 bg-slate-100 border-slate-200', dot: 'bg-slate-400' }; // suspendido, de baja, free, término giro
+    // Estado de cobranza REAL, calculado desde cobro_mensual. Reemplaza al badge que
+    // leía empresa.estado_pago: ese campo viene de la importación del Excel y nadie
+    // lo actualiza, así que mostraba "AL DIA" a clientes con deuda vencida y
+    // "NO PAGADO" a clientes que ya habían pagado.
+    // Tres estados, no dos. "Al día" a secas se leía como "no debe nada", y era falso:
+    // un cliente recién facturado debe su factura del mes, solo que aún en plazo.
+    const cobranzaStyle = (client) => {
+        if (client.activo === false) {
+            return { label: 'De baja', c: 'text-slate-500 bg-slate-100 border-slate-200', dot: 'bg-slate-400',
+                     title: 'Cliente dado de baja' };
+        }
+        const vencida = Number(client.deudaVencida) || 0;
+        const total = Number(client.deudaTotal) || 0;
+        const meses = Number(client.mesesVencidos) || 0;
+        const fmt = (n) => `$${n.toLocaleString('es-CL')}`;
+
+        if (vencida > 0 || client.cobroVencido) {
+            const desde = client.venceMasAntiguo
+                ? ` desde el ${new Date(client.venceMasAntiguo).toLocaleDateString('es-CL')}`
+                : '';
+            const resto = total > vencida ? ` · ${fmt(total - vencida)} más aún en plazo` : '';
+            return {
+                label: `No pagó ${fmt(vencida)}`,
+                c: 'text-red-600 bg-red-50 border-red-200', dot: 'bg-red-500',
+                title: `Se le pasó el plazo: ${meses} factura(s) sin pagar${desde}. Debe ${fmt(total)} en total${resto}`,
+            };
+        }
+        if (total > 0) {
+            const vence = client.proximoVencimiento
+                ? new Date(client.proximoVencimiento).toLocaleDateString('es-CL')
+                : null;
+            return {
+                label: `Pend. pago ${fmt(total)}`,
+                c: 'text-amber-700 bg-amber-50 border-amber-200', dot: 'bg-amber-500',
+                title: vence
+                    ? `Factura emitida, esperando el pago. Tiene plazo hasta el ${vence}.`
+                    : 'Factura emitida, esperando el pago.',
+            };
+        }
+        return { label: 'Sin deuda', c: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500',
+                 title: 'No tiene facturas impagas' };
     };
 
     // Estilo (color + punto) para estado F29
@@ -116,29 +153,36 @@ const CrmTableList = ({
         return { c: 'text-orange-700 bg-orange-50 border-orange-200', dot: 'bg-orange-500' }; // notificado, revisar, etc.
     };
 
-    // Estado del COBRO del mes pasado (¿se le facturó? ¿pagó?)
+    // Estado del COBRO del mes pasado. El badge lleva el nombre del mes: sin eso
+    // parecía contradecir a la factura recién emitida del mes en curso.
+    const MES_PASADO = (() => {
+        const d = new Date(); d.setMonth(d.getMonth() - 1);
+        const m = d.toLocaleDateString('es-CL', { month: 'long' });
+        return m.charAt(0).toUpperCase() + m.slice(1);
+    })();
+
     const cobroStyle = (client) => {
         const estado = client.cobroMesPasado;
         const vence = client.vencimientoMesPasado ? new Date(client.vencimientoMesPasado) : null;
         const vencido = vence && vence < new Date();
 
         if (!estado || estado === 'POR_EMITIR') {
-            return { label: 'Sin facturar', c: 'text-red-600 bg-red-50 border-red-200', dot: 'bg-red-500',
-                     title: 'El mes pasado no se le emitió factura' };
+            return { label: `${MES_PASADO}: sin facturar`, c: 'text-red-600 bg-red-50 border-red-200', dot: 'bg-red-500',
+                     title: `En ${MES_PASADO.toLowerCase()} no se le emitió factura` };
         }
         if (estado === 'PAGADA') {
-            return { label: 'Pagada', c: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500',
-                     title: 'Factura del mes pasado pagada' };
+            return { label: `${MES_PASADO}: pagada`, c: 'text-emerald-700 bg-emerald-50 border-emerald-200', dot: 'bg-emerald-500',
+                     title: `Factura de ${MES_PASADO.toLowerCase()} pagada` };
         }
         if (estado === 'PENDIENTE_RECIBO') {
-            return { label: 'Pend. recibo', c: 'text-sky-700 bg-sky-50 border-sky-200', dot: 'bg-sky-500',
+            return { label: `${MES_PASADO}: pend. recibo`, c: 'text-sky-700 bg-sky-50 border-sky-200', dot: 'bg-sky-500',
                      title: 'Pagada, falta emitir el recibo' };
         }
         // PENDIENTE_PAGO
         return vencido
-            ? { label: 'Pago vencido', c: 'text-red-600 bg-red-50 border-red-200', dot: 'bg-red-500',
+            ? { label: `${MES_PASADO}: vencida`, c: 'text-red-600 bg-red-50 border-red-200', dot: 'bg-red-500',
                 title: `Venció el ${vence.toLocaleDateString('es-CL')}` }
-            : { label: 'Pend. pago', c: 'text-amber-700 bg-amber-50 border-amber-200', dot: 'bg-amber-500',
+            : { label: `${MES_PASADO}: por pagar`, c: 'text-amber-700 bg-amber-50 border-amber-200', dot: 'bg-amber-500',
                 title: vence ? `Vence el ${vence.toLocaleDateString('es-CL')}` : 'Factura emitida, pendiente de pago' };
     };
 
@@ -159,10 +203,12 @@ const CrmTableList = ({
 
               {showFilters && (
                 <>
+                  {/* Los rótulos dicen exactamente qué miden: "Al Día" a secas se leía
+                      como "no debe nada" cuando en realidad significaba "nada vencido". */}
                   <FilterChip icon={Users} label="Global" value={stats?.total || 0} color="text-blue-500" onClick={() => setStatusFilter('Todos')} active={statusFilter === 'Todos'} />
-                  <FilterChip icon={AlertTriangle} label="Críticos" value={stats?.criticos || 0} color="text-red-500" onClick={() => setStatusFilter('Críticos')} active={statusFilter === 'Críticos'} />
+                  <FilterChip icon={AlertTriangle} label="Con deuda vencida" value={stats?.criticos || 0} color="text-red-500" onClick={() => setStatusFilter('Críticos')} active={statusFilter === 'Críticos'} />
                   <FilterChip icon={FileText} label="F29 Pendientes" value={stats?.f29Pendientes || 0} color="text-amber-500" onClick={() => setStatusFilter('F29 Pendientes')} active={statusFilter === 'F29 Pendientes'} />
-                  <FilterChip icon={CheckCircle2} label="Al Día" value={stats?.alDia || 0} color="text-emerald-500" onClick={() => setStatusFilter('Al Día')} active={statusFilter === 'Al Día'} />
+                  <FilterChip icon={CheckCircle2} label="Sin vencidos" value={stats?.alDia || 0} color="text-emerald-500" onClick={() => setStatusFilter('Al Día')} active={statusFilter === 'Al Día'} />
                 </>
               )}
             </div>
@@ -354,19 +400,18 @@ const CrmTableList = ({
 
                       const correo = client.email_corporativo || client.correo || '';
 
-                      const pagoServicio = String(client.estado_pago || client.pagoServicio || 'AL DIA').trim().toUpperCase();
                       const estadoFormulario = String(client.estado_f29 || client.estadoFormulario || 'PENDIENTE').trim().toUpperCase();
                       const neto = Number(client.honorarioNeto ?? client.honorario_neto ?? 0);
 
-                      const isAlDiaPago = pagoServicio === 'AL DIA' || pagoServicio === 'PAGADO';
                       const isAlDiaF29 = estadoFormulario === 'DECLARADO' || estadoFormulario === 'NO DECLARAR';
                       const tieneImportante = importante && importante !== 'SIN_DATO';
-                      const pSt = pagoStyle(pagoServicio);
+                      const pSt = cobranzaStyle(client);          // deuda real, no el campo estático
+                      const moroso = Number(client.deudaVencida) > 0 || Boolean(client.cobroVencido);
                       const fSt = f29Style(estadoFormulario);
                       const cSt = cobroStyle(client);
 
-                      // Semáforo lateral: rojo si hay alerta o impago, ámbar si F29 no al día, verde si todo ok
-                      const accent = (tieneImportante || pagoServicio === 'NO PAGADO')
+                      // Semáforo lateral: rojo si debe o hay alerta, ámbar si F29 no al día, verde si todo ok
+                      const accent = (tieneImportante || moroso)
                         ? 'bg-red-500'
                         : (!isAlDiaF29 ? 'bg-amber-500' : 'bg-emerald-500');
 
@@ -429,8 +474,8 @@ const CrmTableList = ({
 
                           <td className="px-4 py-2.5">
                              <div className="flex flex-col items-start gap-1.5">
-                                <span className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${pSt.c}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${pSt.dot}`} /> {pagoServicio}
+                                <span title={pSt.title} className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${pSt.c}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${pSt.dot}`} /> {pSt.label}
                                 </span>
                                 <span className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${fSt.c}`}>
                                     <span className={`w-1.5 h-1.5 rounded-full ${fSt.dot}`} /> F29 {estadoFormulario}

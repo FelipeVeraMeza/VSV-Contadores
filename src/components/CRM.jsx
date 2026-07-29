@@ -71,6 +71,10 @@ const clasificarCliente = (c) => {
     return 'activos';
 };
 
+// Moroso = tiene al menos una factura emitida, vencida y sin pagar. Sale de
+// cobro_mensual (dato vivo), no de empresa.estado_pago (texto congelado).
+export const esMoroso = (c) => Boolean(c?.cobroVencido) || Number(c?.deudaVencida) > 0;
+
 // Medidor de completitud de la ficha (0-100). Placeholders del alta no cuentan.
 const CAMPOS_COMPLETITUD = [
     (c) => c.razon_social || c.razonSocial,
@@ -153,22 +157,19 @@ const CRM = () => {
           if (vista === 'todas') return true; // todas las empresas de la organización
           return clasificarCliente(c) === vista;
       });
+      // Los KPI salen de los COBROS reales (cobro_mensual), no de empresa.estado_pago:
+      // ese campo es un texto de la importación del Excel que nadie actualiza nunca —
+      // no existe un solo UPDATE en el backend que lo toque—, así que mostraba
+      // "AL DIA" a clientes con deuda y "NO PAGADO" a clientes que ya habían pagado.
       return {
           total: clientesEnVista.length,
-          criticos: clientesEnVista.filter(c => {
-              const pago = String(c.estado_pago || c.pagoServicio || '').trim().toUpperCase();
-              const dts = parseInt(c.dts_mensuales || c.dtAtrasados || 0);
-              return pago === 'NO PAGADO' || pago === 'SERVICIO SUSPENDIDO' || dts > 0;
-          }).length,
+          criticos: clientesEnVista.filter(esMoroso).length,
           f29Pendientes: clientesEnVista.filter(c => {
               const f29 = String(c.estado_f29 || c.estadoFormulario || '').trim().toUpperCase();
               return f29 === 'PENDIENTE';
           }).length,
-          alDia: clientesEnVista.filter(c => {
-              const pago = String(c.estado_pago || c.pagoServicio || '').trim().toUpperCase();
-              const f29 = String(c.estado_f29 || c.estadoFormulario || '').trim().toUpperCase();
-              return (pago === 'AL DIA' || pago === 'PAGADO') && (f29 === 'DECLARADO' || f29 === 'NO DECLARAR');
-          }).length
+          alDia: clientesEnVista.filter(c => !esMoroso(c)).length,
+          deudaTotal: clientesEnVista.reduce((s, c) => s + (Number(c.deudaVencida) || 0), 0),
       };
   }, [clients, vista]);
 
@@ -217,12 +218,13 @@ const CRM = () => {
           const matchType = typeFilter === 'Todos' || tipo === typeFilter;
           const matchPlan = planFilter === 'Todos' || planNombre === planFilter;
           let matchStatus = true;
+          // Mismo criterio que los KPI: la cobranza manda, no el campo estático.
           if (statusFilter === 'Críticos') {
-              matchStatus = pago === 'NO PAGADO' || pago === 'SERVICIO SUSPENDIDO' || dts > 0;
+              matchStatus = esMoroso(c);
           } else if (statusFilter === 'F29 Pendientes') {
               matchStatus = f29 === 'PENDIENTE';
           } else if (statusFilter === 'Al Día') {
-              matchStatus = (pago === 'AL DIA' || pago === 'PAGADO') && (f29 === 'DECLARADO' || f29 === 'NO DECLARAR');
+              matchStatus = !esMoroso(c);
           }
           return matchSearch && matchType && matchPlan && matchStatus && matchActividad && matchCreador;
       });

@@ -52,11 +52,21 @@ async function asegurarEmpresa(client, rut, nombre, organizacionId) {
 // Por eso el libro se elige por QUÉ empresa está seleccionada (la principal o
 // no), y no por si hay o no una seleccionada.
 // ============================================================================
-const esLibroDeLaFirma = async (empId, ejecutor = pool) => {
-    if (!empId) return true; // consolidado / sin empresa → libro de la firma
+// Devuelve qué libro corresponde leer/escribir:
+//   'firma'       → la empresa principal (o sin empresa al registrar a mano)
+//   'empresa'     → una empresa administrada
+//   'consolidado' → TODAS: el libro de la firma más el de cada empresa. Antes el
+//                   consolidado mostraba solo el libro de la firma, así que la opción
+//                   "Todas las empresas" escondía las compras y ventas de las demás.
+const libroDe = async (empId, ejecutor = pool) => {
+    if (!empId) return 'consolidado';
     const { rows } = await ejecutor.query('SELECT es_principal FROM empresa WHERE id = $1', [empId]);
-    return rows[0]?.es_principal === true;
+    return rows[0]?.es_principal === true ? 'firma' : 'empresa';
 };
+
+// Para escribir siempre hay que elegir una tabla concreta: sin empresa (registro
+// manual global) va al libro de la firma, igual que antes.
+const esLibroDeLaFirma = async (empId, ejecutor = pool) => (await libroDe(empId, ejecutor)) !== 'empresa';
 
 const tablaDocumentos = (esVenta, libroFirma) => esVenta
     ? (libroFirma ? 'documentos_emitidos'  : 'documentos_emitidos_empresa')
@@ -290,10 +300,29 @@ export const consultarHistorialBunkerController = async (req, res) => {
 
         const organizacionId = req.user?.organizacionId || null;
         const empId = empresa_id === 'ALL' ? null : empresa_id;
-        const libroFirma = await esLibroDeLaFirma(empId);
+        const libro = await libroDe(empId);
 
         let query, values;
-        if (libroFirma) {
+        if (libro === 'consolidado') {
+            // TODAS: las ventas de la firma más las de cada empresa administrada.
+            values = [organizacionId];
+            query = `
+                SELECT d.id, d.empresa_id, d.folio, d.tipo_dte, d.monto_neto, d.monto_iva, d.monto_total,
+                       d.fecha_emision, d.url_pdf, d.rut_cliente,
+                       COALESCE(d.razon_social_cliente, e.razon_social) AS razon_social
+                FROM documentos_emitidos d
+                LEFT JOIN empresa e ON d.empresa_id = e.id
+                WHERE d.empresa_id IS NULL OR e.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                UNION ALL
+                SELECT d.id, d.empresa_id, d.folio, d.tipo_dte, d.monto_neto, d.monto_iva, d.monto_total,
+                       d.fecha_emision, d.url_pdf, d.rut_cliente,
+                       d.razon_social_cliente AS razon_social
+                FROM documentos_emitidos_empresa d
+                JOIN empresa e ON d.empresa_id = e.id
+                WHERE e.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                ORDER BY fecha_emision DESC;
+            `;
+        } else if (libro === 'firma') {
             // Libro de VENTAS de la firma: son todas las facturas que emitió.
             // empresa_id apunta al cliente facturado, así que NO se filtra por él;
             // solo se acota a la organización (y se admiten los sin empresa).
@@ -341,10 +370,27 @@ export const consultarComprasBunkerController = async (req, res) => {
 
         const organizacionId = req.user?.organizacionId || null;
         const empId = empresa_id === 'ALL' ? null : empresa_id;
-        const libroFirma = await esLibroDeLaFirma(empId);
+        const libro = await libroDe(empId);
 
         let query, values;
-        if (libroFirma) {
+        if (libro === 'consolidado') {
+            // TODAS: las compras de la firma más las de cada empresa administrada.
+            values = [organizacionId];
+            query = `
+                SELECT d.id, d.empresa_id, d.rut_proveedor, d.razon_social_proveedor, d.tipo_dte, d.folio,
+                       d.monto_neto, d.monto_iva, d.monto_total, d.fecha_emision, d.url_pdf
+                FROM documentos_recibidos d
+                LEFT JOIN empresa e ON d.empresa_id = e.id
+                WHERE d.empresa_id IS NULL OR e.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                UNION ALL
+                SELECT d.id, d.empresa_id, d.rut_proveedor, d.razon_social_proveedor, d.tipo_dte, d.folio,
+                       d.monto_neto, d.monto_iva, d.monto_total, d.fecha_emision, d.url_pdf
+                FROM documentos_recibidos_empresa d
+                JOIN empresa e ON d.empresa_id = e.id
+                WHERE e.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                ORDER BY fecha_emision DESC;
+            `;
+        } else if (libro === 'firma') {
             // Libro de COMPRAS de la firma (empresa_id = la firma).
             values = [organizacionId];
             query = `

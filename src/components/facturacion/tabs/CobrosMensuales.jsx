@@ -68,8 +68,9 @@ const CobrosMensuales = () => {
     if (!user?.sessionId) return;
     setLoading(true);
     try {
+      // Con el filtro "Vencidos" se pide la mora completa, sin acotar al mes.
       const [rc, rr] = await Promise.all([
-        getCobrosApi(user.sessionId, { periodo }),
+        getCobrosApi(user.sessionId, filtro === 'VENCIDOS' ? { vencidos: true } : { periodo }),
         getResumenCobrosApi(user.sessionId, periodo)
       ]);
       const dc = await rc.json();
@@ -81,7 +82,7 @@ const CobrosMensuales = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.sessionId, periodo]);
+  }, [user?.sessionId, periodo, filtro]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -358,13 +359,35 @@ const CobrosMensuales = () => {
         </div>
       )}
 
+      {/* Mora arrastrada: se ve aunque el mes elegido esté al día, porque es plata
+          que ya venció y hay que salir a cobrar. */}
+      {resumen?.vencidos > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-red-500/[0.07] border border-red-500/20 rounded-2xl px-4 py-3">
+          <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-red-700 font-black uppercase tracking-widest text-[11px]">Cobranza pendiente</p>
+            <p className="text-slate-600 text-xs">
+              <span className="font-black text-slate-900">{resumen.vencidos}</span> factura(s) vencida(s) sin pagar por{' '}
+              <span className="font-black text-slate-900">{clp(resumen.montoVencido)}</span>
+              {resumen.vencidoMasAntiguo && <>, la más antigua venció el{' '}
+                <span className="font-black text-slate-900">{new Date(resumen.vencidoMasAntiguo).toLocaleDateString('es-CL')}</span></>}.
+              {' '}Usa el filtro <span className="font-black">Vencidos</span> para verlas.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi icon={FileText} label="Por emitir" value={resumen?.porEmitir ?? 0}
              sub={clp(resumen?.montoPorEmitir)} color="bg-blue-500/15 text-blue-600" />
         <Kpi icon={Clock} label="Pendiente pago" value={resumen?.pendientePago ?? 0}
              color="bg-amber-500/15 text-amber-600" />
-        <Kpi icon={AlertTriangle} label="Vencidos" value={resumen?.vencidos ?? 0}
+        {/* La mora no se acota al mes elegido: una factura vencida lo está venga del
+            período que venga. Acotada al mes, esta tarjeta marcaba 0 hasta el día 5
+            del mes siguiente y escondía lo que se arrastra de meses anteriores. */}
+        <Kpi icon={AlertTriangle} label="Vencidos (todos los meses)" value={resumen?.vencidos ?? 0}
+             sub={resumen?.montoVencido ? clp(resumen.montoVencido) : undefined}
              color="bg-red-500/15 text-red-500" />
         <Kpi icon={Wallet} label="Total del mes" value={clp(resumen?.montoEsperado)}
              sub={`${resumen?.total ?? 0} empresas`} color="bg-emerald-500/15 text-emerald-600" />

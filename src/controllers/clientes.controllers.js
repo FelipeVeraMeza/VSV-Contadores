@@ -94,7 +94,30 @@ export const getClientesCRM = async (req, res) => {
               EXISTS (SELECT 1 FROM cobro_mensual cm
                       WHERE cm.empresa_id = e.id
                         AND cm.estado = 'PENDIENTE_PAGO'
-                        AND cm.fecha_vencimiento < CURRENT_DATE) AS tiene_cobro_vencido`;
+                        AND cm.fecha_vencimiento < CURRENT_DATE) AS tiene_cobro_vencido,
+              -- Cuánto y desde cuándo debe. Es lo que se muestra en el CRM en vez del
+              -- campo estado_pago, que es un texto de la importación que nadie actualiza.
+              (SELECT COALESCE(SUM(cm.monto_esperado), 0) FROM cobro_mensual cm
+               WHERE cm.empresa_id = e.id
+                 AND cm.estado = 'PENDIENTE_PAGO'
+                 AND cm.fecha_vencimiento < CURRENT_DATE) AS deuda_vencida,
+              (SELECT count(*) FROM cobro_mensual cm
+               WHERE cm.empresa_id = e.id
+                 AND cm.estado = 'PENDIENTE_PAGO'
+                 AND cm.fecha_vencimiento < CURRENT_DATE) AS meses_vencidos,
+              (SELECT min(cm.fecha_vencimiento) FROM cobro_mensual cm
+               WHERE cm.empresa_id = e.id
+                 AND cm.estado = 'PENDIENTE_PAGO'
+                 AND cm.fecha_vencimiento < CURRENT_DATE) AS vence_mas_antiguo,
+              -- Deuda TOTAL: todo lo facturado y no pagado, esté vencido o no.
+              -- Sin esto, un cliente al que se le acaba de emitir la factura del mes
+              -- aparecía "al día" cuando en realidad ya debe: solo que aún en plazo.
+              (SELECT COALESCE(SUM(cm.monto_esperado), 0) FROM cobro_mensual cm
+               WHERE cm.empresa_id = e.id AND cm.estado = 'PENDIENTE_PAGO') AS deuda_total,
+              (SELECT min(cm.fecha_vencimiento) FROM cobro_mensual cm
+               WHERE cm.empresa_id = e.id
+                 AND cm.estado = 'PENDIENTE_PAGO'
+                 AND cm.fecha_vencimiento >= CURRENT_DATE) AS proximo_vencimiento`;
 
         const clientesQuery = `
             SELECT
@@ -337,6 +360,11 @@ export const getClientesCRM = async (req, res) => {
                 vencimientoMesPasado: cliente.vencimiento_mes_pasado || null,
                 // Moroso real: factura emitida, vencida y sin pagar
                 cobroVencido: cliente.tiene_cobro_vencido === true,
+                deudaVencida: parseFloat(cliente.deuda_vencida) || 0,
+                mesesVencidos: parseInt(cliente.meses_vencidos) || 0,
+                venceMasAntiguo: cliente.vence_mas_antiguo || null,
+                deudaTotal: parseFloat(cliente.deuda_total) || 0,
+                proximoVencimiento: cliente.proximo_vencimiento || null,
                 // Monto mensual: NETO negociado → precio del plan → 0.
                 // Ojo: precio_mensual puede venir NULL (cliente que no está en la planilla);
                 // en ese caso NO es gratis, se cae al precio de su plan.

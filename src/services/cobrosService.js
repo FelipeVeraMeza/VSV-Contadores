@@ -1,10 +1,15 @@
 import { fetchWithAuth } from './apiClient';
 
 // Cobros del periodo (por defecto, el mes en curso)
-export const getCobrosApi = (sessionId, { periodo, estado } = {}) => {
+// vencidos:true trae la mora de TODOS los períodos (ignora el mes elegido), porque
+// una factura vencida hay que cobrarla venga del mes que venga.
+export const getCobrosApi = (sessionId, { periodo, estado, vencidos } = {}) => {
   const qs = new URLSearchParams();
-  if (periodo) qs.set('periodo', periodo);
-  if (estado) qs.set('estado', estado);
+  if (vencidos) qs.set('vencidos', 'true');
+  else {
+    if (periodo) qs.set('periodo', periodo);
+    if (estado) qs.set('estado', estado);
+  }
   const q = qs.toString();
   return fetchWithAuth(`/cobros${q ? `?${q}` : ''}`, sessionId);
 };

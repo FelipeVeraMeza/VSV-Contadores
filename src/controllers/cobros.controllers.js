@@ -54,18 +54,26 @@ const periodoSql = (periodo) => (periodo ? `${periodo}-01` : null);
 export const listarCobros = async (req, res) => {
     try {
         const organizacionId = req.user?.organizacionId || null;
-        const { periodo, estado } = req.query;
+        const { periodo, estado, vencidos } = req.query;
 
         const params = [];
         const where = [];
 
         if (organizacionId) { params.push(organizacionId); where.push(`cm.organizacion_id = $${params.length}`); }
 
-        const per = periodoSql(periodo);
-        if (per) { params.push(per); where.push(`cm.periodo = $${params.length}::date`); }
-        else where.push(`cm.periodo = date_trunc('month', CURRENT_DATE)::date`);
+        // Al pedir los vencidos NO se filtra por mes: la mora se arrastra de períodos
+        // anteriores y acotarla al mes elegido la dejaba invisible.
+        const soloVencidos = String(vencidos) === 'true';
+        if (soloVencidos) {
+            where.push(`cm.estado = 'PENDIENTE_PAGO'`);
+            where.push(`cm.fecha_vencimiento < CURRENT_DATE`);
+        } else {
+            const per = periodoSql(periodo);
+            if (per) { params.push(per); where.push(`cm.periodo = $${params.length}::date`); }
+            else where.push(`cm.periodo = date_trunc('month', CURRENT_DATE)::date`);
 
-        if (estado) { params.push(estado); where.push(`cm.estado = $${params.length}`); }
+            if (estado) { params.push(estado); where.push(`cm.estado = $${params.length}`); }
+        }
 
         const { rows } = await pool.query(
             `SELECT cm.id, cm.empresa_id, cm.periodo, cm.monto_esperado, cm.monto_facturado,
@@ -141,6 +149,19 @@ export const resumenCobros = async (req, res) => {
         );
         const r = rows[0];
 
+        // Los vencidos NO se acotan al período elegido: una factura vencida lo está
+        // sin importar de qué mes sea. Acotado al mes, el indicador daba 0 hasta el
+        // día 5 del mes siguiente —cuando vencen las del mes— y escondía la mora real
+        // arrastrada de meses anteriores.
+        const { rows: [glob] } = await pool.query(
+            `SELECT COUNT(*) AS n, COALESCE(SUM(monto_esperado), 0) AS monto,
+                    MIN(fecha_vencimiento) AS mas_antiguo
+             FROM cobro_mensual
+             WHERE estado = 'PENDIENTE_PAGO' AND fecha_vencimiento < CURRENT_DATE
+               AND ($1::uuid IS NULL OR organizacion_id = $1)`,
+            [organizacionId]
+        );
+
         const hoy = new Date();
         const diaDelMes = hoy.getDate();
         const porEmitir = parseInt(r.por_emitir) || 0;
@@ -155,7 +176,12 @@ export const resumenCobros = async (req, res) => {
             pendientePago: parseInt(r.pendiente_pago) || 0,
             pagada: parseInt(r.pagada) || 0,
             pendienteRecibo: parseInt(r.pendiente_recibo) || 0,
-            vencidos: parseInt(r.vencidos) || 0,
+            // vencidos = TODA la mora, de cualquier período (ver comentario arriba).
+            // vencidosDelPeriodo queda por si se necesita el dato acotado al mes.
+            vencidos: parseInt(glob.n) || 0,
+            montoVencido: parseFloat(glob.monto) || 0,
+            vencidoMasAntiguo: glob.mas_antiguo || null,
+            vencidosDelPeriodo: parseInt(r.vencidos) || 0,
             montoEsperado: parseFloat(r.monto_esperado) || 0,
             montoPorEmitir: parseFloat(r.monto_por_emitir) || 0,
             // Aviso: desde el día 26 y mientras queden facturas por emitir

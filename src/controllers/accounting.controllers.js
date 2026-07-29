@@ -203,13 +203,29 @@ export const getDocumentosAfectables = async (req, res) => {
     }
 };
 
+// Condición de empresa para las consultas sobre `comprobantes`.
+//   empresa concreta → solo la suya
+//   consolidado      → TODOS los comprobantes de la organización, más los que no
+//                      tienen empresa asignada (los cargados en modo global).
+// Antes el consolidado era `empresa_id IS NULL`, o sea "sin empresa", no "todas":
+// un comprobante contabilizado con una empresa seleccionada desaparecía de la
+// vista consolidada, del Libro Diario y del Balance.
+const condicionEmpresaComprobante = (empId, organizacionId) => {
+    if (empId) return { sql: 'c.empresa_id = $1', params: [empId] };
+    return {
+        sql: `(c.empresa_id IS NULL OR c.empresa_id IN (
+                  SELECT id FROM empresa WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid))`,
+        params: [organizacionId || null],
+    };
+};
+
 export const getComprobantes = async (req, res) => {
     const { empresaId } = req.query;
     // 🔒 Un cliente sin empresa no ve los comprobantes globales del búnker
     if (clienteSinEmpresa(req, empresaId)) return res.json({ comprobantes: [] });
     const empId = (!empresaId || empresaId === 'undefined' || empresaId === 'ALL' || empresaId === 'null')
         ? null : empresaId;
-    const empCond = empId === null ? 'c.empresa_id IS NULL' : 'c.empresa_id = $1';
+    const { sql: empCond, params: empParams } = condicionEmpresaComprobante(empId, req.user?.organizacionId);
     try {
         const { rows } = await pool.query(
             `SELECT c.id, c.numero_comprobante, c.fecha, c.tipo, c.glosa, c.estado, c.created_at,
@@ -226,7 +242,7 @@ export const getComprobantes = async (req, res) => {
              LEFT JOIN plan_cuentas pc ON pc.codigo = cd.cuenta_codigo
              WHERE ${empCond}
              GROUP BY c.id ORDER BY c.created_at DESC`,
-            empId === null ? [] : [empId]
+            empParams
         );
         res.json({ comprobantes: rows });
     } catch (error) {
@@ -241,9 +257,8 @@ export const getComprobantes = async (req, res) => {
 //   1 = Activo · 2/3 = Pasivo+Patrimonio · 4 = Gasto · 5 = Ingreso
 // ========================================================
 // Calcula el balance (8 columnas) desde los comprobantes. Reutilizable por JSON y PDF.
-const calcularBalanceData = async (empId, { mes, anio, desde, hasta } = {}) => {
-    const empCond = empId === null ? 'c.empresa_id IS NULL' : 'c.empresa_id = $1';
-    const params = empId === null ? [] : [empId];
+const calcularBalanceData = async (empId, { mes, anio, desde, hasta } = {}, organizacionId = null) => {
+    const { sql: empCond, params } = condicionEmpresaComprobante(empId, organizacionId);
     let fechaCond = '';
     if (desde && hasta) {
         fechaCond = `AND c.fecha::date BETWEEN $${params.length + 1} AND $${params.length + 2}`;
@@ -311,7 +326,7 @@ export const getBalance = async (req, res) => {
     const empId = (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
 
     try {
-        const { cuentas, tot, utilidad, cuadrado } = await calcularBalanceData(empId, { mes, anio, desde, hasta });
+        const { cuentas, tot, utilidad, cuadrado } = await calcularBalanceData(empId, { mes, anio, desde, hasta }, req.user?.organizacionId);
 
         res.json({
             ok: true,
@@ -353,7 +368,7 @@ export const getBalancePdf = async (req, res) => {
     const empId = (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
 
     try {
-        const { cuentas: cuentasData, utilidad } = await calcularBalanceData(empId, { mes, anio, desde, hasta });
+        const { cuentas: cuentasData, utilidad } = await calcularBalanceData(empId, { mes, anio, desde, hasta }, req.user?.organizacionId);
 
         // Datos de la empresa para el encabezado
         let empresa = { nombre: 'BÓVEDA GLOBAL — VSV CONTADORES', rut: '', direccion: '', representante: '', representanteRut: '' };
