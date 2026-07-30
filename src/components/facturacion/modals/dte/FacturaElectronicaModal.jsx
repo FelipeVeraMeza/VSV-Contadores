@@ -313,8 +313,17 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
       }
 
       // 2) Confirmación explícita antes de un envío real a clientes.
+      // Se listan los excluidos por nombre: son los que NO van a recibir el
+      // cobro, y es la última oportunidad de notar que alguno debería ir.
+      const detalleExcluidos = (prevData.excluidos || [])
+        .map(e => `  · ${e.razonSocial} — ${e.motivo}`)
+        .join('\n');
+
       const ok = window.confirm(
-        `Se enviará el RECORDATORIO DE PAGO a ${prevData.total} empresa(s) con factura enviada (desde el 27 de junio).\n\n` +
+        `Se enviará el RECORDATORIO DE PAGO a ${prevData.total} cliente(s) ACTIVOS con factura enviada (desde el 27 de junio).\n\n` +
+        (prevData.totalExcluidos
+          ? `Quedan fuera ${prevData.totalExcluidos} que ya no son clientes activos:\n${detalleExcluidos}\n\n`
+          : '') +
         `Este correo SÍ se manda de verdad a los clientes. ¿Continuar?`
       );
       if (!ok) return;

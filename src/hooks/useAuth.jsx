@@ -59,10 +59,12 @@ export const AuthProvider = ({ children }) => {
         return res.ok ? data : { error: true, message: data.message };
     }, [logout]);
 
-    const login = useCallback(async (email, clave) => {
+    // `identificador`: el RUT sin dígito verificador, o el correo en el caso de
+    // la cuenta master. Ver buscarUsuario() en auth.controllers.js.
+    const login = useCallback(async (identificador, clave) => {
         try {
             setLoading(true);
-            const res = await loginApi(email, clave);
+            const res = await loginApi(identificador, clave);
             const data = await res.json();
             
             if (res.ok) {

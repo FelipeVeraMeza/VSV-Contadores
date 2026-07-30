@@ -12,6 +12,8 @@
 // =====================================================================
 import 'dotenv/config';
 import { pool } from '../../../../database/db.js';
+import { generateHash } from '../../../../utils/crypto.js';
+import { cleanRut } from '../../../../lib/rut.js';
 import { enviarConReintentos } from './mensajes_facturador_masivo.mjs';
 
 const delay = (ms) => new Promise(res => setTimeout(res, ms));
@@ -47,14 +49,14 @@ function resetEstado(total) {
 // Correos únicos y válidos de facturas ENVIADAS en el rango [desde, hasta].
 // Por defecto: desde el 27-jun hasta hoy (lo que pidió el negocio).
 // =====================================================================
-export async function obtenerDestinatariosRecordatorio({ desde = '2026-06-27', hasta = null } = {}) {
+export async function obtenerDestinatariosRecordatorio({ desde = '2026-06-27', hasta = null, soloActivos = true } = {}) {
     const params = [desde];
     let filtroHasta = '';
     if (hasta) { params.push(hasta); filtroHasta = `AND fecha < ($${params.length}::date + INTERVAL '1 day')`; }
 
     const { rows } = await pool.query(
         `SELECT DISTINCT ON (LOWER(TRIM(correo)))
-                razon_social AS "razonSocial", correo, folio
+                razon_social AS "razonSocial", correo, rut, folio
          FROM correos_facturas
          WHERE fecha >= $1::date ${filtroHasta}
            AND estado = 'enviado'
@@ -65,7 +67,42 @@ export async function obtenerDestinatariosRecordatorio({ desde = '2026-06-27', h
          ORDER BY LOWER(TRIM(correo)), fecha DESC`,
         params
     );
-    return rows;
+
+    if (!soloActivos) return { destinatarios: rows, excluidos: [] };
+
+    // Activo = sigue en la cartera y no está dado de baja. Es la misma regla del
+    // selector de empresas del encabezado. La propia firma queda fuera: no se
+    // cobra a sí misma.
+    //
+    // El cruce va por RUT contra `empresa.rut_hash`, NO por razón social: el
+    // nombre de `correos_facturas` viene del CSV de facturación y no calza con
+    // la ficha en 42 de 99 casos. Por RUT calzan 97 de 99.
+    const { rows: activas } = await pool.query(
+        `SELECT rut_hash FROM empresa
+          WHERE es_principal = false
+            AND en_cartera IS NOT FALSE
+            AND activo IS NOT FALSE
+            AND rut_hash IS NOT NULL`
+    );
+    const vivas = new Set(activas.map(e => e.rut_hash));
+
+    const destinatarios = [];
+    const excluidos = [];
+
+    for (const d of rows) {
+        const rut = d.rut ? cleanRut(String(d.rut)) : '';
+        // Sin RUT no hay cómo saber si sigue siendo cliente. Ante la duda no se
+        // manda: el recordatorio va a cobrar plata.
+        if (!rut) {
+            excluidos.push({ ...d, motivo: 'sin RUT en el registro' });
+        } else if (!vivas.has(generateHash(rut))) {
+            excluidos.push({ ...d, motivo: 'no está activo en la cartera' });
+        } else {
+            destinatarios.push(d);
+        }
+    }
+
+    return { destinatarios, excluidos };
 }
 
 // =====================================================================
@@ -113,13 +150,17 @@ Saludos cordiales,`;
 // 🚀 ENVÍO MASIVO DE RECORDATORIOS
 // Corre en segundo plano. Actualiza estadoRecordatorio en cada paso.
 // =====================================================================
-export async function enviarRecordatoriosPago({ desde = '2026-06-27', hasta = null, fechaLimite = '5 de julio' } = {}) {
-    const destinatarios = await obtenerDestinatariosRecordatorio({ desde, hasta });
+export async function enviarRecordatoriosPago({ desde = '2026-06-27', hasta = null, fechaLimite = '5 de julio', soloActivos = true } = {}) {
+    const { destinatarios, excluidos } = await obtenerDestinatariosRecordatorio({ desde, hasta, soloActivos });
     resetEstado(destinatarios.length);
 
     console.log('==================================================');
     console.log(`📢 RECORDATORIO DE PAGO: ${destinatarios.length} empresa(s)`);
     console.log(`   Rango: desde ${desde}${hasta ? ` hasta ${hasta}` : ' hasta hoy'} | Límite de pago: ${fechaLimite}`);
+    if (excluidos.length) {
+        console.log(`   Excluidas ${excluidos.length} que ya no son clientes activos:`);
+        for (const e of excluidos) console.log(`     · ${e.razonSocial} (${e.correo}) — ${e.motivo}`);
+    }
     console.log('==================================================');
 
     for (let i = 0; i < destinatarios.length; i++) {

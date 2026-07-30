@@ -2,23 +2,67 @@ import { pool } from "../database/db.js";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import { generateHash, decrypt } from "../utils/crypto.js";
+import { rutDesdeCuerpo } from "../lib/rut.js";
+
+const CAMPOS_USUARIO =
+    'SELECT id, nombre, rut_encrypted, email_encrypted, rol, clave, activo, organizacion_id FROM usuario';
+
+// ============================================================================
+// Cómo se identifica quien entra
+// ----------------------------------------------------------------------------
+// Regla del negocio: se entra con el **RUT sin dígito verificador** (18358147),
+// porque un cliente se sabe su RUT y no el correo corporativo que le asignamos.
+// La única excepción es la cuenta master, que entra con su correo — por eso la
+// decisión es simple: si el texto trae una arroba es un correo, si no, un RUT.
+//
+// El RUT se guarda cifrado y se busca por `rut_hash`, que se calcula sobre el
+// RUT COMPLETO ("18358147-3"). Como el usuario no escribe el dígito, se calcula
+// acá con el módulo 11 y recién ahí se hashea.
+//
+// Se aceptan además las formas que la gente escribe igual aunque no se pidan:
+// con puntos, con guion y con el dígito incluido.
+// ============================================================================
+const buscarUsuario = async (identificador) => {
+    const texto = String(identificador ?? '').trim();
+    if (!texto) return null;
+
+    if (texto.includes('@')) {
+        const { rows } = await pool.query(
+            `${CAMPOS_USUARIO} WHERE email_hash = $1`,
+            [generateHash(texto.toLowerCase())]
+        );
+        return rows[0] || null;
+    }
+
+    const limpio = texto.toUpperCase().replace(/[^0-9K]/g, '');
+    if (!limpio) return null;
+
+    const candidatos = [
+        rutDesdeCuerpo(limpio),                                   // caso normal: falta el dígito
+        limpio.length > 1 ? `${limpio.slice(0, -1)}-${limpio.slice(-1)}` : null, // ya venía con dígito
+    ];
+
+    for (const rut of candidatos) {
+        if (!rut) continue;
+        const { rows } = await pool.query(
+            `${CAMPOS_USUARIO} WHERE rut_hash = $1`,
+            [generateHash(rut)]
+        );
+        if (rows.length) return rows[0];
+    }
+
+    return null;
+};
 
 export const loginUser = async (req, res) => {
-    const { email, clave } = req.body;
+    const { identificador, email, clave } = req.body;
 
     try {
-        const emailHash = generateHash(email);
+        const user = await buscarUsuario(identificador ?? email);
 
-        const userResult = await pool.query(
-            'SELECT id, nombre, rut_encrypted, email_encrypted, rol, clave, activo, organizacion_id FROM usuario WHERE email_hash = $1',
-            [emailHash]
-        );
-
-        if (userResult.rows.length === 0) {
+        if (!user) {
             return res.status(401).json({ message: 'Credenciales inválidas' });
         }
-
-        const user = userResult.rows[0];
 
         if (!user.activo) {
             return res.status(403).json({ 

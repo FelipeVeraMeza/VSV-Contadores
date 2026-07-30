@@ -163,11 +163,18 @@ export const reenviarCorreosMasivoController = async (req, res) => {
 export const previewRecordatoriosController = async (req, res) => {
     try {
         const { desde, hasta } = req.query;
-        const destinatarios = await obtenerDestinatariosRecordatorio({
+        const { destinatarios, excluidos } = await obtenerDestinatariosRecordatorio({
             desde: desde || undefined,
             hasta: hasta || null,
         });
-        res.json({ ok: true, total: destinatarios.length, destinatarios });
+        res.json({
+            ok: true,
+            total: destinatarios.length,
+            destinatarios,
+            // Para que la confirmación diga a quiénes se está dejando fuera y por qué.
+            totalExcluidos: excluidos.length,
+            excluidos,
+        });
     } catch (error) {
         console.error("❌ Error en previewRecordatoriosController:", error.message);
         res.status(500).json({ ok: false, error: error.message });

@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
 import { 
-  Mail, 
-  Lock, 
+  Fingerprint,
+  Lock,
   Eye, 
   EyeOff, 
   Loader2, 
@@ -19,24 +19,36 @@ import { Link, useNavigate } from 'react-router-dom';
 const LoginPage = ({ onLogin }) => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    email: '',
+    identificador: '',
     clave: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.id]: e.target.value });
+    const { id, value } = e.target;
+
+    // El campo es el RUT SIN dígito verificador. Se deja escribir solo números
+    // (y la arroba/letras del correo, para la cuenta master, que es la única
+    // que entra con email). Los puntos y el guion se descartan solos.
+    if (id === 'identificador') {
+      const esCorreo = value.includes('@');
+      const limpio = esCorreo ? value.trim() : value.replace(/[^0-9kK]/g, '');
+      setFormData({ ...formData, identificador: limpio });
+      return;
+    }
+
+    setFormData({ ...formData, [id]: value });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const { email, clave } = formData;
-    
-    if (!email || !clave) {
+    const { identificador, clave } = formData;
+
+    if (!identificador || !clave) {
       toast({
-        title: "Campos requeridos",
-        description: "Por favor, ingresa tus credenciales de acceso.",
+        title: "Faltan datos",
+        description: "Escribe tu RUT y tu contraseña.",
         variant: "destructive",
       });
       return;
@@ -44,8 +56,7 @@ const LoginPage = ({ onLogin }) => {
 
     setIsLoading(true);
     try {
-      const emailNormalizado = email.toLowerCase().trim();
-      const result = await onLogin(emailNormalizado, clave);
+      const result = await onLogin(identificador.trim(), clave);
 
       if (!result.success) {
         toast({
@@ -108,21 +119,26 @@ const LoginPage = ({ onLogin }) => {
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-xs font-bold text-slate-600 uppercase ml-1 tracking-wider">
-                    Correo Electrónico
+                  <Label htmlFor="identificador" className="text-xs font-bold text-slate-600 uppercase ml-1 tracking-wider">
+                    RUT
                   </Label>
                   <div className="relative group">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#199b4d] transition-colors" />
+                    <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-[#199b4d] transition-colors" />
                     <Input
-                      id="email"
-                      type="email"
-                      placeholder="Correo"
-                      value={formData.email}
+                      id="identificador"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="username"
+                      placeholder="18358147"
+                      value={formData.identificador}
                       onChange={handleChange}
-                      className="pl-12 !bg-white !border-[#e5ddd0] !text-slate-900 placeholder:!text-slate-400 focus:!border-[#199b4d] focus:!ring-2 focus:!ring-[#199b4d]/20 transition-all h-12 rounded-xl"
+                      className="pl-12 !bg-white !border-[#e5ddd0] !text-slate-900 placeholder:!text-slate-400 focus:!border-[#199b4d] focus:!ring-2 focus:!ring-[#199b4d]/20 transition-all h-12 rounded-xl font-mono tracking-wide"
                       required
                     />
                   </div>
+                  <p className="text-[11px] text-slate-400 font-medium ml-1">
+                    Sin puntos y <span className="font-bold text-slate-500">sin el dígito verificador</span>.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -135,6 +151,7 @@ const LoginPage = ({ onLogin }) => {
                       id="clave"
                       type={showPassword ? 'text' : 'password'}
                       placeholder="••••••••"
+                      autoComplete="current-password"
                       value={formData.clave}
                       onChange={handleChange}
                       className="pl-12 pr-12 !bg-white !border-[#e5ddd0] !text-slate-900 placeholder:!text-slate-400 focus:!border-[#199b4d] focus:!ring-2 focus:!ring-[#199b4d]/20 transition-all h-12 rounded-xl"

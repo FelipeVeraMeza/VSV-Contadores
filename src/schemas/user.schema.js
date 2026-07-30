@@ -11,10 +11,21 @@ const userBase = z.object({
   assignedCompanies: z.array(z.string().uuid("ID de compañía no válido")).optional()
 });
 
+// Al login se entra con el RUT sin dígito verificador. La cuenta master sigue
+// entrando con su correo, así que acá NO se puede validar formato de email:
+// el controlador decide qué es según el texto traiga o no una arroba.
+//
+// Se aceptan las dos llaves (`identificador` y `email`) a propósito: si el
+// frontend se despliega antes que el backend —o al revés— el login sigue
+// funcionando en vez de caerse con un 400.
 export const loginSchema = z.object({
   body: z.object({
-    email: emailSchema,
+    identificador: z.string().min(1).max(120).trim().optional(),
+    email: z.string().min(1).max(120).trim().optional(),
     clave: z.string().min(1, "La clave es requerida")
+  }).refine((b) => b.identificador || b.email, {
+    message: "Ingresa tu RUT",
+    path: ["identificador"]
   })
 });
 

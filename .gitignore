@@ -4,3 +4,7 @@ AgregarDatosExcel/output/*
 perfil_temporal_robot
 .env
 whatsapp_auth
+
+# Respaldos del .env: contienen secretos, nunca deben commitearse
+.env.backup-*
+.env.*.backup
