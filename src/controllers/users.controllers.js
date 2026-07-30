@@ -27,7 +27,11 @@ export const getUsers = async (req, res) => {
                 ) as "assignedCompanies"
             FROM usuario u
             LEFT JOIN audita a ON u.id = a.usuario_id
-            WHERE (u.nombre ILIKE $3 OR u.rut_hash = $4) 
+            WHERE (u.nombre ILIKE $3 OR u.rut_hash = $4)
+              -- Aislamiento por tenant: esta consulta no filtraba por organización,
+              -- así que un administrador veía (y podía editar) los usuarios de las
+              -- demás organizaciones. createUser ya crea dentro de la del que llama.
+              AND u.organizacion_id IS NOT DISTINCT FROM $5::uuid
             GROUP BY u.id
             ORDER BY 
                 CASE 
@@ -39,7 +43,9 @@ export const getUsers = async (req, res) => {
             LIMIT $1 OFFSET $2
         `;
 
-        const { rows } = await pool.query(query, [limit, offset, searchTerm, searchHash]);
+        const { rows } = await pool.query(query, [
+            limit, offset, searchTerm, searchHash, req.user?.organizacionId || null
+        ]);
 
         const decryptedUsers = rows.map(u => ({
             id: u.id,
@@ -142,6 +148,20 @@ export const createUser = async (req, res) => {
             message: "Fallo de integridad al procesar el registro en el búnker." 
         });
     }
+};
+
+/**
+ * Registro público (POST /auth/register). Es la ÚNICA vía de alta sin sesión, así
+ * que el rol NO puede venir del cuerpo de la petición: se fuerza a 'Cliente'.
+ *
+ * Antes la ruta llamaba directo a `createUser`, que lee `rol` de `req.body`, y el
+ * esquema acepta 'Administrador' como valor válido: cualquiera con acceso a la API
+ * podía crearse una cuenta de administrador. Tampoco se permite autoasignarse
+ * empresas.
+ */
+export const registerPublicUser = (req, res) => {
+    req.body = { ...req.body, rol: 'Cliente', activo: true, assignedCompanies: [] };
+    return createUser(req, res);
 };
 
 export const updateUser = async (req, res) => {

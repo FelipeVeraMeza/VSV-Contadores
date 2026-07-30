@@ -10,6 +10,10 @@ const pedir = async (ruta, sessionId) => {
         headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId || '' },
     });
     if (res.status === 401) return { ok: false, error: 'Sesión expirada', documentos: [] };
+    if (res.status === 403) {
+        const data = await res.json().catch(() => ({}));
+        return { ok: false, error: data.error || 'Sin acceso a esos documentos', documentos: [] };
+    }
     return await res.json();
 };
 

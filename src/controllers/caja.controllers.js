@@ -24,10 +24,10 @@ export const crearMovimientoCaja = async (req, res) => {
     await client.query('BEGIN');
     const { rows: [m] } = await client.query(
       `INSERT INTO movimientos_caja
-         (id, empresa_id, tipo, fecha, rut, nombre, folio_asociado, monto, medio_pago, glosa, creado_por)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+         (id, empresa_id, tipo, fecha, rut, nombre, folio_asociado, monto, medio_pago, glosa, creado_por, organizacion_id)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
       [empId, tipo, fechaFinal, rut || '', nombre || '', folio_asociado || '',
-       Number(monto) || 0, medio, glosa || '', usuario.nombre || null]
+       Number(monto) || 0, medio, glosa || '', usuario.nombre || null, usuario.organizacionId || null]
     );
 
     const compId = await crearAsientoCaja(client, {
@@ -66,10 +66,11 @@ export const crearMovimientosCajaLote = async (req, res) => {
       const fechaFinal = mv.fecha ? new Date(mv.fecha) : new Date();
       const { rows: [m] } = await client.query(
         `INSERT INTO movimientos_caja
-           (id, empresa_id, tipo, fecha, rut, nombre, folio_asociado, monto, medio_pago, glosa, creado_por)
-         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+           (id, empresa_id, tipo, fecha, rut, nombre, folio_asociado, monto, medio_pago, glosa, creado_por, organizacion_id)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
         [empId, tipo, fechaFinal, mv.rut || '', mv.nombre || '',
-         mv.folio_asociado || '', Number(mv.monto) || 0, medio, mv.glosa || '', usuario.nombre || null]
+         mv.folio_asociado || '', Number(mv.monto) || 0, medio, mv.glosa || '', usuario.nombre || null,
+         usuario.organizacionId || null]
       );
 
       const compId = await crearAsientoCaja(client, {
@@ -97,6 +98,10 @@ export const listarMovimientosCaja = async (req, res) => {
   const empId = normEmp(empresaId);
   const cond = [];
   const params = [];
+  // Aislamiento por tenant. Sin esto, `empresa_id IS NULL` ("movimientos de la
+  // propia firma") no distinguía de qué organización eran y una organización
+  // nueva veía los de la firma anterior.
+  cond.push(`organizacion_id IS NOT DISTINCT FROM $${params.push(req.user?.organizacionId || null)}::uuid`);
   cond.push(empId === null ? 'empresa_id IS NULL' : `empresa_id = $${params.push(empId)}`);
   if (tipo) cond.push(`tipo = $${params.push(tipo)}`);
   if (desde && hasta) cond.push(`fecha::date BETWEEN $${params.push(desde)} AND $${params.push(hasta)}`);

@@ -56,13 +56,12 @@ function MainPage() {
   ];
 
   // Submódulos del menú de Facturación (soporte interno / SII).
-  // "Cobro del Mes" es el ciclo de cobro a los clientes del CRM: solo el
-  // Administrador (dueño de la organización) factura, así que ese cliente
-  // no lo ve.
+  // "Cobro del Mes" ya no se esconde por rol: el recorte de módulos se hace por
+  // usuario en la BD, no ocultando opciones del menú.
   const subFacturacion = [
     { id: 'emision',    name: 'Emitir DTE',              icon: Send },
     { id: 'documentos', name: 'Historial de Documentos', icon: FileText },
-    ...(user?.rol === 'Administrador' ? [{ id: 'cobros', name: 'Cobro del Mes', icon: Wallet }] : []),
+    { id: 'cobros',     name: 'Cobro del Mes',           icon: Wallet },
   ];
 
   // Submódulos del menú de Recursos Humanos (Remuneraciones)
@@ -89,36 +88,25 @@ function MainPage() {
   }, []);
 
   // =========================================
-  // LÓGICA DE RUTEO POR ROLES
+  // MENÚ: los mismos módulos para todos los roles
+  // -----------------------------------------
+  // Antes el rol Cliente tenía una lista recortada a mano (sin Dashboard, RRHH,
+  // Operación Renta ni Administración). El recorte se hace por usuario en la BD
+  // (tabla `admin_modulos`), no escondiendo opciones según el rol: así se limita
+  // en un solo lugar y no hay que tocar este archivo cada vez que cambia quién
+  // puede ver qué.
   // =========================================
-  let modules = [];
-
-  if (user?.rol === 'Cliente') {
-    modules = [
-      { id: 'CRM', path: '/CRM', name: 'CRM', icon: Package, color: 'from-pink-500 to-rose-500', sub: subCRM },
-      { id: 'contabilidad', path: '/contabilidad', name: 'Contabilidad', icon: Calculator, color: 'from-green-500 to-emerald-500', sub: subContabilidad },
-      { id: 'facturacion', path: '/facturacion', name: 'Facturación SII', icon: FileText, color: 'from-orange-500 to-red-500', sub: subFacturacion },
-      { id: 'bancos', path: '/bancos', name: 'Bancos', icon: Landmark, color: 'from-indigo-500 to-blue-600' },
-      { id: 'perfil', path: '/perfil', name: 'Mi Perfil', icon: UserCircle, color: 'from-cyan-500 to-blue-600' }
-    ];
-  } else {
-    modules = [
-      { id: 'dashboard', path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard, color: 'from-emerald-500 to-green-500' },
-      { id: 'CRM', path: '/CRM', name: 'CRM', icon: Package, color: 'from-pink-500 to-rose-500', sub: subCRM },
-      { id: 'contabilidad', path: '/contabilidad', name: 'Contabilidad', icon: Calculator, color: 'from-green-500 to-emerald-500', sub: subContabilidad },
-      { id: 'rrhh', path: '/rrhh', name: 'Recursos Humanos', icon: Users, color: 'from-purple-500 to-violet-500', sub: subRRHH },
-      { id: 'facturacion', path: '/facturacion', name: 'Facturación SII', icon: FileText, color: 'from-orange-500 to-red-500', sub: subFacturacion },
-      { id: 'operacionRenta', path: '/operacion-renta', name: 'Operación Renta', icon: FileBarChart, color: 'from-teal-500 to-cyan-600' },
-      { id: 'bancos', path: '/bancos', name: 'Bancos', icon: Landmark, color: 'from-indigo-500 to-blue-600' },
-    ];
-    if (user?.rol === 'Administrador') {
-      modules.push({ id: 'admin', path: '/admin', name: 'Administración', icon: ShieldCheck, color: 'from-yellow-500 to-amber-500' });
-    }
-    // "Mi Perfil" va al final para todos los roles: la ruta /perfil siempre existió,
-    // pero solo el Cliente la tenía enlazada. Un Administrador o Consultor no tenía
-    // cómo cambiar su nombre, email o contraseña sin escribir la URL a mano.
-    modules.push({ id: 'perfil', path: '/perfil', name: 'Mi Perfil', icon: UserCircle, color: 'from-cyan-500 to-blue-600' });
-  }
+  const modules = [
+    { id: 'dashboard', path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard, color: 'from-emerald-500 to-green-500' },
+    { id: 'CRM', path: '/CRM', name: 'CRM', icon: Package, color: 'from-pink-500 to-rose-500', sub: subCRM },
+    { id: 'contabilidad', path: '/contabilidad', name: 'Contabilidad', icon: Calculator, color: 'from-green-500 to-emerald-500', sub: subContabilidad },
+    { id: 'rrhh', path: '/rrhh', name: 'Recursos Humanos', icon: Users, color: 'from-purple-500 to-violet-500', sub: subRRHH },
+    { id: 'facturacion', path: '/facturacion', name: 'Facturación SII', icon: FileText, color: 'from-orange-500 to-red-500', sub: subFacturacion },
+    { id: 'operacionRenta', path: '/operacion-renta', name: 'Operación Renta', icon: FileBarChart, color: 'from-teal-500 to-cyan-600' },
+    { id: 'bancos', path: '/bancos', name: 'Bancos', icon: Landmark, color: 'from-indigo-500 to-blue-600' },
+    { id: 'admin', path: '/admin', name: 'Administración', icon: ShieldCheck, color: 'from-yellow-500 to-amber-500' },
+    { id: 'perfil', path: '/perfil', name: 'Mi Perfil', icon: UserCircle, color: 'from-cyan-500 to-blue-600' },
+  ];
 
   // El modo "rail" (solo íconos) aplica únicamente en escritorio.
   const rail = railCollapsed && windowWidth >= 1024;

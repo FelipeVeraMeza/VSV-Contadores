@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { empresasDeLaOrganizacion } from '../utils/scope.js';
 // Nuevas herramientas de Node.js nativas para ejecutar el script
 import { exec } from 'child_process';
 import util from 'util';
@@ -44,9 +45,17 @@ export const getMovimientosBancarios = async (req, res) => {
             // Hay empresa seleccionada: filtramos por ella (aplica a admin y cliente)
             query.eq('empresa_id', empresaId);
         } else if (esAdmin) {
-            // Solo el ADMIN sin empresa seleccionada ve la Bóveda Global completa
-            console.log("📊 Cargando vista global/admin: Mostrando TODA la Bóveda...");
-            // Sin filtro: Supabase devuelve todos los registros
+            // El ADMIN sin empresa seleccionada ve la Bóveda "global", pero global
+            // significa TODAS SUS empresas, no todas las del sistema: antes esta rama
+            // iba sin filtro y le mostraba también los movimientos bancarios de otras
+            // organizaciones.
+            const idsDeMiOrganizacion = await empresasDeLaOrganizacion(req);
+            if (idsDeMiOrganizacion.length === 0) {
+                // Organización sin empresas (un tenant nuevo): no hay nada que mostrar.
+                return res.status(200).json([]);
+            }
+            console.log(`📊 Vista global/admin: ${idsDeMiOrganizacion.length} empresas de la organización.`);
+            query.in('empresa_id', idsDeMiOrganizacion);
         } else {
             // 🔒 Un CLIENTE sin empresa NO puede ver datos globales del búnker
             console.log("🔒 Cliente sin empresa seleccionada: devolviendo espacio vacío.");

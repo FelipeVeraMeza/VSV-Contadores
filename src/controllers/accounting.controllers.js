@@ -37,6 +37,10 @@ export const getChartOfAccounts = async (req, res) => {
     if (clienteSinEmpresa(req, empresaId)) return res.json({ plan: [] });
     try {
         const usarEmpresa = empresaId && empresaId !== 'undefined' && empresaId !== 'ALL';
+        // Sin empresa seleccionada la consulta no llevaba filtro: devolvía el plan de
+        // cuentas de TODAS las empresas del sistema, también las de otras
+        // organizaciones. Ahora "global" se acota a las empresas de la organización
+        // (más las cuentas base compartidas, empresa_id IS NULL).
         const query = usarEmpresa
             ? `SELECT id, codigo, descripcion, tipo_cuenta, grupo, normativa, clasificacion_contable, es_editable
                FROM plan_cuentas
@@ -44,11 +48,16 @@ export const getChartOfAccounts = async (req, res) => {
                ORDER BY empresa_id NULLS LAST, codigo ASC`
             : `SELECT id, codigo, descripcion, tipo_cuenta, grupo, normativa, clasificacion_contable, es_editable
                FROM plan_cuentas
-               ORDER BY codigo ASC`;
+               WHERE empresa_id IS NULL
+                  OR empresa_id IN (
+                        SELECT id FROM empresa
+                         WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid)
+               ORDER BY empresa_id NULLS LAST, codigo ASC`;
 
-        const { rows } = usarEmpresa
-            ? await pool.query(query, [empresaId])
-            : await pool.query(query);
+        const { rows } = await pool.query(
+            query,
+            [usarEmpresa ? empresaId : (req.user?.organizacionId || null)]
+        );
         res.json({ plan: rows });
     } catch (error) {
         console.error("❌ Error al obtener plan de cuentas:", error.message);

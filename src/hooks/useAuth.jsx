@@ -174,13 +174,21 @@ export const AuthProvider = ({ children }) => {
                 const res = await getEmpresasListaApi(user.sessionId);
                 if (!res.ok) return;
                 const payload = await res.json();
-                const principal = (payload?.empresas || []).find(e => e.esPrincipal);
+                const disponibles = payload?.empresas || [];
+                // La principal si está disponible; si no, la primera de la lista.
+                //
+                // Un rol Cliente solo recibe sus empresas asignadas y la principal
+                // no está entre ellas, así que antes no se elegía ninguna: la app
+                // quedaba en "consolidado", que para un no-administrador está
+                // prohibido, y TODOS los módulos mostraban "selecciona una empresa"
+                // sin que hubiera forma de avanzar.
+                const principal = disponibles.find(e => e.esPrincipal) || disponibles[0];
                 if (!principal || cancelado) return;
                 const empresa = {
                     id: principal.id,
                     razon_social: principal.razonSocial,
                     razonSocial: principal.razonSocial,
-                    esPrincipal: true,
+                    esPrincipal: principal.esPrincipal === true,
                 };
                 setSelectedCompany(empresa);
                 localStorage.setItem('selectedCompany', JSON.stringify(empresa));

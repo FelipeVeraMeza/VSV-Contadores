@@ -139,19 +139,11 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
   const handleSyncSII = async () => {
     setIsSyncing(true);
 
-    const rut = selectedCompany?.rut;
-    const clave = selectedCompany?.claveSII;
+    // Las credenciales ya no se validan ni se envían desde acá: el backend las
+    // lee de la ficha del cliente y, si falta alguna, responde diciendo cuál.
+    // Antes este chequeo miraba `selectedCompany.claveSII`, que casi nunca venía
+    // cargado en el objeto del selector, así que cortaba antes de intentarlo.
 
-    if (!rut || !clave) {
-      toast({ 
-        variant: "destructive", 
-        title: "Credenciales Faltantes", 
-        description: "Debes seleccionar una empresa con RUT y Clave del SII para sincronizar." 
-      });
-      setIsSyncing(false);
-      return;
-    }
-    
     // Si targetId es ALL, evitamos sincronizar
     if (targetId === 'ALL') {
       toast({ variant: "destructive", title: "Operación no permitida", description: "Selecciona una empresa específica para sincronizar manualmente."});
@@ -169,8 +161,6 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
           'x-session-id': user?.sessionId,
         },
         body: JSON.stringify({
-          rut,
-          clave,
           mes: mesActivo,
           anio: anioActivo,
           tipo: activeView, // Solo referencial, el robot saca ambos

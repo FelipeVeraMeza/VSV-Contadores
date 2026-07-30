@@ -72,6 +72,30 @@ const tablaDocumentos = (esVenta, libroFirma) => esVenta
     ? (libroFirma ? 'documentos_emitidos'  : 'documentos_emitidos_empresa')
     : (libroFirma ? 'documentos_recibidos' : 'documentos_recibidos_empresa');
 
+// ============================================================================
+// ALCANCE POR ROL
+// ----------------------------------------------------------------------------
+// Estas rutas solo exigían `requireSession`, así que un rol Cliente podía pedir
+// `empresa_id=ALL`, caer en la rama "consolidado" y leer las compras y ventas de
+// TODA la organización, no solo de las empresas que tiene asignadas. Viola el
+// aislamiento por empresa (el usuario solo debe ver lo suyo).
+//
+// Regla: el Administrador ve el consolidado de su organización; un Cliente o
+// Consultor debe pedir una empresa concreta Y tenerla asignada en `audita`.
+// Devuelve null si puede seguir, o el motivo del rechazo.
+// ============================================================================
+const rechazoDeAlcance = async (req, empId) => {
+    if (req.user?.rol === 'Administrador') return null;
+
+    if (!empId) return 'Debes seleccionar una empresa para ver sus documentos.';
+
+    const { rows } = await pool.query(
+        'SELECT 1 FROM audita WHERE usuario_id = $1 AND empresa_id = $2 LIMIT 1',
+        [req.user?.usuarioId, empId]
+    );
+    return rows.length ? null : 'No tienes acceso a los documentos de esa empresa.';
+};
+
 // ========================================================
 // 0. CREAR MOVIMIENTO MANUAL
 // ========================================================
@@ -356,6 +380,10 @@ export const consultarHistorialBunkerController = async (req, res) => {
 
         const organizacionId = req.user?.organizacionId || null;
         const empId = empresa_id === 'ALL' ? null : empresa_id;
+
+        const rechazo = await rechazoDeAlcance(req, empId);
+        if (rechazo) return res.status(403).json({ ok: false, error: rechazo, documentos: [] });
+
         const libro = await libroDe(empId);
 
         let query, values;
@@ -426,6 +454,10 @@ export const consultarComprasBunkerController = async (req, res) => {
 
         const organizacionId = req.user?.organizacionId || null;
         const empId = empresa_id === 'ALL' ? null : empresa_id;
+
+        const rechazo = await rechazoDeAlcance(req, empId);
+        if (rechazo) return res.status(403).json({ ok: false, error: rechazo, documentos: [] });
+
         const libro = await libroDe(empId);
 
         let query, values;

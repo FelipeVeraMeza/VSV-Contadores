@@ -86,7 +86,10 @@ function App() {
               <Route path="/operacion-renta" element={<OperacionRenta />} />
               <Route path="/bancos" element={<Bancos />} />
 
-              <Route path="/admin" element={<ProtectedRoute isAdminRequired={true} />}>
+              {/* Administración accesible a todos los roles: el recorte de
+                  módulos se hace por usuario en la BD, no rebotando por rol.
+                  Antes un Cliente que entraba acá era devuelto al dashboard. */}
+              <Route path="/admin">
                 <Route index element={<Administracion />} />
                 <Route path="usuarios" element={<GestionUsuarios />} />
                 <Route path="empresas" element={<GestionEmpresas />} />

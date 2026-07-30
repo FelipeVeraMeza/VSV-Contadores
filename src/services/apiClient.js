@@ -2,7 +2,7 @@ import { API_BASE_URL } from '../../config.js';
 import { mapperToCamel } from '../lib/mappers.js';
 
 export const fetchWithAuth = async (endpoint, sessionId, options = {}, empresaId = null) => {
-    
+
     if (options.body && typeof options.body === 'object') {
         options.body = JSON.stringify(options.body);
     }

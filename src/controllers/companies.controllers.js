@@ -57,11 +57,20 @@ export const listCompaniesLista = async (req, res) => {
             auditaJoin = ` JOIN audita a ON a.empresa_id = e.id AND a.usuario_id = $${params.length} `;
         }
 
+        // Solo empresas ACTIVAS en cartera. El selector traía las 217, incluidas las
+        // 83 de baja y las inactivas, y encontrar una era imposible.
+        //
+        // La empresa principal se incluye SIEMPRE, aunque esté marcada
+        // en_cartera=false y activo=false: es la firma, no un cliente de la cartera,
+        // y lleva su propio libro de compras y ventas. Sin esta excepción el
+        // administrador perdía acceso a la contabilidad de su propia oficina.
         const { rows } = await pool.query(
             `SELECT DISTINCT e.id, e.razon_social, e.es_principal, e.en_cartera, e.activo
              FROM empresa e
              ${auditaJoin}
              WHERE e.organizacion_id IS NOT DISTINCT FROM $1::uuid
+               AND (e.es_principal = true
+                    OR (e.en_cartera IS NOT FALSE AND e.activo IS NOT FALSE))
              ORDER BY e.es_principal DESC, e.razon_social ASC`,
             params
         );

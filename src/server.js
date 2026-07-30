@@ -41,6 +41,7 @@ import { reconectarSesionesGuardadas } from "./services/whatsapp/whatsappBot.js"
 
 // Importación del Robot Manual
 import { ejecutarRobotSII } from './components/contabilidad/scripts/sincronizador_sii.mjs';
+import { credencialesSiiDeEmpresa } from './utils/credencialesSii.js';
 import { cargarJSONaBD } from './components/contabilidad/scripts/subir_documentos_db.mjs';
 
 // 🔒 Estado del Facturador Masivo: si está activo, NO sincronizamos el SII (misma cuenta = se botan la sesión)
@@ -174,14 +175,31 @@ const ejecutarSincronizacion = async (tipo) => {
 // consulta no encontraba sesión y devolvía siempre 403 "Solo administradores",
 // incluso a un administrador legítimo. La sincronización nunca funcionó.
 app.post('/api/sincronizar-sii', apiLimiter, requireSession, requireAdmin, async (req, res) => {
-    const { tipo, rut, clave, mes, anio, mesDesde, anioDesde, mesHasta, anioHasta, empresaId } = req.body;
+    const { tipo, mes, anio, mesDesde, anioDesde, mesHasta, anioHasta, empresaId } = req.body;
 
     // 1. MODO MANUAL: Extracción por rango de fechas para una empresa específica
-    if (rut && clave && empresaId) {
-        console.log(`\n👨‍💻 [MODO MANUAL] Sincronizando para RUT: ${rut} | Rango: ${mesDesde}/${anioDesde} → ${mesHasta}/${anioHasta}`);
+    if (empresaId) {
+        // Las credenciales se leen de la BD, NO del cuerpo del POST.
+        //
+        // Antes el frontend enviaba `rut` y `clave` desde el navegador: la clave
+        // del SII de cada cliente viajaba al browser y quedaba a la vista en las
+        // herramientas de desarrollo. Además mandaba el RUT de la EMPRESA como
+        // usuario de login, cuando al SII se entra con el del representante legal.
+        let credenciales;
         try {
-            const resultado = await ejecutarRobotSII({ rut, clave, mesDesde, anioDesde, mesHasta, anioHasta });
-            
+            credenciales = await credencialesSiiDeEmpresa(empresaId, req.user?.organizacionId);
+        } catch (error) {
+            return res.status(400).json({ success: false, message: error.message });
+        }
+
+        const { rutEmpresa, rutRepresentante, clave, razonSocial } = credenciales;
+        console.log(`\n👨‍💻 [MODO MANUAL] ${razonSocial} | representante ${rutRepresentante} → empresa ${rutEmpresa} | Rango: ${mesDesde}/${anioDesde} → ${mesHasta}/${anioHasta}`);
+        try {
+            const resultado = await ejecutarRobotSII({
+                rutRepresentante, clave, rutEmpresa,
+                mesDesde, anioDesde, mesHasta, anioHasta,
+            });
+
             if (resultado.success) {
                 console.log(`✅ Extracción completada. Subiendo a BD...`);
                 
@@ -194,11 +212,21 @@ app.post('/api/sincronizar-sii', apiLimiter, requireSession, requireAdmin, async
                     return res.status(500).json({ success: false, message: "Los datos se extrajeron, pero falló la escritura en BD." });
                 }
             } else {
-                return res.status(500).json({ success: false, message: "Fallo durante la ejecución del robot en el portal del SII." });
+                return res.status(500).json({
+                    success: false,
+                    message: resultado.error || "Fallo durante la ejecución del robot en el portal del SII.",
+                });
             }
         } catch (error) {
+            // El mensaje del robot VIAJA a la pantalla. Antes se reemplazaba por
+            // "Error interno del servidor al iniciar Puppeteer", así que cuando el
+            // SII decía "La Clave Tributaria ingresada no es correcta" el usuario
+            // veía un error genérico y no tenía idea de qué corregir.
             console.error("❌ Error al ejecutar robot manual:", error);
-            return res.status(500).json({ success: false, message: "Error interno del servidor al iniciar Puppeteer." });
+            return res.status(500).json({
+                success: false,
+                message: error.message || "Error interno del servidor al iniciar Puppeteer.",
+            });
         }
     }
 

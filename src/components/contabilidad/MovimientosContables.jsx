@@ -580,15 +580,21 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     return { ok, fail, sinReferencia };
   };
 
-  const handleContabilizarTodo = async (auto = false) => {
+  // Sin parámetro `auto`: la confirmación es SIEMPRE obligatoria.
+  //
+  // Antes recibía `auto = true` desde la extracción del SII y en ese modo se
+  // saltaba el confirm, así que contabilizaba en lote sin preguntar. Se quitó el
+  // parámetro en vez de solo dejar de pasarlo, para que nadie pueda reactivar el
+  // atajo sin darse cuenta.
+  const handleContabilizarTodo = async () => {
     const ventasPend  = ventas.filter(d => !comprobanteDe(d, 'ventas'));
     const comprasPend = compras.filter(d => !comprobanteDe(d, 'compras'));
     const total = ventasPend.length + comprasPend.length;
     if (total === 0) {
-      if (!auto) toast({ title: 'Todo contabilizado', description: 'No hay documentos pendientes en el período.' });
+      toast({ title: 'Todo contabilizado', description: 'No hay documentos pendientes en el período.' });
       return;
     }
-    if (!auto && !confirm(`¿Contabilizar ${total} documento(s) pendiente(s) del período con su asiento sugerido?`)) return;
+    if (!confirm(`¿Contabilizar ${total} documento(s) pendiente(s) del período con su asiento sugerido?`)) return;
     setIsContabilizando(true);
     try {
       const r1 = await contabilizarLote(ventasPend, 'ventas');
@@ -603,7 +609,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
         title: `✅ ${ok} contabilizado${ok !== 1 ? 's' : ''}`,
         description: notas.length
           ? `${notas.join(' · ')}.`
-          : (auto ? 'Auto-contabilizados tras sincronizar SII.' : 'Pendientes del período listos.'),
+          : 'Pendientes del período listos.',
       });
       cargarDatos();
       queryClient.invalidateQueries(['comprobantes', targetId]);
@@ -612,14 +618,16 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     }
   };
 
-  // Auto-contabilizar tras sincronizar SII (cuando los datos ya recargaron)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Extraer del SII ya NO contabiliza solo.
+  //
+  // Antes, al terminar una extracción exitosa se disparaba `handleContabilizarTodo`
+  // sobre todo lo recién traído: una sola extracción de 3 meses generó 51 asientos
+  // sin que nadie los pidiera. Contabilizar es una decisión del contador —revisar
+  // cuentas, notas de crédito, documentos que no corresponden— así que se hace
+  // desde el botón "Contabilizar todo" o fila por fila, nunca de forma implícita.
   React.useEffect(() => {
-    if (autoContabilizar && !isLoading) {
-      setAutoContabilizar(false);
-      handleContabilizarTodo(true);
-    }
-  }, [autoContabilizar, isLoading]);
+    if (autoContabilizar) setAutoContabilizar(false);
+  }, [autoContabilizar]);
 
   const handleEnviarLibroDiario = () => {
     if (libroAsientos.length === 0) {
@@ -650,13 +658,17 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     try {
       const result = await (await fetch(`${API_BASE_URL}/sincronizar-sii`, {
         method:'POST', headers:{'Content-Type':'application/json', 'x-session-id': user?.sessionId},
-        body: JSON.stringify({ rut: selectedCompany.rut, clave: selectedCompany.claveSII, mesDesde, anioDesde, mesHasta, anioHasta, empresaId: targetId }),
+        // Sin credenciales: el backend las lee de la ficha del cliente. Antes se
+        // enviaban el RUT y la clave del SII desde el navegador.
+        body: JSON.stringify({ mesDesde, anioDesde, mesHasta, anioHasta, empresaId: targetId }),
       })).json();
       if (result.success) {
-        toast({ title:'✅ Extracción Exitosa', description: result.message });
+        toast({
+          title: '✅ Extracción Exitosa',
+          description: `${result.message} Quedaron como Pendientes: revísalos y contabiliza cuando corresponda.`,
+        });
         setIsSyncModalOpen(false);
         cargarDatos();
-        setAutoContabilizar(true); // contabiliza automáticamente los documentos extraídos
       } else {
         toast({ variant:'destructive', title:'❌ Error en el Robot', description: result.message });
       }
@@ -746,7 +758,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
             <Plus className="h-4 w-4 mr-2" />
             Nueva {activeTab === 'ventas' ? 'Venta' : activeTab === 'compras' ? 'Compra' : 'Honorario'}
           </Button>
-          <Button onClick={() => handleContabilizarTodo(false)} disabled={isContabilizando || !hayDatos}
+          <Button onClick={() => handleContabilizarTodo()} disabled={isContabilizando || !hayDatos}
             className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 disabled:opacity-50 text-slate-900 font-black uppercase text-[10px] tracking-widest">
             {isContabilizando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bot className="h-4 w-4 mr-2" />}
             {isContabilizando ? 'CONTABILIZANDO...' : 'CONTABILIZAR TODO'}

@@ -13,6 +13,13 @@ const CrmTableList = ({
     esAdminMaster = false, // Solo el Administrador master ve la columna "Creado por"
     getCompletitud = () => 0 // Medidor de completitud de ficha (0-100)
 }) => {
+    // Si la pestaña "Creadas por usuarios" desaparece (llegó a 0) mientras estaba
+    // seleccionada, la vista quedaría filtrando por algo sin botón visible: se
+    // vuelve a Activos.
+    React.useEffect(() => {
+        if (vista === 'usuarios' && (conteos.usuarios ?? 0) === 0) setVista('activos');
+    }, [vista, conteos.usuarios, setVista]);
+
     // Pestañas por estado real del cliente
     const ESTADOS_TABS = [
         { id: 'activos',     label: 'Activos',       activo: 'bg-[#199b4d] text-white shadow-sm' },
@@ -230,7 +237,11 @@ const CrmTableList = ({
                             </span>
                         </button>
                     ))}
-                    {esAdminMaster && (
+                    {/* "Creadas por usuarios" solo tiene sentido si existe alguna:
+                        son las empresas registradas por un usuario con rol Cliente.
+                        En una organización sin clientes con cuenta propia la pestaña
+                        quedaba siempre en 0, ocupando espacio y confundiendo. */}
+                    {esAdminMaster && (conteos.usuarios ?? 0) > 0 && (
                         <button
                             onClick={() => setVista('usuarios')}
                             className={`flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${

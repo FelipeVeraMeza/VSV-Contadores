@@ -34,6 +34,26 @@ export async function cargarJSONaBD(empresaId) {
         console.log(`📊 Total de documentos REALES a procesar: ${documentos.length}`);
         
         client = await pool.connect();
+
+        // ==========================================
+        // EN QUÉ LIBRO SE GUARDA
+        // ------------------------------------------
+        // La firma (empresa.es_principal) lleva su libro en las tablas base; las
+        // empresas cliente en las tablas _empresa. Es la MISMA regla que usa la
+        // lectura (libroDe en dteConsulta.controllers.js).
+        //
+        // Antes esto estaba fijo en las tablas _empresa: extraer de la propia
+        // firma guardaba los documentos donde su libro no los busca, así que la
+        // extracción "funcionaba" y no se veía nada.
+        // ==========================================
+        const { rows: [emp] } = await client.query(
+            'SELECT es_principal, razon_social FROM empresa WHERE id = $1', [empresaId]
+        );
+        const esFirma = emp?.es_principal === true;
+        const tablaCompras = esFirma ? 'documentos_recibidos' : 'documentos_recibidos_empresa';
+        const tablaVentas  = esFirma ? 'documentos_emitidos'  : 'documentos_emitidos_empresa';
+        console.log(`📚 Libro destino: ${esFirma ? 'la FIRMA (tablas base)' : 'empresa cliente (tablas _empresa)'} — ${emp?.razon_social || empresaId}`);
+
         await client.query('BEGIN'); // Transacción segura
 
         let comprasCargadas = 0;
@@ -68,7 +88,7 @@ export async function cargarJSONaBD(empresaId) {
                 // ==========================================
                 if (doc.Categoria === 'Compra') {
                     const check = await client.query(`
-                        SELECT 1 FROM documentos_recibidos_empresa 
+                        SELECT 1 FROM ${tablaCompras}
                         WHERE empresa_id = $1 AND folio = $2 AND rut_proveedor = $3 AND tipo_dte = $4
                     `, [empresaId, folio, rut, tipoDte]);
 
@@ -76,7 +96,7 @@ export async function cargarJSONaBD(empresaId) {
                         omitidos++; // Ya existe
                     } else {
                         const queryCompra = `
-                            INSERT INTO documentos_recibidos_empresa 
+                            INSERT INTO ${tablaCompras}
                             (empresa_id, rut_proveedor, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision)
                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                         `;
@@ -86,7 +106,7 @@ export async function cargarJSONaBD(empresaId) {
 
                 } else if (doc.Categoria === 'Venta') {
                     const check = await client.query(`
-                        SELECT 1 FROM documentos_emitidos_empresa 
+                        SELECT 1 FROM ${tablaVentas}
                         WHERE empresa_id = $1 AND folio = $2 AND rut_cliente = $3 AND tipo_dte = $4
                     `, [empresaId, folio, rut, tipoDte]);
 
@@ -94,7 +114,7 @@ export async function cargarJSONaBD(empresaId) {
                         omitidos++; // Ya existe
                     } else {
                         const queryVenta = `
-                            INSERT INTO documentos_emitidos_empresa 
+                            INSERT INTO ${tablaVentas}
                             (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision)
                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                         `;

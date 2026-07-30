@@ -83,10 +83,10 @@ export async function registrarMovimientoCaja(client, {
 
   const { rows: [m] } = await client.query(
     `INSERT INTO movimientos_caja
-       (id, empresa_id, tipo, fecha, rut, nombre, folio_asociado, monto, medio_pago, glosa, creado_por)
-     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+       (id, empresa_id, tipo, fecha, rut, nombre, folio_asociado, monto, medio_pago, glosa, creado_por, organizacion_id)
+     VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
     [empId, tipo, fechaFinal, rut || '', nombre || '', folioAsociado || '',
-     Number(monto) || 0, medioFinal, glosa || '', usuario.nombre || null]
+     Number(monto) || 0, medioFinal, glosa || '', usuario.nombre || null, usuario.organizacionId || null]
   );
 
   const comprobanteId = await crearAsientoCaja(client, {
