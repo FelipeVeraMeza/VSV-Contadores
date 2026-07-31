@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import pkg from 'pg'; 
 import crypto from 'crypto'; 
 import { encrypt } from '../../../utils/crypto.js'; // ⚠️ Ajusta tu ruta si es necesario
+import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
 
 const { Client } = pkg;
 dotenv.config();
@@ -39,7 +40,7 @@ const limpiarYTipar = async (page, selector, texto) => {
 // =========================================================================
 // 🚀 MEGA FUNCIÓN DE FACTURACIÓN: EXTRACCIÓN + EMISIÓN + GUARDADO
 // =========================================================================
-export async function emitirFacturaPuppeteer(datos) {
+export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSistema()) {
     
     let razonSocialCapturadaDelSII = null;
     let browser, page, client;
@@ -121,9 +122,9 @@ export async function emitirFacturaPuppeteer(datos) {
         // =======================================================================
         const inputRutExiste = await page.$('#rutcntr');
         if (inputRutExiste) {
-            console.log(`🔑 Entrando al SII con RUT: ${process.env.DTE_RUT}`);
-            await page.type('#rutcntr', `${process.env.DTE_RUT}-${process.env.DTE_DV}`, { delay: 50 });
-            await page.type('#clave', process.env.DTE_PASS, { delay: 50 });
+            console.log(`🔑 Entrando al SII con RUT: ${credSii.DTE_RUT}`);
+            await page.type('#rutcntr', `${credSii.DTE_RUT}-${credSii.DTE_DV}`, { delay: 50 });
+            await page.type('#clave', credSii.DTE_PASS, { delay: 50 });
             await Promise.all([page.waitForNavigation(), page.click('#bt_ingresar')]);
             await delay(1500); 
 
@@ -319,7 +320,7 @@ export async function emitirFacturaPuppeteer(datos) {
 
         console.log('🔒 Ingresando clave y enviando factura...');
         await page.focus('#myPass');
-        await page.type('#myPass', process.env.SII_PFX_PASS, { delay: 50 });
+        await page.type('#myPass', credSii.SII_PFX_PASS, { delay: 50 });
         await delay(500); 
         await Promise.all([
             page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {}),

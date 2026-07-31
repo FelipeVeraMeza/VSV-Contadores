@@ -7,7 +7,6 @@ import fs from 'fs';
 // ==========================================
 import { 
     emitirDTE, 
-    cerrarSesion,
     emitirManualController,
     emitirMasivoController,
     reenviarCorreoController,
@@ -19,15 +18,6 @@ import {
     emitirExentaManualController,
     emitirExentaMasivaController,
     emitirNotaController, // <-- NUEVO CONTROLADOR INTEGRADO
-    getDtesEmitidos,
-    testConnection,
-    loginDTE,
-    checkSIIStatus,
-    getSessionData,
-    verificarSesion,
-    obtenerPDF,
-    emitirBoletaHonorarios,
-    getHistorialController 
 } from "../controllers/dte.controllers.js";
 
 // ==========================================
@@ -35,25 +25,51 @@ import {
 // ==========================================
 import { estadoRobot, detenerRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
 import { estadoRobotExenta, detenerRobotExenta } from '../components/facturacion/scripts/exenta_masiva.mjs';
-import { requireSession } from '../middleware/auth.js';
+import { requireSession, requireAdmin, requireModulo } from '../middleware/auth.js';
+import { envioMasivoLimiter } from '../config/security.js';
 
 const dteRoutes = Router();
 
+// ============================================================================
+// 🔒 TODO EL FACTURADOR EXIGE SESIÓN
+// ----------------------------------------------------------------------------
+// Hasta el 31-jul-2026 solo `/correos-log` pedía sesión. Las otras 24 rutas
+// estaban abiertas: cualquiera que alcanzara la dirección de la API podía
+// emitir una factura real al SII, facturar en lote, mandarle correo a los 93
+// clientes o frenar el robot a media corrida. Sin cuenta ni contraseña.
+//
+// Va como middleware del router completo y no ruta por ruta, para que una ruta
+// nueva quede protegida por omisión en vez de quedar abierta por olvido.
+//
+// Requisito para que esto no rompa nada: TODAS las llamadas del frontend pasan
+// por `src/services/apiDTE.js`, que adjunta la cabecera `x-session-id`.
+// ============================================================================
+dteRoutes.use(requireSession);
+
+// Acciones sobre la cartera COMPLETA de la firma, no sobre una empresa: van
+// además con rol Administrador. La emisión (individual o en lote) se queda solo
+// con sesión a propósito, porque un Cliente factura para su propia empresa.
+const soloAdmin = [requireAdmin];
+
 // ==========================================
-// 🔗 RUTAS BÁSICAS DEL SISTEMA
+// 🗑️ RUTAS RETIRADAS EL 31-JUL-2026
+// ------------------------------------------
+// /login, /cerrar-sesion, /status, /session-data, /verificar-sesion,
+// /test-conexion, /historial, /dtes-emitidos, /obtener-pdf y /emitir-boleta.
+//
+// Ninguna pantalla las llamaba y cuatro de ellas devolvían 500 con cualquier
+// sesión. Eran superficie que había que mantener y proteger sin que nadie la
+// usara. El historial que sí funciona vive en /api/dte-consulta/historial.
+//
+// Sus controladores siguen exportados en dte.controllers.js por si hay que
+// reponer alguna.
 // ==========================================
-dteRoutes.post('/login', loginDTE);
-dteRoutes.post('/cerrar-sesion', cerrarSesion);
-dteRoutes.get('/status', checkSIIStatus);
-dteRoutes.get('/session-data', getSessionData);
-dteRoutes.get('/verificar-sesion', verificarSesion);
-dteRoutes.get('/test-conexion', testConnection);
 
 // ==========================================
 // 🚀 RUTAS DE PUPPETEER: DTE 33 (AFECTA)
 // ==========================================
 dteRoutes.post('/emitir-manual', emitirManualController);
-dteRoutes.post('/emitir-masivo', emitirMasivoController);
+dteRoutes.post('/emitir-masivo', envioMasivoLimiter, emitirMasivoController);
 dteRoutes.get('/progreso-masivo', (req, res) => res.json(estadoRobot));
 dteRoutes.post('/detener-masivo', (req, res) => {
     detenerRobot();
@@ -64,21 +80,21 @@ dteRoutes.post('/detener-masivo', (req, res) => {
 dteRoutes.post('/reenviar-correo', reenviarCorreoController);
 
 // 📧 Reenvío MASIVO de los correos seleccionados
-dteRoutes.post('/reenviar-correos-masivo', reenviarCorreosMasivoController);
+dteRoutes.post('/reenviar-correos-masivo', soloAdmin, envioMasivoLimiter, reenviarCorreosMasivoController);
 
 // 📒 Registro de correos enviados (desde la BD) — requiere sesión
-dteRoutes.get('/correos-log', requireSession, getCorreosLogController);
+dteRoutes.get('/correos-log', getCorreosLogController);
 
 // 📢 Recordatorios de pago (módulo aparte)
-dteRoutes.get('/recordatorios/preview', previewRecordatoriosController);
-dteRoutes.post('/enviar-recordatorios', enviarRecordatoriosController);
-dteRoutes.get('/recordatorios/progreso', getProgresoRecordatoriosController);
+dteRoutes.get('/recordatorios/preview', soloAdmin, previewRecordatoriosController);
+dteRoutes.post('/enviar-recordatorios', soloAdmin, envioMasivoLimiter, enviarRecordatoriosController);
+dteRoutes.get('/recordatorios/progreso', soloAdmin, getProgresoRecordatoriosController);
 
 // ==========================================
 // 🌟 RUTAS DE PUPPETEER: DTE 34 (EXENTA)
 // ==========================================
 dteRoutes.post('/emitir-exenta-manual', emitirExentaManualController);
-dteRoutes.post('/emitir-masivo-exenta', emitirExentaMasivaController);
+dteRoutes.post('/emitir-masivo-exenta', envioMasivoLimiter, emitirExentaMasivaController);
 dteRoutes.get('/progreso-masivo-exenta', (req, res) => res.json(estadoRobotExenta));
 dteRoutes.post('/detener-robot-exenta', (req, res) => {
     detenerRobotExenta();
@@ -93,22 +109,39 @@ dteRoutes.post('/emitir-nota', emitirNotaController);
 // ==========================================
 // 📊 RUTAS DE HISTORIAL Y DESCARGAS
 // ==========================================
-dteRoutes.get('/historial', getHistorialController);
 dteRoutes.post('/emitir-dte', emitirDTE);
-dteRoutes.post('/dtes-emitidos', getDtesEmitidos);
-dteRoutes.post('/obtener-pdf', obtenerPDF);
-dteRoutes.post('/emitir-boleta', emitirBoletaHonorarios);
 
+// Descarga de un PDF generado por el robot.
+//
+// ⚠️ Acá había una fuga grave: `fileName` se concatenaba tal cual a la ruta, así
+// que `GET /api/dte/download/..%2F..%2F.env` salía de `tmp/` y entregaba
+// cualquier archivo del servidor — incluido el `.env` con la clave de la base,
+// la ENCRYPTION_KEY y las claves del SII. Comprobado: devolvía HTTP 200.
+//
+// Dos candados: se descarta el nombre si trae separadores de ruta, y después se
+// verifica que la ruta final siga estando DENTRO de tmp/ (por si un `%2e%2e` o
+// un enlace simbólico se cuela igual).
 dteRoutes.get('/download/:fileName', (req, res) => {
     const { fileName } = req.params;
-    const filePath = path.resolve(process.cwd(), 'tmp', fileName);
-    if (fs.existsSync(filePath)) {
-        res.download(filePath, fileName, (err) => {
-            if (err && !res.headersSent) res.status(500).send("Error de descarga.");
-        });
-    } else {
-        res.status(404).send("El archivo no existe.");
+
+    if (!fileName || /[\\/]|\.\./.test(fileName)) {
+        return res.status(400).send("Nombre de archivo no válido.");
     }
+
+    const carpeta = path.resolve(process.cwd(), 'tmp');
+    const filePath = path.resolve(carpeta, fileName);
+
+    if (!filePath.startsWith(carpeta + path.sep)) {
+        return res.status(400).send("Nombre de archivo no válido.");
+    }
+
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).send("El archivo no existe.");
+    }
+
+    res.download(filePath, fileName, (err) => {
+        if (err && !res.headersSent) res.status(500).send("Error de descarga.");
+    });
 });
 
 export default dteRoutes;

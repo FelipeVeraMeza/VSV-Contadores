@@ -167,7 +167,7 @@ export const AuthProvider = ({ children }) => {
     // Si el usuario elige el consolidado a propósito, queda marcado en companyScope
     // y no se le vuelve a imponer la principal.
     useEffect(() => {
-        if (!user?.sessionId || selectedCompany) return;
+        if (!user?.sessionId) return;
         if (localStorage.getItem('companyScope') === 'ALL') return;
 
         let cancelado = false;
@@ -177,6 +177,24 @@ export const AuthProvider = ({ children }) => {
                 if (!res.ok) return;
                 const payload = await res.json();
                 const disponibles = payload?.empresas || [];
+                if (cancelado) return;
+
+                // La empresa guardada en el navegador puede haber sido ELIMINADA o
+                // haber salido de la cartera desde la última vez. Si ya no está en
+                // la lista hay que soltarla: si no, el encabezado sigue mostrando
+                // una empresa fantasma y los módulos filtran por un id que no
+                // existe, así que todo sale vacío y no hay forma de salir de ahí
+                // salvo borrando los datos del navegador.
+                if (selectedCompany) {
+                    if (disponibles.some(e => e.id === selectedCompany.id)) return;
+
+                    console.warn(`⚠️ La empresa seleccionada (${selectedCompany.razonSocial || selectedCompany.razon_social}) ya no existe o salió de la cartera. Se elige otra.`);
+                    if (!disponibles.length) {
+                        setSelectedCompany(null);
+                        localStorage.removeItem('selectedCompany');
+                        return;
+                    }
+                }
                 // La principal si está disponible; si no, la primera de la lista.
                 //
                 // Un rol Cliente solo recibe sus empresas asignadas y la principal

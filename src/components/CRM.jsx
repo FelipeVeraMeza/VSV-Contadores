@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams , Navigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { LayoutList, BarChart3, Building2, ChevronDown, Search, CheckCircle2, UserPlus, Download, Upload, FileSpreadsheet } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
@@ -18,7 +18,6 @@ import InteraccionesPanel from './crm/views/InteraccionesPanel';
 import CrearClienteModal from './crm/modals/CrearClienteModal';
 import CrearEmpresaModal from './crm/modals/CrearEmpresaModal';
 import PersonasPanel from './crm/views/PersonasPanel';
-import TareasPanel from './crm/views/TareasPanel';
 import CrmDashboard from './crm/views/CrmDashboard';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -117,7 +116,7 @@ const CRM = () => {
   const setActiveTab = (id) => setSearchParams({ sub: id });
 
   // El administrador de la organización ve quién creó cada empresa
-  const { user } = useAuth();
+  const { user, selectedCompany, setSelectedCompany } = useAuth();
   const esAdminMaster = user?.rol === 'Administrador';
   const { clients: dbClients, planes, serviciosDisponibles, preciosPlanTramo, cashFlow, services, compliance, risk, chartsSample, loading, refresh } = useBunkerData();
   const _saved = useMemo(loadFilters, []);
@@ -247,6 +246,18 @@ const CRM = () => {
       return acc;
   }, [clients]);
 
+  // Si se elimina la empresa que está seleccionada en el encabezado, hay que
+  // soltarla en el momento. Si no, el selector sigue mostrando una empresa que
+  // ya no existe y todos los módulos filtran por un id fantasma: salen vacíos
+  // y no hay manera de recuperarse desde la pantalla.
+  const soltarSiEsLaSeleccionada = (ids) => {
+    const borradas = new Set(Array.isArray(ids) ? ids : [ids]);
+    if (selectedCompany?.id && borradas.has(selectedCompany.id)) {
+      setSelectedCompany(null);
+      localStorage.removeItem('selectedCompany');
+    }
+  };
+
   const handleDeleteClient = async (clientToDelete) => {
     try {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -255,6 +266,7 @@ const CRM = () => {
       const payload = await res.json();
       if (!payload.success) throw new Error(payload.message || 'No se pudo eliminar.');
       setClients(prev => prev.filter(c => c.id !== clientToDelete.id));
+      soltarSiEsLaSeleccionada(clientToDelete.id);
       setSelectedClient(null);
       toast({ title: "Cliente eliminado", description: payload.message });
       refresh();
@@ -276,6 +288,7 @@ const CRM = () => {
     }
     const ids = new Set(clientsArr.map(c => c.id));
     setClients(prev => prev.filter(c => !ids.has(c.id)));
+    soltarSiEsLaSeleccionada([...ids]);
     setSelectedClient(null);
     toast({ title: "Eliminación masiva", description: `${ok} eliminados${fail ? `, ${fail} no se pudieron (tienen registros asociados)` : ''}.` });
     refresh();
@@ -407,11 +420,10 @@ const CRM = () => {
         </div>
       )}
 
-      {activeTab === 'tareas' && (
-        <div className="flex-1 min-h-0">
-          <TareasPanel />
-        </div>
-      )}
+      {/* Las tareas se mudaron a su propio módulo, al mismo nivel que CRM y
+          Contabilidad: /tareas. Quien llegue con el enlace viejo (?sub=tareas)
+          se redirige, para no dejarlo mirando una pantalla en blanco. */}
+      {activeTab === 'tareas' && <Navigate to="/tareas" replace />}
 
       {activeTab === 'whatsapp' && (
         <div className="flex-1 min-h-0">

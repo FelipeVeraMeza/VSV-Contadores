@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer';
 import dotenv from 'dotenv';
 import pkg from 'pg'; 
+import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
 
 const { Client } = pkg;
 dotenv.config();
@@ -49,7 +50,7 @@ async function capturarFolio(page) {
 // 🚀 ROBOT PRINCIPAL
 // =======================================================
 
-export async function emitirNotaCDPuppeteer(datos) {
+export async function emitirNotaCDPuppeteer(datos, credSii = credencialesDelSistema()) {
 
     let browser;
     let page;
@@ -122,10 +123,10 @@ export async function emitirNotaCDPuppeteer(datos) {
         // =======================================================
         // 1️⃣ LOGIN
         // =======================================================
-        const rutLimpio = `${process.env.DTE_RUT}${process.env.DTE_DV}`.replace(/[^0-9kK]/gi, '');
+        const rutLimpio = `${credSii.DTE_RUT}${credSii.DTE_DV}`.replace(/[^0-9kK]/gi, '');
         await page.waitForSelector('#rutcntr, #rut');
         await page.type('#rutcntr', rutLimpio);
-        await page.type('#clave', process.env.DTE_PASS);
+        await page.type('#clave', credSii.DTE_PASS);
         await Promise.all([page.click('#bt_ingresar'), page.waitForNavigation()]);
 
         // =======================================================
@@ -270,7 +271,7 @@ export async function emitirNotaCDPuppeteer(datos) {
 
         // 2. Ingresar Clave
         await page.waitForSelector("#myPass, input[type=password]", { visible: true });
-        await page.type("#myPass, input[type=password]", process.env.SII_PFX_PASS, { delay: 40 });
+        await page.type("#myPass, input[type=password]", credSii.SII_PFX_PASS, { delay: 40 });
 
         // 3. Confirmar Firma
         console.log("   🚀 Enviando documento...");

@@ -1,6 +1,7 @@
 import { pool } from "../database/db.js";
 import { encrypt, decrypt, generateHash } from "../utils/crypto.js";
 import { cleanRut } from "../lib/rut.js";
+import { registrar } from '../utils/bitacora.js';
 
 export const getAssignedCompanies = async (req, res) => {
     try {
@@ -434,6 +435,12 @@ export const deleteCompany = async (req, res) => {
 
     try {
         await pool.query('BEGIN');
+        const { rows: previa } = await pool.query('SELECT razon_social FROM empresa WHERE id = $1', [id]);
+        await registrar(req, {
+            modulo: 'empresas', accion: 'eliminar',
+            entidad: 'empresa', entidadId: id,
+            descripcion: `Empresa eliminada: ${previa[0]?.razon_social || id}`,
+        });
         const result = await pool.query('DELETE FROM empresa WHERE id = $1', [id]);
 
         if (result.rowCount === 0) {

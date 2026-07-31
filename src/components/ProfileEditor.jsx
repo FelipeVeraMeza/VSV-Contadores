@@ -302,14 +302,16 @@ const ProfileEditor = () => {
         </div>
       </form>
 
-      {/* CREDENCIALES SII: solo para el rol Cliente, que emite sus propios documentos.
-          Los Administradores y Consultores facturan con las credenciales de la firma,
-          que se configuran desde el módulo de Facturación, no desde el perfil. */}
-      {user?.rol === 'Cliente' && (
-        <div className="pt-2">
-          <CredencialesSII embedded />
-        </div>
-      )}
+      {/* CREDENCIALES SII: las ve CUALQUIER usuario, no solo el rol Cliente.
+          Victor y Mati también facturan, y necesitan dejar guardados su RUT, su
+          clave tributaria y la clave de su certificado.
+
+          La única excepción es la cuenta cuyo RUT coincide con el `DTE_RUT` del
+          sistema: esa es la que factura hoy para toda la oficina, y el propio
+          panel muestra un aviso en vez del formulario. */}
+      <div className="pt-2">
+        <CredencialesSII embedded />
+      </div>
     </motion.div>
   );
 };

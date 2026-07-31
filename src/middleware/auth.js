@@ -1,6 +1,10 @@
 import { pool } from "../database/db.js";
 
 export async function requireSession(req, res, next) {
+  // Se puede montar dos veces en la misma peticion (a nivel de servidor y dentro
+  // del router). Si ya resolvio al usuario, no se vuelve a consultar la base.
+  if (req.user) return next();
+
   const sessionId = req.header("x-session-id");
   const empresaIdFromHeader = req.header("x-company-id");
 
@@ -46,8 +50,10 @@ export async function requireSession(req, res, next) {
       empresaId: empresaIdFromHeader || null
     };
 
-    // Cargar permisos de módulos si es administrador
-    if (session.rol === 'Administrador') {
+    // Los módulos se cargan para CUALQUIER rol: el recorte es por usuario, no
+    // por rol. Antes solo se leían para Administrador, así que las banderas de
+    // un Consultor o un Cliente nunca llegaban a aplicarse.
+    {
       try {
         const modulosResult = await pool.query(
           `SELECT puede_ver_contabilidad, puede_ver_facturacion, puede_ver_rrhh,
@@ -81,34 +87,40 @@ export const requireAdmin = (req, res, next) => {
   next();
 };
 
+const MODULO_A_COLUMNA = {
+  contabilidad:    'puede_ver_contabilidad',
+  facturacion:     'puede_ver_facturacion',
+  rrhh:            'puede_ver_rrhh',
+  operacion_renta: 'puede_ver_operacion_renta',
+  crm:             'puede_ver_crm',
+  admin:           'puede_ver_admin',
+};
+
+/**
+ * Exige que el usuario tenga habilitado un módulo en `admin_modulos`.
+ *
+ * ⚠️ Esta función existía desde antes pero NUNCA se usó en ninguna ruta, y
+ * además empezaba rechazando a todo el que no fuera Administrador — o sea que
+ * conectarla habría dejado a Consultores y Clientes fuera de todo. Eso se
+ * corrigió: acá NO se mira el rol. El rol se controla aparte con requireAdmin;
+ * esto solo mira las banderas por usuario.
+ *
+ * Regla deliberada: SIN fila en `admin_modulos` se permite todo. Un usuario sin
+ * configurar no puede quedarse sin acceso a su trabajo por un olvido; recortar
+ * es una decisión explícita que alguien tiene que tomar.
+ */
 export const requireModulo = (modulo) => {
   return (req, res, next) => {
-    if (req.user?.rol !== 'Administrador') {
+    const columna = MODULO_A_COLUMNA[modulo];
+    if (!columna) return next();          // módulo desconocido: no se inventa un bloqueo
+
+    const banderas = req.user?.modulos;
+    if (!banderas) return next();          // sin configurar = acceso completo
+
+    if (banderas[columna] === false) {
       return res.status(403).json({
         success: false,
-        message: "Acceso Denegado: Esta acción requiere privilegios de Administrador."
-      });
-    }
-
-    // Si no tiene módulos asignados (backward compatibility), permitir todo
-    if (!req.user?.modulos) {
-      return next();
-    }
-
-    const moduloMap = {
-      'contabilidad': 'puede_ver_contabilidad',
-      'facturacion': 'puede_ver_facturacion',
-      'rrhh': 'puede_ver_rrhh',
-      'operacion_renta': 'puede_ver_operacion_renta',
-      'crm': 'puede_ver_crm',
-      'admin': 'puede_ver_admin'
-    };
-
-    const permiso = moduloMap[modulo];
-    if (!permiso || !req.user?.modulos?.[permiso]) {
-      return res.status(403).json({
-        success: false,
-        message: `Acceso Denegado: No tienes permiso para acceder a ${modulo}.`
+        message: `No tienes habilitado el módulo de ${modulo.replace('_', ' ')}. Pídeselo a un administrador.`
       });
     }
 

@@ -6,6 +6,7 @@ import pkg from 'pg';
 import crypto from 'crypto'; 
 import { encrypt } from '../../../utils/crypto.js';
 import { pool } from '../../../database/db.js';
+import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
 
 const { Client } = pkg;
 dotenv.config();
@@ -72,7 +73,7 @@ const limpiarYTipar = async (page, selector, texto) => {
 // =========================================================================
 // 🚀 MOTOR DE FACTURACIÓN MASIVA (EXENTAS DTE 34)
 // =========================================================================
-export async function emitirLoteExentaPuppeteer(facturasFront) {
+export async function emitirLoteExentaPuppeteer(facturasFront, credSii = credencialesDelSistema()) {
     console.log('\n==================================================');
     console.log('[INFO] AUDITORÍA: Iniciando Motor Masivo EXENTAS...');
 
@@ -195,8 +196,8 @@ export async function emitirLoteExentaPuppeteer(facturasFront) {
                                     if (document.querySelector('#clave')) document.querySelector('#clave').value = '';
                                 });
 
-                                await page.type('#rutcntr', `${process.env.DTE_RUT}-${process.env.DTE_DV}`, { delay: 100 });
-                                await page.type('#clave', process.env.DTE_PASS, { delay: 100 });
+                                await page.type('#rutcntr', `${credSii.DTE_RUT}-${credSii.DTE_DV}`, { delay: 100 });
+                                await page.type('#clave', credSii.DTE_PASS, { delay: 100 });
                                 
                                 await Promise.all([
                                     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
@@ -340,7 +341,7 @@ export async function emitirLoteExentaPuppeteer(facturasFront) {
                     if (!cajaVisible) throw new Error("El SII no cargó la caja para la clave digital.");
 
                     await page.focus('#myPass');
-                    await page.type('#myPass', process.env.SII_PFX_PASS, { delay: 150 }); 
+                    await page.type('#myPass', credSii.SII_PFX_PASS, { delay: 150 }); 
                     await delay(1000); 
 
                     await Promise.all([

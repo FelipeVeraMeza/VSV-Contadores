@@ -171,31 +171,24 @@ const UserInspector = ({ u, onEdit, onDelete, rolStyles, allCompanies = [] }) =>
       {/* ACCIONES */}
       <footer className="p-6 border-t border-[#efe8dd] bg-slate-50 backdrop-blur-md">
         <div className="flex gap-3">
-          {u.rol === 'Administrador' && (
-          <div className="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-start gap-3">
-            <Shield size={14} className="text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest leading-relaxed">
-              Se han restringido las acciones de eliminación y edición para proteger la integridad.
-            </p>
-          </div>
-        )}
-          {u.rol !== 'Administrador' && (
-            <Button 
-              variant="ghost"
-              onClick={() => onDelete(u)}
-              className="bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-slate-900 h-12 w-12 rounded-xl border border-red-500/10 active:scale-95 transition-all"
-            >
-              <Trash2 size={18} />
-            </Button>
-          )}
-          {u.rol !== 'Administrador' && (
-            <Button 
+          {/* Los administradores ya se pueden editar y eliminar. Los resguardos
+              viven en el backend (motivoParaFrenar): no puedes cambiar tu propio
+              rol, ni desactivarte, ni dejar la organización sin administrador.
+              Se ponen ahí y no acá para que valgan aunque alguien llame la API
+              directo. */}
+          <Button 
+            variant="ghost"
+            onClick={() => onDelete(u)}
+            className="bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-slate-900 h-12 w-12 rounded-xl border border-red-500/10 active:scale-95 transition-all"
+          >
+            <Trash2 size={18} />
+          </Button>
+          <Button 
             onClick={() => onEdit(u)}
             className="flex-1 bg-emerald-600 hover:bg-emerald-500 h-12 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-emerald-900/20 active:scale-95 transition-all"
           >
             <Pencil className="mr-2 h-3.5 w-3.5" /> Editar Perfil
           </Button>
-          )}
         </div>
       </footer>
     </motion.div>

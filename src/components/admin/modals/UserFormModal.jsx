@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, User, Briefcase, Mail, Lock, 
   CreditCard, Loader2, Search, Info,
-  Eye, EyeOff, Check
+  Eye, EyeOff, Check, ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -291,8 +291,14 @@ const UserFormModal = ({ isOpen, onClose, onSave, user, companies = [] }) => {
 
               <div className="space-y-3">
                 <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Rol en el Sistema</Label>
-                <RadioGroup value={formData.rol} onValueChange={handleRolChange} className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Administrador se puede elegir desde el 31-jul. Antes solo había
+                    Consultor y Cliente, así que cada admin nuevo se creaba por
+                    consola y ninguna organización podía armar su propio equipo.
+                    Los resguardos están en el backend (ver motivoParaFrenar):
+                    nadie cambia su propio rol ni deja la organización sin admin. */}
+                <RadioGroup value={formData.rol} onValueChange={handleRolChange} className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[
+                    { id: 'Administrador', icon: ShieldCheck, color: 'text-amber-600' },
                     { id: 'Consultor', icon: Briefcase, color: 'text-blue-600' },
                     { id: 'Cliente', icon: User, color: 'text-emerald-600' }
                   ].map(({ id, icon: RoleIcon, color }) => (

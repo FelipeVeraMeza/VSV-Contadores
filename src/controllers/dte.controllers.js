@@ -1,6 +1,5 @@
 import * as siiBase from '../lib/siiBase.js';
 import * as utils from '../lib/utils.js';
-import * as API_DTE from '../services/apiDTE.js';
 import { crear_cliente } from '../controllers/clientes.controllers.js';
 
 // ==========================================
@@ -11,6 +10,10 @@ import { emitirFacturaPuppeteer } from '../components/facturacion/scripts/factur
 import { emitirLotePuppeteer, estadoRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
 import { reenviarCorreoIndividual, reenviarCorreosMasivo } from '../components/facturacion/scripts/revisar para envios/mensajes_facturador_masivo.mjs';
 import { obtenerDestinatariosRecordatorio, enviarRecordatoriosPago, estadoRecordatorio } from '../components/facturacion/scripts/revisar para envios/recordatorio_pago.mjs';
+import { credencialesParaFacturar, describirCredenciales } from '../utils/credencialesFacturacion.js';
+import { registrar } from '../utils/bitacora.js';
+import { ultimoProceso } from '../utils/procesoEnCurso.js';
+import { claveDeCuenta, cuentaOcupada, tomarCuenta, soltarCuenta, motivoOcupada } from '../utils/candadoSii.js';
 import { pool } from '../database/db.js';
 
 // Robots para Factura Exenta (DTE 34)
@@ -23,6 +26,47 @@ import { emitirNotaCDPuppeteer } from '../components/facturacion/scripts/nota_cr
 // ==========================================
 // 🚀 CONTROLADORES DTE 33 (FACTURA ELECTRÓNICA)
 // ==========================================
+// Credenciales del SII con las que se va a emitir: las del usuario que apretó el
+// botón si las tiene cargadas en su perfil, y si no las del sistema. Queda
+// escrito en el log con cuál salió, que hasta ahora era imposible de saber.
+const credencialesDe = async (req) => {
+    const resuelto = await credencialesParaFacturar(req.user?.usuarioId, req.user?.nombre);
+    console.log(describirCredenciales(resuelto, req.user?.nombre));
+    return resuelto.credenciales;
+};
+
+// ============================================================================
+// 🔒 UN NAVEGADOR POR CUENTA DEL SII
+// ----------------------------------------------------------------------------
+// El portal del SII no admite dos sesiones abiertas con la MISMA cuenta. Con
+// cuentas distintas no hay conflicto, así que el candado va por cuenta: si
+// Victor factura con su RUT, Mati puede facturar con el suyo al mismo tiempo.
+//
+// El detalle está en utils/candadoSii.js.
+// ============================================================================
+// Candado del envío de correos: es por la cuenta de GMAIL, no por el SII, así
+// que NO impide emitir. Antes sí lo hacía, y mandar los 92 recordatorios dejaba
+// la facturación parada media hora sin necesidad.
+let correoEnCurso = false;
+
+/**
+ * Resuelve las credenciales del que factura y toma el candado de ESA cuenta.
+ * Devuelve null (y ya respondió 409) si la cuenta está ocupada.
+ */
+const tomarSiiPara = async (req, res, etiqueta) => {
+    const credenciales = await credencialesDe(req);
+    const clave = claveDeCuenta(credenciales);
+
+    const uso = cuentaOcupada(clave);
+    if (uso) {
+        res.status(409).json({ ok: false, error: `No se puede emitir ahora: ${motivoOcupada(uso)}. Espera a que termine.` });
+        return null;
+    }
+
+    tomarCuenta(clave, etiqueta, req.user?.nombre || null);
+    return { credenciales, clave };
+};
+
 export const emitirManualController = async (req, res) => {
     try {
         const datosFactura = req.body; 
@@ -35,11 +79,25 @@ export const emitirManualController = async (req, res) => {
             return res.status(400).json({ ok: false, error: "Falta el ID de la empresa emisora." });
         }
 
+        const sii = await tomarSiiPara(req, res, 'factura afecta (33)');
+        if (!sii) return;
+
         console.log("🤖 Iniciando Robot para FACTURA AFECTA (33)...");
+        try {
         // La organización del usuario viaja al robot: si crea un cliente externo,
         // la empresa nueva debe quedar en la misma organización o el CRM no la mostrará.
-        const result = await emitirFacturaPuppeteer({ ...datosFactura, organizacion_id: req.user?.organizacionId || null });
+        const result = await emitirFacturaPuppeteer({ ...datosFactura, organizacion_id: req.user?.organizacionId || null }, sii.credenciales);
+        await registrar(req, {
+            modulo: 'facturacion', accion: 'emitir_factura',
+            entidad: 'documento', entidadId: result?.folio || result?.numeroDocumento || null,
+            descripcion: `Factura afecta (33) a ${datosFactura.rutReceptor}`,
+            resultado: result?.ok === false ? 'error' : 'ok',
+            detalle: { tipoDte: 33, rutReceptor: datosFactura.rutReceptor, empresaId },
+        });
         return res.status(200).json(result);
+        } finally {
+            soltarCuenta(sii.clave);
+        }
 
     } catch(error) {
         console.error("❌ Error en emitirManualController:", error);
@@ -54,22 +112,33 @@ export const emitirMasivoController = async (req, res) => {
             return res.status(400).json({ ok: false, error: "Array de facturas inválido." });
         }
 
+        // Se resuelve ANTES de responder: después de `res.json` ya no hay a quién
+        // avisarle si la cuenta está ocupada o si no tiene credenciales.
+        const sii = await tomarSiiPara(req, res, `lote de ${facturas.length} factura(s) afecta(s)`);
+        if (!sii) return;
+
         console.log(`[INFO] Lote MASIVO AFECTO (33): ${facturas.length} registros. Iniciando...`);
+        await registrar(req, {
+            modulo: 'facturacion', accion: 'emitir_lote',
+            descripcion: `Lote de ${facturas.length} factura(s) afecta(s)`,
+            detalle: { tipoDte: 33, cantidad: facturas.length },
+        });
         res.status(200).json({ ok: true, mensaje: "Lote recibido (33). Procesando en segundo plano." });
 
-        emitirLotePuppeteer(facturas).catch(error => {
-            console.error(`\n❌ Error en proceso masivo (33):`, error);
-            // 🔓 Si el motor reventó, liberamos el candado para no bloquear las sincronizaciones del SII.
-            estadoRobot.activo = false;
-        });
+        emitirLotePuppeteer(facturas, sii.credenciales)
+            .catch(error => {
+                console.error(`\n❌ Error en proceso masivo (33):`, error);
+                // 🔓 Si el motor reventó, liberamos para no bloquear las sincronizaciones del SII.
+                estadoRobot.activo = false;
+            })
+            // El lote corre en segundo plano: la cuenta se suelta cuando TERMINA,
+            // no cuando se le responde al navegador.
+            .finally(() => soltarCuenta(sii.clave));
 
     } catch (error) {
         if (!res.headersSent) res.status(500).json({ ok: false, error: error.message });
     }
 };
-
-// 🔒 Candado: solo un envío/reenvío de correos a la vez (misma cuenta SII = no concurrencia).
-let correoEnCurso = false;
 
 // ==========================================
 // 📧 REENVÍO MANUAL DE UN CORREO (desde el registro)
@@ -93,6 +162,12 @@ export const reenviarCorreoController = async (req, res) => {
         // Respondemos de inmediato y procesamos en segundo plano (tarda ~1 min: login SII + PDF + envío).
         res.json({ ok: true, mensaje: `Reenvío del folio ${folio} iniciado. Refresca el registro en ~1 minuto para ver el resultado.` });
 
+        await registrar(req, {
+            modulo: 'correos', accion: 'reenviar_factura',
+            entidad: 'correo', entidadId: folio,
+            descripcion: `Reenvío del correo de la factura ${folio}`,
+        });
+
         reenviarCorreoIndividual(folio, datos || {}, true)
             .catch(err => console.error(`❌ Error reenviando correo del folio ${folio}:`, err.message))
             .finally(() => { correoEnCurso = false; });
@@ -106,17 +181,35 @@ export const reenviarCorreoController = async (req, res) => {
 
 // 📒 Leer el registro de correos desde la BASE DE DATOS
 export const getCorreosLogController = async (req, res) => {
-    // 🔒 El registro global de correos es una vista de administrador.
-    // Esta tabla no tiene empresa_id, así que un cliente no puede verla acotada.
+    // 🔒 Vista de administrador. Desde el 31-jul la tabla SÍ guarda
+    // `organizacion_id`, así que la consulta ya no cruza firmas: cada
+    // administrador ve solo los correos de la suya.
     if (req.user?.rol !== 'Administrador') {
         return res.json({ ok: true, correos: [] });
     }
     try {
+        // Se adjunta el estado del COBRO de cada folio para poder separar en
+        // pantalla a quien ya pagó de quien no. `correos_facturas` solo sabe si
+        // el correo salió; quién debe está en `cobro_mensual`, y el folio es la
+        // llave común entre las dos.
         const { rows } = await pool.query(
-            `SELECT folio, rut, razon_social AS "razonSocial", correo, estado, motivo, datos, fecha
-             FROM correos_facturas
-             ORDER BY fecha DESC
-             LIMIT 2000`
+            `SELECT cf.folio, cf.rut, cf.razon_social AS "razonSocial", cf.correo,
+                    cf.estado, cf.motivo, cf.datos, cf.fecha,
+                    cm.estado                       AS "estadoPago",
+                    cm.monto_facturado              AS "montoCobro",
+                    to_char(cm.periodo, 'YYYY-MM')  AS "periodoCobro"
+               FROM correos_facturas cf
+               LEFT JOIN LATERAL (
+                    SELECT c.estado, c.monto_facturado, c.periodo
+                      FROM cobro_mensual c
+                     WHERE TRIM(c.folio) = TRIM(cf.folio)
+                     ORDER BY c.periodo DESC
+                     LIMIT 1
+               ) cm ON true
+             WHERE cf.organizacion_id IS NOT DISTINCT FROM $1::uuid
+             ORDER BY cf.fecha DESC
+             LIMIT 2000`,
+            [req.user?.organizacionId || null]
         );
         res.json({ ok: true, correos: rows });
     } catch (e) {
@@ -162,15 +255,20 @@ export const reenviarCorreosMasivoController = async (req, res) => {
 // 👀 Vista previa: a cuántas empresas y a qué correos se enviaría (sin enviar nada).
 export const previewRecordatoriosController = async (req, res) => {
     try {
-        const { desde, hasta } = req.query;
+        // `periodo`: primer día del mes a cobrar. Sin él, el mes en curso.
+        // `folios`: lista separada por comas para acotar a lo que el usuario marcó.
+        const { periodo, folios } = req.query;
         const { destinatarios, excluidos } = await obtenerDestinatariosRecordatorio({
-            desde: desde || undefined,
-            hasta: hasta || null,
+            periodo: periodo || null,
+            folios: folios ? String(folios).split(',').filter(Boolean) : null,
+            organizacionId: req.user?.organizacionId || null,
         });
         res.json({
             ok: true,
             total: destinatarios.length,
             destinatarios,
+            periodo: destinatarios[0]?.periodo || null,
+            deuda: destinatarios.reduce((a, d) => a + Number(d.monto || 0), 0),
             // Para que la confirmación diga a quiénes se está dejando fuera y por qué.
             totalExcluidos: excluidos.length,
             excluidos,
@@ -192,16 +290,19 @@ export const enviarRecordatoriosController = async (req, res) => {
             return res.status(409).json({ ok: false, error: "Ya hay un envío de correos en curso. Espera a que termine." });
         }
 
-        const { desde, hasta, fechaLimite } = req.body || {};
+        const { periodo, fechaLimite, folios } = req.body || {};
 
         correoEnCurso = true;
         console.log("[INFO] Envío de recordatorios de pago solicitado.");
         res.json({ ok: true, mensaje: "Envío de recordatorios iniciado. Sigue el progreso en pantalla." });
 
         enviarRecordatoriosPago({
-            desde: desde || undefined,
-            hasta: hasta || null,
+            periodo: periodo || null,
             fechaLimite: fechaLimite || undefined,
+            folios: Array.isArray(folios) && folios.length ? folios : null,
+            // Viaja el usuario porque el envío sigue corriendo DESPUÉS de
+            // responder: para entonces ya no existe `req`.
+            usuario: req.user || null,
         })
             .catch(err => {
                 console.error("❌ Error en envío de recordatorios:", err);
@@ -219,8 +320,34 @@ export const enviarRecordatoriosController = async (req, res) => {
 };
 
 // 📊 Progreso en vivo del envío de recordatorios.
-export const getProgresoRecordatoriosController = (req, res) => {
-    res.status(200).json(estadoRecordatorio);
+export const getProgresoRecordatoriosController = async (req, res) => {
+    // La memoria manda mientras el proceso vive en ESTE servidor.
+    if (estadoRecordatorio.activo || estadoRecordatorio.total > 0) {
+        return res.status(200).json(estadoRecordatorio);
+    }
+
+    // Si la memoria está vacía puede ser que nunca se haya enviado nada, o que
+    // el servidor se reiniciara a media corrida. Se responde desde la base para
+    // que la pantalla muestre dónde quedó en vez de verse quieta.
+    const p = await ultimoProceso('recordatorio_pago', req.user?.organizacionId || null);
+    if (!p) return res.status(200).json(estadoRecordatorio);
+
+    return res.status(200).json({
+        activo: p.estado === 'activo',
+        total: p.total,
+        actual: p.actual,
+        enviados: p.exitos,
+        fallidos: p.fallidos,
+        ultimoCorreo: p.ultimo || '',
+        finalizado: p.estado === 'finalizado',
+        error: p.estado === 'abandonado'
+            ? 'El envío se interrumpió (el servidor se reinició). Revisa la bitácora para ver a quiénes alcanzó a llegar.'
+            : p.error,
+        // Extra respecto de la memoria: de dónde salió y quién lo disparó.
+        origen: 'base',
+        iniciadoPor: p.usuario_nombre,
+        iniciadoAt: p.iniciado_at,
+    });
 };
 
 // ==========================================
@@ -238,9 +365,23 @@ export const emitirExentaManualController = async (req, res) => {
             return res.status(400).json({ ok: false, error: "Falta el ID de la empresa emisora." });
         }
 
+        const sii = await tomarSiiPara(req, res, 'factura exenta (34)');
+        if (!sii) return;
+
         console.log("🤖 Iniciando Robot para FACTURA EXENTA (34)...");
-        const result = await emitirExentaPuppeteer({ ...datosFactura, organizacion_id: req.user?.organizacionId || null });
+        try {
+        const result = await emitirExentaPuppeteer({ ...datosFactura, organizacion_id: req.user?.organizacionId || null }, sii.credenciales);
+        await registrar(req, {
+            modulo: 'facturacion', accion: 'emitir_exenta',
+            entidad: 'documento', entidadId: result?.folio || null,
+            descripcion: `Factura exenta (34) a ${datosFactura.rutReceptor}`,
+            resultado: result?.ok === false ? 'error' : 'ok',
+            detalle: { tipoDte: 34, rutReceptor: datosFactura.rutReceptor, empresaId },
+        });
         return res.status(200).json(result);
+        } finally {
+            soltarCuenta(sii.clave);
+        }
 
     } catch(error) {
         console.error("❌ Error en emitirExentaManualController:", error);
@@ -255,12 +396,20 @@ export const emitirExentaMasivaController = async (req, res) => {
             return res.status(400).json({ ok: false, error: "Array de exentas inválido." });
         }
 
+        const sii = await tomarSiiPara(req, res, `lote de ${facturas.length} factura(s) exenta(s)`);
+        if (!sii) return;
+
         console.log(`[INFO] Lote MASIVO EXENTO (34): ${facturas.length} registros. Iniciando...`);
+        await registrar(req, {
+            modulo: 'facturacion', accion: 'emitir_lote',
+            descripcion: `Lote de ${facturas.length} factura(s) exenta(s)`,
+            detalle: { tipoDte: 34, cantidad: facturas.length },
+        });
         res.status(200).json({ ok: true, mensaje: "Lote recibido (34). Procesando en segundo plano." });
 
-        emitirLoteExentaPuppeteer(facturas).catch(error => {
-            console.error(`\n❌ Error en proceso masivo (34):`, error);
-        });
+        emitirLoteExentaPuppeteer(facturas, sii.credenciales)
+            .catch(error => { console.error(`\n❌ Error en proceso masivo (34):`, error); })
+            .finally(() => soltarCuenta(sii.clave));
 
     } catch (error) {
         if (!res.headersSent) res.status(500).json({ ok: false, error: error.message });
@@ -290,13 +439,27 @@ export const emitirNotaController = async (req, res) => {
         }
 
         // Llamamos al robot de Puppeteer directamente
+        const sii = await tomarSiiPara(req, res, `nota ${datos.tipo_documento}`);
+        if (!sii) return;
+
         console.log(`🚀 Iniciando motor Puppeteer en modo directo...`);
-        const resultado = await emitirNotaCDPuppeteer(datos);
+        try {
+        const resultado = await emitirNotaCDPuppeteer(datos, sii.credenciales);
+        await registrar(req, {
+            modulo: 'facturacion', accion: 'emitir_nota',
+            entidad: 'documento', entidadId: resultado?.folio || null,
+            descripcion: `Nota ${datos.tipo_documento} a ${datos.rutReceptor}-${datos.dvReceptor}, afecta folio ${datos?.referencia?.folio}`,
+            resultado: resultado?.ok ? 'ok' : 'error',
+            detalle: { tipoDte: datos.tipo_documento, folioAfectado: datos?.referencia?.folio },
+        });
 
         if (resultado && resultado.ok) {
             return res.status(200).json(resultado);
         } else {
             throw new Error("Falla desconocida dentro del robot.");
+        }
+        } finally {
+            soltarCuenta(sii.clave);
         }
 
     } catch (error) {
@@ -399,7 +562,28 @@ export const emitirDTE = async (req, res) => {
            estado: 'Emitido'
        };
 
-       await API_DTE.guardarDocumentoEmitido(documentoData);
+       // Antes esto llamaba a `API_DTE.guardarDocumentoEmitido`, que NO EXISTE:
+       // reventaba con un TypeError que el catch de abajo se tragaba, así que
+       // ningún documento emitido por esta ruta se guardaba. Ahora se inserta
+       // con los nombres reales de la tabla `documentos_emitidos`.
+       await pool.query(
+           `INSERT INTO documentos_emitidos
+               (id, empresa_id, rut_cliente, razon_social_cliente, tipo_dte, folio,
+                monto_neto, monto_iva, monto_total, fecha_emision, url_pdf)
+            VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+           [
+               documentoData.empresa_id,
+               documentoData.receptor_rut,
+               documentoData.receptor_razon_social,
+               33,
+               documentoData.numero_documento,
+               documentoData.monto_neto,
+               documentoData.monto_iva,
+               documentoData.monto_total,
+               documentoData.fecha_emision,
+               documentoData.archivo_pdf || null,
+           ]
+       );
     } catch (err) {
         console.error('Error Crítico: Fallo al guardar el documento:', err);
     }

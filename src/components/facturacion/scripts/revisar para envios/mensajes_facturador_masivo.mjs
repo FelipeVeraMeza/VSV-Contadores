@@ -154,8 +154,13 @@ export async function registrarCorreoEnLog({ folio, rut, razonSocial, correo, es
     if (folioStr) {
         try {
             await pool.query(
-                `INSERT INTO correos_facturas (folio, rut, razon_social, correo, estado, motivo, datos, fecha)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+                // La organización sale del cobro del mismo folio: es la llave que
+                // comparten las dos tablas. Sin esto la fila queda global y, al
+                // entrar la segunda firma, se vería desde la otra organización.
+                `INSERT INTO correos_facturas (folio, rut, razon_social, correo, estado, motivo, datos, fecha, organizacion_id)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(),
+                         (SELECT cm.organizacion_id FROM cobro_mensual cm
+                           WHERE TRIM(cm.folio) = TRIM($1) ORDER BY cm.periodo DESC LIMIT 1))
                  ON CONFLICT (folio) DO UPDATE SET
                     rut = EXCLUDED.rut,
                     razon_social = EXCLUDED.razon_social,
@@ -163,6 +168,7 @@ export async function registrarCorreoEnLog({ folio, rut, razonSocial, correo, es
                     estado = EXCLUDED.estado,
                     motivo = EXCLUDED.motivo,
                     datos = COALESCE(EXCLUDED.datos, correos_facturas.datos),
+                    organizacion_id = COALESCE(EXCLUDED.organizacion_id, correos_facturas.organizacion_id),
                     fecha = NOW()`,
                 [folioStr, rut || '', razonSocial || '', correo || '', estado || 'desconocido', motivo || '', datos ? JSON.stringify(datos) : null]
             );
@@ -512,7 +518,7 @@ Saludos cordiales,
 Simple Pyme`;
 
         const mailOptions = {
-            from: `"Simple Pyme" <matias.olivos@vsvconsultores.com>`,
+            from: `"Matias Olivos" <matias.olivos@vsvconsultores.com>`,
             to: datosExtraidos.correo,
             subject: asunto,
             html: `<div style="font-family: Arial, sans-serif; color: #333; line-height: 1.5;">

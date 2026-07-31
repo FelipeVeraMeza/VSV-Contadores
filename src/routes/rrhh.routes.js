@@ -64,7 +64,7 @@ import {
     getFiniquito,
 } from '../controllers/finiquitos.controllers.js';
 import { listCompaniesLista } from '../controllers/companies.controllers.js';
-import { requireSession, requireAdmin } from "../middleware/auth.js";
+import { requireSession, requireAdmin, requireModulo } from "../middleware/auth.js";
 
 const router = Router();
 

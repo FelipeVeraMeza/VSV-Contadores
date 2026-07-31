@@ -19,6 +19,7 @@ const GestionUsuarios = lazy(() => import('../components/admin/GestionUsuarios.j
 const GestionEmpresas = lazy(() => import('../components/admin/GestionEmpresas.jsx'));
 const Administracion = lazy(() => import('../components/admin/Administracion.jsx'));
 const ProfileEditor = lazy(() => import('../components/ProfileEditor.jsx'));
+const Tareas = lazy(() => import('../components/Tareas.jsx'));
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
@@ -80,6 +81,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/perfil" element={<ProfileEditor />} />
               <Route path="/CRM" element={<CRM />} />
+              <Route path="/tareas" element={<Tareas />} />
               <Route path="/contabilidad" element={<Contabilidad />} />
               <Route path="/rrhh" element={<RecursosHumanos />} />
               <Route path="/facturacion" element={<Facturacion />} />

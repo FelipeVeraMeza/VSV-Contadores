@@ -168,11 +168,7 @@ export default function GuiaDespachoModal({ isOpen, setIsOpen }) {
             : {})
       });
 
-      const res = await fetch(`${API_BASE_URL}/dte/emitir-dte`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dteJson }),
-      });
+      const res = await apiDTE.emitirDte(dteJson);
 
       const data = await res.json();
 

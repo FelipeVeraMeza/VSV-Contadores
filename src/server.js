@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 // Database
 import { pool } from "./database/db.js";
-import { requireSession, requireAdmin } from './middleware/auth.js';
+import { requireSession, requireAdmin , requireModulo } from './middleware/auth.js';
 
 // Routes
 import authRoutes from './routes/auth.routes.js';
@@ -83,18 +83,28 @@ app.use('/api/auth', apiLimiter, authRoutes);
 app.use('/api/users', apiLimiter, userRoutes);
 app.use('/api/companies', apiLimiter, companyRoutes);
 app.use('/api/dashboard', apiLimiter, dashboardRoutes);
-app.use('/api/clientes', apiLimiter, clientesRoutes);
+app.use('/api/clientes', apiLimiter, requireSession, requireModulo('crm'), clientesRoutes);
 app.use('/api/personas', apiLimiter, personasRoutes);
-app.use('/api/crm', apiLimiter, crmRoutes);
-app.use('/api/accounting', apiLimiter, accountingRoutes);
-app.use('/api/rrhh', apiLimiter, rrhhRoutes);
-app.use('/api/renta', apiLimiter, rentaRoutes);
+app.use('/api/crm', apiLimiter, requireSession, requireModulo('crm'), crmRoutes);
+
+// ============================================================================
+// 🔐 RECORTE DE MÓDULOS POR USUARIO
+// ----------------------------------------------------------------------------
+// `requireSession` va acá, ANTES de requireModulo, porque el candado necesita
+// saber quién es para leer sus banderas. Montarlo dentro de cada router lo
+// dejaba corriendo demasiado temprano: `req.user` todavía no existía y dejaba
+// pasar a todos. requireSession es idempotente, así que el que ya hace cada
+// router no vuelve a consultar la base.
+// ============================================================================
+app.use('/api/accounting', apiLimiter, requireSession, requireModulo('contabilidad'), accountingRoutes);
+app.use('/api/rrhh', apiLimiter, requireSession, requireModulo('rrhh'), rrhhRoutes);
+app.use('/api/renta', apiLimiter, requireSession, requireModulo('operacion_renta'), rentaRoutes);
 app.use('/api/bancos', apiLimiter, bancoRoutes);
-app.use('/api/dte', apiLimiter, dteRoutes);
+app.use('/api/dte', apiLimiter, requireSession, requireModulo('facturacion'), dteRoutes);
 app.use("/api/dte-consulta", apiLimiter, dteConsultaRoutes);
 app.use("/api/caja", apiLimiter, cajaRoutes);
 app.use('/api/credenciales', apiLimiter, credencialesRoutes);
-app.use('/api/cobros', apiLimiter, cobrosRoutes);
+app.use('/api/cobros', apiLimiter, requireSession, requireModulo('facturacion'), cobrosRoutes);
 app.use('/api/whatsapp', apiLimiter, whatsappRoutes);
 
 // ============================================================================

@@ -7,7 +7,6 @@ import { toast } from "@/components/ui/use-toast";
 import { ArrowDownUp, Search, CheckCircle2, Loader2, FileText, ChevronRight, User, Hash } from "lucide-react";
 import { cleanRut } from "@/lib/rut.js";
 import { useAuth } from "@/hooks/useAuth.jsx";
-import { API_BASE_URL } from "../../../../../config.js";
 
 // Servicios
 import { getCrmDataApi } from "@/services/crmService.js";
@@ -234,9 +233,7 @@ export default function NotaCreditoDebitoModal({ isOpen, setIsOpen, prefillData 
       });
 
       // 3. Enviamos al Backend
-      const res = await fetch(`${API_BASE_URL}/dte/emitir-nota`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
-      });
+      const res = await apiDTE.emitirNota(payload);
       const data = await res.json();
       
       if (!data.ok) throw new Error(data.error || "Error de comunicación con el SII.");

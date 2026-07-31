@@ -12,6 +12,9 @@ const CredencialesSII = ({ embedded = false }) => {
 
   const [form, setForm] = useState({ dteRut: '', dteDv: '', dtePass: '', pfxPass: '', ciudad: 'Santiago' });
   const [tieneCredenciales, setTieneCredenciales] = useState(false);
+  // La cuenta cuyo RUT es el `DTE_RUT` del sistema es la que factura hoy para
+  // toda la oficina. No se le ofrece el formulario para no romper eso sin querer.
+  const [esCuentaDelSistema, setEsCuentaDelSistema] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [showPfx, setShowPfx] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -29,6 +32,7 @@ const CredencialesSII = ({ embedded = false }) => {
           pfxPass: data.pfxPass || '', ciudad: data.ciudad || 'Santiago'
         });
         setTieneCredenciales(!!data.tieneCredenciales);
+        setEsCuentaDelSistema(!!data.esCuentaDelSistema);
       }
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'No se pudieron cargar las credenciales.' });
@@ -93,6 +97,25 @@ const CredencialesSII = ({ embedded = false }) => {
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="h-6 w-6 text-blue-500 animate-spin" />
+          </div>
+        ) : esCuentaDelSistema ? (
+          <div className="p-6">
+            <div className="bg-amber-500/[0.07] border border-amber-500/25 rounded-2xl p-5 flex gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="text-[12px] text-slate-600 leading-relaxed space-y-2">
+                <p className="font-black uppercase tracking-widest text-amber-700 text-[10px]">
+                  Cuenta de facturación del sistema
+                </p>
+                <p>
+                  Esta es la cuenta con la que hoy se emiten <span className="font-bold text-slate-700">todos</span> los
+                  documentos de la oficina. Sus credenciales están en la configuración del servidor y no se cambian
+                  desde acá, para no dejar la facturación fuera de servicio sin querer.
+                </p>
+                <p className="text-slate-400">
+                  Los demás usuarios sí configuran las suyas en esta misma pantalla.
+                </p>
+              </div>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSave} className="p-6 space-y-5">

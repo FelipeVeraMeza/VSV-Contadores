@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { encrypt } from '../../../utils/crypto.js';
 import { pool } from '../../../database/db.js';
 import { enviarCorreoFacturaEnSesion } from './revisar para envios/mensajes_facturador_masivo.mjs';
+import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
 
 const { Client } = pkg;
 dotenv.config();
@@ -273,7 +274,7 @@ async function cerrarSesionSII(page, browser) {
 // =========================================================================
 // 🚀 MOTOR DE FACTURACIÓN MASIVA
 // =========================================================================
-export async function emitirLotePuppeteer(facturasFront) {
+export async function emitirLotePuppeteer(facturasFront, credSii = credencialesDelSistema()) {
     console.log('\n==================================================');
     console.log('[INFO] AUDITORÍA: Iniciando Motor Masivo por Lotes...');
 
@@ -463,8 +464,8 @@ export async function emitirLotePuppeteer(facturasFront) {
                                     if (document.querySelector('#clave')) document.querySelector('#clave').value = '';
                                 });
 
-                                await page.type('#rutcntr', `${process.env.DTE_RUT}-${process.env.DTE_DV}`, { delay: 35 });
-                                await page.type('#clave', process.env.DTE_PASS, { delay: 35 });
+                                await page.type('#rutcntr', `${credSii.DTE_RUT}-${credSii.DTE_DV}`, { delay: 35 });
+                                await page.type('#clave', credSii.DTE_PASS, { delay: 35 });
 
                                 await Promise.all([
                                     page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 15000 }),
@@ -692,7 +693,7 @@ export async function emitirLotePuppeteer(facturasFront) {
 
                     console.log('   🔑 Ingresando clave de firma...');
                     await page.focus('#myPass');
-                    await page.type('#myPass', process.env.SII_PFX_PASS, { delay: 150 });
+                    await page.type('#myPass', credSii.SII_PFX_PASS, { delay: 150 });
                     await delay(1000);
 
                     console.log('   📤 Enviando factura al SII (firmando)...');

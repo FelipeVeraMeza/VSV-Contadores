@@ -24,6 +24,9 @@ const delay = (ms) => new Promise(res => setTimeout(res, ms));
 const RUTA_FIRMA = './src/components/facturacion/data/firma mati.jpeg';
 
 // 📅 Fecha en que venció el pago (día de ayer). ⚠️ EDÍTALA antes de enviar.
+// OJO: acá la fecha es una fecha PASADA ("el plazo venció el ..."), no un plazo
+// futuro como en recordatorio_pago.mjs. Por eso NO se calcula automáticamente:
+// este script se corre a mano y la fecha se edita según el caso.
 const FECHA_VENCIMIENTO = '5 de julio';
 
 // =====================================================================
@@ -198,7 +201,7 @@ export async function enviarRecordatoriosLista({ fechaVencimiento = FECHA_VENCIM
 
         const { asunto, html } = construirCorreoRecordatorio(dest, { fechaVencimiento });
         const mailOptions = {
-            from: `"Simple Pyme" <matias.olivos@vsvconsultores.com>`,
+            from: `"Matias Olivos" <matias.olivos@vsvconsultores.com>`,
             to: dest.correos, // array → todas las direcciones de la fila reciben el mismo correo
             subject: asunto,
             html,

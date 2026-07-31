@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Building2 } from 'lucide-react';
+import { Building2, Plus } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { useSii } from '@/contexts/SiiContext.jsx';
 import { useAuth } from '@/hooks/useAuth.jsx';
+import { useEmpresasLista } from '@/hooks/useEmpresasLista';
+import { Button } from '@/components/ui/button';
 
 // IMPORTACIONES
 import SIILoginModal from '@/components/facturacion/modals/SIILoginModal';
 import EmisionDTE from '@/components/facturacion/tabs/EmisionDTE';
 import DocumentosDTE from '@/components/facturacion/tabs/DocumentosDTE';
 import CobrosMensuales from '@/components/facturacion/tabs/CobrosMensuales';
+import CorreoMasivo from '@/components/facturacion/tabs/CorreoMasivo';
 
 import FacturaElectronicaModal from '@/components/facturacion/modals/dte/FacturaElectronicaModal';
 import ExentaElectronicaModal from '@/components/facturacion/modals/dte/ExentaElectronicaModal';
@@ -23,35 +26,66 @@ const TITULOS = {
   emision:    { title: 'Emitir DTE',              sub: 'Emisión de documentos tributarios electrónicos' },
   documentos: { title: 'Historial de Documentos', sub: 'Documentos emitidos y recibidos en el SII' },
   cobros:     { title: 'Cobro del Mes',           sub: 'Ciclo de cobro mensual a los clientes del CRM' },
+  correos:    { title: 'Correo Masivo',           sub: 'Registro de correos enviados y recordatorios de pago' },
 };
 
 const Facturacion = () => {
   const { dtes } = useSii();
   const { selectedCompany, user } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = user?.rol === 'Administrador';
+  // Para distinguir "no eligió empresa" de "no tiene ninguna".
+  const { empresas, isLoading: cargandoEmpresas } = useEmpresasLista();
   const empresaId = selectedCompany?.id;
 
   // La sub-página activa se controla desde el menú lateral (?sub=...).
   // El cobro del mes es solo para el administrador; si un cliente llega a esa
-  // URL, cae de vuelta a la emisión de DTE.
+  // URL, cae de vuelta a la emisión de DTE. El correo masivo va por la misma
+  // regla: manda correo a los clientes de la firma, no a los de una empresa.
   const [searchParams] = useSearchParams();
   let activeTab = searchParams.get('sub') || 'emision';
-  if (activeTab === 'cobros' && !isAdmin) activeTab = 'emision';
+  if ((activeTab === 'cobros' || activeTab === 'correos') && !isAdmin) activeTab = 'emision';
 
   const [isSIILoginModalOpen, setIsSIILoginModalOpen] = useState(false);
   const [isDocumentoModalOpen, setIsDocumentoModalOpen] = useState(false);
   const [tipoDocumentoSeleccionado, setTipoDocumentoSeleccionado] = useState(null);
 
+  // Sin empresa seleccionada hay DOS situaciones muy distintas, y antes las dos
+  // mostraban el mismo mensaje: "selecciona una empresa en el menú superior".
+  // A quien todavía no tiene NINGUNA empresa eso le pide algo imposible —el
+  // selector le sale vacío— y lo deja sin salida desde la pantalla.
   if (!empresaId && !isAdmin) {
+    const sinNinguna = !cargandoEmpresas && empresas.length === 0;
+
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] text-center animate-in fade-in duration-500">
+      <div className="flex flex-col items-center justify-center h-[70vh] text-center animate-in fade-in duration-500 px-4">
         <div className="w-24 h-24 bg-blue-500/10 border border-blue-500/20 rounded-full flex items-center justify-center mb-6 shadow-[0_0_50px_rgba(59,130,246,0.15)]">
-            <Building2 className="h-10 w-10 text-blue-600" />
+          <Building2 className="h-10 w-10 text-blue-600" />
         </div>
-        <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter italic">Módulo Facturador</h2>
-        <p className="text-slate-500 text-xs md:text-sm mt-3 font-bold uppercase tracking-widest max-w-md">
-          Para emitir o revisar documentos tributarios, por favor selecciona una empresa en el menú superior.
-        </p>
+        <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter italic">
+          {sinNinguna ? 'Aún no tienes empresas' : 'Módulo Facturador'}
+        </h2>
+
+        {cargandoEmpresas ? (
+          <p className="text-slate-400 text-xs mt-3 font-bold uppercase tracking-widest">Cargando tus empresas…</p>
+        ) : sinNinguna ? (
+          <>
+            <p className="text-slate-500 text-xs md:text-sm mt-3 font-medium max-w-md leading-relaxed">
+              Para emitir documentos tributarios necesitas al menos una empresa registrada.
+              Créala en el CRM y vuelve acá: quedará asignada a ti automáticamente.
+            </p>
+            <Button
+              onClick={() => navigate('/CRM?sub=list')}
+              className="mt-6 h-11 px-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black uppercase text-[11px] tracking-widest shadow-lg shadow-emerald-600/25 inline-flex items-center gap-2"
+            >
+              <Plus size={16} /> Crear mi primera empresa
+            </Button>
+          </>
+        ) : (
+          <p className="text-slate-500 text-xs md:text-sm mt-3 font-bold uppercase tracking-widest max-w-md">
+            Selecciona una empresa en el menú superior para emitir o revisar documentos.
+          </p>
+        )}
       </div>
     );
   }
@@ -115,6 +149,7 @@ const Facturacion = () => {
               )}
               {activeTab === 'documentos' && <DocumentosDTE />}
               {activeTab === 'cobros' && isAdmin && <CobrosMensuales />}
+              {activeTab === 'correos' && isAdmin && <CorreoMasivo />}
             </motion.div>
           </AnimatePresence>
         </div>

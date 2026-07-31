@@ -46,9 +46,35 @@ export const corsOptions = {
 };
 
 export const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, 
-  max: 1000, 
-  standardHeaders: true, 
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas peticiones. Intente más tarde.' }
+});
+
+// ============================================================================
+// LÍMITE PROPIO PARA LAS ACCIONES QUE SALEN AL MUNDO
+// ----------------------------------------------------------------------------
+// El limitador de arriba es global: 1000 peticiones cada 15 minutos compartidas
+// por toda la API. Para consultar está bien, pero dispara igual de fácil un
+// envío de 93 correos a clientes reales o un lote de facturas al SII.
+//
+// Estas acciones no se repiten: se hacen una vez al mes. Un puñado de intentos
+// por ventana es de sobra, y corta el caso de apretar el botón dos veces por
+// nervios o por un doble clic.
+//
+// Va POR USUARIO y no por IP: en una oficina todos salen por la misma IP, y no
+// tiene sentido que el envío de uno le consuma el cupo al otro.
+// ============================================================================
+export const envioMasivoLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.usuarioId || req.ip,
+  message: {
+    ok: false,
+    error: 'Demasiados envíos masivos seguidos. Espera unos minutos: si el anterior salió bien, no hace falta repetirlo.'
+  }
 });

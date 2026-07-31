@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     Plus, Search, Loader2, X, Trash2, Check, Clock, Folder, FolderPlus,
     MessageSquare, ListChecks, ChevronRight, Circle, CircleDot, CheckCircle2,
-    Flag, User, Users, Calendar, Send, Paperclip, Download
+    Flag, User, Users, Calendar, Send, Paperclip, Download, Eye
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import {
@@ -16,14 +16,28 @@ import { getCatalogosApi as getCatalogosPersonasApi } from '@/services/personaSe
 const getUser = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
 const getSessionId = () => getUser().sessionId;
 
-const PRIO = { alta: 'text-red-600 bg-red-500/10 border-red-500/30', media: 'text-amber-600 bg-amber-500/10 border-amber-500/30', baja: 'text-slate-500 bg-slate-500/10 border-slate-400/30' };
+// Los valores tienen que calzar con los del backend (crm.controllers.js) y con
+// las restricciones CHECK de la base. Si acá aparece uno que la base no acepta,
+// el guardado revienta; si falta uno que la base sí acepta, la fila se dibuja
+// sin color ni etiqueta.
+const PRIO = {
+    critica: 'text-red-700 bg-red-600/15 border-red-600/40',
+    alta: 'text-orange-600 bg-orange-500/10 border-orange-500/30',
+    media: 'text-amber-600 bg-amber-500/10 border-amber-500/30',
+    baja: 'text-slate-500 bg-slate-500/10 border-slate-400/30',
+};
+const PRIORIDADES = ['baja', 'media', 'alta', 'critica'];
 const ESTADO_META = {
     pendiente: { label: 'Activa', icon: Circle, c: 'text-blue-600' },
     en_proceso: { label: 'En proceso', icon: CircleDot, c: 'text-amber-600' },
+    en_revision: { label: 'En revisión', icon: Eye, c: 'text-violet-600' },
     completada: { label: 'Finalizada', icon: CheckCircle2, c: 'text-emerald-600' },
     cancelada: { label: 'Cancelada', icon: X, c: 'text-slate-400' },
 };
-const ESTADOS_ORDEN = ['pendiente', 'en_proceso', 'completada'];
+// Los botones de estado del detalle, en el orden del flujo.
+const ESTADOS_ORDEN = ['pendiente', 'en_proceso', 'en_revision', 'completada'];
+// Trabajo todavía abierto. Espeja ESTADOS_ACTIVOS del backend.
+const ESTADOS_ACTIVOS = ['pendiente', 'en_proceso', 'en_revision'];
 const inp = "w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500";
 const fechaCorta = (d) => d ? new Date(d).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }) : null;
 
@@ -67,7 +81,10 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
                         </label>
                         <label className="block"><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Prioridad</span>
                             <select className={`${inp} cursor-pointer`} value={form.prioridad} onChange={set('prioridad')}>
-                                <option value="alta">Alta</option><option value="media">Media</option><option value="baja">Baja</option>
+                                <option value="critica">Crítica</option>
+                                <option value="alta">Alta</option>
+                                <option value="media">Media</option>
+                                <option value="baja">Baja</option>
                             </select>
                         </label>
                         <label className="block"><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fecha de entrega</span>
@@ -105,7 +122,9 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
 // ---------------------------------------------------------------
 // Panel de detalle: subtareas + comentarios + estado
 // ---------------------------------------------------------------
-const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios }) => {
+// Una subtarea ES una tarea (misma tabla, con parent_id), así que este mismo
+// panel sirve para las dos. `onAbrir` permite entrar a una subtarea y volver.
+const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
     const [data, setData] = useState(null);
     const [subs, setSubs] = useState([]);
     const [coms, setComs] = useState([]);
@@ -124,6 +143,15 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios }) => {
         } catch { /* */ } finally { setLoading(false); }
     }, [tareaId]);
     useEffect(() => { setLoading(true); cargar(); }, [cargar]);
+
+    // RF-07 y RF-12: los campos se pueden corregir después de crear. Antes solo
+    // se fijaban al crear la tarea y ya no había forma de cambiarlos, y las
+    // subtareas nacían solo con título.
+    const guardarCampo = async (campo, valor) => {
+        setData(p => ({ ...p, [campo]: valor }));
+        try { await actualizarTareaApi(getSessionId(), tareaId, { [campo]: valor }); onChanged(); }
+        catch { toast({ variant: 'destructive', title: 'No se pudo guardar' }); cargar(); }
+    };
 
     const cambiarEstado = async (estado) => {
         setData(p => ({ ...p, estado }));
@@ -206,6 +234,14 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios }) => {
         <div className="w-full lg:w-2/5 bg-white border border-[#efe8dd] rounded-2xl flex flex-col overflow-hidden h-full min-h-[400px]">
             <div className="p-4 border-b border-[#efe8dd] flex items-start gap-2">
                 <div className="min-w-0 flex-1">
+                    {data.parentId && (
+                        <button
+                            onClick={() => onAbrir?.(data.parentId)}
+                            className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-emerald-600 flex items-center gap-1 mb-1"
+                        >
+                            ← Volver a la tarea principal
+                        </button>
+                    )}
                     <h3 className="text-sm font-black text-slate-900">{data.titulo}</h3>
                     {data.proyectoNombre && <span className="text-[10px] font-bold" style={{ color: data.proyectoColor || '#199b4d' }}>● {data.proyectoNombre}</span>}
                 </div>
@@ -228,14 +264,48 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios }) => {
 
                 {/* Meta */}
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div><span className="text-[9px] text-slate-400 uppercase block">Responsable</span><span className="text-slate-700">{data.responsableNombre || '—'}</span></div>
-                    <div><span className="text-[9px] text-slate-400 uppercase block">Prioridad</span><span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase ${PRIO[data.prioridad]}`}>{data.prioridad}</span></div>
-                    <div><span className="text-[9px] text-slate-400 uppercase block">Entrega</span><span className="text-slate-700">{data.venceAt ? new Date(data.venceAt).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</span></div>
-                    <div><span className="text-[9px] text-slate-400 uppercase block">Colaboradores</span><span className="text-slate-700">{(data.colaboradores || []).map(c => c.nombre).join(', ') || '—'}</span></div>
+                    <div>
+                        <span className="text-[9px] text-slate-400 uppercase block mb-0.5">Responsable</span>
+                        <select
+                            value={data.responsableId || ''}
+                            onChange={(e) => guardarCampo('responsableId', e.target.value || null)}
+                            className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-2 py-1 text-xs text-slate-700 outline-none focus:border-emerald-500 cursor-pointer"
+                        >
+                            <option value="">— Sin responsable —</option>
+                            {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <span className="text-[9px] text-slate-400 uppercase block mb-0.5">Prioridad</span>
+                        <select
+                            value={data.prioridad || 'media'}
+                            onChange={(e) => guardarCampo('prioridad', e.target.value)}
+                            className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-2 py-1 text-xs text-slate-700 outline-none focus:border-emerald-500 cursor-pointer capitalize"
+                        >
+                            {PRIORIDADES.map(x => <option key={x} value={x}>{x === 'critica' ? 'crítica' : x}</option>)}
+                        </select>
+                    </div>
+                    <div>
+                        <span className="text-[9px] text-slate-400 uppercase block mb-0.5">Entrega</span>
+                        <input
+                            type="datetime-local"
+                            value={data.venceAt ? new Date(data.venceAt).toISOString().slice(0, 16) : ''}
+                            onChange={(e) => guardarCampo('venceAt', e.target.value || null)}
+                            className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-2 py-1 text-xs text-slate-700 outline-none focus:border-emerald-500"
+                        />
+                    </div>
+                    <div>
+                        <span className="text-[9px] text-slate-400 uppercase block mb-0.5">Colaboradores</span>
+                        <span className="text-slate-700 block pt-1">{(data.colaboradores || []).map(c => c.nombre).join(', ') || '—'}</span>
+                    </div>
                 </div>
                 {data.descripcion && <div><span className="text-[9px] text-slate-400 uppercase block mb-1">Descripción</span><p className="text-xs text-slate-700 whitespace-pre-wrap">{data.descripcion}</p></div>}
 
                 {/* Subtareas */}
+                {/* Un solo nivel de anidación: dentro de una subtarea no se ofrece
+                    crear otra. Sin ese tope se puede anidar sin fin y la pantalla
+                    deja de entenderse. */}
+                {!data.parentId && (
                 <div>
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5 mb-2"><ListChecks size={13} /> Subtareas ({subs.filter(s => s.estado === 'completada').length}/{subs.length})</span>
                     <div className="space-y-1">
@@ -244,7 +314,13 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios }) => {
                                 <button onClick={() => toggleSub(s)} className="shrink-0">
                                     {s.estado === 'completada' ? <CheckCircle2 size={15} className="text-emerald-500" /> : <Circle size={15} className="text-slate-300 hover:text-emerald-500" />}
                                 </button>
-                                <span className={`text-xs flex-1 ${s.estado === 'completada' ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{s.titulo}</span>
+                                <button
+                                    onClick={() => onAbrir?.(s.id)}
+                                    title="Abrir la subtarea"
+                                    className={`text-xs flex-1 text-left hover:text-emerald-600 hover:underline underline-offset-2 ${s.estado === 'completada' ? 'text-slate-400 line-through' : 'text-slate-700'}`}
+                                >
+                                    {s.titulo}
+                                </button>
                                 <button onClick={() => delSub(s)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={12} /></button>
                             </div>
                         ))}
@@ -254,6 +330,7 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios }) => {
                         <button onClick={addSub} className="bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg px-2.5"><Plus size={14} /></button>
                     </div>
                 </div>
+                )}
 
                 {/* Archivos (binario en la base) */}
                 <div>
@@ -351,7 +428,9 @@ const TareasPanel = () => {
     const lista = useMemo(() => {
         const q = busq.trim().toLowerCase();
         return tareas.filter(t => {
-            if (filtroEstado === 'activas' && t.estado === 'completada') return false;
+            // "Activas" es lo que sigue abierto: en revisión todavía cuenta, y
+            // lo cancelado no aparece acá aunque tampoco esté finalizado.
+            if (filtroEstado === 'activas' && !ESTADOS_ACTIVOS.includes(t.estado)) return false;
             if (!q) return true;
             return (t.titulo || '').toLowerCase().includes(q) || (t.responsableNombre || '').toLowerCase().includes(q);
         });
@@ -469,7 +548,7 @@ const TareasPanel = () => {
                                         </div>
                                     </div>
                                     {t.venceAt && <span className={`text-[9px] font-bold shrink-0 ${vencida ? 'text-red-600' : 'text-slate-500'}`}>{fechaCorta(t.venceAt)}</span>}
-                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 ${PRIO[t.prioridad]}`}>{t.prioridad}</span>
+                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 ${PRIO[t.prioridad] || PRIO.media}`}>{t.prioridad}</span>
                                     <span className={`text-[9px] font-black uppercase shrink-0 ${meta.c} hidden lg:inline`}>{meta.label}</span>
                                     <button onClick={(e) => eliminar(t, e)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={13} /></button>
                                 </div>
@@ -479,7 +558,7 @@ const TareasPanel = () => {
                 </div>
 
                 {/* Detalle */}
-                {selId && <DetalleTarea tareaId={selId} onClose={() => setSelId(null)} onChanged={cargar} usuarios={usuarios} />}
+                {selId && <DetalleTarea tareaId={selId} onClose={() => setSelId(null)} onChanged={cargar} usuarios={usuarios} onAbrir={setSelId} />}
             </div>
 
             {crear && <CrearTareaModal onClose={() => setCrear(false)} onCreated={cargar} proyectos={proyectos} usuarios={usuarios} proyectoActual={proyectoSel} />}

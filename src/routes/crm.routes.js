@@ -6,7 +6,8 @@ import {
     listarProyectos, crearProyecto, actualizarProyecto, eliminarProyecto,
     metricasDashboard, guardarMeta
 } from '../controllers/crm.controllers.js';
-import { requireSession } from '../middleware/auth.js';
+import { requireSession, requireModulo } from '../middleware/auth.js';
+import { exigirPermisoTarea } from '../utils/permisosTarea.js';
 
 const router = Router();
 
@@ -32,10 +33,14 @@ router.get('/tareas', requireSession, listarTareas);
 router.post('/tareas', requireSession, crearTarea);
 // Rutas específicas antes de la genérica /:id para que no las capture como id.
 router.delete('/tareas/completadas', requireSession, eliminarTareasCompletadas);
-router.get('/tareas/:id', requireSession, obtenerTarea);
-router.post('/tareas/:id/comentarios', requireSession, agregarComentario);
-router.post('/tareas/:id/adjuntos', requireSession, subirAdjunto);
-router.put('/tareas/:id', requireSession, actualizarTarea);
-router.delete('/tareas/:id', requireSession, eliminarTarea);
+// RF-14 · Permisos por tarea. Arrancan en MODO PERMISIVO: registran en la
+// bitacora lo que habrian bloqueado y dejan pasar. Se activan de verdad con
+// PERMISOS_TAREA_ESTRICTO=true, despues de revisar unos dias que no corten nada
+// legitimo. Ver utils/permisosTarea.js.
+router.get('/tareas/:id', requireSession, exigirPermisoTarea('ver'), obtenerTarea);
+router.post('/tareas/:id/comentarios', requireSession, exigirPermisoTarea('editar'), agregarComentario);
+router.post('/tareas/:id/adjuntos', requireSession, exigirPermisoTarea('editar'), subirAdjunto);
+router.put('/tareas/:id', requireSession, exigirPermisoTarea('editar'), actualizarTarea);
+router.delete('/tareas/:id', requireSession, exigirPermisoTarea('eliminar'), eliminarTarea);
 
 export default router;

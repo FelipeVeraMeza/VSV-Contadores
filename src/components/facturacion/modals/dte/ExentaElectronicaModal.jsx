@@ -11,7 +11,6 @@ import {
   Search, CheckCircle2, UserPlus, UploadCloud, AlertCircle, FileText, Plus, X,
   ChevronLeft, ChevronRight, Receipt
 } from "lucide-react";
-import { API_BASE_URL } from "../../../../../config.js";
 import { cleanRut } from "@/lib/rut.js";
 
 import { useAuth } from "@/hooks/useAuth.jsx"; 
@@ -148,7 +147,7 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
       if (isOpen && activeTab === TABS.MASIVA) {
           interval = setInterval(async () => {
               try {
-                  const res = await fetch(`${API_BASE_URL}/dte/progreso-masivo-exenta`);
+                  const res = await apiDTE.getProgresoMasivoExenta();
                   if (res.ok) {
                       const data = await res.json();
                       setProgresoRobot(data);
@@ -383,7 +382,7 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
       if (confirm("¿Estás seguro de detener el robot? Cancelará el ciclo activo y las exentas restantes.")) {
           try {
               // 🔥 Asegura que este endpoint lo tengas creado en tu backend (exenta)
-              await fetch(`${API_BASE_URL}/dte/detener-robot-exenta`, { method: "POST" });
+              await apiDTE.detenerRobotExenta();
               toast({ title: "Señal de Aborto Enviada", description: "El robot se detendrá de forma segura." });
               setIsBulkSubmitting(false);
           } catch (e) {}
@@ -409,9 +408,7 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
     setBulkRows(prev => prev.map(r => r.estado === 'pendiente' ? { ...r, estado: "procesando" } : r));
     
     // 🔥 Endpoint para emitir Exentas en lote
-    fetch(`${API_BASE_URL}/dte/emitir-masivo-exenta`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ facturas: facturasAProcesar }),
-    }).catch(err => { console.error("Error al enviar lote:", err); setIsBulkSubmitting(false); });
+    apiDTE.emitirMasivoExenta(facturasAProcesar).catch(err => { console.error("Error al enviar lote:", err); setIsBulkSubmitting(false); });
   };
 
   const handleSubmitUnica = async (e) => {
@@ -430,9 +427,7 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
       };
       
       // 🔥 Endpoint individual exenta
-      const res = await fetch(`${API_BASE_URL}/dte/emitir-exenta-manual`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
-      });
+      const res = await apiDTE.emitirExentaManual(payload);
       const data = await res.json();
       if (!res.ok || data?.ok === false) throw new Error(data?.error || "Error SII");
       

@@ -48,7 +48,6 @@ function MainPage() {
     { id: 'dashboard',     name: 'Dashboard',     icon: LayoutDashboard },
     { id: 'list',          name: 'Clientes',      icon: Building2 },
     { id: 'prospectos',    name: 'Prospectos',    icon: UserPlus },
-    { id: 'tareas',        name: 'Tareas',        icon: ListChecks },
     { id: 'whatsapp',      name: 'WhatsApp',      icon: MessageCircle },
     { id: 'correo',        name: 'Correo',        icon: Mail },
     { id: 'interacciones', name: 'Interacciones', icon: Activity },
@@ -56,12 +55,20 @@ function MainPage() {
   ];
 
   // Submódulos del menú de Facturación (soporte interno / SII).
-  // "Cobro del Mes" ya no se esconde por rol: el recorte de módulos se hace por
-  // usuario en la BD, no ocultando opciones del menú.
+  //
+  // "Cobro del Mes" y "Correo Masivo" son de la firma completa, no de una
+  // empresa: el backend los reserva al Administrador (403) y Facturacion.jsx
+  // rebota a quien no corresponde. Si además se muestran en el menú, el
+  // Cliente hace clic y aterriza en otra pantalla sin ninguna explicación:
+  // parece que la aplicación está rota. Se esconden en origen.
+  const esAdministrador = user?.rol === 'Administrador';
   const subFacturacion = [
     { id: 'emision',    name: 'Emitir DTE',              icon: Send },
     { id: 'documentos', name: 'Historial de Documentos', icon: FileText },
-    { id: 'cobros',     name: 'Cobro del Mes',           icon: Wallet },
+    ...(esAdministrador ? [
+      { id: 'cobros',   name: 'Cobro del Mes',           icon: Wallet },
+      { id: 'correos',  name: 'Correo Masivo',           icon: Mail },
+    ] : []),
   ];
 
   // Submódulos del menú de Recursos Humanos (Remuneraciones)
@@ -88,17 +95,25 @@ function MainPage() {
   }, []);
 
   // =========================================
-  // MENÚ: los mismos módulos para todos los roles
+  // MENÚ: mismos módulos para todos, recortados por usuario en la BD
   // -----------------------------------------
-  // Antes el rol Cliente tenía una lista recortada a mano (sin Dashboard, RRHH,
-  // Operación Renta ni Administración). El recorte se hace por usuario en la BD
-  // (tabla `admin_modulos`), no escondiendo opciones según el rol: así se limita
-  // en un solo lugar y no hay que tocar este archivo cada vez que cambia quién
-  // puede ver qué.
+  // El recorte NO se hace por rol sino por usuario, con la tabla `admin_modulos`
+  // (una fila por usuario, una bandera por módulo). Así se limita en un solo
+  // lugar y no hay que tocar este archivo cada vez que cambia quién ve qué.
+  //
+  // Regla de seguridad al revés de lo habitual: sin fila en `admin_modulos` se
+  // muestra TODO. Es a propósito — un usuario sin configurar no puede quedarse
+  // sin acceso a su trabajo por un olvido. El recorte es una acción explícita.
+  //
+  // El candado de verdad está en el backend (requireModulo). Esconder la opción
+  // del menú es comodidad, no seguridad.
   // =========================================
   const modules = [
     { id: 'dashboard', path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard, color: 'from-emerald-500 to-green-500' },
     { id: 'CRM', path: '/CRM', name: 'CRM', icon: Package, color: 'from-pink-500 to-rose-500', sub: subCRM },
+    // Las tareas cruzan todos los módulos, no son "algo del CRM": van al mismo
+    // nivel que Contabilidad o Facturación.
+    { id: 'tareas', path: '/tareas', name: 'Tareas', icon: ListChecks, color: 'from-violet-500 to-purple-600' },
     { id: 'contabilidad', path: '/contabilidad', name: 'Contabilidad', icon: Calculator, color: 'from-green-500 to-emerald-500', sub: subContabilidad },
     { id: 'rrhh', path: '/rrhh', name: 'Recursos Humanos', icon: Users, color: 'from-purple-500 to-violet-500', sub: subRRHH },
     { id: 'facturacion', path: '/facturacion', name: 'Facturación SII', icon: FileText, color: 'from-orange-500 to-red-500', sub: subFacturacion },
@@ -107,6 +122,22 @@ function MainPage() {
     { id: 'admin', path: '/admin', name: 'Administración', icon: ShieldCheck, color: 'from-yellow-500 to-amber-500' },
     { id: 'perfil', path: '/perfil', name: 'Mi Perfil', icon: UserCircle, color: 'from-cyan-500 to-blue-600' },
   ];
+
+  // Qué módulos tiene habilitados este usuario. `user.modulos` viene del login.
+  // Dashboard, Bancos, Tareas y Mi Perfil no se recortan: son transversales.
+  const BANDERA_POR_MODULO = {
+    contabilidad:   'puedeVerContabilidad',
+    facturacion:    'puedeVerFacturacion',
+    rrhh:           'puedeVerRrhh',
+    operacionRenta: 'puedeVerOperacionRenta',
+    CRM:            'puedeVerCrm',
+    admin:          'puedeVerAdmin',
+  };
+  const modulosVisibles = modules.filter((m) => {
+    const bandera = BANDERA_POR_MODULO[m.id];
+    if (!bandera || !user?.modulos) return true;   // sin configurar = ve todo
+    return user.modulos[bandera] !== false;
+  });
 
   // El modo "rail" (solo íconos) aplica únicamente en escritorio.
   const rail = railCollapsed && windowWidth >= 1024;
@@ -140,7 +171,7 @@ function MainPage() {
 
               {/* Navegación (con scroll propio) */}
               <nav className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-3 space-y-1.5">
-                {modules.map((m) => {
+                {modulosVisibles.map((m) => {
                   const Icon = m.icon;
                   const isActive = location.pathname.startsWith(m.path);
                   const tieneSub = Array.isArray(m.sub) && m.sub.length > 0;

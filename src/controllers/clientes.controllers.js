@@ -1,6 +1,7 @@
 import { pool } from '../database/db.js';
 import { decrypt, encrypt, generateHash } from '../utils/crypto.js';
 import { cleanRut } from '../lib/rut.js';
+import { registrar } from '../utils/bitacora.js';
 
 // RUT chileno con dígito verificador (módulo 11)
 const validarRutDV = (rut) => {
@@ -190,29 +191,36 @@ export const getClientesCRM = async (req, res) => {
         }
 
         // Catálogo de planes disponibles (para el selector en la ficha)
+        // Los planes de cobro son de cada firma: cuánto cobra SIMPLE PYME no es
+        // asunto de otra organización.
         const planesResult = await pool.query(`
             SELECT id, nombre, precio_base
             FROM plan
+            WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid
             ORDER BY precio_base ASC, nombre ASC
-        `);
+        `, [organizacionId]);
 
         // Catálogo de servicios disponibles (para sumar servicios contratados)
         const serviciosDisponiblesResult = await pool.query(`
             SELECT id, nombre, categoria, es_critico
             FROM servicio
             WHERE activo = TRUE
+              AND organizacion_id IS NOT DISTINCT FROM $1::uuid
             ORDER BY nombre ASC
-        `);
+        `, [organizacionId]);
 
         // Matriz de precios Plan × Tramo (si la tabla existe)
         let preciosResult = { rows: [] };
         try {
+            // Los tramos cuelgan del plan, así que basta con acotar el plan: son
+            // los precios que cobra la firma y no los ve otra organización.
             preciosResult = await pool.query(`
                 SELECT p.nombre AS plan, ppt.tramo_orden, ppt.tramo_min, ppt.tramo_max, ppt.precio_neto, ppt.rrhh_gratis
                 FROM plan_precio_tramo ppt JOIN plan p ON p.id = ppt.plan_id
                 WHERE ppt.activo
+                  AND p.organizacion_id IS NOT DISTINCT FROM $1::uuid
                 ORDER BY p.nombre, ppt.tramo_orden
-            `);
+            `, [organizacionId]);
         } catch (err) {
             if (err.code !== '42P01') throw err; // tabla no existe aún → degradar
         }
@@ -1093,6 +1101,15 @@ export const eliminarEmpresaCRM = async (req, res) => {
         await client.query('DELETE FROM sucursal WHERE empresa_id = $1', [empresaId]);
         await client.query('DELETE FROM persona_empresa WHERE empresa_id = $1', [empresaId]);
         await client.query('DELETE FROM audita WHERE empresa_id = $1', [empresaId]);
+
+        // Se registra ANTES de borrar: `empresa_auditoria` tiene ON DELETE CASCADE
+        // contra empresa, así que su historial se va junto con ella. La bitácora
+        // del sistema no depende de la empresa y sobrevive al borrado.
+        await registrar(req, {
+            modulo: 'empresas', accion: 'eliminar',
+            entidad: 'empresa', entidadId: empresaId,
+            descripcion: `Empresa eliminada: ${existe.rows[0]?.razon_social || empresaId}`,
+        });
 
         await client.query('DELETE FROM empresa WHERE id = $1', [empresaId]);
 

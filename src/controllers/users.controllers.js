@@ -2,6 +2,7 @@ import { pool } from "../database/db.js";
 import bcrypt from "bcrypt";
 import { generateHash, encrypt, decrypt } from "../utils/crypto.js";
 import { cleanRut } from "../lib/rut.js";
+import { registrar } from '../utils/bitacora.js';
 
 export const getUsers = async (req, res) => {
     try {
@@ -68,6 +69,73 @@ export const getUsers = async (req, res) => {
     }
 };
 
+
+// ============================================================================
+// 🛡️ RESGUARDOS AL TOCAR CUENTAS DE ADMINISTRADOR
+// ----------------------------------------------------------------------------
+// Hasta el 31-jul las cuentas de Administrador simplemente NO se podían editar
+// ni borrar desde la aplicación: había que hacerlo por consola. Eso dejaba a
+// cada organización dependiendo de alguien externo para armar su equipo.
+//
+// Abrirlo sin resguardos es peligroso: si un administrador se baja el rol a sí
+// mismo, o borra al único que queda, esa organización se queda SIN NADIE que
+// pueda crear usuarios o empresas. Queda muerta y solo se arregla por consola,
+// que es justo lo que se está eliminando.
+//
+// Cuatro candados, en el backend y no en la pantalla:
+//   1. Nadie cambia su propio rol.
+//   2. Nadie se desactiva a sí mismo.
+//   3. Nadie se borra a sí mismo.
+//   4. Ninguna organización se queda sin un Administrador ACTIVO.
+// ============================================================================
+
+/** ¿Cuántos administradores activos quedan en la organización, sin contar a `exceptoId`? */
+const adminsActivosRestantes = async (organizacionId, exceptoId) => {
+    const { rows } = await pool.query(
+        `SELECT COUNT(*)::int AS n
+           FROM usuario
+          WHERE rol = 'Administrador'
+            AND activo = true
+            AND id <> $2
+            AND organizacion_id IS NOT DISTINCT FROM $1::uuid`,
+        [organizacionId || null, exceptoId]
+    );
+    return rows[0].n;
+};
+
+/**
+ * Revisa los cuatro candados. Devuelve un mensaje si hay que frenar, o null.
+ * `objetivo` es la fila actual del usuario que se va a tocar.
+ */
+const motivoParaFrenar = async ({ req, objetivo, nuevoRol, nuevoActivo, esBorrado }) => {
+    const soyYo = req.user?.usuarioId === objetivo.id;
+
+    if (soyYo && esBorrado) return 'No puedes eliminar tu propia cuenta.';
+    if (soyYo && nuevoRol && nuevoRol !== objetivo.rol) return 'No puedes cambiar tu propio rol. Pídeselo a otro administrador.';
+    if (soyYo && nuevoActivo === false) return 'No puedes desactivar tu propia cuenta.';
+
+    // Aislamiento: un administrador solo toca usuarios de SU organización.
+    const miOrg = req.user?.organizacionId || null;
+    if ((objetivo.organizacion_id || null) !== miOrg) {
+        return 'Ese usuario pertenece a otra organización.';
+    }
+
+    // El último administrador activo no se puede borrar, desactivar ni degradar.
+    const dejaDeSerAdmin = objetivo.rol === 'Administrador' && (
+        esBorrado ||
+        nuevoActivo === false ||
+        (nuevoRol && nuevoRol !== 'Administrador')
+    );
+    if (dejaDeSerAdmin) {
+        const quedan = await adminsActivosRestantes(objetivo.organizacion_id, objetivo.id);
+        if (quedan === 0) {
+            return 'Es el único administrador activo de la organización. Nombra a otro antes de quitarle el rol, desactivarlo o eliminarlo.';
+        }
+    }
+
+    return null;
+};
+
 export const createUser = async (req, res) => {
     const { nombre, rut, clave, email, rol, assignedCompanies, activo } = req.body;
 
@@ -126,6 +194,13 @@ export const createUser = async (req, res) => {
 
         await pool.query('COMMIT');
 
+        await registrar(req, {
+            modulo: 'usuarios', accion: 'crear',
+            entidad: 'usuario', entidadId: newUser.id,
+            descripcion: `Usuario creado: ${newUser.nombre} (${rol})`,
+            detalle: { rol, empresasAsignadas: assignedCompanies?.length || 0 },
+        });
+
         res.status(201).json({
             ...newUser,
             rut: rutLimpio,
@@ -179,18 +254,19 @@ export const updateUser = async (req, res) => {
     try {
         await pool.query('BEGIN');
 
-        const checkUser = await pool.query('SELECT rol FROM usuario WHERE id = $1', [id]);
+        const checkUser = await pool.query('SELECT id, rol, activo, organizacion_id FROM usuario WHERE id = $1', [id]);
         
         if (checkUser.rows.length === 0) {
             await pool.query('ROLLBACK');
             return res.status(404).json({ message: "Usuario no localizado en el registro." });
         }
 
-        if (checkUser.rows[0].rol === 'Administrador') {
+        const frenar = await motivoParaFrenar({
+            req, objetivo: checkUser.rows[0], nuevoRol: rol, nuevoActivo: activo, esBorrado: false,
+        });
+        if (frenar) {
             await pool.query('ROLLBACK');
-            return res.status(403).json({ 
-                message: "Acceso Restringido: Cuentas de nivel Administrador solo modificables vía consola de comandos." 
-            });
+            return res.status(403).json({ success: false, message: frenar });
         }
 
         const rutLimpio = cleanRut(rut);
@@ -239,6 +315,13 @@ export const updateUser = async (req, res) => {
         }
 
         await pool.query('COMMIT');
+
+        await registrar(req, {
+            modulo: 'usuarios', accion: 'editar',
+            entidad: 'usuario', entidadId: id,
+            descripcion: `Usuario modificado: ${nombre}${clave ? ' (incluida la contraseña)' : ''}`,
+            detalle: { rol, activo, cambioClave: !!clave },
+        });
 
         res.json({ 
             success: true,
@@ -369,7 +452,7 @@ export const deleteUser = async (req, res) => {
     try {
         await pool.query('BEGIN');
 
-        const checkUser = await pool.query('SELECT rol, nombre FROM usuario WHERE id = $1', [id]);
+        const checkUser = await pool.query('SELECT id, rol, nombre, activo, organizacion_id FROM usuario WHERE id = $1', [id]);
         
         if (checkUser.rows.length === 0) {
             await pool.query('ROLLBACK');
@@ -378,12 +461,10 @@ export const deleteUser = async (req, res) => {
 
         const userToDelete = checkUser.rows[0];
 
-        if (userToDelete.rol === 'Administrador') {
+        const frenar = await motivoParaFrenar({ req, objetivo: userToDelete, esBorrado: true });
+        if (frenar) {
             await pool.query('ROLLBACK');
-            return res.status(403).json({ 
-                success: false,
-                message: "Acceso Denegado: Los registros de Administrador son permanentes en este nivel." 
-            });
+            return res.status(403).json({ success: false, message: frenar });
         }
 
         await pool.query('DELETE FROM sessions WHERE usuario_id = $1', [id]);
@@ -392,6 +473,12 @@ export const deleteUser = async (req, res) => {
         await pool.query('DELETE FROM usuario WHERE id = $1', [id]);
 
         await pool.query('COMMIT');
+
+        await registrar(req, {
+            modulo: 'usuarios', accion: 'eliminar',
+            entidad: 'usuario', entidadId: id,
+            descripcion: `Usuario eliminado: ${userToDelete.nombre} (${userToDelete.rol})`,
+        });
 
         return res.status(200).json({ 
             success: true, 

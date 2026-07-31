@@ -15,7 +15,6 @@ import {
   Search, CheckCircle2, UserPlus, UploadCloud, AlertCircle, FileText, Plus, X,
   ChevronLeft, ChevronRight
 } from "lucide-react";
-import { API_BASE_URL } from "../../../../../config.js";
 import { cleanRut } from "@/lib/rut.js";
 import * as XLSX from "xlsx";
 
@@ -33,7 +32,10 @@ const DOC_CONFIG = {
 const TABS = {
   UNICA: "unica",
   MASIVA: "masiva",
-  CORREOS: "correos",
+  // La pestaña CORREOS se movió a su propia sub-página:
+  // Facturación → Correo Masivo (components/facturacion/tabs/CorreoMasivo.jsx).
+  // Era una vista de consulta y envío, no de emisión, y obligaba a abrir el
+  // modal de facturar para llegar a ella.
 };
 
 // --- UTILIDADES ---
@@ -167,18 +169,6 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   const [empresaEncontrada, setEmpresaEncontrada] = useState(null);
   const [isLoadingCrm, setIsLoadingCrm] = useState(false);
 
-  // 📒 Registro de correos enviados
-  const [correosLog, setCorreosLog] = useState([]);
-  const [isLoadingCorreos, setIsLoadingCorreos] = useState(false);
-  const [reenviandoFolio, setReenviandoFolio] = useState(null);
-  const [manualFolio, setManualFolio] = useState("");
-  const [selectedFolios, setSelectedFolios] = useState([]);
-  const [isReenviandoMasivo, setIsReenviandoMasivo] = useState(false);
-
-  // 📢 Recordatorios de pago
-  const [isEnviandoRecordatorios, setIsEnviandoRecordatorios] = useState(false);
-  const [progresoRecordatorio, setProgresoRecordatorio] = useState(null);
-
   const [bulkRows, setBulkRows] = useState([]);
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false);
   const [activeRowIndex, setActiveRowIndex] = useState(null); 
@@ -210,164 +200,6 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   const goToPrevPage = () => setCurrentPage((prev) => Math.max(prev - 1, 1));
 
   // ====================================================
-  // 📒 CARGA DEL REGISTRO DE CORREOS
-  // ====================================================
-  const cargarCorreosLog = async () => {
-    setIsLoadingCorreos(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/dte/correos-log`);
-      const data = await res.json();
-      if (data?.correos) setCorreosLog(data.correos);
-    } catch (e) {
-      console.error("Error cargando registro de correos:", e);
-    } finally {
-      setIsLoadingCorreos(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen && activeTab === TABS.CORREOS) cargarCorreosLog();
-  }, [isOpen, activeTab]);
-
-  // Reenviar (o enviar) el correo de una factura por su folio
-  const reenviarCorreo = async (folio, datos) => {
-    const folioLimpio = String(folio || "").replace(/[^0-9]/g, "");
-    if (!folioLimpio) return toast({ variant: "destructive", title: "Falta el folio", description: "Ingresa el N° de folio de la factura." });
-
-    setReenviandoFolio(folioLimpio);
-    try {
-      const res = await fetch(`${API_BASE_URL}/dte/reenviar-correo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folio: folioLimpio, datos: datos || null }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        toast({ title: "📧 Reenvío iniciado", description: data.mensaje || `Folio ${folioLimpio}: enviando en segundo plano. Se refresca solo en ~1 min.`, duration: 9000 });
-        setTimeout(cargarCorreosLog, 65000); // refresca cuando ya debería estar listo
-      } else {
-        toast({ variant: "destructive", title: "No se pudo iniciar", description: data.error || "Revisa el registro." });
-      }
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error de conexión", description: e.message });
-    } finally {
-      setReenviandoFolio(null);
-    }
-  };
-
-  // Selección de filas (por folio)
-  const toggleFolio = (folio) => {
-    const f = String(folio);
-    setSelectedFolios((prev) => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]);
-  };
-  const seleccionarPendientes = () => {
-    // Selecciona los que faltan (fallidos + omitidos)
-    setSelectedFolios(correosLog.filter(c => c.estado === 'fallido' || c.estado === 'omitido').map(c => String(c.folio)));
-  };
-  const limpiarSeleccion = () => setSelectedFolios([]);
-
-  // Reenvío masivo de los seleccionados
-  const reenviarSeleccionados = async () => {
-    if (selectedFolios.length === 0) return;
-    const items = correosLog
-      .filter(c => selectedFolios.includes(String(c.folio)))
-      .map(c => ({ folio: String(c.folio), datos: c.datos || { razonSocial: c.razonSocial, rut: c.rut, correo: c.correo } }));
-
-    setIsReenviandoMasivo(true);
-    toast({ title: "📧 Reenvío masivo iniciado", description: `Procesando ${items.length} correo(s) en segundo plano. Puede tardar varios minutos; refresca para ver el avance.`, duration: 10000 });
-    try {
-      const res = await fetch(`${API_BASE_URL}/dte/reenviar-correos-masivo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        toast({ variant: "destructive", title: "No se pudo iniciar", description: data.error || "Error" });
-      } else {
-        setSelectedFolios([]);
-        // Refrescamos periódicamente mientras el lote se procesa en segundo plano.
-        setTimeout(cargarCorreosLog, 30000);
-        setTimeout(cargarCorreosLog, 90000);
-      }
-    } catch (e) {
-      toast({ variant: "destructive", title: "Error de conexión", description: e.message });
-    } finally {
-      setIsReenviandoMasivo(false);
-    }
-  };
-
-  // ====================================================
-  // 📢 RECORDATORIO DE PAGO (módulo aparte)
-  // ====================================================
-  const enviarRecordatoriosPago = async () => {
-    try {
-      // 1) Vista previa: cuántas empresas recibirán el recordatorio.
-      const prev = await fetch(`${API_BASE_URL}/dte/recordatorios/preview`);
-      const prevData = await prev.json();
-      if (!prevData.ok) {
-        return toast({ variant: "destructive", title: "No se pudo calcular", description: prevData.error || "Error al obtener destinatarios." });
-      }
-      if (!prevData.total) {
-        return toast({ title: "Sin destinatarios", description: "No hay facturas enviadas con correo válido en el rango." });
-      }
-
-      // 2) Confirmación explícita antes de un envío real a clientes.
-      // Se listan los excluidos por nombre: son los que NO van a recibir el
-      // cobro, y es la última oportunidad de notar que alguno debería ir.
-      const detalleExcluidos = (prevData.excluidos || [])
-        .map(e => `  · ${e.razonSocial} — ${e.motivo}`)
-        .join('\n');
-
-      const ok = window.confirm(
-        `Se enviará el RECORDATORIO DE PAGO a ${prevData.total} cliente(s) ACTIVOS con factura enviada (desde el 27 de junio).\n\n` +
-        (prevData.totalExcluidos
-          ? `Quedan fuera ${prevData.totalExcluidos} que ya no son clientes activos:\n${detalleExcluidos}\n\n`
-          : '') +
-        `Este correo SÍ se manda de verdad a los clientes. ¿Continuar?`
-      );
-      if (!ok) return;
-
-      setIsEnviandoRecordatorios(true);
-      const res = await fetch(`${API_BASE_URL}/dte/enviar-recordatorios`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        toast({ title: "📢 Recordatorios en camino", description: data.mensaje || `Enviando a ${prevData.total} empresa(s) en segundo plano.`, duration: 9000 });
-      } else {
-        setIsEnviandoRecordatorios(false);
-        toast({ variant: "destructive", title: "No se pudo iniciar", description: data.error || "Error." });
-      }
-    } catch (e) {
-      setIsEnviandoRecordatorios(false);
-      toast({ variant: "destructive", title: "Error de conexión", description: e.message });
-    }
-  };
-
-  // Progreso en vivo de los recordatorios mientras se envían.
-  useEffect(() => {
-    let interval;
-    if (isOpen && activeTab === TABS.CORREOS && isEnviandoRecordatorios) {
-      interval = setInterval(async () => {
-        try {
-          const res = await fetch(`${API_BASE_URL}/dte/recordatorios/progreso`);
-          if (!res.ok) return;
-          const data = await res.json();
-          setProgresoRecordatorio(data);
-          if (data.finalizado || (!data.activo && data.total > 0 && data.actual >= data.total)) {
-            setIsEnviandoRecordatorios(false);
-            toast({ title: "🏁 Recordatorios enviados", description: `Enviados: ${data.enviados} | Fallidos: ${data.fallidos}`, duration: 10000 });
-          }
-        } catch (e) {}
-      }, 2500);
-    }
-    return () => clearInterval(interval);
-  }, [isOpen, activeTab, isEnviandoRecordatorios]);
-
-  // ====================================================
   // 🌟 ESCUCHADOR DE PROGRESO EN VIVO
   // ====================================================
   useEffect(() => {
@@ -375,7 +207,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
       if (isOpen && activeTab === TABS.MASIVA) {
           interval = setInterval(async () => {
               try {
-                  const res = await fetch(`${API_BASE_URL}/dte/progreso-masivo`);
+                  const res = await apiDTE.getProgresoMasivo();
                   if (res.ok) {
                       const data = await res.json();
                       setProgresoRobot(data);
@@ -788,7 +620,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
 
   const handleDetenerMasivo = async () => {
     try {
-      await fetch(`${API_BASE_URL}/dte/detener-masivo`, { method: "POST" });
+      await apiDTE.detenerMasivo();
       toast({ 
         title: "🛑 Deteniendo Robot", 
         description: "El robot abortará de forma segura apenas termine su paso actual.",
@@ -852,11 +684,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
 
     setBulkRows(prev => prev.map(r => r.estado === 'pendiente' ? { ...r, estado: "procesando" } : r));
 
-    fetch(`${API_BASE_URL}/dte/emitir-masivo`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ facturas: facturasAProcesar }),
-    }).catch(err => {
+    apiDTE.emitirMasivo(facturasAProcesar).catch(err => {
         console.error("Error al enviar lote al servidor:", err);
         setIsBulkSubmitting(false);
     });
@@ -893,11 +721,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
         }
       };
 
-      const res = await fetch(`${API_BASE_URL}/dte/emitir-manual`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res = await apiDTE.emitirManual(payload);
 
       const data = await res.json();
       if (!res.ok || data?.ok === false) throw new Error(data?.error || "Error SII");
@@ -914,7 +738,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   return (
     <Dialog open={isOpen} onOpenChange={(val) => { if (!isSubmitting && !isBulkSubmitting) setIsOpen(val); }}>
       <DialogContent className={`w-full bg-white border-[#efe8dd] text-slate-700 overflow-hidden p-0 shadow-2xl flex flex-col transition-all duration-500 max-h-[95vh] ${
-          (activeTab === TABS.MASIVA || activeTab === TABS.CORREOS) ? 'max-w-[95vw] lg:max-w-[1250px]' : 'sm:max-w-[800px]'
+          activeTab === TABS.MASIVA ? 'max-w-[95vw] lg:max-w-[1250px]' : 'sm:max-w-[800px]'
       }`}>
         
         {(isSubmitting || isFinished) && activeTab === TABS.UNICA && (
@@ -971,7 +795,6 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
             <div className="flex bg-slate-50 p-1 rounded-xl border border-[#efe8dd] mb-4">
                 <button onClick={() => setActiveTab(TABS.UNICA)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.UNICA ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}>Factura Única</button>
                 <button onClick={() => setActiveTab(TABS.MASIVA)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.MASIVA ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}><FileText size={14} /> Factura Masiva (CSV o Manual)</button>
-                <button onClick={() => setActiveTab(TABS.CORREOS)} className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all duration-300 ${activeTab === TABS.CORREOS ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}><Mail size={14} /> Correos Enviados</button>
             </div>
           </div>
 
@@ -1345,140 +1168,6 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                 </div>
               )}
 
-              {/* ================================================= */}
-              {/* PESTAÑA: CORREOS ENVIADOS */}
-              {/* ================================================= */}
-              {activeTab === TABS.CORREOS && (
-                <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-300">
-                  <div className="flex items-center justify-between mb-3 flex-shrink-0 gap-4 flex-wrap">
-                    <div className="flex gap-6 text-[10px] font-bold uppercase tracking-widest">
-                      <span className="text-slate-500">Total: <span className="text-slate-700">{correosLog.length}</span></span>
-                      <span className="text-emerald-600 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Enviados: {correosLog.filter(c => c.estado === 'enviado').length}</span>
-                      <span className="text-red-500 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>Fallidos: {correosLog.filter(c => c.estado === 'fallido').length}</span>
-                      <span className="text-slate-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-gray-500"></span>Omitidos: {correosLog.filter(c => c.estado === 'omitido').length}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {/* Enviar por folio manual */}
-                      <div className="flex items-center gap-1 bg-slate-50 border border-[#efe8dd] rounded-lg pl-3 pr-1 h-9">
-                        <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Folio N°</span>
-                        <Input
-                          value={manualFolio}
-                          onChange={(e) => setManualFolio(e.target.value.replace(/[^0-9]/g, ''))}
-                          placeholder="1145"
-                          className="h-7 w-24 bg-transparent border-0 text-xs font-mono font-bold text-blue-700 focus:ring-0 shadow-none"
-                        />
-                        <Button
-                          onClick={() => reenviarCorreo(manualFolio, null)}
-                          disabled={!manualFolio || reenviandoFolio !== null}
-                          className="h-7 px-3 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-700 text-[10px] font-black uppercase tracking-widest rounded-md"
-                        >
-                          {reenviandoFolio === manualFolio ? <Loader2 size={13} className="animate-spin" /> : 'Enviar'}
-                        </Button>
-                      </div>
-                      <Button onClick={cargarCorreosLog} disabled={isLoadingCorreos} className="h-9 px-4 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-700 text-[10px] font-black uppercase tracking-widest rounded-lg">
-                        {isLoadingCorreos ? <Loader2 size={14} className="animate-spin" /> : '🔄 Refrescar'}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Barra de acciones masivas */}
-                  <div className="flex items-center justify-between mb-2 flex-shrink-0 gap-3 flex-wrap bg-white border border-[#efe8dd] rounded-xl px-4 py-2">
-                    <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-widest">
-                      <span className="text-slate-500">Seleccionados: <span className="text-blue-600">{selectedFolios.length}</span></span>
-                      <button onClick={seleccionarPendientes} className="text-orange-600 hover:text-orange-700 underline-offset-2 hover:underline">Seleccionar los que faltan</button>
-                      {selectedFolios.length > 0 && <button onClick={limpiarSeleccion} className="text-slate-400 hover:text-slate-600">Limpiar</button>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {/* 📢 Recordatorio de pago a todas las empresas facturadas (desde el 27-jun) */}
-                      <Button
-                        onClick={enviarRecordatoriosPago}
-                        disabled={isEnviandoRecordatorios || isReenviandoMasivo || reenviandoFolio !== null}
-                        title="Envía un correo recordando el pago a todas las empresas con factura enviada"
-                        className="h-9 px-5 bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-amber-600/20 inline-flex items-center gap-2"
-                      >
-                        {isEnviandoRecordatorios
-                          ? <><Loader2 size={14} className="animate-spin" />{progresoRecordatorio?.total ? ` ${progresoRecordatorio.actual}/${progresoRecordatorio.total}` : ' Enviando…'}</>
-                          : <><Mail size={14} /> Recordatorio de pago</>}
-                      </Button>
-                      <Button
-                        onClick={reenviarSeleccionados}
-                        disabled={selectedFolios.length === 0 || isReenviandoMasivo || reenviandoFolio !== null}
-                        className="h-9 px-5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-emerald-600/20 inline-flex items-center gap-2"
-                      >
-                        {isReenviandoMasivo ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
-                        Enviar seleccionados ({selectedFolios.length})
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto custom-scrollbar rounded-xl border border-[#efe8dd] bg-white">
-                    {correosLog.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-full text-slate-400 gap-2 py-16">
-                        <Mail size={32} className="opacity-40" />
-                        <p className="text-xs font-bold uppercase tracking-widest">Aún no hay correos registrados</p>
-                      </div>
-                    ) : (
-                      <table className="w-full text-left whitespace-nowrap border-collapse">
-                        <thead className="bg-slate-50 sticky top-0 z-10 border-b border-[#efe8dd]">
-                          <tr className="text-slate-400 font-black uppercase tracking-widest text-[9px]">
-                            <th className="px-3 py-2.5 w-8 text-center">
-                              <input
-                                type="checkbox"
-                                className="accent-emerald-500 cursor-pointer"
-                                checked={correosLog.length > 0 && selectedFolios.length === correosLog.length}
-                                onChange={(e) => setSelectedFolios(e.target.checked ? correosLog.map(c => String(c.folio)) : [])}
-                                title="Seleccionar todos"
-                              />
-                            </th>
-                            <th className="px-4 py-2.5">Fecha</th>
-                            <th className="px-3 py-2.5">Folio</th>
-                            <th className="px-3 py-2.5 min-w-[160px]">Razón Social</th>
-                            <th className="px-3 py-2.5 min-w-[160px]">Correo</th>
-                            <th className="px-3 py-2.5 text-center">Estado</th>
-                            <th className="px-3 py-2.5 min-w-[200px]">Detalle</th>
-                            <th className="px-3 py-2.5 text-center">Acción</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-white/5">
-                          {correosLog.map((c, i) => (
-                            <tr key={i} className={`hover:bg-slate-50 transition-colors ${selectedFolios.includes(String(c.folio)) ? 'bg-emerald-500/5' : ''}`}>
-                              <td className="px-3 py-2 text-center">
-                                <input
-                                  type="checkbox"
-                                  className="accent-emerald-500 cursor-pointer"
-                                  checked={selectedFolios.includes(String(c.folio))}
-                                  onChange={() => toggleFolio(c.folio)}
-                                />
-                              </td>
-                              <td className="px-4 py-2 text-[10px] text-slate-500 font-mono">{c.fecha ? new Date(c.fecha).toLocaleString('es-CL') : '—'}</td>
-                              <td className="px-3 py-2 text-[10px] font-mono font-bold text-blue-600">{c.folio || '—'}</td>
-                              <td className="px-3 py-2 text-[10px] font-bold text-slate-700 uppercase truncate max-w-[200px]">{c.razonSocial || '—'}</td>
-                              <td className="px-3 py-2 text-[10px] text-slate-600 truncate max-w-[200px]">{c.correo || '—'}</td>
-                              <td className="px-3 py-2 text-center">
-                                {c.estado === 'enviado' && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 font-black text-[8px] uppercase border border-emerald-500/20 inline-flex items-center gap-1"><CheckCircle2 size={9} /> Enviado</span>}
-                                {c.estado === 'fallido' && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-500 font-black text-[8px] uppercase border border-red-500/20 inline-flex items-center gap-1"><AlertCircle size={9} /> Fallido</span>}
-                                {c.estado === 'omitido' && <span className="px-2 py-1 rounded-full bg-gray-500/10 text-slate-500 font-black text-[8px] uppercase border border-gray-500/20">Omitido</span>}
-                                {!['enviado', 'fallido', 'omitido'].includes(c.estado) && <span className="text-slate-400 text-[9px]">{c.estado}</span>}
-                              </td>
-                              <td className="px-3 py-2 text-[9px] text-slate-400 whitespace-normal max-w-[260px]">{c.motivo || (c.estado === 'enviado' ? '✓ Entregado al cliente' : '—')}</td>
-                              <td className="px-3 py-2 text-center">
-                                <Button
-                                  onClick={() => reenviarCorreo(c.folio, c.datos)}
-                                  disabled={!c.folio || reenviandoFolio !== null}
-                                  title="Reenviar este correo"
-                                  className="h-7 px-3 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-700 text-[9px] font-black uppercase tracking-widest rounded-md inline-flex items-center gap-1"
-                                >
-                                  {reenviandoFolio === String(c.folio) ? <Loader2 size={12} className="animate-spin" /> : <><Mail size={11} /> {c.estado === 'enviado' ? 'Reenviar' : 'Enviar'}</>}
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
-                </div>
-              )}
           </div>
 
           <div className="flex gap-4 pt-4 mt-2 border-t border-[#efe8dd] flex-shrink-0 relative z-20">

@@ -3,6 +3,7 @@ import { decrypt } from '../utils/crypto.js';
 import { cleanRut } from '../lib/rut.js';
 // Robot masivo del SII (el mismo de Emisión de DTE → Factura Electrónica).
 import { emitirLotePuppeteer, estadoRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
+import { registrar } from '../utils/bitacora.js';
 
 // ============================================================================
 // CICLO DE COBRO MENSUAL (honorarios del despacho a sus clientes)
@@ -401,6 +402,15 @@ export const cambiarEstadoCobro = async (req, res) => {
              RETURNING id`,
             [id, estado, organizacionId]
         );
+
+        if (rows.length) {
+            await registrar(req, {
+                modulo: 'cobros', accion: 'cambiar_estado',
+                entidad: 'cobro', entidadId: id,
+                descripcion: `Cobro marcado como ${estado}`,
+                detalle: { estado },
+            });
+        }
         if (!rows.length) return res.status(404).json({ success: false, message: 'Cobro no encontrado.' });
         return res.json({ success: true, message: 'Estado actualizado.' });
     } catch (err) {

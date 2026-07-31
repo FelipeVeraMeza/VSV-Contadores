@@ -8,9 +8,22 @@ import { pool } from '../database/db.js';
 
 const esAdmin = (req) => req.user?.rol === 'Administrador';
 const TIPOS = ['tarea', 'reunion', 'llamada', 'whatsapp', 'correo', 'ticket'];
-const PRIORIDADES = ['alta', 'media', 'baja'];
-// 'en_proceso' añade el estado intermedio del módulo de tareas.
-const ESTADOS = ['pendiente', 'en_proceso', 'completada', 'cancelada'];
+const PRIORIDADES = ['baja', 'media', 'alta', 'critica'];
+// Flujo: pendiente → en_proceso → en_revision → completada. 'cancelada' lo corta.
+// Archivar NO está acá: es `archivada_at`, un eje aparte (ver la migración
+// 2026-07-31_tareas_fase1_modelo.sql). Una tarea archivada conserva su estado.
+const ESTADOS = ['pendiente', 'en_proceso', 'en_revision', 'completada', 'cancelada'];
+// Los que cuentan como trabajo vivo: lo que aparece por defecto y lo que suma
+// al avance de un proyecto. 'en_revision' cuenta como activa (todavía no está
+// dada por buena), y 'cancelada' no cuenta para ningún lado.
+const ESTADOS_ACTIVOS = ['pendiente', 'en_proceso', 'en_revision'];
+
+// Orden de la lista: primero lo vivo, después lo cerrado; dentro de eso, por
+// fecha de entrega y por prioridad. Se repite en varias consultas.
+const ORDEN_TAREAS = `
+    CASE t.estado WHEN 'pendiente' THEN 0 WHEN 'en_proceso' THEN 1 WHEN 'en_revision' THEN 2 ELSE 3 END,
+    t.vence_at ASC NULLS LAST,
+    CASE t.prioridad WHEN 'critica' THEN 0 WHEN 'alta' THEN 1 WHEN 'media' THEN 2 ELSE 3 END`;
 
 // ------------------------------------------------------------
 // LISTAR TAREAS
@@ -54,10 +67,7 @@ export const listarTareas = async (req, res) => {
              LEFT JOIN persona p ON p.id = t.persona_id
              LEFT JOIN proyecto pr ON pr.id = t.proyecto_id
              WHERE ${where.join(' AND ')}
-             ORDER BY
-                CASE t.estado WHEN 'pendiente' THEN 0 WHEN 'en_proceso' THEN 1 ELSE 2 END,
-                t.vence_at ASC NULLS LAST,
-                CASE t.prioridad WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END`,
+             ORDER BY ${ORDEN_TAREAS}`,
             params
         );
         return res.json({ success: true, tareas: rows.map(mapTarea) });
@@ -82,7 +92,11 @@ const mapTarea = (t) => ({
     venceAt: t.vence_at,
     origen: t.origen,
     createdAt: t.created_at,
+    updatedAt: t.updated_at,
     completedAt: t.completed_at,
+    // Archivar es un eje aparte del estado: `archivada` sale de la fecha.
+    archivada: !!t.archivada_at,
+    archivadaAt: t.archivada_at,
     // Módulo de tareas
     proyectoId: t.proyecto_id,
     proyectoNombre: t.proyecto_nombre || null,
@@ -313,16 +327,21 @@ export const metricasDashboard = async (req, res) => {
                    AND p.created_at >= $${soloMias ? 3 : 2}::timestamptz AND p.created_at <= $${soloMias ? 4 : 3}::timestamptz`,
                 soloMias ? [org, uid, desde, hasta] : [org, desde, hasta]),
             // Tareas: pendientes, vencidas, completadas/reuniones en período, reuniones de hoy. RF-003/004/017
+            // "Pendiente" acá significa "sin terminar", no el estado literal: con
+            // los estados nuevos, una tarea en proceso o en revisión seguía sin
+            // contarse en ningún lado y el tablero mostraba menos trabajo del real.
+            // Las archivadas no cuentan: se archivan justamente para sacarlas.
             pool.query(
                 `SELECT
-                    COUNT(*) FILTER (WHERE estado='pendiente')::int AS pendientes,
-                    COUNT(*) FILTER (WHERE estado='pendiente' AND vence_at < NOW())::int AS vencidas,
+                    COUNT(*) FILTER (WHERE estado = ANY($${soloMias ? 4 : 3}))::int AS pendientes,
+                    COUNT(*) FILTER (WHERE estado = ANY($${soloMias ? 4 : 3}) AND vence_at < NOW())::int AS vencidas,
                     COUNT(*) FILTER (WHERE estado='completada' AND completed_at >= $${soloMias ? 3 : 2}::timestamptz)::int AS completadas,
                     COUNT(*) FILTER (WHERE tipo='reunion' AND estado='completada' AND completed_at >= $${soloMias ? 3 : 2}::timestamptz)::int AS reuniones_realizadas,
-                    COUNT(*) FILTER (WHERE tipo='reunion' AND estado='pendiente' AND vence_at::date = CURRENT_DATE)::int AS reuniones_hoy,
-                    COUNT(*) FILTER (WHERE estado='pendiente' AND vence_at::date = CURRENT_DATE)::int AS vencen_hoy
-                 FROM tarea WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid ${tScope}`,
-                soloMias ? [org, uid, desde] : [org, desde]),
+                    COUNT(*) FILTER (WHERE tipo='reunion' AND estado = ANY($${soloMias ? 4 : 3}) AND vence_at::date = CURRENT_DATE)::int AS reuniones_hoy,
+                    COUNT(*) FILTER (WHERE estado = ANY($${soloMias ? 4 : 3}) AND vence_at::date = CURRENT_DATE)::int AS vencen_hoy
+                 FROM tarea
+                 WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid AND archivada_at IS NULL ${tScope}`,
+                soloMias ? [org, uid, desde, ESTADOS_ACTIVOS] : [org, desde, ESTADOS_ACTIVOS]),
             // Pipeline comercial (embudo). RF-014
             pool.query(
                 `SELECT
@@ -606,42 +625,109 @@ export const eliminarAdjunto = async (req, res) => {
 // ============================================================
 // PROYECTOS
 // ============================================================
+const ESTADOS_PROYECTO = ['activo', 'pausado', 'completado', 'archivado'];
+
+// ---------------------------------------------------------------------------
+// AVANCE DE UN PROYECTO · tres decisiones, todas discutibles, todas explícitas
+//
+//   1. Cuenta SOLO tareas principales (parent_id IS NULL). Si contara subtareas,
+//      una tarea partida en diez pasos pesaría diez veces más que otra igual de
+//      grande que nadie desglosó, y el porcentaje diría más sobre el estilo de
+//      cada uno que sobre el proyecto.
+//   2. 'en_revision' NO cuenta como terminada: está entregada, no aprobada.
+//   3. Las archivadas y las canceladas salen del cálculo ENTERO — ni arriba ni
+//      abajo de la división. Archivar algo no debería mover el porcentaje.
+//
+// El denominador vive en TAREAS_QUE_CUENTAN para que numerador y denominador no
+// se puedan desincronizar por un cambio en uno solo.
+// ---------------------------------------------------------------------------
+const TAREAS_QUE_CUENTAN = `
+    t.proyecto_id = pr.id
+    AND t.parent_id IS NULL
+    AND t.archivada_at IS NULL
+    AND t.estado <> 'cancelada'`;
+
 export const listarProyectos = async (req, res) => {
     try {
         const org = req.user?.organizacionId || null;
         const { rows } = await pool.query(
-            `SELECT pr.*, u.nombre AS creador,
-                    (SELECT COUNT(*)::int FROM tarea t WHERE t.proyecto_id = pr.id) AS tareas_total,
-                    (SELECT COUNT(*)::int FROM tarea t WHERE t.proyecto_id = pr.id AND t.estado='completada') AS tareas_hechas
-             FROM proyecto pr LEFT JOIN usuario u ON u.id = pr.creado_por
+            `SELECT pr.*, u.nombre AS creador, r.nombre AS responsable_nombre,
+                    (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN}) AS tareas_total,
+                    (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN} AND t.estado='completada') AS tareas_hechas,
+                    (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN}
+                       AND t.estado <> 'completada' AND t.vence_at < NOW()) AS tareas_atrasadas
+             FROM proyecto pr
+             LEFT JOIN usuario u ON u.id = pr.creado_por
+             LEFT JOIN usuario r ON r.id = pr.responsable_id
              WHERE pr.organizacion_id IS NOT DISTINCT FROM $1::uuid
-             ORDER BY pr.estado ASC, pr.created_at DESC`, [org]);
-        return res.json({
-            success: true,
-            proyectos: rows.map(p => ({
-                id: p.id, nombre: p.nombre, descripcion: p.descripcion, color: p.color, estado: p.estado,
-                creador: p.creador || null,
-                tareasTotal: p.tareas_total, tareasHechas: p.tareas_hechas,
-                avance: p.tareas_total > 0 ? Math.round((p.tareas_hechas / p.tareas_total) * 100) : 0,
-            })),
-        });
+             ORDER BY
+                CASE pr.estado WHEN 'activo' THEN 0 WHEN 'pausado' THEN 1 WHEN 'completado' THEN 2 ELSE 3 END,
+                pr.created_at DESC`, [org]);
+        return res.json({ success: true, proyectos: rows.map(mapProyecto) });
     } catch (error) {
         console.error('❌ Error listando proyectos:', error.message);
         return res.status(500).json({ success: false, message: 'Error al listar proyectos.' });
     }
 };
 
+const mapProyecto = (p) => ({
+    id: p.id,
+    nombre: p.nombre,
+    descripcion: p.descripcion,
+    color: p.color,
+    estado: p.estado,
+    creador: p.creador || null,
+    responsableId: p.responsable_id || null,
+    responsableNombre: p.responsable_nombre || null,
+    fechaInicio: p.fecha_inicio,
+    fechaTermino: p.fecha_termino,
+    archivado: p.estado === 'archivado',
+    archivadoAt: p.archivado_at,
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
+    tareasTotal: p.tareas_total ?? 0,
+    tareasHechas: p.tareas_hechas ?? 0,
+    tareasAtrasadas: p.tareas_atrasadas ?? 0,
+    avance: p.tareas_total > 0 ? Math.round((p.tareas_hechas / p.tareas_total) * 100) : 0,
+});
+
+// Relee un proyecto con sus contadores, para devolverlo ya armado.
+const proyectoCompleto = async (id) => {
+    const { rows } = await pool.query(
+        `SELECT pr.*, u.nombre AS creador, r.nombre AS responsable_nombre,
+                (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN}) AS tareas_total,
+                (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN} AND t.estado='completada') AS tareas_hechas,
+                (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN}
+                   AND t.estado <> 'completada' AND t.vence_at < NOW()) AS tareas_atrasadas
+         FROM proyecto pr
+         LEFT JOIN usuario u ON u.id = pr.creado_por
+         LEFT JOIN usuario r ON r.id = pr.responsable_id
+         WHERE pr.id = $1`, [id]);
+    return rows[0] ? mapProyecto(rows[0]) : null;
+};
+
+// Una fecha vacía del formulario llega como '' y no como null.
+const fechaONull = (v) => (v && String(v).trim()) ? String(v).trim() : null;
+
 export const crearProyecto = async (req, res) => {
     try {
-        const { nombre, descripcion, color } = req.body;
+        const { nombre, descripcion, color, responsableId, fechaInicio, fechaTermino } = req.body;
         if (!nombre?.trim()) return res.status(400).json({ success: false, message: 'El nombre es obligatorio.' });
+
+        const desde = fechaONull(fechaInicio), hasta = fechaONull(fechaTermino);
+        if (desde && hasta && hasta < desde) {
+            return res.status(400).json({ success: false, message: 'La fecha de término no puede ser anterior al inicio.' });
+        }
+
         const { rows } = await pool.query(
-            `INSERT INTO proyecto (organizacion_id, nombre, descripcion, color, creado_por)
-             VALUES ($1,$2,$3,$4,$5) RETURNING id, nombre, descripcion, color, estado`,
-            [req.user?.organizacionId || null, nombre.trim(), descripcion?.trim() || null, color?.trim() || '#199b4d', req.user?.usuarioId || null]
+            `INSERT INTO proyecto (organizacion_id, nombre, descripcion, color, creado_por,
+                                   responsable_id, fecha_inicio, fecha_termino)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+            [req.user?.organizacionId || null, nombre.trim(), descripcion?.trim() || null,
+             color?.trim() || '#199b4d', req.user?.usuarioId || null,
+             responsableId || req.user?.usuarioId || null, desde, hasta]
         );
-        const p = rows[0];
-        return res.status(201).json({ success: true, proyecto: { ...p, tareasTotal: 0, tareasHechas: 0, avance: 0 } });
+        return res.status(201).json({ success: true, proyecto: await proyectoCompleto(rows[0].id) });
     } catch (error) {
         console.error('❌ Error creando proyecto:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo crear el proyecto.' });
@@ -652,18 +738,41 @@ export const actualizarProyecto = async (req, res) => {
     try {
         const { id } = req.params;
         const org = req.user?.organizacionId || null;
-        const { nombre, descripcion, color, estado } = req.body;
+        const { nombre, descripcion, color, estado, responsableId, fechaInicio, fechaTermino } = req.body;
+
+        // Las fechas necesitan poder BORRARSE, no solo cambiarse: por eso van con
+        // una bandera de "vino en el body" en vez del COALESCE de los demás
+        // campos, que nunca deja volver a null.
+        const tocaInicio = Object.hasOwn(req.body, 'fechaInicio');
+        const tocaTermino = Object.hasOwn(req.body, 'fechaTermino');
+
         const r = await pool.query(
             `UPDATE proyecto SET
-                nombre = COALESCE($2, nombre), descripcion = COALESCE($3, descripcion),
-                color = COALESCE($4, color), estado = COALESCE($5, estado)
-             WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $6::uuid RETURNING id`,
+                nombre         = COALESCE($2, nombre),
+                descripcion    = COALESCE($3, descripcion),
+                color          = COALESCE($4, color),
+                estado         = COALESCE($5, estado),
+                responsable_id = COALESCE($6, responsable_id),
+                fecha_inicio   = CASE WHEN $7::boolean THEN $8::date  ELSE fecha_inicio  END,
+                fecha_termino  = CASE WHEN $9::boolean THEN $10::date ELSE fecha_termino END,
+                archivado_at   = CASE WHEN $5 = 'archivado' AND estado <> 'archivado' THEN NOW()
+                                      WHEN $5 IS NOT NULL AND $5 <> 'archivado'       THEN NULL
+                                      ELSE archivado_at END
+             WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $11::uuid RETURNING id`,
             [id, nombre?.trim() || null, descripcion?.trim() || null, color?.trim() || null,
-             ['activo', 'archivado'].includes(estado) ? estado : null, org]
+             ESTADOS_PROYECTO.includes(estado) ? estado : null,
+             responsableId || null,
+             tocaInicio, tocaInicio ? fechaONull(fechaInicio) : null,
+             tocaTermino, tocaTermino ? fechaONull(fechaTermino) : null,
+             org]
         );
         if (r.rows.length === 0) return res.status(404).json({ success: false, message: 'Proyecto no encontrado.' });
-        return res.json({ success: true });
+        return res.json({ success: true, proyecto: await proyectoCompleto(id) });
     } catch (error) {
+        // La restricción de fechas coherentes llega hasta acá si el cliente la saltó.
+        if (error.constraint === 'proyecto_fechas_coherentes') {
+            return res.status(400).json({ success: false, message: 'La fecha de término no puede ser anterior al inicio.' });
+        }
         console.error('❌ Error actualizando proyecto:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo actualizar el proyecto.' });
     }

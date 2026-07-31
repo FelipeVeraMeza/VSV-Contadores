@@ -4,7 +4,7 @@ import {
     cambiarPlanCRM, addServicioCRM, removeServicioCRM, reactivarServicioCRM, toggleTicketCRM,
     crearEmpresaCRM, eliminarEmpresaCRM
 } from '../controllers/clientes.controllers.js';
-import { requireSession } from '../middleware/auth.js';
+import { requireSession, requireModulo } from '../middleware/auth.js';
 
 const router = Router();
 

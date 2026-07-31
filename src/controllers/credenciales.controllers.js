@@ -1,6 +1,29 @@
 import { pool } from '../database/db.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
 
+// ¿Esta cuenta es la que hoy factura con las credenciales del sistema (.env)?
+//
+// No existe una marca de "cuenta master" en la base: los roles son solo
+// Administrador / Consultor / Cliente. Pero sí hay una señal fiable: los robots
+// entran al SII con `DTE_RUT` del .env, así que la cuenta cuyo RUT coincide con
+// esa variable ES la cuenta del sistema.
+//
+// Se calcula en vez de escribirla a mano para que, si mañana cambian el .env a
+// otro RUT, la aplicación siga sola sin que haya que tocar código.
+const esCuentaDelSistema = async (usuarioId) => {
+    const rutSistema = String(process.env.DTE_RUT || '').replace(/[^0-9kK]/g, '');
+    if (!rutSistema) return false;
+
+    const { rows } = await pool.query('SELECT rut_encrypted FROM usuario WHERE id = $1', [usuarioId]);
+    if (!rows.length) return false;
+
+    const rutUsuario = String(decrypt(rows[0].rut_encrypted) || '')
+        .split('-')[0]
+        .replace(/[^0-9kK]/g, '');
+
+    return !!rutUsuario && rutUsuario === rutSistema;
+};
+
 // ============================================================================
 // CREDENCIAL GLOBAL DEL USUARIO (para facturar)
 // Cada usuario (admin o cliente) tiene su propio set de 5 credenciales,
@@ -51,7 +74,10 @@ export const getCredencialGlobal = async (req, res) => {
             dtePass: dtePass || '',
             pfxPass: pfxPass || '',
             ciudad: r.ciudad || 'Santiago',
-            tieneCredenciales: !!(dteRut && dtePass)
+            tieneCredenciales: !!(dteRut && dtePass),
+            // La pantalla lo usa para no invitar a cambiar las credenciales con
+            // las que hoy factura todo el sistema.
+            esCuentaDelSistema: await esCuentaDelSistema(usuarioId)
         });
     } catch (err) {
         console.error('❌ Error obteniendo credencial global:', err.message);

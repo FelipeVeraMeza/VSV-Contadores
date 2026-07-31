@@ -16,7 +16,7 @@ import {
     editarCuenta,
     eliminarCuenta
 } from '../controllers/accounting.controllers.js';
-import { requireSession } from "../middleware/auth.js";
+import { requireSession, requireModulo } from "../middleware/auth.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });

@@ -3709,5 +3709,15 @@
       "tramo": "",
       "trabajadores": ""
     }
+  },
+  {
+    "fecha": "2026-07-31T01:28:04.982Z",
+    "folio": "1313",
+    "rut": "",
+    "razonSocial": "JL MONTERO SPA",
+    "correo": "JLMONTERO.SPA@GMAIL.COM",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {}
   }
 ]

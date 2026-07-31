@@ -6,7 +6,7 @@ import {
     getAnalisisSocios, 
     getDeclaracionesRenta 
 } from '../controllers/renta.controllers.js';
-import { requireSession, requireAdmin } from "../middleware/auth.js";
+import { requireSession, requireAdmin, requireModulo } from "../middleware/auth.js";
 
 
 const router = Router();

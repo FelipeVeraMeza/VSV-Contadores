@@ -613,7 +613,9 @@ export const catalogosCRM = async (req, res) => {
                 `SELECT id, nombre FROM usuario
                  WHERE activo = true AND organizacion_id IS NOT DISTINCT FROM $1::uuid
                  ORDER BY nombre`, [org]),
-            pool.query(`SELECT id, nombre, categoria FROM servicio WHERE activo = true ORDER BY nombre`),
+            pool.query(`SELECT id, nombre, categoria FROM servicio
+                 WHERE activo = true AND organizacion_id IS NOT DISTINCT FROM $1::uuid
+                 ORDER BY nombre`, [org]),
             // "Estado del cliente" (situación comercial): valores ya usados en la
             // organización. El combobox los ofrece para buscar y permite escribir uno nuevo.
             pool.query(

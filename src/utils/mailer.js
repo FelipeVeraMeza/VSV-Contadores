@@ -1,40 +1,57 @@
 // ============================================================================
-// Envío de correo reutilizable (nodemailer + Gmail).
+// Envío de correo reutilizable (liquidaciones, avisos, notificaciones)
+// ----------------------------------------------------------------------------
+// Antes esto mandaba por SMTP directo con nodemailer. Dos problemas:
 //
-// Usa las mismas credenciales de los envíos masivos del sistema:
-//   GMAIL_EMAIL_Masivo / GMAIL_PASSWORD_Masivo (definidas en .env).
+//   1. Railway BLOQUEA los puertos SMTP salientes, así que en producción no
+//      salía ni un correo. Funcionaba solo desde el computador local.
+//   2. El facturador masivo ya tenía resuelto el problema con una cascada de
+//      tres vías, pero vivía en su propio archivo y nadie más la usaba.
 //
-// Si faltan credenciales lanza un error claro para que la capa HTTP responda
-// 503 en vez de romper silenciosamente.
+// Ahora todo el sistema manda por la misma cascada:
+//
+//      1. API de Gmail por HTTPS   (si hay GMAIL_CLIENT_ID/SECRET/REFRESH_TOKEN)
+//      2. Resend por HTTPS         (si hay RESEND_API_KEY)
+//      3. Gmail SMTP con reintentos en dos puertos  (solo sirve en local)
+//
+// Ver docs/correo-envio-diagnostico.md para el estado de cada vía.
 // ============================================================================
-import nodemailer from 'nodemailer';
+import { enviarConReintentos } from '../components/facturacion/scripts/revisar para envios/mensajes_facturador_masivo.mjs';
 
-let transporter = null;
+const REMITENTE = 'matias.olivos@vsvconsultores.com';
 
-const getTransporter = () => {
-  const user = process.env.GMAIL_EMAIL_Masivo;
-  const pass = process.env.GMAIL_PASSWORD_Masivo;
-  if (!user || !pass) {
-    const err = new Error('El correo no está configurado (faltan GMAIL_EMAIL_Masivo / GMAIL_PASSWORD_Masivo).');
-    err.code = 'MAIL_NO_CONFIG';
-    throw err;
-  }
-  if (!transporter) {
-    transporter = nodemailer.createTransport({ service: 'gmail', auth: { user, pass } });
-  }
-  return transporter;
-};
+// Hay alguna vía disponible si existe cualquiera de las tres configuraciones.
+export const correoConfigurado = () => Boolean(
+    (process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET && process.env.GMAIL_REFRESH_TOKEN) ||
+    process.env.RESEND_API_KEY ||
+    (process.env.GMAIL_EMAIL_Masivo && process.env.GMAIL_PASSWORD_Masivo) ||
+    (process.env.GMAIL_EMAIL_PRINCIPAL && process.env.GMAIL_PASSWORD_PRINCIPAL)
+);
 
 /**
- * Envía un correo. Devuelve la respuesta del servidor SMTP.
- * @param {{to:string, subject:string, html:string, attachments?:Array, replyTo?:string}} opts
+ * Envía un correo por la primera vía que funcione.
+ *
+ * @param {{to:string, subject:string, html:string, attachments?:Array, replyTo?:string, from?:string}} opts
+ * @returns {Promise<boolean>} true si salió por alguna vía.
+ * @throws  Si ninguna vía está configurada, o si todas fallaron.
  */
-export const enviarCorreo = async ({ to, subject, html, attachments, replyTo }) => {
-  const t = getTransporter();
-  const from = `"VS Consultores — Remuneraciones" <${process.env.GMAIL_EMAIL_Masivo}>`;
-  const info = await t.sendMail({ from, to, subject, html, attachments, replyTo });
-  return info;
-};
+export const enviarCorreo = async ({ to, subject, html, attachments, replyTo, from }) => {
+    if (!correoConfigurado()) {
+        const err = new Error(
+            'El correo no está configurado. Hace falta al menos una vía: ' +
+            'Gmail API (GMAIL_CLIENT_ID/SECRET/REFRESH_TOKEN), Resend (RESEND_API_KEY) ' +
+            'o SMTP (GMAIL_EMAIL_Masivo/GMAIL_PASSWORD_Masivo).'
+        );
+        err.code = 'MAIL_NO_CONFIG';
+        throw err;
+    }
 
-export const correoConfigurado = () =>
-  Boolean(process.env.GMAIL_EMAIL_Masivo && process.env.GMAIL_PASSWORD_Masivo);
+    return enviarConReintentos({
+        from: from || `"Matias Olivos" <${REMITENTE}>`,
+        to,
+        subject,
+        html,
+        ...(attachments ? { attachments } : {}),
+        ...(replyTo ? { replyTo } : {}),
+    });
+};
