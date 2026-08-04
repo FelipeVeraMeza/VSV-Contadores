@@ -71,6 +71,22 @@ function MainPage() {
     ] : []),
   ];
 
+  // Submódulos del menú de Tareas.
+  //
+  // "Equipo" muestra las tareas de TODA la organización y es solo para
+  // Administradores. Mismo triple candado que Facturación: se esconde del menú,
+  // la página rebota a quien entre por URL, y el backend responde 403. Esconder
+  // la opción es cortesía; el candado de verdad está en el servidor.
+  const subTareas = [
+    { id: 'inicio',    name: 'Inicio',     icon: LayoutDashboard },
+    { id: 'proyectos', name: 'Proyectos',  icon: FolderOpen },
+    { id: 'todas',     name: 'Tareas',     icon: ListChecks },
+    { id: 'mias',      name: 'Mis tareas', icon: UserCircle },
+    ...(esAdministrador ? [
+      { id: 'equipo',  name: 'Equipo',     icon: Users },
+    ] : []),
+  ];
+
   // Submódulos del menú de Recursos Humanos (Remuneraciones)
   // subRRHH viene de src/config/rrhhNav.js (7 secciones planas y uniformes;
   // las sub-páginas de cada sección se muestran como pestañas DENTRO de la página).
@@ -81,6 +97,7 @@ function MainPage() {
     else if (location.pathname.startsWith('/CRM')) setExpandedModule('CRM');
     else if (location.pathname.startsWith('/rrhh')) setExpandedModule('rrhh');
     else if (location.pathname.startsWith('/facturacion')) setExpandedModule('facturacion');
+    else if (location.pathname.startsWith('/tareas')) setExpandedModule('tareas');
   }, [location.pathname]);
 
   const subActivo = new URLSearchParams(location.search).get('sub');
@@ -113,7 +130,7 @@ function MainPage() {
     { id: 'CRM', path: '/CRM', name: 'CRM', icon: Package, color: 'from-pink-500 to-rose-500', sub: subCRM },
     // Las tareas cruzan todos los módulos, no son "algo del CRM": van al mismo
     // nivel que Contabilidad o Facturación.
-    { id: 'tareas', path: '/tareas', name: 'Tareas', icon: ListChecks, color: 'from-violet-500 to-purple-600' },
+    { id: 'tareas', path: '/tareas', name: 'Tareas', icon: ListChecks, color: 'from-violet-500 to-purple-600', sub: subTareas },
     { id: 'contabilidad', path: '/contabilidad', name: 'Contabilidad', icon: Calculator, color: 'from-green-500 to-emerald-500', sub: subContabilidad },
     { id: 'rrhh', path: '/rrhh', name: 'Recursos Humanos', icon: Users, color: 'from-purple-500 to-violet-500', sub: subRRHH },
     { id: 'facturacion', path: '/facturacion', name: 'Facturación SII', icon: FileText, color: 'from-orange-500 to-red-500', sub: subFacturacion },

@@ -207,9 +207,36 @@ export const getCorreosLogController = async (req, res) => {
                      LIMIT 1
                ) cm ON true
              WHERE cf.organizacion_id IS NOT DISTINCT FROM $1::uuid
+               -- UN SOLO PERIODO A LA VEZ.
+               --
+               -- Sin este filtro la pantalla traía TODOS los correos jamás
+               -- registrados y mezclaba meses: el 04-08-2026 mostraba 169 filas
+               -- —81 pendientes y 12 pagados de julio, más 75 pagados de junio—
+               -- y el contador "Ya pagaron" decía 87. Nadie podía cuadrar ese
+               -- número contra la realidad de julio, que son 93 cobros.
+               --
+               -- Por defecto se muestra el periodo que se está cobrando: el
+               -- último con deuda, el MISMO criterio que usa el recordatorio,
+               -- para que la lista y el envío no puedan discrepar.
+               AND (
+                    cm.periodo = COALESCE(
+                        $2::date,
+                        (SELECT MAX(c2.periodo) FROM cobro_mensual c2
+                          WHERE c2.estado = 'PENDIENTE_PAGO'
+                            AND c2.organizacion_id IS NOT DISTINCT FROM $1::uuid)
+                    )
+                    -- Un correo sin cobro asociado no tiene periodo propio: se
+                    -- ubica por su fecha de envío para que no desaparezca.
+                    OR (cm.periodo IS NULL AND date_trunc('month', cf.fecha)::date = COALESCE(
+                        $2::date,
+                        (SELECT MAX(c2.periodo) FROM cobro_mensual c2
+                          WHERE c2.estado = 'PENDIENTE_PAGO'
+                            AND c2.organizacion_id IS NOT DISTINCT FROM $1::uuid)
+                    ))
+               )
              ORDER BY cf.fecha DESC
              LIMIT 2000`,
-            [req.user?.organizacionId || null]
+            [req.user?.organizacionId || null, req.query.periodo || null]
         );
         res.json({ ok: true, correos: rows });
     } catch (e) {

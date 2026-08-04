@@ -297,6 +297,18 @@ setInterval(cleanTmpFolder, 30 * 60 * 1000);
 // --- Manejo de Errores Global ---
 app.use((err, req, res, next) => {
   console.error(`❌ [Error]: ${err.message}`);
+
+  // Cuando express rechaza el cuerpo por tamaño, el mensaje que sale es
+  // "request entity too large": correcto y completamente inútil para quien
+  // acaba de intentar subir un archivo. Se traduce a algo accionable.
+  if (err.type === 'entity.too.large' || err.status === 413) {
+    return res.status(413).json({
+      status: 'error',
+      success: false,
+      message: 'El archivo es demasiado grande para enviarlo. El máximo por archivo es 7 MB.',
+    });
+  }
+
   res.status(err.statusCode || 500).json({
     status: 'error',
     message: err.message || 'Error interno del servidor',

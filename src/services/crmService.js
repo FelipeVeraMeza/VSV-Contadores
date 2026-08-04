@@ -98,17 +98,25 @@ export const guardarMetaCrmApi = (sessionId, metaMensual) =>
 // ============================================================
 // Tareas / actividades (dashboard, WhatsApp, automatización)
 // ============================================================
-export const listarTareasApi = (sessionId, { estado = '', tipo = '', personaId = '', desde = '', hasta = '', scope = '' } = {}) => {
+// Los filtros se pasan tal cual, sin lista blanca.
+//
+// Antes esta función destructuraba solo los parámetros que conocía, así que
+// `proyectoId` y `soloRaiz` se perdían en silencio: filtrar por proyecto no
+// hacía nada y las subtareas aparecían como filas sueltas en la lista
+// principal. El backend ya valida cada parámetro; repetir la lista acá solo
+// servía para que se desincronizaran.
+export const listarTareasApi = (sessionId, filtros = {}) => {
   const p = new URLSearchParams();
-  if (estado) p.set('estado', estado);
-  if (tipo) p.set('tipo', tipo);
-  if (personaId) p.set('personaId', personaId);
-  if (desde) p.set('desde', desde);
-  if (hasta) p.set('hasta', hasta);
-  if (scope) p.set('scope', scope);
+  for (const [clave, valor] of Object.entries(filtros)) {
+    if (valor !== '' && valor !== null && valor !== undefined) p.set(clave, valor);
+  }
   const qs = p.toString();
   return fetchWithAuth(`/crm/tareas${qs ? `?${qs}` : ''}`, sessionId);
 };
+
+// Resumen de la pantalla Inicio: conteos + las tres listas, en una llamada.
+export const resumenInicioApi = (sessionId, ambito = 'todas') =>
+  fetchWithAuth(`/crm/tareas/inicio?ambito=${encodeURIComponent(ambito)}`, sessionId);
 
 export const crearTareaApi = (sessionId, data) =>
   fetchWithAuth('/crm/tareas', sessionId, { method: 'POST', body: data });
@@ -121,6 +129,10 @@ export const completarTareaApi = (sessionId, id) =>
 
 export const eliminarTareaApi = (sessionId, id) =>
   fetchWithAuth(`/crm/tareas/${id}`, sessionId, { method: 'DELETE' });
+
+// Archivar / desarchivar (RF-TA-17). No borra: saca de la vista y se deshace.
+export const archivarTareaApi = (sessionId, id, archivar = true) =>
+  fetchWithAuth(`/crm/tareas/${id}/archivar`, sessionId, { method: 'PATCH', body: { archivar } });
 
 export const limpiarTareasCompletadasApi = (sessionId, scope = '') =>
   fetchWithAuth(`/crm/tareas/completadas${scope ? `?scope=${scope}` : ''}`, sessionId, { method: 'DELETE' });

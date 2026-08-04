@@ -1,15 +1,18 @@
 import { Router } from 'express';
 import {
-    listarTareas, crearTarea, actualizarTarea, eliminarTarea, eliminarTareasCompletadas,
+    listarTareas, crearTarea, actualizarTarea, eliminarTarea, eliminarTareasCompletadas, archivarTarea,
     obtenerTarea, agregarComentario, eliminarComentario,
     subirAdjunto, descargarAdjunto, eliminarAdjunto,
     listarProyectos, crearProyecto, actualizarProyecto, eliminarProyecto,
-    metricasDashboard, guardarMeta
+    metricasDashboard, guardarMeta, resumenInicio
 } from '../controllers/crm.controllers.js';
 import { requireSession, requireModulo } from '../middleware/auth.js';
 import { exigirPermisoTarea } from '../utils/permisosTarea.js';
 
 const router = Router();
+
+// Resumen de la pantalla Inicio del módulo de Tareas
+router.get('/tareas/inicio', requireSession, resumenInicio);
 
 // Métricas del dashboard
 router.get('/metricas', requireSession, metricasDashboard);
@@ -41,6 +44,8 @@ router.get('/tareas/:id', requireSession, exigirPermisoTarea('ver'), obtenerTare
 router.post('/tareas/:id/comentarios', requireSession, exigirPermisoTarea('editar'), agregarComentario);
 router.post('/tareas/:id/adjuntos', requireSession, exigirPermisoTarea('editar'), subirAdjunto);
 router.put('/tareas/:id', requireSession, exigirPermisoTarea('editar'), actualizarTarea);
+// Archivar es "editar", no "eliminar": no se pierde nada y se puede deshacer.
+router.patch('/tareas/:id/archivar', requireSession, exigirPermisoTarea('editar'), archivarTarea);
 router.delete('/tareas/:id', requireSession, exigirPermisoTarea('eliminar'), eliminarTarea);
 
 export default router;

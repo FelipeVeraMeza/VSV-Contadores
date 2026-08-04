@@ -131,7 +131,25 @@ export async function obtenerDestinatariosRecordatorio({ periodo = null, soloAct
                  ORDER BY f.fecha DESC
                  LIMIT 1
            ) cf ON true
-          WHERE c.periodo = COALESCE($1::date, date_trunc('month', CURRENT_DATE)::date)
+          WHERE c.periodo = COALESCE(
+                    $1::date,
+                    -- Sin periodo explícito: EL ÚLTIMO QUE TIENE DEUDA, no el mes
+                    -- en curso.
+                    --
+                    -- El cobro de un mes se persigue al mes siguiente: el de julio
+                    -- vence el 5 de agosto. Tomando el mes en curso a secas,
+                    -- el 1 de agosto el recordatorio se ponía a buscar cobros de
+                    -- agosto —que todavía no existen— y respondía "sin
+                    -- destinatarios" teniendo 81 clientes con deuda de julio a la
+                    -- vista en la pantalla. Pasó el 03-08-2026.
+                    --
+                    -- Así se corrige solo: cuando se generen los cobros de agosto y
+                    -- julio quede saldado, el periodo avanza sin tocar nada.
+                    (SELECT MAX(c2.periodo)
+                       FROM cobro_mensual c2
+                      WHERE c2.estado = 'PENDIENTE_PAGO'
+                        AND c2.organizacion_id IS NOT DISTINCT FROM $2::uuid)
+                )
             AND c.estado = 'PENDIENTE_PAGO'
             AND c.organizacion_id IS NOT DISTINCT FROM $2::uuid
             ${filtroCartera}

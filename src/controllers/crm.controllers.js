@@ -1,4 +1,5 @@
 import { pool } from '../database/db.js';
+import { registrar } from '../utils/bitacora.js';
 
 // ============================================================
 // CRM · Tareas / actividades y métricas del dashboard
@@ -25,37 +26,119 @@ const ORDEN_TAREAS = `
     t.vence_at ASC NULLS LAST,
     CASE t.prioridad WHEN 'critica' THEN 0 WHEN 'alta' THEN 1 WHEN 'media' THEN 2 ELSE 3 END`;
 
+// ---------------------------------------------------------------------------
+// ÁMBITO DE UNA CONSULTA DE TAREAS · las tres secciones del módulo
+//
+//   todas   Las tareas en las que participo: soy responsable, colaboro, o la creé.
+//   mias    Solo lo que tengo encima: responsable o colaborador. Deja fuera lo
+//           que creé y le asigné a otro — eso es trabajo suyo, no mío.
+//   equipo  Toda la organización. SOLO Administradores.
+//
+// La diferencia entre "todas" y "mias" está en `creado_por`, y no es un detalle:
+// quien reparte trabajo termina con una lista llena de tareas ajenas si no se
+// separan.
+//
+// Antes ninguno de los dos miraba `tarea_colaborador`: un colaborador no veía
+// en su lista las tareas donde lo habían sumado (RF-TA-13 lo pide explícito).
+// ---------------------------------------------------------------------------
+const AMBITOS = ['todas', 'mias', 'equipo'];
+
+const condicionAmbito = (ambito, indiceUsuario) => {
+    const colabora = `EXISTS (SELECT 1 FROM tarea_colaborador tc WHERE tc.tarea_id = t.id AND tc.usuario_id = $${indiceUsuario})`;
+    if (ambito === 'mias') return `(t.responsable_id = $${indiceUsuario} OR ${colabora})`;
+    return `(t.responsable_id = $${indiceUsuario} OR t.creado_por = $${indiceUsuario} OR ${colabora})`;
+};
+
+// `scope=equipo|mias` era el nombre viejo; se sigue aceptando para no romper
+// llamadas existentes (el dashboard del CRM todavía lo usa).
+const ambitoPedido = (req) => {
+    const crudo = req.query.ambito || req.query.scope || 'todas';
+    return AMBITOS.includes(crudo) ? crudo : 'todas';
+};
+
 // ------------------------------------------------------------
 // LISTAR TAREAS
-//   ?estado=pendiente|completada  ?tipo=  ?personaId=  ?desde=&hasta= (vence_at)
-//   ?scope=mias|equipo   (equipo solo aplica a administradores)
+//   ?estado=  ?tipo=  ?personaId=  ?desde=&hasta= (vence_at)
+//   ?ambito=todas|mias|equipo   (equipo solo para administradores)
 // ------------------------------------------------------------
 export const listarTareas = async (req, res) => {
     try {
-        const { estado, tipo, personaId, desde, hasta, scope } = req.query;
+        const { estado, tipo, personaId, desde, hasta } = req.query;
         const org = req.user?.organizacionId || null;
         const where = ['t.organizacion_id IS NOT DISTINCT FROM $1::uuid'];
         const params = [org];
 
-        // Cartera propia salvo que el admin pida ver el equipo.
-        const verEquipo = esAdmin(req) && scope === 'equipo';
-        if (!verEquipo) {
+        const ambito = ambitoPedido(req);
+        // Tercer candado de "Equipo". El menú la esconde y la página rebota, pero
+        // el que decide es este: sin él, cualquiera pide ?ambito=equipo y ve todo.
+        if (ambito === 'equipo' && !esAdmin(req)) {
+            return res.status(403).json({ success: false, message: 'La vista de equipo es solo para administradores.' });
+        }
+        if (ambito !== 'equipo') {
             params.push(req.user?.usuarioId || null);
-            where.push(`(t.responsable_id = $${params.length} OR t.creado_por = $${params.length})`);
+            where.push(condicionAmbito(ambito, params.length));
         }
         if (estado && ESTADOS.includes(estado)) { params.push(estado); where.push(`t.estado = $${params.length}`); }
         if (tipo && TIPOS.includes(tipo)) { params.push(tipo); where.push(`t.tipo = $${params.length}`); }
         if (personaId) { params.push(personaId); where.push(`t.persona_id = $${params.length}`); }
         if (desde) { params.push(desde); where.push(`t.vence_at >= $${params.length}::timestamptz`); }
         if (hasta) { params.push(hasta); where.push(`t.vence_at <= $${params.length}::timestamptz`); }
+
+        // ------------------------------------------------------------------
+        // BUSCAR Y FILTRAR EN EL SERVIDOR · RF-TA-11, RF-TA-12, RNF-TA-02
+        // ------------------------------------------------------------------
+        // Antes la pantalla se traía TODAS las tareas y filtraba en el
+        // navegador. Con 0 tareas da igual; con 2.000 el navegador se arrastra
+        // y encima el usuario espera a que baje todo para ver tres resultados.
+        //
+        // 'activas' no es un estado: es el atajo de la pantalla para "lo que
+        // sigue abierto". Se resuelve acá para que el filtro de la lista y el
+        // que usa el resumen de Inicio no puedan discrepar.
+        if (req.query.estado === 'activas') where.push(`t.estado = ANY($${params.push(ESTADOS_ACTIVOS)})`);
+
+        if (PRIORIDADES.includes(req.query.prioridad)) {
+            params.push(req.query.prioridad); where.push(`t.prioridad = $${params.length}`);
+        }
+        if (req.query.responsableId) {
+            params.push(req.query.responsableId); where.push(`t.responsable_id = $${params.length}`);
+        }
+
+        // Texto libre. Busca donde el usuario espera que busque: el nombre de la
+        // tarea, su descripción, el responsable y el proyecto. Se escapan los
+        // comodines de LIKE para que un guion bajo o un % escrito por el usuario
+        // se busquen como texto y no como patrón.
+        const q = String(req.query.q || '').trim();
+        if (q) {
+            params.push(`%${q.replace(/[\\%_]/g, c => '\\' + c)}%`);
+            const i = params.length;
+            where.push(`(t.titulo ILIKE $${i} OR t.descripcion ILIKE $${i}
+                         OR u.nombre ILIKE $${i} OR pr.nombre ILIKE $${i})`);
+        }
         // Filtros del módulo de tareas.
         if (req.query.proyectoId) { params.push(req.query.proyectoId); where.push(`t.proyecto_id = $${params.length}`); }
         if (req.query.soloRaiz === '1') where.push(`t.parent_id IS NULL`);
+
+        // ARCHIVADAS · por defecto NO se ven. Se archiva justamente para sacarlas
+        // de en medio; si siguieran apareciendo, archivar no serviría de nada.
+        //   (sin parámetro) → solo las vivas
+        //   ?archivadas=solo    → solo el archivo
+        //   ?archivadas=incluir → todo junto
+        const arch = req.query.archivadas;
+        if (arch === 'solo') where.push(`t.archivada_at IS NOT NULL`);
+        else if (arch !== 'incluir') where.push(`t.archivada_at IS NULL`);
+
+        // PAGINACIÓN. Con tope siempre puesto: sin él, el día que haya 5.000
+        // tareas una pantalla las pide todas y se lleva el servidor por delante.
+        // `COUNT(*) OVER()` devuelve el total sin una segunda consulta.
+        const limite = Math.min(Math.max(parseInt(req.query.limite, 10) || 100, 1), 500);
+        const desplazamiento = Math.max(parseInt(req.query.desplazamiento, 10) || 0, 0);
+        params.push(limite, desplazamiento);
 
         const { rows } = await pool.query(
             `SELECT t.*, u.nombre AS responsable_nombre,
                     (p.nombre || ' ' || COALESCE(p.apellidos,'')) AS persona_nombre,
                     pr.nombre AS proyecto_nombre, pr.color AS proyecto_color,
+                    COUNT(*) OVER()::int AS total_filtrado,
                     (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id) AS subtareas_total,
                     (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.estado='completada') AS subtareas_hechas,
                     (SELECT COUNT(*)::int FROM tarea_comentario tc WHERE tc.tarea_id = t.id) AS comentarios,
@@ -67,10 +150,19 @@ export const listarTareas = async (req, res) => {
              LEFT JOIN persona p ON p.id = t.persona_id
              LEFT JOIN proyecto pr ON pr.id = t.proyecto_id
              WHERE ${where.join(' AND ')}
-             ORDER BY ${ORDEN_TAREAS}`,
+             ORDER BY ${ORDEN_TAREAS}
+             LIMIT $${params.length - 1} OFFSET $${params.length}`,
             params
         );
-        return res.json({ success: true, tareas: rows.map(mapTarea) });
+
+        const total = rows[0]?.total_filtrado ?? 0;
+        return res.json({
+            success: true,
+            tareas: rows.map(mapTarea),
+            total,                                        // cuántas calzan con el filtro
+            desplazamiento,
+            hayMas: desplazamiento + rows.length < total, // para el botón "ver más"
+        });
     } catch (error) {
         console.error('❌ Error listando tareas:', error.message);
         return res.status(500).json({ success: false, message: 'Error al listar tareas.' });
@@ -218,6 +310,48 @@ export const actualizarTarea = async (req, res) => {
     }
 };
 
+// ------------------------------------------------------------
+// ARCHIVAR / DESARCHIVAR UNA TAREA · RF-TA-17
+// ------------------------------------------------------------
+// Archivar NO es borrar y no es un estado: es sacar la tarea de la vista
+// conservando todo —estado, comentarios, archivos, subtareas—. Al desarchivar
+// vuelve exactamente como estaba, porque el estado nunca se tocó.
+//
+// Las subtareas siguen a su tarea principal: archivar el padre y dejar los
+// hijos sueltos dejaría huérfanos flotando en la lista.
+// ------------------------------------------------------------
+export const archivarTarea = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const org = req.user?.organizacionId || null;
+        const archivar = req.body?.archivar !== false;   // por defecto, archiva
+
+        const { rows } = await pool.query(
+            `UPDATE tarea
+                SET archivada_at  = CASE WHEN $2::boolean THEN NOW() ELSE NULL END,
+                    archivada_por = CASE WHEN $2::boolean THEN $3::uuid ELSE NULL END
+              WHERE (id = $1 OR parent_id = $1)
+                AND organizacion_id IS NOT DISTINCT FROM $4::uuid
+              RETURNING id, parent_id`,
+            [id, archivar, req.user?.usuarioId || null, org]
+        );
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Tarea no encontrada.' });
+
+        const subtareas = rows.filter(r => r.parent_id).length;
+        await registrar(req, {
+            modulo: 'tareas',
+            accion: archivar ? 'archivar' : 'desarchivar',
+            entidad: 'tarea', entidadId: id,
+            descripcion: `${archivar ? 'Archivó' : 'Desarchivó'} una tarea${subtareas ? ` y sus ${subtareas} subtareas` : ''}`,
+        });
+
+        return res.json({ success: true, archivada: archivar, subtareas, tarea: await tareaCompleta(id) });
+    } catch (error) {
+        console.error('❌ Error archivando tarea:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo archivar la tarea.' });
+    }
+};
+
 export const eliminarTarea = async (req, res) => {
     try {
         const { id } = req.params;
@@ -249,6 +383,123 @@ export const eliminarTareasCompletadas = async (req, res) => {
     } catch (error) {
         console.error('❌ Error limpiando tareas completadas:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudieron limpiar las tareas.' });
+    }
+};
+
+// ============================================================
+// INICIO DEL MÓDULO · el resumen del día
+// ------------------------------------------------------------
+// Es la pantalla que más se va a abrir, así que la regla es no hacerla cara:
+//
+//   · Los seis conteos salen de UNA consulta con COUNT(*) FILTER, no de seis
+//     viajes a la base. Con seis, la pantalla tarda seis veces más y encima
+//     puede mostrar números de momentos distintos.
+//   · Las listas salen de OTRA consulta, una sola, que marca cada tarea con el
+//     grupo al que pertenece en vez de repetir la consulta por grupo.
+//
+// Son dos viajes en total, y van en paralelo.
+// ============================================================
+const DIAS_PROXIMAS = 7;   // qué se considera "próxima a vencer"
+const DIAS_RECIENTES = 7;  // cuánto dura algo en "finalizadas recientemente"
+const TOPE_LISTA = 8;      // por grupo; la pantalla es un resumen, no un listado
+
+// ATRASADA se compara por DÍA, no por instante. Con `vence_at < NOW()`, una
+// tarea que vence hoy a las 09:00 pasaba a contarse como atrasada a las 09:01 y
+// aparecía a la vez en "Atrasadas" y en "Vencen hoy": el mismo trabajo sumado
+// dos veces, y la sensación de ir atrasado apenas empieza el día.
+// Con el corte por día los dos grupos quedan separados: hoy es hoy, atrasado es
+// de ayer para atrás.
+const ATRASADA = `t.vence_at::date < CURRENT_DATE`;
+
+export const resumenInicio = async (req, res) => {
+    try {
+        const org = req.user?.organizacionId || null;
+        const uid = req.user?.usuarioId || null;
+        const ambito = ambitoPedido(req);
+        if (ambito === 'equipo' && !esAdmin(req)) {
+            return res.status(403).json({ success: false, message: 'La vista de equipo es solo para administradores.' });
+        }
+
+        // Los parámetros se arman según el ámbito, no con posiciones fijas. En
+        // "equipo" no se filtra por usuario, así que ese parámetro NO se manda:
+        // si se mandara sin aparecer en el SQL, Postgres no puede deducir su
+        // tipo y la consulta falla entera con "could not determine data type".
+        const params = [org];
+        let alcance = '';
+        if (ambito !== 'equipo') {
+            params.push(uid);
+            alcance = ` AND ${condicionAmbito(ambito, params.length)}`;
+        }
+        params.push(ESTADOS_ACTIVOS);
+        const activa = `t.estado = ANY($${params.length})`;
+
+        const base = `FROM tarea t
+                      WHERE t.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                        AND t.archivada_at IS NULL
+                        AND t.parent_id IS NULL ${alcance}`;
+
+        const [conteos, listas] = await Promise.all([
+            pool.query(
+                `SELECT
+                    COUNT(*) FILTER (WHERE ${activa})::int AS activas,
+                    COUNT(*) FILTER (WHERE ${activa} AND ${ATRASADA})::int AS vencidas,
+                    COUNT(*) FILTER (WHERE ${activa} AND t.vence_at::date = CURRENT_DATE)::int AS vencen_hoy,
+                    COUNT(*) FILTER (WHERE ${activa} AND t.vence_at::date >= CURRENT_DATE
+                        AND t.vence_at <= NOW() + INTERVAL '${DIAS_PROXIMAS} days')::int AS proximas,
+                    COUNT(*) FILTER (WHERE t.estado = 'completada'
+                        AND t.completed_at >= NOW() - INTERVAL '${DIAS_RECIENTES} days')::int AS recientes,
+                    COUNT(*) FILTER (WHERE ${activa} AND t.prioridad = 'critica')::int AS criticas
+                 ${base}`, params),
+
+            // Un solo viaje para las tres listas. `grupo` decide dónde se dibuja
+            // cada una; el ORDER las deja listas para pintar sin reordenar.
+            pool.query(
+                `SELECT * FROM (
+                    SELECT t.*, u.nombre AS responsable_nombre,
+                           pr.nombre AS proyecto_nombre, pr.color AS proyecto_color,
+                           NULL AS persona_nombre, 0 AS subtareas_total, 0 AS subtareas_hechas,
+                           0 AS comentarios, '[]'::json AS colaboradores,
+                           CASE
+                             WHEN t.estado = 'completada' THEN 'reciente'
+                             WHEN ${ATRASADA} THEN 'vencida'
+                             ELSE 'proxima'
+                           END AS grupo,
+                           ROW_NUMBER() OVER (
+                             PARTITION BY CASE
+                               WHEN t.estado = 'completada' THEN 'reciente'
+                               WHEN ${ATRASADA} THEN 'vencida'
+                               ELSE 'proxima' END
+                             ORDER BY
+                               CASE WHEN t.estado = 'completada' THEN t.completed_at END DESC,
+                               t.vence_at ASC
+                           ) AS n
+                    FROM tarea t
+                    LEFT JOIN usuario u ON u.id = t.responsable_id
+                    LEFT JOIN proyecto pr ON pr.id = t.proyecto_id
+                    WHERE t.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                      AND t.archivada_at IS NULL
+                      AND t.parent_id IS NULL ${alcance}
+                      AND (
+                        (${activa} AND t.vence_at IS NOT NULL
+                         AND t.vence_at <= NOW() + INTERVAL '${DIAS_PROXIMAS} days')
+                        OR (t.estado = 'completada'
+                            AND t.completed_at >= NOW() - INTERVAL '${DIAS_RECIENTES} days')
+                      )
+                 ) q WHERE q.n <= ${TOPE_LISTA}`, params),
+        ]);
+
+        const porGrupo = (g) => listas.rows.filter(r => r.grupo === g).map(mapTarea);
+
+        return res.json({
+            success: true,
+            resumen: { ...conteos.rows[0], diasProximas: DIAS_PROXIMAS, diasRecientes: DIAS_RECIENTES },
+            vencidas: porGrupo('vencida'),
+            proximas: porGrupo('proxima'),
+            recientes: porGrupo('reciente'),
+        });
+    } catch (error) {
+        console.error('❌ Error en el resumen de inicio:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo cargar el resumen.' });
     }
 };
 
@@ -509,6 +760,13 @@ export const obtenerTarea = async (req, res) => {
                 id: a.id, nombre: a.nombre, mime: a.mime, tamano: a.tamano,
                 autor: a.usuario_nombre || 'Sistema', fecha: a.created_at ? new Date(a.created_at).toLocaleString('es-CL') : '',
             })),
+            // Los topes viajan desde acá para que la pantalla no los repita: si
+            // se repitieran, el día que cambien quedaría avisando un número que
+            // la base ya no acepta.
+            limites: {
+                ...LIMITES_ADJUNTO,
+                usado: adjRes.rows.reduce((s, a) => s + Number(a.tamano || 0), 0),
+            },
         });
     } catch (error) {
         console.error('❌ Error obteniendo tarea:', error.message);
@@ -556,7 +814,33 @@ export const eliminarComentario = async (req, res) => {
 // ============================================================
 // ADJUNTOS de tarea (guardados como binario EN LA BASE)
 // ============================================================
-const MAX_ADJUNTO = 7 * 1024 * 1024; // 7 MB por archivo
+// ============================================================================
+// LÍMITES DE ADJUNTOS · RNF-TA-03
+// ----------------------------------------------------------------------------
+// Los archivos se guardan DENTRO de la base (`tarea_adjunto.contenido`). Es
+// cómodo —no hay que administrar almacenamiento aparte, y el respaldo de la
+// base ya se los lleva— pero tiene un costo que se paga después: cada respaldo
+// arrastra todos los archivos, y unos cientos de PDF empiezan a pesar en el
+// tiempo de restauración y en la memoria del servidor.
+//
+// Por eso hay DOS topes, no uno:
+//   · por archivo, para que nadie suba un video;
+//   · por tarea, porque un tope por archivo no impide subir cien archivos.
+//
+// Un solo lugar donde cambiarlos: el frontend los recibe del servidor en vez de
+// repetirlos, así no pueden quedar desalineados y mostrar un aviso que no
+// corresponde con lo que la base acepta.
+//
+// ⚠️ MAX_ADJUNTO no puede subir sin subir también el límite de express.json en
+// server.js: un archivo viaja en base64 y crece un tercio por el camino.
+// Hoy: 7 MB de archivo ≈ 9,4 MB de JSON, contra un tope de 10 MB.
+// ============================================================================
+const MAX_ADJUNTO = 7 * 1024 * 1024;        // 7 MB por archivo
+const MAX_POR_TAREA = 25 * 1024 * 1024;     // 25 MB sumando todos los de una tarea
+
+export const LIMITES_ADJUNTO = { porArchivo: MAX_ADJUNTO, porTarea: MAX_POR_TAREA };
+
+const enMegas = (bytes) => `${(bytes / 1024 / 1024).toFixed(bytes % (1024 * 1024) === 0 ? 0 : 1)} MB`;
 
 // POST /crm/tareas/:id/adjuntos   body: { nombre, mime, dataBase64 }
 export const subirAdjunto = async (req, res) => {
@@ -570,7 +854,27 @@ export const subirAdjunto = async (req, res) => {
         const base64 = String(dataBase64).includes(',') ? String(dataBase64).split(',').pop() : dataBase64;
         const buffer = Buffer.from(base64, 'base64');
         if (buffer.length === 0) return res.status(400).json({ success: false, message: 'Archivo vacío o inválido.' });
-        if (buffer.length > MAX_ADJUNTO) return res.status(413).json({ success: false, message: 'El archivo supera el máximo de 7 MB.' });
+
+        if (buffer.length > MAX_ADJUNTO) {
+            return res.status(413).json({
+                success: false,
+                message: `«${nombre}» pesa ${enMegas(buffer.length)} y el máximo por archivo es ${enMegas(MAX_ADJUNTO)}.`,
+            });
+        }
+
+        // Tope acumulado: un límite por archivo no impide subir cien archivos.
+        const { rows: [uso] } = await pool.query(
+            `SELECT COALESCE(SUM(tamano),0)::bigint AS usado FROM tarea_adjunto WHERE tarea_id = $1`, [id]);
+        const usado = Number(uso.usado);
+        if (usado + buffer.length > MAX_POR_TAREA) {
+            const libre = Math.max(0, MAX_POR_TAREA - usado);
+            return res.status(413).json({
+                success: false,
+                message: libre === 0
+                    ? `Esta tarea ya ocupa los ${enMegas(MAX_POR_TAREA)} disponibles. Elimina algún archivo antes de subir otro.`
+                    : `No cabe: la tarea lleva ${enMegas(usado)} de ${enMegas(MAX_POR_TAREA)} y solo quedan ${enMegas(libre)} libres.`,
+            });
+        }
 
         const { rows } = await pool.query(
             `INSERT INTO tarea_adjunto (tarea_id, nombre, mime, tamano, contenido, subido_por, usuario_nombre)
@@ -647,6 +951,32 @@ const TAREAS_QUE_CUENTAN = `
     AND t.archivada_at IS NULL
     AND t.estado <> 'cancelada'`;
 
+// ---------------------------------------------------------------------------
+// INTEGRANTES DE UN PROYECTO · derivados, no mantenidos a mano
+//
+// La especificación pedía mostrar los integrantes. Se podría haber creado una
+// tabla `proyecto_integrante`, pero sería un dato más que alguien tiene que
+// acordarse de actualizar cada vez que entra o sale gente — y que en la
+// práctica queda desactualizado a la semana.
+//
+// Acá salen de quienes REALMENTE participan: el responsable del proyecto, los
+// responsables de sus tareas y sus colaboradores. Siempre está al día porque
+// no hay nada que mantener. Incluye las subtareas: quien solo tiene una
+// subtarea también es parte del proyecto.
+// ---------------------------------------------------------------------------
+const INTEGRANTES_DEL_PROYECTO = `
+    COALESCE((
+        SELECT json_agg(json_build_object('id', x.id, 'nombre', x.nombre) ORDER BY x.nombre)
+        FROM (
+            SELECT DISTINCT us.id, us.nombre
+            FROM usuario us
+            WHERE us.id = pr.responsable_id
+               OR us.id IN (SELECT t2.responsable_id FROM tarea t2 WHERE t2.proyecto_id = pr.id)
+               OR us.id IN (SELECT tc.usuario_id FROM tarea_colaborador tc
+                            JOIN tarea t3 ON t3.id = tc.tarea_id WHERE t3.proyecto_id = pr.id)
+        ) x
+    ), '[]')`;
+
 export const listarProyectos = async (req, res) => {
     try {
         const org = req.user?.organizacionId || null;
@@ -655,7 +985,8 @@ export const listarProyectos = async (req, res) => {
                     (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN}) AS tareas_total,
                     (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN} AND t.estado='completada') AS tareas_hechas,
                     (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN}
-                       AND t.estado <> 'completada' AND t.vence_at < NOW()) AS tareas_atrasadas
+                       AND t.estado <> 'completada' AND t.vence_at < NOW()) AS tareas_atrasadas,
+                    ${INTEGRANTES_DEL_PROYECTO} AS integrantes
              FROM proyecto pr
              LEFT JOIN usuario u ON u.id = pr.creado_por
              LEFT JOIN usuario r ON r.id = pr.responsable_id
@@ -687,7 +1018,9 @@ const mapProyecto = (p) => ({
     updatedAt: p.updated_at,
     tareasTotal: p.tareas_total ?? 0,
     tareasHechas: p.tareas_hechas ?? 0,
+    tareasPendientes: Math.max(0, (p.tareas_total ?? 0) - (p.tareas_hechas ?? 0)),
     tareasAtrasadas: p.tareas_atrasadas ?? 0,
+    integrantes: p.integrantes || [],
     avance: p.tareas_total > 0 ? Math.round((p.tareas_hechas / p.tareas_total) * 100) : 0,
 });
 
@@ -698,7 +1031,8 @@ const proyectoCompleto = async (id) => {
                 (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN}) AS tareas_total,
                 (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN} AND t.estado='completada') AS tareas_hechas,
                 (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN}
-                   AND t.estado <> 'completada' AND t.vence_at < NOW()) AS tareas_atrasadas
+                   AND t.estado <> 'completada' AND t.vence_at < NOW()) AS tareas_atrasadas,
+                ${INTEGRANTES_DEL_PROYECTO} AS integrantes
          FROM proyecto pr
          LEFT JOIN usuario u ON u.id = pr.creado_por
          LEFT JOIN usuario r ON r.id = pr.responsable_id

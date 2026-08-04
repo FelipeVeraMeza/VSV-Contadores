@@ -183,7 +183,7 @@ legítimo.
 |---|---|---|
 | RF-TA-01 | Crear proyectos | ✅ |
 | RF-TA-02 | Editar proyectos | ✅ |
-| RF-TA-03 | Archivar proyectos | Fase 5 |
+| RF-TA-03 | Archivar proyectos | ✅ |
 | RF-TA-04 | Crear tareas asociadas a un proyecto | ✅ |
 | RF-TA-05 | Asignar responsable y colaboradores | ✅ |
 | RF-TA-06 | Definir prioridad de la tarea | ✅ |
@@ -191,13 +191,13 @@ legítimo.
 | RF-TA-08 | Crear subtareas | ✅ |
 | RF-TA-09 | Adjuntar archivos a tareas y subtareas | ✅ |
 | RF-TA-10 | Registrar comentarios por tarea | ✅ |
-| RF-TA-11 | Buscar tareas por distintos criterios | Fase 6 |
-| RF-TA-12 | Filtrar por proyecto, estado, prioridad y responsable | Fase 6 |
+| RF-TA-11 | Buscar tareas por distintos criterios | ✅ |
+| RF-TA-12 | Filtrar por proyecto, estado, prioridad y responsable | ✅ |
 | RF-TA-13 | Visualizar "Mis tareas" | ✅ |
 | RF-TA-14 | Visualizar tareas del equipo (Administradores) | ✅ |
 | RF-TA-15 | Calcular el avance de un proyecto según el estado de sus tareas | ✅ |
 | RF-TA-16 | Registrar fecha de creación y última modificación | ✅ |
-| RF-TA-17 | Archivar tareas y proyectos sin eliminar la información | Fase 5 |
+| RF-TA-17 | Archivar tareas y proyectos sin eliminar la información | ✅ |
 
 ---
 
@@ -214,21 +214,29 @@ que rompen el módulo cuando ya está en uso, no cuando se está construyendo.
 > próxima consulta que alguien agregue se olvida del filtro. Con Victor en su
 > propia organización, eso ahora se nota de inmediato.
 
-> **RNF-TA-02 · Búsqueda y paginación en el servidor.**
-> La búsqueda y los filtros deberán resolverse en la base de datos, no en el
-> navegador.
+> **RNF-TA-02 · Búsqueda y paginación en el servidor.** ✅
+> La búsqueda y los filtros se resuelven en la base de datos, no en el navegador.
 >
-> Hoy se trae todo y se filtra en memoria. Con 0 tareas da igual; con 2.000 el
-> navegador se arrastra. Conviene hacerlo antes de que se llene.
+> La lista pide 60 tareas por vez y el resto llega con "Ver más"; el servidor
+> recorta a 500 aunque se le pida más. El total lo cuenta la base, así que el
+> contador no miente cuando la lista está paginada. La búsqueda escapa los
+> comodines de LIKE: un `%` escrito por el usuario se busca como texto.
 
-> **RNF-TA-03 · Tamaño de los archivos adjuntos.**
-> Deberá existir un límite por archivo, con aviso claro al superarlo.
+> **RNF-TA-03 · Tamaño de los archivos adjuntos.** ✅
+> Hay **dos** topes: **7 MB por archivo** y **25 MB sumando todos los de una
+> tarea**. Un tope por archivo solo no impide subir cien archivos.
 >
 > Los adjuntos se guardan **dentro de la base de datos**
-> (`tarea_adjunto.contenido`). Unos cientos de PDF empiezan a pesar en los
-> respaldos y en la memoria del servidor. El límite es la solución rápida;
-> mover los archivos a almacenamiento aparte es la buena, y queda pendiente
-> para cuando duela.
+> (`tarea_adjunto.contenido`), así que cada respaldo se los lleva. Los límites
+> viven en un solo lugar del servidor y viajan a la pantalla, que muestra cuánto
+> lleva ocupado y avisa en ámbar sobre el 80%.
+>
+> ⚠️ Subir `MAX_ADJUNTO` obliga a subir también el límite de `express.json` en
+> `server.js`: el archivo viaja en base64 y crece un tercio por el camino. Hoy
+> 7 MB de archivo ≈ 9,4 MB de JSON contra un tope de 10 MB.
+>
+> Mover los archivos a almacenamiento aparte sigue siendo la solución buena, y
+> queda pendiente para cuando duela.
 
 > **RNF-TA-04 · Fecha de modificación confiable.**
 > `updated_at` deberá mantenerse por *trigger* en la base, nunca por la
@@ -255,18 +263,46 @@ que rompen el módulo cuando ya está en uso, no cuando se está construyendo.
 
 ## 10. Fases de construcción
 
-| Fase | Qué | Estado |
-|---|---|---|
-| 1 | Modelo: estados, prioridades, campos de proyecto, `updated_at` | ✅ 31-07-2026 |
-| 2 | Las cinco secciones del módulo | en curso |
-| 3 | Pantalla Proyectos | pendiente |
-| 4 | Pantalla Inicio | pendiente |
-| 5 | Archivar tareas y proyectos | pendiente |
-| 6 | Buscar y filtrar en el servidor | pendiente |
-| 7 | Límite de tamaño de los adjuntos | pendiente |
+**Las siete fases están cerradas.** Cada una se verificó llamando a los
+controladores reales contra la base de datos, no con datos simulados; los datos
+de prueba se borran al terminar y las tablas quedan como estaban.
 
-**Migración de la Fase 1:**
-`src/DatabaseThings/migrations/2026-07-31_tareas_fase1_modelo.sql`
+| Fase | Qué | Estado | Pruebas |
+|---|---|---|---|
+| 1 | Modelo: estados, prioridades, campos de proyecto, `updated_at` | ✅ 31-07 | 10/10 |
+| 2 | Las cinco secciones del módulo | ✅ 03-08 | 7/7 |
+| 3 | Pantalla Proyectos | ✅ 03-08 | 10/10 |
+| 4 | Pantalla Inicio | ✅ 03-08 | 13/13 |
+| 5 | Archivar tareas y proyectos | ✅ 04-08 | 11/11 |
+| 6 | Buscar y filtrar en el servidor | ✅ 04-08 | 13/13 |
+| 7 | Límite de tamaño de los adjuntos | ✅ 04-08 | 10/10 |
+
+**Migración:** `src/DatabaseThings/migrations/2026-07-31_tareas_fase1_modelo.sql`
+
+### Defectos que encontraron las pruebas
+
+Vale la pena dejarlos escritos: son los que se habrían visto en producción.
+
+| Dónde | Qué pasaba |
+|---|---|
+| Inicio, modo Equipo | La pantalla reventaba entera. Se mandaba un parámetro que no aparecía en la consulta y Postgres no podía deducir su tipo |
+| Contadores de Inicio | Una tarea que vencía **hoy** se contaba a la vez como atrasada y como de hoy. El mismo trabajo sumado dos veces, y sensación de ir atrasado desde temprano. Ahora el corte es por día |
+| Lista de tareas | `proyectoId` y `soloRaiz` se descartaban en el servicio del frontend: filtrar por proyecto no hacía nada y las subtareas aparecían sueltas |
+| Ámbitos | Ni "mías" ni "todas" miraban `tarea_colaborador`: a quien lo sumaban como colaborador no le aparecía la tarea, contra lo que pide RF-TA-13 |
+
+---
+
+## 12. Lo que este módulo NO hace
+
+Escrito a propósito, para que nadie lo busque:
+
+- **Tablero kanban** y **calendario** — se descartaron con los cronogramas
+- **Notificaciones** cuando te asignan una tarea — no hay avisos de ningún tipo
+- **Tareas que se repiten solas** (el F29 de cada mes, por ejemplo)
+- **Adjuntos en los comentarios** — solo en la tarea
+- **Más de un nivel de subtareas**
+- **Registro de cambios por tarea** — quién cambió qué y cuándo. La bitácora
+  guarda archivar y desarchivar, no cada edición
 
 ---
 

@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
     Plus, Search, Loader2, X, Trash2, Check, Clock, Folder, FolderPlus,
     MessageSquare, ListChecks, ChevronRight, Circle, CircleDot, CheckCircle2,
-    Flag, User, Users, Calendar, Send, Paperclip, Download, Eye
+    Flag, User, Users, Calendar, Send, Paperclip, Download, Eye, Archive, ArchiveRestore
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import {
     listarTareasApi, crearTareaApi, actualizarTareaApi, eliminarTareaApi, completarTareaApi,
     obtenerTareaApi, agregarComentarioApi, eliminarComentarioApi,
     subirAdjuntoApi, descargarAdjuntoApi, eliminarAdjuntoApi,
-    listarProyectosApi, crearProyectoApi, eliminarProyectoApi,
+    listarProyectosApi, crearProyectoApi, eliminarProyectoApi, archivarTareaApi,
 } from '@/services/crmService';
 import { getCatalogosApi as getCatalogosPersonasApi } from '@/services/personaService';
 
@@ -36,8 +37,9 @@ const ESTADO_META = {
 };
 // Los botones de estado del detalle, en el orden del flujo.
 const ESTADOS_ORDEN = ['pendiente', 'en_proceso', 'en_revision', 'completada'];
-// Trabajo todavía abierto. Espeja ESTADOS_ACTIVOS del backend.
-const ESTADOS_ACTIVOS = ['pendiente', 'en_proceso', 'en_revision'];
+// Cuántas tareas se piden por vez. La lista no se trae completa nunca: el resto
+// llega con "Ver más". El servidor recorta a 500 aunque se pida más.
+const POR_PAGINA = 60;
 const inp = "w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500";
 const fechaCorta = (d) => d ? new Date(d).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }) : null;
 
@@ -130,6 +132,9 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
     const [coms, setComs] = useState([]);
     const [adjs, setAdjs] = useState([]);
     const [subiendo, setSubiendo] = useState(false);
+    // Los topes los manda el servidor (RNF-TA-03). Estos valores son solo el
+    // punto de partida hasta que llega la respuesta; nunca la fuente de verdad.
+    const [limites, setLimites] = useState({ porArchivo: 7 * 1024 * 1024, porTarea: 25 * 1024 * 1024, usado: 0 });
     const [loading, setLoading] = useState(true);
     const [nuevaSub, setNuevaSub] = useState('');
     const [nuevoCom, setNuevoCom] = useState('');
@@ -139,7 +144,10 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
         try {
             const r = await obtenerTareaApi(getSessionId(), tareaId);
             const d = await r.json();
-            if (d.success) { setData(d.tarea); setSubs(d.subtareas || []); setComs(d.comentarios || []); setAdjs(d.adjuntos || []); }
+            if (d.success) {
+                setData(d.tarea); setSubs(d.subtareas || []); setComs(d.comentarios || []); setAdjs(d.adjuntos || []);
+                if (d.limites) setLimites(d.limites);
+            }
         } catch { /* */ } finally { setLoading(false); }
     }, [tareaId]);
     useEffect(() => { setLoading(true); cargar(); }, [cargar]);
@@ -193,7 +201,17 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
         const file = e.target.files?.[0];
         if (fileRef.current) fileRef.current.value = '';
         if (!file) return;
-        if (file.size > 7 * 1024 * 1024) { toast({ variant: 'destructive', title: 'Archivo muy grande', description: 'Máximo 7 MB.' }); return; }
+        // Se avisa acá antes de gastar la subida; el servidor vuelve a revisarlo
+        // igual, porque esta comprobación se puede saltar.
+        if (file.size > limites.porArchivo) {
+            toast({ variant: 'destructive', title: 'Archivo muy grande', description: `«${file.name}» pesa ${kb(file.size)} y el máximo es ${kb(limites.porArchivo)}.` });
+            return;
+        }
+        if (limites.usado + file.size > limites.porTarea) {
+            const libre = Math.max(0, limites.porTarea - limites.usado);
+            toast({ variant: 'destructive', title: 'No cabe en esta tarea', description: `Quedan ${kb(libre)} libres de ${kb(limites.porTarea)}. Elimina algún archivo.` });
+            return;
+        }
         setSubiendo(true);
         try {
             const dataBase64 = await new Promise((resolve, reject) => {
@@ -205,6 +223,7 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
             const r = await subirAdjuntoApi(getSessionId(), tareaId, { nombre: file.name, mime: file.type, dataBase64 });
             const d = await r.json(); if (!d.success) throw new Error(d.message);
             setAdjs(prev => [...prev, d.adjunto]);
+            setLimites(l => ({ ...l, usado: l.usado + Number(d.adjunto?.tamano || 0) }));
             toast({ title: 'Archivo subido' });
         } catch (err) { toast({ variant: 'destructive', title: 'Error', description: err.message }); }
         finally { setSubiendo(false); }
@@ -222,6 +241,7 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
     };
     const delAdj = async (a) => {
         setAdjs(prev => prev.filter(x => x.id !== a.id));
+        setLimites(l => ({ ...l, usado: Math.max(0, l.usado - Number(a.tamano || 0)) }));
         try { await eliminarAdjuntoApi(getSessionId(), a.id); } catch { cargar(); }
     };
     const kb = (n) => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
@@ -334,7 +354,17 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
 
                 {/* Archivos (binario en la base) */}
                 <div>
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5 mb-2"><Paperclip size={13} /> Archivos ({adjs.length})</span>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Paperclip size={13} /> Archivos ({adjs.length})</span>
+                        {/* Cuánto lleva ocupado de su cupo. Se avisa en amarillo
+                            cuando queda poco, para que nadie se entere recién al
+                            intentar subir. */}
+                        {adjs.length > 0 && (
+                            <span className={`text-[9px] font-bold ${limites.usado > limites.porTarea * 0.8 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                {kb(limites.usado)} de {kb(limites.porTarea)}
+                            </span>
+                        )}
+                    </div>
                     <div className="space-y-1 mb-2">
                         {adjs.map(a => (
                             <div key={a.id} className="flex items-center gap-2 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 group">
@@ -352,7 +382,7 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                     <input ref={fileRef} type="file" className="hidden" onChange={subirArchivo} />
                     <button onClick={() => fileRef.current?.click()} disabled={subiendo}
                         className="w-full flex items-center justify-center gap-1.5 border border-dashed border-[#e5ddd0] hover:border-emerald-500/50 rounded-lg py-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-emerald-700">
-                        {subiendo ? <Loader2 size={13} className="animate-spin" /> : <Paperclip size={13} />} Adjuntar archivo (máx. 7 MB)
+                        {subiendo ? <Loader2 size={13} className="animate-spin" /> : <Paperclip size={13} />} Adjuntar archivo (máx. {kb(limites.porArchivo)})
                     </button>
                 </div>
 
@@ -385,38 +415,108 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
 // ---------------------------------------------------------------
 // Panel principal
 // ---------------------------------------------------------------
-const TareasPanel = () => {
-    const user = getUser();
-    const esAdmin = user?.rol === 'Administrador';
+// `modo` es la sección que lo monta: 'todas' | 'mias' | 'equipo'. Antes el panel
+// traía un interruptor Mías/Equipo adentro; ahora la sección ya decidió el
+// alcance y volver a preguntarlo dentro solo confunde (y permitía quedar en
+// "Equipo" dentro de "Mis tareas").
+const TareasPanel = ({ modo = 'todas' }) => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [tareas, setTareas] = useState([]);
     const [proyectos, setProyectos] = useState([]);
     const [usuarios, setUsuarios] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filtroEstado, setFiltroEstado] = useState('activas'); // activas | completada | todas
-    const [proyectoSel, setProyectoSel] = useState(''); // '' = todos
-    const [scope, setScope] = useState('mias');
+
+    // El proyecto elegido vive en la URL (`?proyecto=`) y no en el estado: así
+    // "entrar a un proyecto" desde la pantalla de Proyectos es solo navegar, y
+    // el enlace se puede compartir o recargar sin perder el filtro.
+    const proyectoSel = searchParams.get('proyecto') || ''; // '' = todos
+    const elegirProyecto = (id) => {
+        const p = new URLSearchParams(searchParams);
+        if (id) p.set('proyecto', id); else p.delete('proyecto');
+        setSearchParams(p, { replace: true });
+    };
     const [busq, setBusq] = useState('');
     const [selId, setSelId] = useState(null);
-    const [crear, setCrear] = useState(false);
+    const [filtroPrioridad, setFiltroPrioridad] = useState('');
+    const [filtroResponsable, setFiltroResponsable] = useState('');
+    const [total, setTotal] = useState(0);
+    const [hayMas, setHayMas] = useState(false);
+    const [cargandoMas, setCargandoMas] = useState(false);
+
+    // La búsqueda ahora la resuelve el servidor, así que no se puede disparar
+    // una consulta por cada tecla. Se espera a que la persona deje de escribir.
+    const [busqAplicada, setBusqAplicada] = useState('');
+    useEffect(() => {
+        const t = setTimeout(() => setBusqAplicada(busq.trim()), 350);
+        return () => clearTimeout(t);
+    }, [busq]);
+
+    // `?nueva=1` abre el formulario al entrar: es cómo el botón "+ Tarea" de la
+    // pantalla Inicio llega hasta acá, sin duplicar el modal en cada pantalla.
+    const [crear, setCrear] = useState(searchParams.get('nueva') === '1');
+    const cerrarCrear = () => {
+        setCrear(false);
+        if (searchParams.get('nueva')) {
+            const p = new URLSearchParams(searchParams);
+            p.delete('nueva');
+            setSearchParams(p, { replace: true });
+        }
+    };
     const [nuevoProy, setNuevoProy] = useState(false);
     const [proyNombre, setProyNombre] = useState('');
+
+    // Todos los filtros viajan al servidor (RNF-TA-02). Antes se traía la lista
+    // completa y se filtraba en el navegador: con pocas tareas da igual, con
+    // dos mil el navegador se arrastra y además hay que esperar a que baje todo
+    // para ver tres resultados.
+    const filtros = useCallback((desplazamiento) => {
+        // soloRaiz: las subtareas se ven dentro de su tarea, no sueltas en la lista.
+        const o = { soloRaiz: '1', ambito: modo, limite: String(POR_PAGINA), desplazamiento: String(desplazamiento) };
+        if (proyectoSel) o.proyectoId = proyectoSel;
+        // El archivo es una vista aparte: o se ve lo vivo, o se ve lo archivado.
+        if (filtroEstado === 'archivadas') o.archivadas = 'solo';
+        else if (filtroEstado !== 'todas') o.estado = filtroEstado;   // 'activas' | 'completada'
+        if (filtroPrioridad) o.prioridad = filtroPrioridad;
+        if (filtroResponsable) o.responsableId = filtroResponsable;
+        if (busqAplicada) o.q = busqAplicada;
+        return o;
+    }, [modo, proyectoSel, filtroEstado, filtroPrioridad, filtroResponsable, busqAplicada]);
 
     const cargar = useCallback(async () => {
         setLoading(true);
         try {
-            const opts = { soloRaiz: '1', scope: esAdmin && scope === 'equipo' ? 'equipo' : '' };
-            if (proyectoSel) opts.proyectoId = proyectoSel;
-            if (filtroEstado === 'completada') opts.estado = 'completada';
             const [tRes, pRes] = await Promise.all([
-                listarTareasApi(getSessionId(), opts),
+                listarTareasApi(getSessionId(), filtros(0)),
                 listarProyectosApi(getSessionId()),
             ]);
             const t = await tRes.json(); const p = await pRes.json();
-            if (t.success) setTareas(t.tareas || []);
+            if (t.success) { setTareas(t.tareas || []); setTotal(t.total || 0); setHayMas(!!t.hayMas); }
             if (p.success) setProyectos(p.proyectos || []);
-        } catch { /* */ } finally { setLoading(false); }
-    }, [esAdmin, scope, proyectoSel, filtroEstado]);
+        } catch { /* la lista queda como estaba */ } finally { setLoading(false); }
+    }, [filtros]);
     useEffect(() => { cargar(); }, [cargar]);
+
+    // "Ver más" pide la página siguiente y la agrega al final, sin recargar lo
+    // que la persona ya está mirando.
+    const verMas = async () => {
+        setCargandoMas(true);
+        try {
+            const r = await listarTareasApi(getSessionId(), filtros(tareas.length));
+            const d = await r.json();
+            if (d.success) {
+                setTareas(prev => [...prev, ...(d.tareas || [])]);
+                setTotal(d.total || 0);
+                setHayMas(!!d.hayMas);
+            }
+        } catch { /* se queda con lo que ya tenía */ } finally { setCargandoMas(false); }
+    };
+
+    const limpiarFiltros = () => {
+        setBusq(''); setFiltroPrioridad(''); setFiltroResponsable('');
+        setFiltroEstado('activas'); elegirProyecto('');
+    };
+    const hayFiltros = !!(busqAplicada || filtroPrioridad || filtroResponsable || proyectoSel || filtroEstado !== 'activas');
 
     // Usuarios de la organización (responsable / colaboradores)
     useEffect(() => {
@@ -425,16 +525,10 @@ const TareasPanel = () => {
         })();
     }, []);
 
-    const lista = useMemo(() => {
-        const q = busq.trim().toLowerCase();
-        return tareas.filter(t => {
-            // "Activas" es lo que sigue abierto: en revisión todavía cuenta, y
-            // lo cancelado no aparece acá aunque tampoco esté finalizado.
-            if (filtroEstado === 'activas' && !ESTADOS_ACTIVOS.includes(t.estado)) return false;
-            if (!q) return true;
-            return (t.titulo || '').toLowerCase().includes(q) || (t.responsableNombre || '').toLowerCase().includes(q);
-        });
-    }, [tareas, busq, filtroEstado]);
+    // Ya no se filtra acá: lo que llega del servidor es exactamente lo que se
+    // muestra. Dejar un segundo filtro en el navegador solo servía para que los
+    // dos se desincronizaran y el contador no calzara con la lista.
+    const lista = tareas;
 
     const completar = async (t, e) => {
         e.stopPropagation();
@@ -443,10 +537,32 @@ const TareasPanel = () => {
     };
     const eliminar = async (t, e) => {
         e.stopPropagation();
-        if (!window.confirm(`¿Eliminar la tarea "${t.titulo}" y sus subtareas?`)) return;
+        if (!window.confirm(
+            `¿Eliminar la tarea "${t.titulo}" y sus subtareas?\n\nEsto NO se puede deshacer.\nSi solo quieres sacarla de la lista, usa Archivar.`
+        )) return;
         setTareas(prev => prev.filter(x => x.id !== t.id));
         if (selId === t.id) setSelId(null);
         try { await eliminarTareaApi(getSessionId(), t.id); cargar(); } catch { cargar(); }
+    };
+
+    // Archivar y desarchivar (RF-TA-17). La tarea desaparece de la lista actual
+    // porque el filtro no la incluye, no porque se haya borrado.
+    const archivar = async (t, e) => {
+        e.stopPropagation();
+        const volver = !!t.archivada;
+        setTareas(prev => prev.filter(x => x.id !== t.id));
+        if (selId === t.id) setSelId(null);
+        try {
+            const r = await archivarTareaApi(getSessionId(), t.id, !volver);
+            const d = await r.json(); if (!d.success) throw new Error(d.message);
+            toast({
+                title: volver ? 'Tarea recuperada' : 'Tarea archivada',
+                description: volver
+                    ? 'Volvió a la lista con el estado que tenía.'
+                    : `Está en el filtro "Archivadas"${d.subtareas ? ` junto a sus ${d.subtareas} subtareas` : ''}.`,
+            });
+            cargar();
+        } catch (err) { toast({ variant: 'destructive', title: 'Error', description: err.message }); cargar(); }
     };
     const crearProyecto = async () => {
         if (!proyNombre.trim()) return;
@@ -459,7 +575,7 @@ const TareasPanel = () => {
     const borrarProyecto = async (p, e) => {
         e.stopPropagation();
         if (!window.confirm(`¿Eliminar el proyecto "${p.nombre}"? Sus tareas quedarán sin proyecto.`)) return;
-        try { await eliminarProyectoApi(getSessionId(), p.id); if (proyectoSel === p.id) setProyectoSel(''); cargar(); }
+        try { await eliminarProyectoApi(getSessionId(), p.id); if (proyectoSel === p.id) elegirProyecto(''); cargar(); }
         catch { toast({ variant: 'destructive', title: 'Error' }); }
     };
 
@@ -468,27 +584,52 @@ const TareasPanel = () => {
             {/* Toolbar */}
             <div className="flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                    {['activas', 'completada', 'todas'].map(f => (
+                    {[['activas', 'Activas'], ['completada', 'Finalizadas'], ['todas', 'Todas'], ['archivadas', 'Archivadas']].map(([f, label]) => (
                         <button key={f} onClick={() => setFiltroEstado(f)}
                             className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider ${filtroEstado === f ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-white border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
-                            {f === 'activas' ? 'Activas' : f === 'completada' ? 'Finalizadas' : 'Todas'}
+                            {label}
                         </button>
                     ))}
-                    {esAdmin && (
-                        <div className="flex rounded-lg border border-[#efe8dd] overflow-hidden text-[10px] font-black uppercase tracking-widest">
-                            <button onClick={() => setScope('mias')} className={`px-3 py-1.5 ${scope === 'mias' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-500'}`}>Mías</button>
-                            <button onClick={() => setScope('equipo')} className={`px-3 py-1.5 ${scope === 'equipo' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-500'}`}>Equipo</button>
-                        </div>
-                    )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                    {/* Filtros de RF-TA-12. Se resuelven en el servidor. */}
+                    <select value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)}
+                        title="Filtrar por prioridad"
+                        className="bg-white border border-[#efe8dd] rounded-lg px-2 py-2 text-[11px] text-slate-600 outline-none focus:border-emerald-500 cursor-pointer capitalize">
+                        <option value="">Prioridad: todas</option>
+                        {PRIORIDADES.map(p => <option key={p} value={p}>{p === 'critica' ? 'crítica' : p}</option>)}
+                    </select>
+                    <select value={filtroResponsable} onChange={(e) => setFiltroResponsable(e.target.value)}
+                        title="Filtrar por responsable"
+                        className="bg-white border border-[#efe8dd] rounded-lg px-2 py-2 text-[11px] text-slate-600 outline-none focus:border-emerald-500 cursor-pointer max-w-[10rem]">
+                        <option value="">Responsable: todos</option>
+                        {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                    </select>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                        <input value={busq} onChange={(e) => setBusq(e.target.value)} placeholder="Buscar tarea..." className="w-48 bg-white border border-[#efe8dd] rounded-lg pl-9 pr-3 py-2 text-xs outline-none focus:border-emerald-500" />
+                        <input value={busq} onChange={(e) => setBusq(e.target.value)}
+                            placeholder="Buscar tarea, proyecto o persona..."
+                            className="w-56 bg-white border border-[#efe8dd] rounded-lg pl-9 pr-3 py-2 text-xs outline-none focus:border-emerald-500" />
                     </div>
                     <button onClick={() => setCrear(true)} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest"><Plus size={14} /> Tarea</button>
                 </div>
             </div>
+
+            {/* Cuántas calzan con el filtro. El total lo cuenta el servidor, así
+                que no miente cuando la lista está paginada. */}
+            {!loading && (total > 0 || hayFiltros) && (
+                <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-500 -mt-1 flex-shrink-0">
+                    <span className="font-bold">
+                        {total === 0 ? 'Ninguna tarea calza con el filtro'
+                            : `${lista.length} de ${total} ${total === 1 ? 'tarea' : 'tareas'}`}
+                    </span>
+                    {hayFiltros && (
+                        <button onClick={limpiarFiltros} className="text-emerald-600 hover:text-emerald-700 font-black uppercase tracking-widest text-[10px]">
+                            Limpiar filtros
+                        </button>
+                    )}
+                </div>
+            )}
 
             <div className="flex-1 min-h-0 flex gap-3 lg:gap-4">
                 {/* Proyectos */}
@@ -503,9 +644,9 @@ const TareasPanel = () => {
                             <button onClick={crearProyecto} className="bg-emerald-600 text-white rounded-lg px-2"><Check size={12} /></button>
                         </div>
                     )}
-                    <button onClick={() => setProyectoSel('')} className={`text-left px-2 py-1.5 rounded-lg text-[11px] font-bold ${!proyectoSel ? 'bg-emerald-500/10 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}>Todas las tareas</button>
+                    <button onClick={() => elegirProyecto('')} className={`text-left px-2 py-1.5 rounded-lg text-[11px] font-bold ${!proyectoSel ? 'bg-emerald-500/10 text-emerald-700' : 'text-slate-600 hover:bg-slate-50'}`}>Todas las tareas</button>
                     {proyectos.map(p => (
-                        <button key={p.id} onClick={() => setProyectoSel(p.id)} className={`text-left px-2 py-1.5 rounded-lg group ${proyectoSel === p.id ? 'bg-emerald-500/10' : 'hover:bg-slate-50'}`}>
+                        <button key={p.id} onClick={() => elegirProyecto(p.id)} className={`text-left px-2 py-1.5 rounded-lg group ${proyectoSel === p.id ? 'bg-emerald-500/10' : 'hover:bg-slate-50'}`}>
                             <div className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color || '#199b4d' }} />
                                 <span className="text-[11px] font-bold text-slate-700 truncate flex-1">{p.nombre}</span>
@@ -526,8 +667,16 @@ const TareasPanel = () => {
                         {loading ? (
                             <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="animate-spin" /></div>
                         ) : lista.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-16 text-slate-400 text-sm gap-2">
-                                <ListChecks size={28} /> No hay tareas. Usa <span className="text-emerald-600 font-bold">+ Tarea</span>.
+                            <div className="flex flex-col items-center justify-center py-16 text-slate-400 text-sm gap-2 text-center px-6">
+                                <ListChecks size={28} />
+                                {hayFiltros ? (
+                                    <>
+                                        <span>Ninguna tarea calza con lo que buscaste.</span>
+                                        <button onClick={limpiarFiltros} className="text-emerald-600 font-bold text-xs">Limpiar los filtros</button>
+                                    </>
+                                ) : filtroEstado === 'archivadas'
+                                    ? <span>No hay tareas archivadas.</span>
+                                    : <span>No hay tareas. Usa <span className="text-emerald-600 font-bold">+ Tarea</span>.</span>}
                             </div>
                         ) : lista.map(t => {
                             const meta = ESTADO_META[t.estado] || ESTADO_META.pendiente;
@@ -550,10 +699,24 @@ const TareasPanel = () => {
                                     {t.venceAt && <span className={`text-[9px] font-bold shrink-0 ${vencida ? 'text-red-600' : 'text-slate-500'}`}>{fechaCorta(t.venceAt)}</span>}
                                     <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 ${PRIO[t.prioridad] || PRIO.media}`}>{t.prioridad}</span>
                                     <span className={`text-[9px] font-black uppercase shrink-0 ${meta.c} hidden lg:inline`}>{meta.label}</span>
-                                    <button onClick={(e) => eliminar(t, e)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={13} /></button>
+                                    <button onClick={(e) => archivar(t, e)}
+                                        title={t.archivada ? 'Devolver a la lista' : 'Archivar (no se borra)'}
+                                        className="text-slate-300 hover:text-amber-600 opacity-0 group-hover:opacity-100 shrink-0">
+                                        {t.archivada ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+                                    </button>
+                                    <button onClick={(e) => eliminar(t, e)} title="Eliminar definitivamente" className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={13} /></button>
                                 </div>
                             );
                         })}
+
+                        {/* Paginación: la lista no se trae completa nunca. */}
+                        {!loading && hayMas && (
+                            <button onClick={verMas} disabled={cargandoMas}
+                                className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-emerald-700 hover:bg-slate-50 flex items-center justify-center gap-2">
+                                {cargandoMas ? <Loader2 size={13} className="animate-spin" /> : null}
+                                Ver más ({total - lista.length} restantes)
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -561,7 +724,7 @@ const TareasPanel = () => {
                 {selId && <DetalleTarea tareaId={selId} onClose={() => setSelId(null)} onChanged={cargar} usuarios={usuarios} onAbrir={setSelId} />}
             </div>
 
-            {crear && <CrearTareaModal onClose={() => setCrear(false)} onCreated={cargar} proyectos={proyectos} usuarios={usuarios} proyectoActual={proyectoSel} />}
+            {crear && <CrearTareaModal onClose={cerrarCrear} onCreated={cargar} proyectos={proyectos} usuarios={usuarios} proyectoActual={proyectoSel} />}
         </div>
     );
 };

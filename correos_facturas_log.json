@@ -3719,5 +3719,25 @@
     "estado": "enviado",
     "motivo": "",
     "datos": {}
+  },
+  {
+    "fecha": "2026-08-04T05:09:40.461Z",
+    "folio": "1313",
+    "rut": "",
+    "razonSocial": "",
+    "correo": "",
+    "estado": "omitido",
+    "motivo": "No cargó la tabla de documentos emitidos en el SII.",
+    "datos": {}
+  },
+  {
+    "fecha": "2026-08-04T05:24:45.734Z",
+    "folio": "1313",
+    "rut": "",
+    "razonSocial": "JL MONTERO SPA",
+    "correo": "JLMONTERO.SPA@GMAIL.COM",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {}
   }
 ]

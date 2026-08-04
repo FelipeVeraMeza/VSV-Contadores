@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { FRONTEND_URL } from '../../config.js';
 
 // Configuración de CORS
@@ -72,7 +72,14 @@ export const envioMasivoLimiter = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.user?.usuarioId || req.ip,
+  // Por usuario cuando hay sesión; si no, por IP.
+  //
+  // La IP NO se puede usar cruda: en IPv6 cada equipo tiene un rango enorme de
+  // direcciones, así que quien quisiera saltarse el límite solo tendría que
+  // cambiar de dirección dentro de su propio rango. `ipKeyGenerator` normaliza
+  // el rango a una sola clave. express-rate-limit avisaba de esto en cada
+  // arranque del servidor (ERR_ERL_KEY_GEN_IPV6).
+  keyGenerator: (req) => req.user?.usuarioId || ipKeyGenerator(req.ip),
   message: {
     ok: false,
     error: 'Demasiados envíos masivos seguidos. Espera unos minutos: si el anterior salió bien, no hace falta repetirlo.'
