@@ -49,7 +49,7 @@ maestra usa correo.
 | **Remuneraciones** | 8 fases. Liquidaciones es el controlador más grande del sistema (49 consultas) |
 | **Usuarios y permisos** | 4 candados de administrador, módulos por usuario, bitácora |
 | **Correo masivo** | Funciona **en local**. Ver la advertencia de la sección 4 |
-| **WhatsApp** | Existe de verdad, con su propio repositorio de datos |
+| **WhatsApp** | **Fase 2 funcionando**: 25 requerimientos implementados. QR con Baileys, respuesta automática con Gemini, varios números en paralelo, todo guardado en Postgres |
 
 ### 2.2 Simulado — muestra datos inventados
 
@@ -147,7 +147,7 @@ producción deja de funcionar entera.** Debería salir de un archivo de entorno.
 
 | Decisión | Por qué urge |
 |---|---|
-| **WhatsApp: vía oficial o rápida** | La oficial exige verificación de empresa y tarda semanas. La rápida funciona mañana y puede costar el bloqueo del número |
+| **WhatsApp: ¿se migra a la vía oficial?** | Ya funciona con Baileys, que es **no oficial**: va contra los términos de WhatsApp y arriesga el bloqueo del número. La vía oficial de Meta exige verificación de empresa y tarda semanas |
 | **Conciliación: proveedor de API o cartola** | Los bancos chilenos no dan API abierta a pymes. Recomendación: cartola con calce automático |
 | **Tareas: espacio compartido o privado por persona** | Hoy cualquier administrador ve todo. Recomendación: dejarlo compartido. Cambiarlo con 500 tareas cargadas es otro trabajo |
 | **Operación Renta y RRHH: construir o esconder** | Hoy muestran datos inventados |
@@ -167,7 +167,7 @@ producción deja de funcionar entera.** Debería salir de un archivo de entorno.
 | 6 | Colores y visual | 🟡 tema claro migrado, falta pulido |
 | 9 | Correos masivos | 🔴 funciona en local, **no en producción** |
 | 2 | Dejar de usar Excel | ⬜ falta lo principal: **migrar los datos** |
-| 3 | WhatsApp | ⬜ bloqueado por decisión |
+| 3 | WhatsApp | 🟡 **más avanzado de lo que parecía**: responde y guarda contactos desde el 16-jul. Falta cargar qué sabe la IA sobre la oficina, y decidir si se migra a la vía oficial |
 | 5 | Responsive | ⬜ alcance demasiado ancho |
 | 8 | Conciliación bancaria | 🟡 hay 555 movimientos reales; **revisar antes de prometer** |
 
@@ -254,8 +254,8 @@ orden, y **generar en borrador para un solo cliente** antes de soltarlo sobre lo
 | Propuesta de Agenda | `docs/agenda-propuesta.md` |
 | Requerimientos del calendario | `docs/calendario-requerimientos.md` |
 | Remuneraciones | `docs/remuneraciones-requerimientos.md` |
-| WhatsApp | `docs/whatsapp-requerimientos.md` |
-| Clientes y prospectos | `docs/requerimientos-clientes-prospectos.md` |
+
+| CRM: clientes y prospectos | `docs/crm-modulo.md` |
 | Diagnóstico del correo | `docs/correo-envio-diagnostico.md` |
 | Migraciones | `src/DatabaseThings/migrations/` |
 | Aplicar una migración | `node src/DatabaseThings/migrations/aplicar_migracion.mjs <archivo.sql>` |
