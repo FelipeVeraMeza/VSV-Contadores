@@ -85,6 +85,13 @@ app.use('/api/companies', apiLimiter, companyRoutes);
 app.use('/api/dashboard', apiLimiter, dashboardRoutes);
 app.use('/api/clientes', apiLimiter, requireSession, requireModulo('crm'), clientesRoutes);
 app.use('/api/personas', apiLimiter, personasRoutes);
+// El canal de avisos en vivo necesita marcarse ANTES de requireSession, porque
+// éste corre acá arriba y no dentro del router. Lo abre `EventSource`, que no
+// puede mandar cabeceras, así que su sesión viaja en la URL — y solo la suya.
+app.use('/api/crm', (req, _res, next) => {
+    if (req.path === '/notificaciones/stream') req.permitirSesionEnUrl = true;
+    next();
+});
 app.use('/api/crm', apiLimiter, requireSession, requireModulo('crm'), crmRoutes);
 
 // ============================================================================

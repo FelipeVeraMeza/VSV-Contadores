@@ -5,7 +5,15 @@ export async function requireSession(req, res, next) {
   // del router). Si ya resolvio al usuario, no se vuelve a consultar la base.
   if (req.user) return next();
 
-  const sessionId = req.header("x-session-id");
+  // Normalmente la sesión viaja en la cabecera. La excepción es el canal de
+  // avisos en vivo: lo abre `EventSource`, que por diseño del navegador NO
+  // permite mandar cabeceras propias, así que ahí la sesión llega en la URL.
+  //
+  // Se acepta solo cuando la ruta lo pide (`permitirSesionEnUrl`), no en
+  // cualquier petición: una sesión en la URL queda escrita en los registros del
+  // servidor y en el historial, y no queremos eso como norma.
+  const sessionId = req.header("x-session-id")
+    || (req.permitirSesionEnUrl ? req.query?.sesion : null);
   const empresaIdFromHeader = req.header("x-company-id");
 
   if (!sessionId) {

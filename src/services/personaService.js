@@ -78,3 +78,14 @@ export const buscarDuplicadosApi = (sessionId, { rut = '', correo = '', telefono
   if (apellidos) params.set('apellidos', apellidos);
   return fetchWithAuth(`/personas/duplicados?${params.toString()}`, sessionId);
 };
+
+// ---- Importar prospectos desde planilla ----
+// La planilla se lee en el navegador y viajan las filas ya en JSON: así no hay
+// que manejar archivos en el servidor y la vista previa es inmediata.
+export const previsualizarImportacionApi = (sessionId, filas, mapa) =>
+  fetchWithAuth('/personas/importar/previsualizar', sessionId, { method: 'POST', body: { filas, mapa } });
+
+// Quien importa queda como dueño de los prospectos: el servidor toma el
+// ejecutivo de la sesión, no de lo que mande la pantalla.
+export const importarProspectosApi = (sessionId, filas, mapa, opciones = {}) =>
+  fetchWithAuth('/personas/importar', sessionId, { method: 'POST', body: { filas, mapa, ...opciones } });

@@ -218,10 +218,19 @@ export const crearPersona = async (req, res) => {
                 fechaNacimiento || null, rutEncrypted, rutHash,
                 ['manual','whatsapp','correo','web','import','integracion'].includes(origen) ? origen : 'manual',
                 rubro?.trim() || null, direccion?.trim() || null, comuna?.trim() || null, region?.trim() || null,
-                ejecutivoId || null, observaciones?.trim() || null,
+                // DUEÑO. Si no se indica uno, queda a nombre de quien lo crea.
+                //
+                // Antes esto guardaba null cuando el formulario no mandaba
+                // ejecutivo, y así 3 de los 4 prospectos que había en el sistema
+                // terminaron sin dueño: no aparecían en la cartera de nadie y
+                // nadie los llamaba. Un prospecto sin dueño es un prospecto
+                // perdido, así que ya no se permite que nazca así.
+                ejecutivoId || req.user?.usuarioId || null,
+                observaciones?.trim() || null,
                 organizacionId,
                 proximoContacto || null,
-                // Dueño del prospecto: solo él (y el Administrador) lo verá.
+                // Quién lo dio de alta. Es historia: no cambia aunque el
+                // prospecto se traspase después a otra persona.
                 req.user?.usuarioId || null,
                 necesidad?.trim() || null, estadoComercial?.trim() || null, accionSiguiente?.trim() || null
             ]

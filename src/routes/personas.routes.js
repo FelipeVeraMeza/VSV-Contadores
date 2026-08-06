@@ -4,9 +4,15 @@ import {
     obtenerPersona, actualizarPersona, agregarNotaPersona, cambiarEstadoPersona, eliminarPersona,
     catalogosCRM, empresasLista, editarNotaPersona, eliminarNotaPersona, asociarEmpresa, desasociarEmpresa, fusionarPersona, crearEmpresaParaPersona
 } from '../controllers/personas.controllers.js';
+import { previsualizarImportacion, importarProspectos } from '../controllers/importarProspectos.controllers.js';
 import { requireSession } from '../middleware/auth.js';
 
 const router = Router();
+
+// Importar desde planilla. Van ANTES de /:id para que "importar" no se lea
+// como el id de una persona.
+router.post('/importar/previsualizar', requireSession, previsualizarImportacion);
+router.post('/importar', requireSession, importarProspectos);
 
 router.get('/', requireSession, listarPersonas);
 router.post('/', requireSession, crearPersona);

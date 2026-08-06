@@ -197,3 +197,28 @@ export const listarNotificacionesApi = (sessionId) =>
 // Sin id marca todas como leídas.
 export const marcarNotificacionesApi = (sessionId, id = null) =>
   fetchWithAuth(`/crm/notificaciones/${id ? `${id}/leer` : 'leer'}`, sessionId, { method: 'PATCH', body: {} });
+
+// ---- Plantillas de tareas ----
+// Una plantilla guarda la estructura de un trabajo que se repite (la tarea y
+// sus subtareas) para volcarla en un clic. Guarda un PLAZO EN DIAS, no una
+// fecha: una fecha fija envejece y la plantilla termina mintiendo.
+export const listarPlantillasApi = (sessionId) =>
+  fetchWithAuth('/crm/plantillas', sessionId);
+
+export const crearPlantillaApi = (sessionId, datos) =>
+  fetchWithAuth('/crm/plantillas', sessionId, { method: 'POST', body: datos });
+
+// Copia una tarea existente —con sus subtareas— y la deja como plantilla.
+export const guardarComoPlantillaApi = (sessionId, tareaId, nombre) =>
+  fetchWithAuth('/crm/plantillas', sessionId, { method: 'POST', body: { desdeTareaId: tareaId, nombre } });
+
+export const actualizarPlantillaApi = (sessionId, id, datos) =>
+  fetchWithAuth(`/crm/plantillas/${id}`, sessionId, { method: "PUT", body: datos });
+
+export const eliminarPlantillaApi = (sessionId, id) =>
+  fetchWithAuth(`/crm/plantillas/${id}`, sessionId, { method: "DELETE" });
+
+// Crea la tarea y todas sus subtareas. Lo que va en `datos` manda sobre lo que
+// guarda la plantilla: ella propone, quien la usa dispone.
+export const usarPlantillaApi = (sessionId, id, datos = {}) =>
+  fetchWithAuth(`/crm/plantillas/${id}/usar`, sessionId, { method: "POST", body: datos });

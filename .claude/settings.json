@@ -130,7 +130,9 @@
       "Read(//tmp/**)",
       "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" -H \"x-session-id: fb1f53d2-2976-4e15-99a8-2a6bdd6b77db\" http://localhost:4000/api/rrhh/catalogos)",
       "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./package.json'\\).scripts,null,2\\)\\)\")",
-      "Bash(curl -s -w '\\\\nHTTP %{http_code}\\\\n' -H 'x-session-id: __TRACKED_VAR__' http://localhost:4000/api/personas/empresas-lista)"
+      "Bash(curl -s -w '\\\\nHTTP %{http_code}\\\\n' -H 'x-session-id: __TRACKED_VAR__' http://localhost:4000/api/personas/empresas-lista)",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(node src/DatabaseThings/migrations/aplicar_migracion.mjs src/DatabaseThings/migrations/2026-08-04_empresa_campos_opcionales.sql)"
     ]
   }
 }

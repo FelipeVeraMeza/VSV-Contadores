@@ -3,14 +3,18 @@ import { useSearchParams } from 'react-router-dom';
 import {
     Plus, Search, Loader2, X, Trash2, Check, Clock, Folder, FolderPlus,
     MessageSquare, ListChecks, ChevronRight, Circle, CircleDot, CheckCircle2,
-    Flag, User, Users, Calendar, Send, Paperclip, Download, Eye, Archive, ArchiveRestore
+    Flag, User, Users, Calendar, Send, Paperclip, Download, Eye, Archive, ArchiveRestore,
+    List, Kanban, LayoutTemplate
 } from 'lucide-react';
+import TableroTareas from '@/components/tareas/TableroTareas';
+import { usePlantillas, SelectorPlantillas, PlantillasModal } from '@/components/tareas/PlantillasTarea';
 import { toast } from '@/components/ui/use-toast';
 import {
     listarTareasApi, crearTareaApi, actualizarTareaApi, eliminarTareaApi, completarTareaApi,
     obtenerTareaApi, agregarComentarioApi, eliminarComentarioApi,
     subirAdjuntoApi, descargarAdjuntoApi, eliminarAdjuntoApi,
     listarProyectosApi, crearProyectoApi, eliminarProyectoApi, archivarTareaApi,
+    usarPlantillaApi, guardarComoPlantillaApi,
 } from '@/services/crmService';
 import { getCatalogosApi as getCatalogosPersonasApi } from '@/services/personaService';
 
@@ -55,15 +59,49 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
         visibilidad: 'proyecto',
     });
     const [saving, setSaving] = useState(false);
+    const { plantillas, recargar } = usePlantillas();
+    const [plantilla, setPlantilla] = useState(null);
+    const [verPlantillas, setVerPlantillas] = useState(false);
     const set = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }));
     const toggleColab = (id) => setForm(p => ({ ...p, colaboradores: p.colaboradores.includes(id) ? p.colaboradores.filter(x => x !== id) : [...p.colaboradores, id] }));
+
+    // Elegir una plantilla llena el formulario, no lo reemplaza: lo que la
+    // persona ya escribió se respeta, y todo queda editable antes de crear.
+    const elegirPlantilla = (p) => {
+        setPlantilla(p);
+        if (!p) return;
+        const fecha = Number.isInteger(p.diasPlazo)
+            ? (() => { const f = new Date(); f.setDate(f.getDate() + p.diasPlazo); f.setHours(18, 0, 0, 0);
+                       return new Date(f.getTime() - f.getTimezoneOffset() * 60000).toISOString().slice(0, 16); })()
+            : '';
+        setForm(prev => ({
+            ...prev,
+            titulo: prev.titulo.trim() || p.titulo || p.nombre,
+            descripcion: prev.descripcion.trim() || p.detalle || '',
+            prioridad: p.prioridad || prev.prioridad,
+            venceAt: fecha || prev.venceAt,
+            proyectoId: p.proyectoId || prev.proyectoId,
+            responsableId: p.responsableId || prev.responsableId,
+            visibilidad: p.visibilidad || prev.visibilidad,
+        }));
+    };
+
     const guardar = async () => {
         if (!form.titulo.trim()) { toast({ variant: 'destructive', title: 'Falta el nombre' }); return; }
         setSaving(true);
         try {
-            const r = await crearTareaApi(getSessionId(), { ...form, venceAt: form.venceAt || null, proyectoId: form.proyectoId || null });
+            const cuerpo = { ...form, venceAt: form.venceAt || null, proyectoId: form.proyectoId || null };
+            // Con plantilla se usa su endpoint: es el único que además crea las
+            // subtareas. Lo del formulario viaja igual y manda sobre la plantilla.
+            const r = plantilla
+                ? await usarPlantillaApi(getSessionId(), plantilla.id, cuerpo)
+                : await crearTareaApi(getSessionId(), cuerpo);
             const d = await r.json(); if (!d.success) throw new Error(d.message);
-            toast({ title: 'Tarea creada' }); onCreated(); onClose();
+            toast({
+                title: 'Tarea creada',
+                description: d.subtareas ? `Con ${d.subtareas} subtareas de «${plantilla.nombre}».` : undefined,
+            });
+            onCreated(); onClose();
         } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
         finally { setSaving(false); }
     };
@@ -75,6 +113,10 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
                     <button onClick={onClose} className="text-slate-400 hover:text-red-500"><X size={18} /></button>
                 </div>
                 <div className="space-y-3">
+                    {/* Las plantillas van primero: la decisión "¿esto ya lo tengo
+                        guardado?" se toma antes de escribir nada. */}
+                    <SelectorPlantillas plantillas={plantillas} elegida={plantilla}
+                        onElegir={elegirPlantilla} onAdministrar={() => setVerPlantillas(true)} />
                     <input className={inp} placeholder="Nombre de la tarea *" value={form.titulo} onChange={set('titulo')} autoFocus />
                     <textarea className={`${inp} resize-none`} rows={2} placeholder="Descripción" value={form.descripcion} onChange={set('descripcion')} />
                     <div className="grid grid-cols-2 gap-2">
@@ -135,10 +177,18 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
                         </div>
                     )}
                     <button onClick={guardar} disabled={saving} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg h-10 text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                        {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Crear tarea
+                        {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                        {plantilla && plantilla.pasos.length > 0
+                            ? `Crear tarea + ${plantilla.pasos.length} subtareas`
+                            : 'Crear tarea'}
                     </button>
                 </div>
             </div>
+
+            {verPlantillas && (
+                <PlantillasModal plantillas={plantillas} proyectos={proyectos} usuarios={usuarios}
+                    onClose={() => setVerPlantillas(false)} onCambio={recargar} />
+            )}
         </div>
     );
 };
@@ -163,6 +213,7 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
     // Candados contra el doble envío: sin esto, dos Enter seguidos duplican.
     const [enviandoCom, setEnviandoCom] = useState(false);
     const [creandoSub, setCreandoSub] = useState(false);
+    const [guardandoPlantilla, setGuardandoPlantilla] = useState(false);
     const fileRef = React.useRef(null);
 
     const cargar = useCallback(async () => {
@@ -287,6 +338,28 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
             URL.revokeObjectURL(url);
         } catch (err) { toast({ variant: 'destructive', title: 'Error', description: err.message }); }
     };
+    // Guardar esta tarea —con sus subtareas— como plantilla reutilizable.
+    const guardarComoPlantilla = async () => {
+        if (guardandoPlantilla) return;
+        const nombre = window.prompt(
+            '¿Con qué nombre guardas esta plantilla?\n\nSe copiarán su descripción, prioridad, proyecto y sus '
+            + `${subs.length} ${subs.length === 1 ? 'subtarea' : 'subtareas'}.`,
+            data.titulo || ''
+        );
+        if (nombre === null) return;              // canceló
+        if (!nombre.trim()) { toast({ variant: 'destructive', title: 'Falta el nombre' }); return; }
+        setGuardandoPlantilla(true);
+        try {
+            const r = await guardarComoPlantillaApi(getSessionId(), tareaId, nombre.trim());
+            const d = await r.json(); if (!d.success) throw new Error(d.message);
+            toast({
+                title: 'Plantilla guardada',
+                description: `Ya aparece al crear una tarea nueva${d.pasos ? ` (${d.pasos} pasos)` : ''}.`,
+            });
+        } catch (e) { toast({ variant: 'destructive', title: 'No se pudo guardar', description: e.message }); }
+        finally { setGuardandoPlantilla(false); }
+    };
+
     const delAdj = async (a) => {
         setAdjs(prev => prev.filter(x => x.id !== a.id));
         setLimites(l => ({ ...l, usado: Math.max(0, l.usado - Number(a.tamano || 0)) }));
@@ -313,6 +386,17 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                     <h3 className="text-sm font-black text-slate-900">{data.titulo}</h3>
                     {data.proyectoNombre && <span className="text-[10px] font-bold" style={{ color: data.proyectoColor || '#199b4d' }}>● {data.proyectoNombre}</span>}
                 </div>
+                {/* Guardar como plantilla se ofrece acá y no al crear, porque
+                    recién cuando la tarea está armada se ve que va a repetirse.
+                    Solo en tareas principales: una subtarea suelta no es un
+                    procedimiento. */}
+                {!data.parentId && (
+                    <button onClick={guardarComoPlantilla} disabled={guardandoPlantilla}
+                        title="Guardar esta tarea y sus subtareas como plantilla"
+                        className="text-slate-400 hover:text-emerald-600 shrink-0">
+                        {guardandoPlantilla ? <Loader2 size={16} className="animate-spin" /> : <LayoutTemplate size={16} />}
+                    </button>
+                )}
                 <button onClick={onClose} className="text-slate-400 hover:text-red-500 shrink-0"><X size={18} /></button>
             </div>
 
@@ -410,22 +494,64 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                 {data.puedeTenerSubtareas !== false && (
                 <div>
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5 mb-2"><ListChecks size={13} /> Subtareas ({subs.filter(s => s.estado === 'completada').length}/{subs.length})</span>
-                    <div className="space-y-1">
-                        {subs.map(s => (
-                            <div key={s.id} className="flex items-center gap-2 group">
-                                <button onClick={() => toggleSub(s)} className="shrink-0">
-                                    {s.estado === 'completada' ? <CheckCircle2 size={15} className="text-emerald-500" /> : <Circle size={15} className="text-slate-300 hover:text-emerald-500" />}
+                    {/* Cada subtarea muestra lo mismo que se ve de una tarea en la
+                        lista: quién responde, para cuándo, con qué prioridad y si
+                        trae cosas dentro. Antes solo se veía el título, así que
+                        había que abrirlas una por una para saber de qué iban. */}
+                    <div className="space-y-0.5">
+                        {subs.map(s => {
+                            const vencida = s.venceAt && new Date(s.venceAt) < new Date() && s.estado !== 'completada';
+                            const hecha = s.estado === 'completada';
+                            return (
+                            <div key={s.id} className="flex items-start gap-2 group rounded-lg px-1.5 py-1 hover:bg-slate-50">
+                                <button onClick={() => toggleSub(s)} className="shrink-0 mt-0.5" title={hecha ? 'Reabrir' : 'Finalizar'}>
+                                    {hecha ? <CheckCircle2 size={15} className="text-emerald-500" /> : <Circle size={15} className="text-slate-300 hover:text-emerald-500" />}
                                 </button>
-                                <button
-                                    onClick={() => onAbrir?.(s.id)}
-                                    title="Abrir la subtarea"
-                                    className={`text-xs flex-1 text-left hover:text-emerald-600 hover:underline underline-offset-2 ${s.estado === 'completada' ? 'text-slate-400 line-through' : 'text-slate-700'}`}
-                                >
-                                    {s.titulo}
-                                </button>
-                                <button onClick={() => delSub(s)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={12} /></button>
+                                <div className="min-w-0 flex-1">
+                                    <button
+                                        onClick={() => onAbrir?.(s.id)}
+                                        title="Abrir la subtarea"
+                                        className={`text-xs text-left block w-full truncate hover:text-emerald-600 hover:underline underline-offset-2 ${hecha ? 'text-slate-400 line-through' : 'text-slate-700'}`}
+                                    >
+                                        {s.titulo}
+                                    </button>
+                                    {/* La segunda línea solo aparece si hay algo que
+                                        contar; una subtarea recién creada no arrastra
+                                        una fila de guiones vacíos. */}
+                                    {(s.responsableNombre || s.venceAt || s.subtareasTotal > 0 || s.comentarios > 0 || s.adjuntos > 0 || s.descripcion) && (
+                                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                                            {s.responsableNombre && (
+                                                <span className="text-[9px] text-slate-500 flex items-center gap-0.5"><User size={9} /> {s.responsableNombre}</span>
+                                            )}
+                                            {s.venceAt && (
+                                                <span className={`text-[9px] font-bold flex items-center gap-0.5 ${vencida ? 'text-red-600' : 'text-slate-500'}`}>
+                                                    <Calendar size={9} /> {fechaCorta(s.venceAt)}
+                                                </span>
+                                            )}
+                                            {s.subtareasTotal > 0 && (
+                                                <span className="text-[9px] text-slate-500 flex items-center gap-0.5"><ListChecks size={9} /> {s.subtareasHechas}/{s.subtareasTotal}</span>
+                                            )}
+                                            {s.comentarios > 0 && (
+                                                <span className="text-[9px] text-slate-500 flex items-center gap-0.5"><MessageSquare size={9} /> {s.comentarios}</span>
+                                            )}
+                                            {s.adjuntos > 0 && (
+                                                <span className="text-[9px] text-slate-500 flex items-center gap-0.5"><Paperclip size={9} /> {s.adjuntos}</span>
+                                            )}
+                                            {s.descripcion && (
+                                                <span className="text-[9px] text-slate-400 italic truncate max-w-[9rem]" title={s.descripcion}>{s.descripcion}</span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                {!hecha && s.prioridad && s.prioridad !== 'media' && (
+                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 mt-0.5 ${PRIO[s.prioridad]}`}>
+                                        {s.prioridad === 'critica' ? 'crítica' : s.prioridad}
+                                    </span>
+                                )}
+                                <button onClick={() => delSub(s)} title="Eliminar la subtarea" className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"><Trash2 size={12} /></button>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                     <div className="flex gap-2 mt-2">
                         <input value={nuevaSub} onChange={(e) => setNuevaSub(e.target.value)} disabled={creandoSub}
@@ -530,6 +656,23 @@ const TareasPanel = ({ modo = 'todas' }) => {
     const [selId, setSelId] = useState(null);
     const [filtroPrioridad, setFiltroPrioridad] = useState('');
     const [filtroResponsable, setFiltroResponsable] = useState('');
+
+    // CÓMO SE VEN LAS TAREAS · «VISUALIZACIÓN DE TAREAS»
+    // Antes había una sola forma: una lista plana. Ahora son dos, y la elección
+    // se recuerda entre visitas porque cada persona tiende a quedarse con una.
+    const [vista, setVista] = useState(() => {
+        try { return localStorage.getItem('tareas:vista') === 'tablero' ? 'tablero' : 'lista'; }
+        catch { return 'lista'; }
+    });
+    const cambiarVista = (v) => {
+        setVista(v);
+        try { localStorage.setItem('tareas:vista', v); } catch { /* modo privado */ }
+        // En el tablero las columnas SON los estados: entrar con el filtro en
+        // "Activas" dejaría la columna de finalizadas vacía para siempre.
+        if (v === 'tablero' && filtroEstado !== 'archivadas') setFiltroEstado('todas');
+    };
+    // Agrupar la lista. '' = una sola lista corrida, como estaba.
+    const [agrupar, setAgrupar] = useState('');
     const [total, setTotal] = useState(0);
     const [hayMas, setHayMas] = useState(false);
     const [cargandoMas, setCargandoMas] = useState(false);
@@ -621,6 +764,55 @@ const TareasPanel = ({ modo = 'todas' }) => {
     // dos se desincronizaran y el contador no calzara con la lista.
     const lista = tareas;
 
+    // AGRUPAR · parte la misma lista en bloques con encabezado.
+    // Se agrupa sobre lo que ya está en pantalla, no sobre el total: con la
+    // lista paginada, decir "Proyecto X (3)" cuando el proyecto tiene 40 sería
+    // mentir. Por eso el encabezado dice cuántas hay *acá*.
+    const ORDEN_PRIO = { critica: 0, alta: 1, media: 2, baja: 3 };
+    const grupos = React.useMemo(() => {
+        if (!agrupar) return null;
+        const mapa = new Map();
+        for (const t of lista) {
+            let clave, label, color = null;
+            if (agrupar === 'proyecto') {
+                clave = t.proyectoId || '_';
+                label = t.proyectoNombre || 'Sin proyecto';
+                color = t.proyectoColor || null;
+            } else if (agrupar === 'responsable') {
+                clave = t.responsableId || '_';
+                label = t.responsableNombre || 'Sin responsable';
+            } else {
+                clave = t.prioridad || 'media';
+                label = clave === 'critica' ? 'Crítica' : clave.charAt(0).toUpperCase() + clave.slice(1);
+            }
+            if (!mapa.has(clave)) mapa.set(clave, { clave, label, color, tareas: [] });
+            mapa.get(clave).tareas.push(t);
+        }
+        const arr = [...mapa.values()];
+        // Por prioridad manda la urgencia; en el resto, alfabético y "sin ..." al
+        // final: un bloque llamado "Sin responsable" arriba de todo estorba.
+        if (agrupar === 'prioridad') {
+            arr.sort((a, b) => (ORDEN_PRIO[a.clave] ?? 9) - (ORDEN_PRIO[b.clave] ?? 9));
+        } else {
+            arr.sort((a, b) => (a.clave === '_') - (b.clave === '_') || a.label.localeCompare(b.label, 'es'));
+        }
+        return arr;
+    }, [lista, agrupar]);
+
+    // Mover una tarjeta de columna en el tablero. Se pinta al tiro y se manda
+    // después; si el servidor rechaza, `cargar()` deja la pantalla como la base.
+    const moverEstado = async (t, estado) => {
+        setTareas(prev => prev.map(x => x.id === t.id ? { ...x, estado } : x));
+        try {
+            const r = await actualizarTareaApi(getSessionId(), t.id, { estado });
+            const d = await r.json(); if (!d.success) throw new Error(d.message);
+            cargar();
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'No se pudo mover', description: e.message });
+            cargar();
+        }
+    };
+
     const completar = async (t, e) => {
         e.stopPropagation();
         setTareas(prev => prev.map(x => x.id === t.id ? { ...x, estado: 'completada' } : x));
@@ -683,7 +875,22 @@ const TareasPanel = ({ modo = 'todas' }) => {
             {/* Toolbar */}
             <div className="flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                    {[['activas', 'Activas'], ['completada', 'Finalizadas'], ['todas', 'Todas'], ['archivadas', 'Archivadas']].map(([f, label]) => (
+                    {/* Lista o tablero. Es lo primero de la barra porque cambia
+                        todo lo que viene después. */}
+                    <div className="flex bg-white border border-[#efe8dd] rounded-lg p-0.5">
+                        {[['lista', 'Lista', List], ['tablero', 'Tablero', Kanban]].map(([v, label, Icono]) => (
+                            <button key={v} onClick={() => cambiarVista(v)} title={`Ver como ${label.toLowerCase()}`}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-colors ${vista === v ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'}`}>
+                                <Icono size={12} /> {label}
+                            </button>
+                        ))}
+                    </div>
+                    {/* En el tablero las columnas ya separan por estado, así que
+                        filtrar por estado además no tiene sentido. */}
+                    {(vista === 'tablero'
+                        ? [['todas', 'Vivas'], ['archivadas', 'Archivadas']]
+                        : [['activas', 'Activas'], ['completada', 'Finalizadas'], ['todas', 'Todas'], ['archivadas', 'Archivadas']]
+                    ).map(([f, label]) => (
                         <button key={f} onClick={() => setFiltroEstado(f)}
                             className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider ${filtroEstado === f ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-white border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
                             {label}
@@ -691,6 +898,18 @@ const TareasPanel = ({ modo = 'todas' }) => {
                     ))}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
+                    {/* Agrupar solo aplica a la lista: el tablero ya está agrupado
+                        por estado y agrupar dos veces no se puede dibujar. */}
+                    {vista === 'lista' && (
+                        <select value={agrupar} onChange={(e) => setAgrupar(e.target.value)}
+                            title="Agrupar la lista"
+                            className="bg-white border border-[#efe8dd] rounded-lg px-2 py-2 text-[11px] text-slate-600 outline-none focus:border-emerald-500 cursor-pointer">
+                            <option value="">Sin agrupar</option>
+                            <option value="proyecto">Agrupar: proyecto</option>
+                            <option value="responsable">Agrupar: responsable</option>
+                            <option value="prioridad">Agrupar: prioridad</option>
+                        </select>
+                    )}
                     {/* Filtros de RF-TA-12. Se resuelven en el servidor. */}
                     <select value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)}
                         title="Filtrar por prioridad"
@@ -764,7 +983,10 @@ const TareasPanel = ({ modo = 'todas' }) => {
 
                 {/* Lista de tareas */}
                 <div className={`min-h-0 bg-white border border-[#efe8dd] rounded-2xl flex flex-col overflow-hidden transition-all ${selId ? 'flex-1 lg:w-3/5' : 'flex-1'}`}>
-                    <div className="flex-1 overflow-y-auto">
+                    {/* El tablero desplaza en horizontal y maneja el alto de sus
+                        columnas; la lista desplaza en vertical. Son dos modos de
+                        scroll distintos, así que el contenedor cambia con la vista. */}
+                    <div className={`flex-1 min-h-0 ${vista === 'tablero' ? 'flex flex-col p-2 gap-2' : 'overflow-y-auto'}`}>
                         {loading ? (
                             <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="animate-spin" /></div>
                         ) : lista.length === 0 ? (
@@ -779,7 +1001,18 @@ const TareasPanel = ({ modo = 'todas' }) => {
                                     ? <span>No hay tareas archivadas.</span>
                                     : <span>No hay tareas. Usa <span className="text-emerald-600 font-bold">+ Tarea</span>.</span>}
                             </div>
-                        ) : lista.map(t => {
+                        ) : vista === 'tablero' ? (
+                            <TableroTareas tareas={lista} selId={selId} onAbrir={setSelId} onMover={moverEstado} />
+                        ) : (grupos || [{ clave: '_todo', label: null, tareas: lista }]).map(g => (
+                          <div key={g.clave}>
+                            {g.label && (
+                                <div className="sticky top-0 z-10 bg-[#faf7f2]/95 backdrop-blur-sm border-b border-[#efe8dd] px-4 py-1.5 flex items-center gap-2">
+                                    {g.color && <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: g.color }} />}
+                                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{g.label}</span>
+                                    <span className="text-[10px] font-black text-slate-400 tabular-nums">{g.tareas.length}</span>
+                                </div>
+                            )}
+                            {g.tareas.map(t => {
                             const meta = ESTADO_META[t.estado] || ESTADO_META.pendiente;
                             const vencida = t.venceAt && new Date(t.venceAt) < new Date() && t.estado !== 'completada';
                             return (
@@ -808,7 +1041,9 @@ const TareasPanel = ({ modo = 'todas' }) => {
                                     <button onClick={(e) => eliminar(t, e)} title="Eliminar definitivamente" className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={13} /></button>
                                 </div>
                             );
-                        })}
+                            })}
+                          </div>
+                        ))}
 
                         {/* Paginación: la lista no se trae completa nunca. */}
                         {!loading && hayMas && (

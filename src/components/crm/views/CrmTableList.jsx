@@ -60,7 +60,6 @@ const CrmTableList = ({
         switch (col) {
             case 'cliente': return String(c.razon_social || c.razonSocial || '').toLowerCase();
             case 'plan': return String(c.plan || c.plan_nombre || '').toLowerCase();
-            case 'score': return Number(c.score ?? 0);
             case 'neto': return Number(c.honorarioNeto ?? c.honorario_neto ?? 0);
             default: return '';
         }
@@ -105,11 +104,6 @@ const CrmTableList = ({
     };
     const bulkPagar = () => { onBulkRegistrarPago?.(selectedClients); clearSel(); };
 
-    const getScoreColor = (score) => {
-        if(score >= 80) return 'text-emerald-700 bg-emerald-50 border-emerald-200';
-        if(score >= 50) return 'text-amber-700 bg-amber-50 border-amber-200';
-        return 'text-red-600 bg-red-50 border-red-200';
-    };
 
     // Color del plan según nivel (mejor lectura visual)
     const getPlanColor = (plan) => {
@@ -415,16 +409,14 @@ const CrmTableList = ({
                           Cliente <SortIcon col="cliente" />
                         </button>
                       </th>
+                      {/* Score y Responsable salieron de la tabla: ocupaban dos
+                          columnas para un dato que casi nunca se mira acá. Los
+                          dos siguen estando en la ficha del cliente. */}
                       <th className="px-4 py-2.5 font-black">
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => toggleSort('plan')} className="flex items-center gap-1 hover:text-slate-900 transition-colors uppercase tracking-widest">Plan <SortIcon col="plan" /></button>
-                          <span className="opacity-30">·</span>
-                          <button onClick={() => toggleSort('score')} className="flex items-center gap-1 hover:text-slate-900 transition-colors uppercase tracking-widest">Score <SortIcon col="score" /></button>
-                        </div>
+                        <button onClick={() => toggleSort('plan')} className="flex items-center gap-1 hover:text-slate-900 transition-colors uppercase tracking-widest">Plan <SortIcon col="plan" /></button>
                       </th>
                       <th className="px-4 py-2.5 font-black">Contacto y Alertas</th>
                       <th className="px-4 py-2.5 font-black">Estados</th>
-                      {esAdminMaster && <th className="px-4 py-2.5 font-black" title="Quién lleva este cliente">Responsable</th>}
                       <th className="px-4 py-2.5 font-black text-right">
                         <button onClick={() => toggleSort('neto')} className="flex items-center gap-1 hover:text-slate-900 transition-colors uppercase tracking-widest ml-auto">
                           Neto mensual <SortIcon col="neto" />
@@ -442,7 +434,6 @@ const CrmTableList = ({
 
                       const plan = client.plan || client.plan_nombre || 'FREE';
 
-                      const score = client.score ?? 50;
                       const importante = client.nota_urgente || client.importante || '';
 
                       // Prioriza WhatsApp igual que la ficha (consistencia entre tabla y drawer)
@@ -504,17 +495,7 @@ const CrmTableList = ({
                           </td>
 
                           <td className="px-4 py-2.5">
-                             <div className="flex flex-col items-start gap-1.5">
-                                <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase border max-w-[130px] truncate ${getPlanColor(plan)}`} title={plan}>{plan}</span>
-                                {/* El score lo calcula un trigger de la base según los
-                                    estados del cliente; no se escribe a mano. Se explica
-                                    acá porque un número suelto del 10 al 100 no dice nada. */}
-                                <span
-                                    title={`Score ${score} de 100 · ${score >= 80 ? 'el cliente está en orden' : score >= 50 ? 'hay algo que revisar' : 'necesita atención'}\nSe calcula solo a partir de los estados del cliente. No se edita a mano.`}
-                                    className={`text-[9px] font-black px-2 py-0.5 rounded-md border cursor-help ${getScoreColor(score)}`}>
-                                    Score {score}
-                                </span>
-                             </div>
+                             <span className={`inline-block px-2 py-0.5 rounded-md text-[9px] font-black uppercase border max-w-[130px] truncate ${getPlanColor(plan)}`} title={plan}>{plan}</span>
                           </td>
 
                           <td className="px-4 py-2.5">
@@ -575,18 +556,6 @@ const CrmTableList = ({
                              </div>
                           </td>
 
-                          {esAdminMaster && (
-                            <td className="px-4 py-2.5">
-                              {client.usuarioCreador && client.usuarioCreador !== 'Sin asignar' ? (
-                                <span className="flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-md border uppercase bg-purple-50 text-purple-700 border-purple-200 max-w-[140px] truncate" title={client.usuarioCreador}>
-                                  <User size={10} className="shrink-0" /> {client.usuarioCreador}
-                                </span>
-                              ) : (
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Sin asignar</span>
-                              )}
-                            </td>
-                          )}
-
                           <td className="px-4 py-2.5 text-right">
                              <div className="flex flex-col items-end gap-0.5">
                                  <span className="text-slate-400 text-[8px] font-black uppercase tracking-widest">Neto mensual</span>
@@ -599,7 +568,7 @@ const CrmTableList = ({
 
                     {sortedClients.length === 0 && (
                       <tr>
-                        <td colSpan={5 + (selectMode ? 1 : 0) + (esAdminMaster && vista === 'usuarios' ? 1 : 0)} className="p-10 text-center">
+                        <td colSpan={5 + (selectMode ? 1 : 0)} className="p-10 text-center">
                           <div className="flex flex-col items-center gap-3">
                             <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-[#efe8dd] flex items-center justify-center text-slate-400">
                               <Users size={22} />

@@ -1,6 +1,7 @@
 import { pool } from '../database/db.js';
 import { registrar } from '../utils/bitacora.js';
 import { notificar, notificarA, misNotificaciones, contarPendientes, marcarLeidas } from '../utils/notificaciones.js';
+import { abrirCanal } from '../utils/avisosEnVivo.js';
 
 // ============================================================
 // CRM · Tareas / actividades y métricas del dashboard
@@ -10,7 +11,9 @@ import { notificar, notificarA, misNotificaciones, contarPendientes, marcarLeida
 
 const esAdmin = (req) => req.user?.rol === 'Administrador';
 const TIPOS = ['tarea', 'reunion', 'llamada', 'whatsapp', 'correo', 'ticket'];
-const PRIORIDADES = ['baja', 'media', 'alta', 'critica'];
+// Exportadas: las plantillas guardan una prioridad y tiene que ser una de
+// éstas, o la CHECK de la base rechaza la tarea recién al usarse.
+export const PRIORIDADES = ['baja', 'media', 'alta', 'critica'];
 // Flujo: pendiente → en_proceso → en_revision → completada. 'cancelada' lo corta.
 // Archivar NO está acá: es `archivada_at`, un eje aparte (ver la migración
 // 2026-07-31_tareas_fase1_modelo.sql). Una tarea archivada conserva su estado.
@@ -233,6 +236,9 @@ const mapTarea = (t) => ({
     subtareasTotal: t.subtareas_total ?? 0,
     subtareasHechas: t.subtareas_hechas ?? 0,
     comentarios: t.comentarios ?? 0,
+    // Solo lo llenan las consultas que lo piden (la lista de subtareas). En el
+    // resto llega `undefined` y la pantalla simplemente no dibuja el clip.
+    adjuntos: t.adjuntos ?? 0,
     colaboradores: t.colaboradores || [],
 });
 
@@ -246,7 +252,9 @@ const setColaboradores = async (tareaId, ids) => {
 };
 
 // Devuelve una tarea enriquecida (nombres, contadores, colaboradores) por id.
-const tareaCompleta = async (id) => {
+// Exportada para que las plantillas devuelvan la tarea recién creada con la
+// misma forma que devuelve el resto del módulo.
+export const tareaCompleta = async (id) => {
     const { rows } = await pool.query(
         `SELECT t.*, u.nombre AS responsable_nombre,
                 (p.nombre || ' ' || COALESCE(p.apellidos,'')) AS persona_nombre,
@@ -487,6 +495,18 @@ export const eliminarTareasCompletadas = async (req, res) => {
 // ============================================================
 // NOTIFICACIONES · la campana del encabezado
 // ============================================================
+// ----------------------------------------------------------------------------
+// CANAL DE AVISOS EN VIVO
+// ----------------------------------------------------------------------------
+// Deja la conexión abierta. Desde acá no se responde nada más: cada aviso se
+// escribe cuando ocurre, desde `notificar()`. Ver utils/avisosEnVivo.js.
+export const canalDeAvisos = (req, res) => {
+    const uid = req.user?.usuarioId;
+    if (!uid) return res.status(401).end();
+    abrirCanal(uid, req, res);
+    // Sin return de respuesta: la petición queda viva a propósito.
+};
+
 export const listarNotificaciones = async (req, res) => {
     try {
         const uid = req.user?.usuarioId;
@@ -856,7 +876,9 @@ export const guardarMeta = async (req, res) => {
 // ============================================================
 
 // Verifica que la tarea sea de la organización del usuario.
-const tareaEnOrg = async (id, org) => {
+// Se exporta porque las plantillas (plantillas.controllers.js) tienen que hacer
+// el mismo corte de organización antes de copiar una tarea.
+export const tareaEnOrg = async (id, org) => {
     const { rows } = await pool.query(`SELECT id FROM tarea WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`, [id, org]);
     return rows.length > 0;
 };
@@ -870,11 +892,24 @@ export const obtenerTarea = async (req, res) => {
 
         const [tarea, subRes, comRes, adjRes] = await Promise.all([
             tareaCompleta(id),
+            // Las subtareas llegan con los mismos datos que una tarea normal.
+            // Antes venían con los contadores en cero fijo, así que en la lista
+            // de subtareas no se veía quién responde, para cuándo, ni si esa
+            // subtarea a su vez tenía subtareas o comentarios: había que abrir
+            // una por una para enterarse.
             pool.query(
-                `SELECT t.*, u.nombre AS responsable_nombre, NULL AS persona_nombre, NULL AS proyecto_nombre, NULL AS proyecto_color,
-                        0 AS subtareas_total, 0 AS subtareas_hechas, 0 AS comentarios, '[]'::json AS colaboradores
+                `SELECT t.*, u.nombre AS responsable_nombre, NULL AS persona_nombre,
+                        NULL AS proyecto_nombre, NULL AS proyecto_color,
+                        (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id) AS subtareas_total,
+                        (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.estado='completada') AS subtareas_hechas,
+                        (SELECT COUNT(*)::int FROM tarea_comentario tc WHERE tc.tarea_id = t.id) AS comentarios,
+                        (SELECT COUNT(*)::int FROM tarea_adjunto ta WHERE ta.tarea_id = t.id) AS adjuntos,
+                        COALESCE((SELECT json_agg(json_build_object('id', cu.id, 'nombre', cu.nombre))
+                                  FROM tarea_colaborador tcol JOIN usuario cu ON cu.id = tcol.usuario_id
+                                  WHERE tcol.tarea_id = t.id), '[]') AS colaboradores
                  FROM tarea t LEFT JOIN usuario u ON u.id = t.responsable_id
-                 WHERE t.parent_id = $1 ORDER BY t.created_at ASC`, [id]),
+                 WHERE t.parent_id = $1
+                 ORDER BY t.estado = 'completada' ASC, t.created_at ASC`, [id]),
             pool.query(
                 `SELECT id, usuario_id, usuario_nombre, texto, created_at
                  FROM tarea_comentario WHERE tarea_id = $1 ORDER BY created_at ASC`, [id]),
@@ -927,12 +962,66 @@ export const agregarComentario = async (req, res) => {
         const { texto } = req.body;
         if (!texto?.trim()) return res.status(400).json({ success: false, message: 'El comentario no puede estar vacío.' });
         if (!await tareaEnOrg(id, req.user?.organizacionId || null)) return res.status(404).json({ success: false, message: 'Tarea no encontrada.' });
-        const { rows } = await pool.query(
-            `INSERT INTO tarea_comentario (tarea_id, usuario_id, usuario_nombre, texto)
-             VALUES ($1,$2,$3,$4) RETURNING id, usuario_id, usuario_nombre, texto, created_at`,
-            [id, req.user?.usuarioId || null, req.user?.nombre || null, texto.trim()]
-        );
-        const c = rows[0];
+
+        // GUARDA CONTRA EL COMENTARIO REPETIDO.
+        //
+        // La pantalla ya vacía el campo antes de enviar, pero eso solo cubre el
+        // doble Enter en una pestaña. Con la red lenta un doble clic manda dos
+        // veces igual, y dos pestañas abiertas no se enteran una de la otra.
+        //
+        // Consultar-y-después-insertar NO alcanza: si las dos peticiones llegan
+        // a la vez, ambas consultan antes de que cualquiera inserte, ninguna ve
+        // a la otra y quedan las dos. Hace falta que la segunda ESPERE a la
+        // primera, y eso solo lo puede hacer la base.
+        //
+        // El candado es por (tarea + autor + texto), así que dos personas
+        // comentando a la vez no se estorban, y la misma persona comentando otra
+        // cosa tampoco. Se suelta solo al terminar la transacción.
+        const cliente = await pool.connect();
+        let c;
+        try {
+            await cliente.query('BEGIN');
+            await cliente.query(
+                `SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))`,
+                [`${id}:${req.user?.usuarioId || ''}`, texto.trim()]
+            );
+
+            // Ya adentro del candado, esto sí es de fiar.
+            const { rows: repe } = await cliente.query(
+                `SELECT id, usuario_id, usuario_nombre, texto, created_at
+                   FROM tarea_comentario
+                  WHERE tarea_id = $1 AND usuario_id IS NOT DISTINCT FROM $2
+                    AND texto = $3 AND created_at > NOW() - interval '10 seconds'
+                  LIMIT 1`,
+                [id, req.user?.usuarioId || null, texto.trim()]
+            );
+            if (repe.length) {
+                await cliente.query('COMMIT');
+                const y = repe[0];
+                // No es un error: la persona quiso comentar y su comentario está.
+                // Se devuelve el que ya existe, con 200.
+                return res.json({
+                    success: true, repetido: true,
+                    comentario: {
+                        id: y.id, usuarioId: y.usuario_id, autor: y.usuario_nombre || 'Sistema',
+                        texto: y.texto, fecha: new Date(y.created_at).toLocaleString('es-CL'),
+                    },
+                });
+            }
+
+            const { rows } = await cliente.query(
+                `INSERT INTO tarea_comentario (tarea_id, usuario_id, usuario_nombre, texto)
+                 VALUES ($1,$2,$3,$4) RETURNING id, usuario_id, usuario_nombre, texto, created_at`,
+                [id, req.user?.usuarioId || null, req.user?.nombre || null, texto.trim()]
+            );
+            await cliente.query('COMMIT');
+            c = rows[0];
+        } catch (err) {
+            await cliente.query('ROLLBACK').catch(() => {});
+            throw err;
+        } finally {
+            cliente.release();
+        }
 
         // Avisar a los involucrados. Esto es lo que hace que un comentario sirva
         // para responderle a alguien y no sea una nota que nadie lee: era la

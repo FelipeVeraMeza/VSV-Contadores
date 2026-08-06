@@ -734,7 +734,73 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                         <EditableField label="Giro" name="giro" value={isEditing ? formData.giro : giro} isEditing={isEditing} onChange={handleInputChange} />
                         <EditableField label="Régimen Tributario" name="regimen" value={isEditing ? formData.regimen : regimen} isEditing={isEditing} onChange={handleInputChange} />
                     </div>
+
+                    {/* RESPONSABLE DEL SERVICIO · es de la OFICINA, no del cliente.
+                        Va aparte del representante legal justamente para que no se
+                        confundan: los dos son "el contacto", pero de lados opuestos. */}
+                    <div className="mt-3 pt-3 border-t border-[#efe8dd] flex items-center gap-2">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Responsable del servicio</span>
+                        {client.responsableNombre ? (
+                            <span className="text-xs font-bold text-emerald-700 bg-emerald-500/10 border border-emerald-500/25 rounded-lg px-2 py-0.5">
+                                {client.responsableNombre}
+                            </span>
+                        ) : (
+                            <span className="text-[11px] text-slate-400 italic">Sin asignar</span>
+                        )}
+                    </div>
+
+                    {/* Los demás representantes legales. Solo aparece si hay más de
+                        uno: con uno solo ya está arriba y repetirlo sobra. */}
+                    {Array.isArray(client.representantes) && client.representantes.length > 1 && (
+                        <div className="mt-3 pt-3 border-t border-[#efe8dd]">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                Otros representantes legales ({client.representantes.length - 1})
+                            </span>
+                            <div className="mt-1.5 space-y-1">
+                                {client.representantes.filter(r => !r.principal).map(r => (
+                                    <div key={r.id} className="flex items-center gap-2 flex-wrap text-xs bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5">
+                                        <span className="font-bold text-slate-700">{r.nombre}</span>
+                                        {r.rut && <span className="text-slate-500 font-mono text-[10px]">{r.rut}</span>}
+                                        {r.email && <span className="text-slate-400 text-[10px] truncate">{r.email}</span>}
+                                        {r.telefono && <span className="text-slate-400 text-[10px]">{r.telefono}</span>}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
+
+                {/* PLANES · el negocio vende más de uno a la vez. Se muestra solo
+                    cuando hay más de uno; con uno solo ya está en la cabecera. */}
+                {Array.isArray(client.planes) && client.planes.length > 1 && (
+                    <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
+                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <Layers size={14} /> Planes contratados ({client.planes.length})
+                        </h3>
+                        <div className="space-y-1.5">
+                            {client.planes.map(p => (
+                                <div key={p.id} className="flex items-center gap-2 border border-[#efe8dd] rounded-lg px-3 py-2">
+                                    <span className="text-[9px] font-black text-slate-300 w-4">{p.principal ? '★' : ''}</span>
+                                    <span className="text-xs font-bold text-slate-700 flex-1 truncate">{p.nombre}</span>
+                                    <span className="text-xs font-black text-slate-900 tabular-nums">{fmt(p.precio)}</span>
+                                </div>
+                            ))}
+                            <div className="flex items-center gap-2 px-3 pt-2 border-t border-[#efe8dd]">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex-1">Suma de planes</span>
+                                <span className="text-xs font-black text-emerald-700 tabular-nums">
+                                    {fmt(client.planes.reduce((s, p) => s + (Number(p.precio) || 0), 0))}
+                                </span>
+                            </div>
+                        </div>
+                        {/* Si la suma no calza con lo que se cobra, hay que verlo. */}
+                        {Math.round(client.planes.reduce((s, p) => s + (Number(p.precio) || 0), 0)) !== Math.round(Number(honorario) || 0) && (
+                            <p className="text-[10px] text-amber-700 bg-amber-500/10 border border-amber-500/25 rounded-lg px-2.5 py-1.5 mt-2">
+                                La suma de los planes no calza con el honorario cobrado ({fmt(honorario)}).
+                                El honorario es el que manda en la facturación.
+                            </p>
+                        )}
+                    </div>
+                )}
 
                 {/* DIRECCIÓN */}
                 <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">

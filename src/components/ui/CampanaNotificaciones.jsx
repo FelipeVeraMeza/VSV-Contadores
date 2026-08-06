@@ -5,14 +5,23 @@
 // enterabas al abrir la pantalla. Y como la pantalla no se abre sola, en la
 // práctica te enterabas cuando alguien te escribía por WhatsApp.
 //
-// Se consulta cada 60 segundos. No es tiempo real y no hace falta que lo sea:
-// avisar de una tarea con un minuto de retraso no le cambia el día a nadie, y
-// mantener una conexión abierta por esto sería caro para lo que aporta.
+// El servidor EMPUJA los avisos por una conexión abierta (SSE), así que si te
+// asignan una tarea mientras estás mirando la pantalla, la campana se enciende
+// sola. Antes preguntaba cada 60 segundos y había que refrescar para enterarse.
+//
+// Se mantiene una consulta de respaldo, pero espaciada: cubre el rato en que la
+// conexión se cae y el navegador todavía no reconecta, y el caso de que el
+// canal no funcione en algún entorno. Los avisos llegan igual, más lento.
 // =====================================================================
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Bell, Check, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { listarNotificacionesApi, marcarNotificacionesApi } from '@/services/crmService';
+import { API_BASE_URL } from '../../../config.js';
+
+// Un "tin" corto generado acá mismo: sin archivo externo que cargar ni que
+// pueda faltar al desplegar.
+const TIN = 'data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YVYAAAAAABAAIAAwAEAAUABgAHAAgACQAKAAsADAANAA4ADwAP8A7wDfAM8AvwCvAJ8AjwB/AG8AXwBPAD8ALwAfAA8A/////+/f39/Pz8+/v7+vr6+fn5+Pj4';
 
 const getSessionId = () => {
     try { return JSON.parse(localStorage.getItem('user') || '{}').sessionId; } catch { return null; }
@@ -56,9 +65,37 @@ const CampanaNotificaciones = () => {
 
     useEffect(() => {
         cargar();
-        const id = setInterval(cargar, 60000);
+        // Respaldo espaciado. Con el canal en vivo funcionando esto casi nunca
+        // trae novedades; existe para el rato en que la conexión se cae.
+        const id = setInterval(cargar, 120000);
         return () => clearInterval(id);
     }, [cargar]);
+
+    // ---- El canal en vivo ----
+    // `EventSource` no admite cabeceras, por eso la sesión va en la URL. Y
+    // reconecta solo si se corta, así que no hay que vigilarlo.
+    useEffect(() => {
+        const s = getSessionId();
+        if (!s || typeof EventSource === 'undefined') return;
+
+        const canal = new EventSource(`${API_BASE_URL}/crm/notificaciones/stream?sesion=${encodeURIComponent(s)}`);
+
+        canal.addEventListener('aviso', (e) => {
+            try {
+                const aviso = JSON.parse(e.data);
+                setAvisos(prev => prev.some(a => a.id === aviso.id) ? prev : [aviso, ...prev].slice(0, 30));
+                setPendientes(p => p + 1);
+                // Un sonido corto: si estás mirando otra pestaña del sistema,
+                // el número rojo solo no se nota.
+                try { new Audio(TIN).play().catch(() => {}); } catch { /* sin sonido */ }
+            } catch { /* si viene mal formado se ignora */ }
+        });
+
+        // Si el canal se cae, el respaldo de arriba sigue cubriendo.
+        canal.onerror = () => { /* EventSource reintenta solo */ };
+
+        return () => canal.close();
+    }, []);
 
     // Cerrar al pulsar fuera: si no, el panel queda abierto tapando la pantalla.
     useEffect(() => {

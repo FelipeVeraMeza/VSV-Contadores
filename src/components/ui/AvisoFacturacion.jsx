@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CalendarClock, AlertTriangle, X } from 'lucide-react';
+import { Receipt, CalendarClock, AlertTriangle, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth.jsx';
 import { getResumenCobrosApi } from '@/services/cobrosService';
 
 const clp = (n) => `$${Number(n || 0).toLocaleString('es-CL')}`;
 
-// Campana del header: avisa desde el día 26 que hay facturas por emitir,
-// y muestra los cobros vencidos (pasado el día 5).
+// Aviso de FACTURACIÓN del header: desde el día 26 avisa que hay facturas por
+// emitir, y muestra los cobros vencidos (pasado el día 5).
+//
+// Lleva una boleta y no una campana a propósito. Al lado está la campana de
+// notificaciones personales, y con las dos iguales parecía que el sistema
+// mostraba la misma campana dos veces. Son cosas distintas: ésta es el
+// calendario de cobro de la oficina, la otra es lo que te toca a ti.
 const AvisoFacturacion = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -43,9 +48,9 @@ const AvisoFacturacion = () => {
       <button
         onClick={() => setAbierto(v => !v)}
         className="relative h-10 w-10 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-colors"
-        title="Avisos de facturación"
+        title="Facturación del mes"
       >
-        <Bell size={18} />
+        <Receipt size={18} />
         {totalAvisos > 0 && (
           <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white animate-pulse" />
         )}
@@ -60,7 +65,7 @@ const AvisoFacturacion = () => {
               className="absolute right-0 mt-2 w-80 bg-white border border-[#e5ddd0] rounded-2xl shadow-xl shadow-black/[0.08] z-50 overflow-hidden"
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-[#efe8dd]">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Avisos</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Facturación del mes</span>
                 <button onClick={() => setAbierto(false)} className="text-slate-400 hover:text-slate-700"><X size={14} /></button>
               </div>
 

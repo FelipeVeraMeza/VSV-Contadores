@@ -6,14 +6,25 @@ import {
     listarProyectos, crearProyecto, actualizarProyecto, eliminarProyecto,
     agregarIntegrante, quitarIntegrante,
     metricasDashboard, guardarMeta, resumenInicio,
-    listarNotificaciones, marcarNotificaciones,
+    listarNotificaciones, marcarNotificaciones, canalDeAvisos,
 } from '../controllers/crm.controllers.js';
+import {
+    listarPlantillas, crearPlantilla, actualizarPlantilla, eliminarPlantilla, usarPlantilla,
+} from '../controllers/plantillas.controllers.js';
 import { requireSession, requireModulo } from '../middleware/auth.js';
 import { exigirPermisoTarea } from '../utils/permisosTarea.js';
 
 const router = Router();
 
 // Notificaciones (la campana). Van antes de /tareas/:id para no confundirse.
+//
+// El canal en vivo: el servidor deja esta conexión abierta y manda el aviso en
+// cuanto ocurre, para que a quien le asignan una tarea se entere sin refrescar.
+// Es la única ruta que acepta la sesión por la URL, porque `EventSource` no
+// puede mandar cabeceras.
+router.get('/notificaciones/stream',
+    (req, _res, next) => { req.permitirSesionEnUrl = true; next(); },
+    requireSession, canalDeAvisos);
 router.get('/notificaciones', requireSession, listarNotificaciones);
 router.patch('/notificaciones/leer', requireSession, marcarNotificaciones);
 router.patch('/notificaciones/:id/leer', requireSession, marcarNotificaciones);
@@ -33,6 +44,15 @@ router.delete('/proyectos/:id', requireSession, eliminarProyecto);
 // Integrantes: quién pertenece al proyecto y por lo tanto qué puede ver.
 router.post('/proyectos/:id/integrantes', requireSession, agregarIntegrante);
 router.delete('/proyectos/:id/integrantes/:usuarioId', requireSession, quitarIntegrante);
+
+// Plantillas de tareas. Van antes de /tareas/:id porque comparten prefijo de
+// módulo pero no de ruta; acá el orden no las cruza, se dejan juntas por claridad.
+router.get('/plantillas', requireSession, listarPlantillas);
+router.post('/plantillas', requireSession, crearPlantilla);
+router.put('/plantillas/:id', requireSession, actualizarPlantilla);
+router.delete('/plantillas/:id', requireSession, eliminarPlantilla);
+// Usar una plantilla CREA una tarea: por eso es POST y devuelve 201.
+router.post('/plantillas/:id/usar', requireSession, usarPlantilla);
 
 // Comentarios de tarea
 router.delete('/comentarios/:comentarioId', requireSession, eliminarComentario);

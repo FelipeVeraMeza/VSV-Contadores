@@ -200,12 +200,14 @@ export const getClientesCRM = async (req, res) => {
                 ec.web_password_encrypted,
                 s.direccion,
                 s.comuna,
-                s.ciudad
+                s.ciudad,
+                resp.nombre AS responsable_nombre
                 ${creadorSelect}
                 ${cobroSelect}
             FROM empresa e
             ${auditaJoin}
             LEFT JOIN plan p ON e.plan_id = p.id
+            LEFT JOIN usuario resp ON resp.id = e.responsable_id
             LEFT JOIN empresa_credenciales ec ON e.id = ec.empresa_id
             LEFT JOIN sucursal s ON e.id = s.empresa_id AND s.es_casa_matriz = TRUE
             ${whereClauses.length ? 'WHERE ' + whereClauses.join(' AND ') : ''}
@@ -234,6 +236,25 @@ export const getClientesCRM = async (req, res) => {
             JOIN servicio s ON es.servicio_id = s.id
             WHERE es.empresa_id = ANY($1)
             ORDER BY es.empresa_id
+        `, [empresaIds]);
+
+        // Representantes legales · pueden ser varios por empresa. El principal va
+        // primero, que es el que se muestra cuando solo cabe uno.
+        const repsResult = empresaIds.length === 0 ? empty : await pool.query(`
+            SELECT id, empresa_id, nombre, rut_encrypted, email, telefono, principal
+              FROM empresa_representante
+             WHERE empresa_id = ANY($1)
+             ORDER BY empresa_id, principal DESC, orden ASC
+        `, [empresaIds]);
+
+        // Planes contratados · el negocio vende más de uno a la vez.
+        const planesContratadosResult = empresaIds.length === 0 ? empty : await pool.query(`
+            SELECT ep.id, ep.empresa_id, ep.plan_id, pl.nombre, pl.precio_base,
+                   ep.precio_pactado, ep.principal, ep.fecha_inicio, ep.fecha_termino
+              FROM empresa_plan ep
+              JOIN plan pl ON pl.id = ep.plan_id
+             WHERE ep.empresa_id = ANY($1) AND ep.fecha_termino IS NULL
+             ORDER BY ep.empresa_id, ep.principal DESC, pl.nombre ASC
         `, [empresaIds]);
 
         let notasResult = empty;
@@ -313,6 +334,35 @@ export const getClientesCRM = async (req, res) => {
                 throw err;
             }
         }
+
+        // Representantes y planes, agrupados por empresa. El RUT se descifra acá,
+        // en el servidor, igual que el resto: nunca viaja cifrado al navegador.
+        const repsPorEmpresa = {};
+        repsResult.rows.forEach(r => {
+            (repsPorEmpresa[r.empresa_id] ||= []).push({
+                id: r.id,
+                nombre: r.nombre,
+                rut: decryptData(r.rut_encrypted) || '',
+                email: r.email || '',
+                telefono: r.telefono || '',
+                principal: r.principal === true,
+            });
+        });
+
+        const planesPorEmpresa = {};
+        planesContratadosResult.rows.forEach(p => {
+            (planesPorEmpresa[p.empresa_id] ||= []).push({
+                id: p.id,
+                planId: p.plan_id,
+                nombre: p.nombre,
+                // El precio pactado manda; si no hay, el de lista del plan.
+                precio: parseFloat(p.precio_pactado ?? p.precio_base) || 0,
+                precioPactado: p.precio_pactado === null ? null : parseFloat(p.precio_pactado),
+                precioBase: parseFloat(p.precio_base) || 0,
+                principal: p.principal === true,
+                desde: p.fecha_inicio,
+            });
+        });
 
         const serviciosPorEmpresa = {};
         serviciosResult.rows.forEach(srv => {
@@ -434,6 +484,14 @@ export const getClientesCRM = async (req, res) => {
 
                 notas: notasPorEmpresa[cliente.id] || [],
                 servicios: serviciosPorEmpresa[cliente.id] || [],
+
+                // Varios representantes y varios planes. Los campos sueltos de
+                // arriba (repNombre / plan) siguen existiendo y apuntan al
+                // principal, para no romper las pantallas que ya los leen.
+                representantes: repsPorEmpresa[cliente.id] || [],
+                planes: planesPorEmpresa[cliente.id] || [],
+                responsableId: cliente.responsable_id || null,
+                responsableNombre: cliente.responsable_nombre || null,
                 type: cliente.tipo_cliente || 'Empresa',
                 activo: cliente.activo !== false, // null/undefined → se considera activo
                 esNuevo: cliente.es_nuevo === true, // onboarding (inicio de actividades / verificación)
@@ -1069,14 +1127,35 @@ export const crearEmpresaCRM = async (req, res) => {
             repNombre, repRut,
             planId, tipoCliente,
             direccion, comuna, ciudad,
-            importante
+            importante,
+            // --- Lo nuevo: se carga todo al crear, sin volver a entrar a la ficha ---
+            // `representantes` y `planes` son listas. Los campos sueltos de arriba
+            // (repNombre/repRut/planId) siguen aceptándose: son los que manda la
+            // pantalla vieja, y no se rompe mientras convive con la nueva.
+            representantes, planes, servicios, responsableId,
         } = req.body;
+
+        // Un representante sin nombre no se puede mostrar en ninguna parte.
+        const repsEntrada = (Array.isArray(representantes) ? representantes : [])
+            .filter(r => r?.nombre?.trim());
+        // Si no vino la lista nueva, se arma con los campos sueltos de siempre.
+        const repsFinales = repsEntrada.length
+            ? repsEntrada
+            : (repNombre?.trim() ? [{ nombre: repNombre, rut: repRut }] : []);
+
+        for (const r of repsFinales) {
+            if (r.rut?.trim() && !validarRutDV(r.rut)) {
+                return res.status(400).json({
+                    success: false,
+                    message: `El RUT del representante ${r.nombre.trim()} no es válido.`,
+                });
+            }
+        }
+
+        const planesEntrada = (Array.isArray(planes) ? planes : []).filter(p => p?.planId);
 
         if (!rut || !rut.trim() || !validarRutDV(rut)) {
             return res.status(400).json({ success: false, message: 'El RUT ingresado no es válido (revisa el dígito verificador).' });
-        }
-        if (repRut && repRut.trim() && !validarRutDV(repRut)) {
-            return res.status(400).json({ success: false, message: 'El RUT del representante no es válido.' });
         }
         if (correo && correo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.trim())) {
             return res.status(400).json({ success: false, message: 'El correo electrónico no es válido.' });
@@ -1101,49 +1180,155 @@ export const crearEmpresaCRM = async (req, res) => {
             });
         }
 
-        // Plan: usa el indicado o cae al plan FREE por defecto (si existe)
-        let finalPlanId = planId || null;
+        // El plan PRINCIPAL es el primero de la lista, o el suelto de la pantalla
+        // vieja, o FREE. Se sigue guardando en empresa.plan_id porque de ahí lo
+        // leen el cobro mensual y la facturación; los demás van a empresa_plan.
+        let finalPlanId = planesEntrada[0]?.planId || planId || null;
         if (!finalPlanId) {
             const free = await client.query(`SELECT id FROM plan WHERE UPPER(nombre) = 'FREE' LIMIT 1`);
             finalPlanId = free.rows[0]?.id || null;
         }
 
-        const repRutLimpio = repRut && repRut.trim() ? cleanRut(repRut) : null;
+        // El representante principal también se refleja en las columnas de
+        // `empresa`: el robot del SII las lee de ahí.
+        const repPrincipal = repsFinales[0] || null;
+        const repRutLimpio = repPrincipal?.rut?.trim() ? cleanRut(repPrincipal.rut) : null;
 
         const ins = await client.query(
             `INSERT INTO empresa (
                 razon_social, rut_encrypted, rut_hash, giro, regimen_tributario,
                 telefono_corporativo, email_corporativo, whatsapp,
                 nombre_rep, rut_rep_encrypted, rut_rep_hash,
-                plan_id, tipo_cliente, nota_urgente, organizacion_id
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+                plan_id, tipo_cliente, nota_urgente, organizacion_id, responsable_id,
+                drive_url, en_cartera
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
             RETURNING id, razon_social`,
             [
                 nombreFinal,
                 encrypt(rutStandard),
                 rutHash,
-                giro?.trim() || 'Sin especificar',
-                regimen?.trim() || 'Sin especificar',
+                // Vacío es NULL, no el texto "Sin especificar": ese relleno
+                // después hay que limpiarlo a mano y ensucia los informes.
+                giro?.trim() || null,
+                regimen?.trim() || null,
                 telefono?.trim() || null,
                 correo?.trim() || null,
                 whatsapp?.trim() || null,
-                repNombre?.trim() || null,
+                repPrincipal?.nombre?.trim() || null,
                 repRutLimpio ? encrypt(repRutLimpio) : null,
                 repRutLimpio ? generateHash(repRutLimpio) : null,
                 finalPlanId,
                 tipoCliente || 'Empresa',
                 importante?.trim() || null,
-                req.user?.organizacionId || null
+                req.user?.organizacionId || null,
+                responsableId || null,
+                req.body.driveUrl?.trim() || null,
+                // Un cliente que se crea a mano es un cliente que se va a
+                // facturar. Si naciera fuera de cartera no entraría al cobro del
+                // mes y nadie se daría cuenta hasta fin de mes.
+                req.body.enCartera === false ? false : true
             ]
         );
         const empresaId = ins.rows[0].id;
 
-        // Fila de credenciales (columnas NOT NULL) para que luego se puedan guardar claves SII/Web
+        // ---- Representantes legales · pueden ser varios ----
+        // El primero queda como principal; es el que se muestra en la ficha y el
+        // que usa el robot del SII para entrar al portal.
+        for (let i = 0; i < repsFinales.length; i++) {
+            const r = repsFinales[i];
+            const limpio = r.rut?.trim() ? cleanRut(r.rut) : null;
+            await client.query(
+                `INSERT INTO empresa_representante
+                    (empresa_id, nombre, rut_encrypted, rut_hash, email, telefono, principal, orden)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+                [empresaId, r.nombre.trim(),
+                 limpio ? encrypt(limpio) : null, limpio ? generateHash(limpio) : null,
+                 r.email?.trim() || null, r.telefono?.trim() || null, i === 0, i]
+            );
+        }
+
+        // ---- Planes · pueden ser varios ----
+        // El precio pactado se guarda por plan. Lo que se factura sale igual de
+        // empresa.precio_mensual: el plan propone, el precio negociado manda.
+        const planesFinales = planesEntrada.length
+            ? planesEntrada
+            : (finalPlanId ? [{ planId: finalPlanId }] : []);
+        for (let i = 0; i < planesFinales.length; i++) {
+            const p = planesFinales[i];
+            const precio = Number(p.precioPactado);
+            await client.query(
+                `INSERT INTO empresa_plan (empresa_id, plan_id, precio_pactado, principal)
+                 VALUES ($1,$2,$3,$4)
+                 ON CONFLICT DO NOTHING`,
+                [empresaId, p.planId, Number.isFinite(precio) && precio >= 0 ? precio : null, i === 0]
+            );
+        }
+
+        // ---- Servicios contratados ----
+        for (const s of (Array.isArray(servicios) ? servicios : [])) {
+            if (!s?.servicioId) continue;
+            const precio = Number(s.precio);
+            await client.query(
+                `INSERT INTO empresa_servicio
+                    (empresa_id, servicio_id, estado, precio_pactado, periodicidad, fecha_inicio)
+                 VALUES ($1,$2,'Activo',$3,$4,NOW())`,
+                [empresaId, s.servicioId,
+                 Number.isFinite(precio) && precio >= 0 ? precio : null,
+                 s.periodicidad || 'mensual']
+            );
+        }
+
+        // El precio a cobrar: lo que se indique, o la suma de los planes. Sin
+        // esto el cliente nuevo quedaría sin monto y no entraría al cobro del mes.
+        //
+        // Se calcula ANTES de escribir. En un UPDATE, `honorario_neto =
+        // precio_mensual` tomaría el valor VIEJO de la columna (NULL), no el que
+        // se acaba de poner en la misma sentencia.
+        const pedido = Number(req.body.precioMensual);
+        let montoFinal = Number.isFinite(pedido) && pedido >= 0 ? pedido : null;
+        if (montoFinal === null) {
+            const { rows: suma } = await client.query(
+                `SELECT COALESCE(SUM(COALESCE(ep.precio_pactado, pl.precio_base, 0)), 0) AS total
+                   FROM empresa_plan ep JOIN plan pl ON pl.id = ep.plan_id
+                  WHERE ep.empresa_id = $1 AND ep.fecha_termino IS NULL`,
+                [empresaId]
+            );
+            montoFinal = Number(suma[0].total) || 0;
+        }
+        await client.query(
+            `UPDATE empresa SET precio_mensual = $2, honorario_neto = $2 WHERE id = $1`,
+            [empresaId, montoFinal]
+        );
+
+        // ---- Credenciales ----
+        // Se cargan AL CREAR. Antes la fila nacía con las cuatro columnas en
+        // blanco y había que volver a entrar a la ficha para llenarlas, que es
+        // justo lo que este formulario vino a evitar.
+        //
+        // Los nombres son los que tiene el sistema HOY —"Clave SII" y "Clave
+        // Portal Web"—. Cuál es de la empresa y cuál del representante legal es
+        // otra discusión, congelada a propósito: está en el ticket CLAVE SII
+        // CLIENTE. Acá solo se guarda lo que la persona escribe, en la misma
+        // columna donde el resto del sistema ya lo busca.
+        //
+        // `sii_rut_encrypted` se llena con el RUT DE LA EMPRESA: es lo que esa
+        // columna contiene en las 155 fichas que lo tienen cargado.
+        //
+        // `encrypt('')` devuelve null y estas columnas son NOT NULL, así que lo
+        // vacío se guarda como cadena vacía —igual que hacía la versión anterior
+        // al crear la fila en blanco—. Cifrar el vacío tampoco tendría sentido.
+        const cifrarOVacio = (v) => (v && v.trim() ? encrypt(v.trim()) : '');
         await client.query(
             `INSERT INTO empresa_credenciales
                 (empresa_id, sii_rut_encrypted, sii_email_encrypted, sii_password_encrypted, web_password_encrypted)
-             VALUES ($1, '', '', '', '')`,
-            [empresaId]
+             VALUES ($1,$2,$3,$4,$5)`,
+            [
+                empresaId,
+                cifrarOVacio(rutStandard),
+                cifrarOVacio(req.body.correoSII || correo),
+                cifrarOVacio(req.body.claveSII),
+                cifrarOVacio(req.body.claveWeb),
+            ]
         );
 
         // Casa matriz para que luego se pueda editar dirección/comuna/ciudad

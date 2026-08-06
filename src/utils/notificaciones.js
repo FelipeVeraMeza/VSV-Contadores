@@ -10,6 +10,7 @@
 // el llamador no quiere esperarlas.
 // ============================================================================
 import { pool } from '../database/db.js';
+import { empujarAviso } from './avisosEnVivo.js';
 
 const seguro = async (fn) => {
     try { return await fn(); }
@@ -25,14 +26,28 @@ export const notificar = async ({ para, actor, tipo, titulo, descripcion = null,
     if (!para || !tipo || !titulo) return null;
     if (actor?.usuarioId && actor.usuarioId === para) return null;
 
-    return seguro(() => pool.query(
-        `INSERT INTO notificacion
-            (organizacion_id, usuario_id, actor_id, actor_nombre, tipo, titulo, descripcion, entidad, entidad_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [organizacionId || actor?.organizacionId || null, para,
-         actor?.usuarioId || null, actor?.nombre || null,
-         tipo, titulo, descripcion, entidad, entidadId]
-    ));
+    return seguro(async () => {
+        const { rows } = await pool.query(
+            `INSERT INTO notificacion
+                (organizacion_id, usuario_id, actor_id, actor_nombre, tipo, titulo, descripcion, entidad, entidad_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+             RETURNING id, tipo, titulo, descripcion, entidad, entidad_id, actor_nombre, created_at`,
+            [organizacionId || actor?.organizacionId || null, para,
+             actor?.usuarioId || null, actor?.nombre || null,
+             tipo, titulo, descripcion, entidad, entidadId]
+        );
+
+        // Y se lo empujamos AHORA si está conectado, para que no tenga que
+        // refrescar la página. Se guarda primero y se avisa después: si el
+        // empuje falla, el aviso ya está a salvo en la base.
+        const n = rows[0];
+        empujarAviso(para, {
+            id: n.id, tipo: n.tipo, titulo: n.titulo, descripcion: n.descripcion,
+            entidad: n.entidad, entidadId: n.entidad_id, actorNombre: n.actor_nombre,
+            fecha: n.created_at, leida: false,
+        });
+        return rows;
+    });
 };
 
 /** Avisa a varias personas de una vez, sin repetir ni incluir al que actúa. */

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { Search, User, Phone, Mail, Loader2, UserPlus, RefreshCw, ArrowRightCircle, Trash2, RotateCcw, CheckCircle2, X, UserMinus, AlertTriangle, Clock } from 'lucide-react';
+import { Search, User, Phone, Mail, Loader2, UserPlus, RefreshCw, ArrowRightCircle, Trash2, RotateCcw, CheckCircle2, X, UserMinus, AlertTriangle, Clock, FileSpreadsheet } from 'lucide-react';
 import { listarPersonasApi, cambiarEstadoPersonaApi, eliminarPersonaApi } from '@/services/personaService';
 import { toast } from '@/components/ui/use-toast';
 import PersonaDetailDrawer from '../modals/PersonaDetailDrawer';
 import ConvertirClienteModal from '../modals/ConvertirClienteModal';
+import ImportarProspectosModal from '../modals/ImportarProspectosModal';
 
 const getUser = () => {
     try { return JSON.parse(localStorage.getItem('user') || '{}'); }
@@ -40,6 +41,7 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
     const [search, setSearch] = useState('');
     const [selectedId, setSelectedId] = useState(null);
     const [personaAConvertir, setPersonaAConvertir] = useState(null);
+    const [importando, setImportando] = useState(false);
     const [selectedIds, setSelectedIds] = useState(new Set());
     const [miCartera, setMiCartera] = useState(false);
     const userId = getUser().id || null;
@@ -188,6 +190,12 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, RUT, correo o teléfono..."
                             className="w-full bg-slate-50 border border-[#efe8dd] rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-500" />
                     </div>
+                    {/* Cargar una planilla completa. Los prospectos que traes
+                        quedan en TU cartera, no en un montón común. */}
+                    <button onClick={() => setImportando(true)} title="Importar prospectos desde una planilla"
+                        className="flex items-center gap-1.5 shrink-0 bg-white border border-[#efe8dd] hover:border-emerald-500/50 text-slate-600 hover:text-emerald-700 rounded-xl px-3 text-[10px] font-black uppercase tracking-widest transition-colors">
+                        <FileSpreadsheet size={13} /> <span className="hidden sm:inline">Importar</span>
+                    </button>
                 </div>
             </div>
 
@@ -326,6 +334,13 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                     </table>
                 </div>
             </div>
+
+            {importando && (
+                <ImportarProspectosModal
+                    onClose={() => setImportando(false)}
+                    onImportado={cargar}
+                />
+            )}
 
             <AnimatePresence>
                 {selectedId && (

@@ -111,8 +111,20 @@ Cada tarea puede contener subtareas. Una subtarea **es** una tarea (misma tabla,
 con `parent_id`), así que registra los mismos campos: nombre, responsable,
 estado, prioridad, fecha límite, comentarios y archivos.
 
-**Un solo nivel de anidación.** Dentro de una subtarea no se ofrece crear otra.
-Sin ese tope se puede anidar sin fin y la pantalla deja de entenderse.
+**Dos niveles de anidación.** El equipo pidió poder crear subtareas dentro de
+subtareas («CREAR SUB TAREAS EN LAS SUBTAREAS»); antes el tope era uno. Dos
+alcanza para desglosar un trabajo sin que la pantalla se vuelva un árbol
+ilegible. El tercer nivel lo rechaza el servidor, y la pantalla directamente
+deja de ofrecer el campo en el último nivel (`puedeTenerSubtareas`) en vez de
+dejar intentarlo y fallar después.
+
+**Heredan el proyecto de su tarea principal.** Sin eso quedaban «sin proyecto» y
+no las veía nadie del equipo: había 16 huérfanas cuando se detectó.
+
+**Qué se ve de cada subtarea en la lista.** Responsable, fecha de entrega,
+prioridad, cuántas subtareas propias tiene, comentarios, archivos y un adelanto
+de la descripción. Antes solo se veía el título, así que para saber de qué iba
+cada una había que abrirlas de a una.
 
 ---
 
@@ -151,6 +163,69 @@ avance = tareas principales completadas / tareas principales que cuentan
 **Búsqueda por:** nombre, proyecto, responsable, estado, prioridad.
 
 **Filtros por:** proyecto, estado, prioridad, responsable, fecha límite.
+
+Todos los filtros los resuelve el **servidor**, no el navegador. Con pocas tareas
+da lo mismo; con dos mil hay que esperar a que baje todo para ver tres
+resultados. La lista viene paginada (60 por vez, «Ver más» trae el resto) y el
+contador dice «X de Y», donde Y lo cuenta el servidor: así no miente cuando la
+lista está cortada.
+
+---
+
+## 5ter. Cómo se ven las tareas · «VISUALIZACIÓN DE TAREAS»
+
+Dos vistas sobre exactamente los mismos datos y los mismos filtros:
+
+| Vista | Para qué | Cómo se opera |
+|---|---|---|
+| **Lista** | «¿qué tengo que hacer?» | Una fila por tarea, ordenada por urgencia |
+| **Tablero** | «¿cómo va el trabajo?» | Una columna por estado; se arrastra la tarjeta para moverla |
+
+El tablero **no vuelve a pedir las tareas**: dibuja las que ya trajo la lista. Si
+pidiera las suyas, los contadores de una vista y otra dejarían de calzar.
+
+Al entrar al tablero el filtro de estado pasa a «todas»: las columnas *son* los
+estados, así que entrar filtrando por «Activas» dejaría la columna de finalizadas
+vacía para siempre. Por lo mismo, en tablero el filtro de estado se reduce a
+vivas / archivadas.
+
+**Agrupar** (solo en lista): por proyecto, responsable o prioridad. Se agrupa
+sobre lo que está en pantalla, no sobre el total — por eso el encabezado dice
+cuántas hay *ahí*, no cuántas existen.
+
+La vista elegida se recuerda entre visitas: cada persona tiende a quedarse con
+una.
+
+---
+
+## 5quater. Plantillas de tareas
+
+El trabajo de la oficina se repite —dar de alta un cliente, cerrar un F29, armar
+la carpeta de renta— y esos pasos se volvían a escribir a mano cada vez, con el
+riesgo de que se olvidara alguno.
+
+Una plantilla guarda la estructura una vez —la tarea y todos sus pasos— y la
+vuelca en un clic, creando la tarea **y sus subtareas** de una sola vez.
+
+**Guarda un plazo en días, no una fecha.** Una fecha fija envejece: la plantilla
+«cierre de F29» con fecha 20-08-2026 sirve un mes y después miente. `dias_plazo`
+sirve siempre y la fecha se calcula el día que se usa (a las 18:00, fin de
+jornada, no la hora exacta en que se apretó el botón).
+
+**Quien la usa manda sobre la plantilla.** Título, responsable, fecha, prioridad
+y proyecto se pueden cambiar antes de crear. Si no fuera así habría que crear la
+tarea y después corregirla a mano, que es el trabajo que la plantilla venía a
+evitar.
+
+**Dos caminos para crearlas:** desde cero, o «guardar como plantilla» sobre una
+tarea que ya existe —con sus subtareas—. El segundo es el natural: la primera vez
+se arma la tarea a mano y recién ahí se ve que va a repetirse.
+
+`veces_usada` lleva la cuenta. Una plantilla que nadie usó en seis meses es ruido
+en la lista y conviene poder verlo.
+
+Borrar una plantilla **no toca** las tareas ya creadas con ella: una vez creadas
+son tareas normales.
 
 ---
 
@@ -346,13 +421,21 @@ Vale la pena dejarlos escritos: son los que se habrían visto en producción.
 
 Escrito a propósito, para que nadie lo busque:
 
-- **Tablero kanban** y **calendario** — se descartaron con los cronogramas
-- **Notificaciones** cuando te asignan una tarea — no hay avisos de ningún tipo
-- **Tareas que se repiten solas** (el F29 de cada mes, por ejemplo)
+- **Calendario** — se descartó junto con los cronogramas
+- **Tareas que se repiten solas** (el F29 de cada mes, por ejemplo). Las
+  plantillas se le acercan, pero hay que dispararlas a mano
 - **Adjuntos en los comentarios** — solo en la tarea
-- **Más de un nivel de subtareas**
+- **Tres o más niveles de subtareas** — el tope es dos
+- **Avisos por correo o WhatsApp** — las notificaciones son solo dentro del
+  sistema, y se consultan cada 60 segundos (no es tiempo real)
 - **Registro de cambios por tarea** — quién cambió qué y cuándo. La bitácora
-  guarda archivar y desarchivar, no cada edición
+  guarda archivar, desarchivar y lo de plantillas, no cada edición
+- **Reordenar tarjetas dentro de una columna** del tablero — se arrastra entre
+  columnas para cambiar el estado, pero el orden dentro de cada una lo decide la
+  urgencia, no la mano
+
+Ya **no** están en esta lista, porque se hicieron el 5 de agosto: el tablero
+kanban, las notificaciones dentro del sistema y el segundo nivel de subtareas.
 
 ---
 
@@ -360,7 +443,14 @@ Escrito a propósito, para que nadie lo busque:
 
 | | |
 |---|---|
-| Tablas | `tarea`, `proyecto`, `tarea_colaborador`, `tarea_comentario`, `tarea_adjunto` |
-| Backend | `src/controllers/crm.controllers.js`, `src/routes/crm.routes.js` |
+| Tablas | `tarea`, `proyecto`, `proyecto_integrante`, `tarea_colaborador`, `tarea_comentario`, `tarea_adjunto`, `notificacion`, `tarea_plantilla`, `tarea_plantilla_item` |
+| Backend | `src/controllers/crm.controllers.js`, `src/controllers/plantillas.controllers.js`, `src/routes/crm.routes.js` |
 | Permisos | `src/utils/permisosTarea.js` |
+| Notificaciones | `src/utils/notificaciones.js`, `src/components/ui/CampanaNotificaciones.jsx` |
 | Frontend | `src/components/Tareas.jsx`, `src/components/crm/views/TareasPanel.jsx` |
+| | `src/components/tareas/InicioPanel.jsx`, `ProyectosPanel.jsx`, `TableroTareas.jsx`, `PlantillasTarea.jsx` |
+
+**Migraciones que armaron el módulo** (en `src/DatabaseThings/migrations/`):
+`2026-07-31_tareas_fase1_modelo.sql`, `2026-08-05_proyecto_nombre_unico.sql`,
+`2026-08-05_proyecto_integrantes.sql`, `2026-08-05_subtarea_hereda_proyecto.sql`,
+`2026-08-05_notificaciones.sql`, `2026-08-05_plantillas_tarea.sql`.
