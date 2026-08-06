@@ -1,5 +1,6 @@
 import { pool } from '../database/db.js';
 import { registrar } from '../utils/bitacora.js';
+import { notificar, notificarA, misNotificaciones, contarPendientes, marcarLeidas } from '../utils/notificaciones.js';
 
 // ============================================================
 // CRM · Tareas / actividades y métricas del dashboard
@@ -43,10 +44,43 @@ const ORDEN_TAREAS = `
 // ---------------------------------------------------------------------------
 const AMBITOS = ['todas', 'mias', 'equipo'];
 
+// ---------------------------------------------------------------------------
+// QUIÉN PUEDE VER UNA TAREA · el modelo que pidió el negocio el 05-08-2026
+//
+//   «Al crear un proyecto se debe añadir a los usuarios que uno desee, y todos
+//    los usuarios del proyecto pueden ver todas las tareas, a no ser que quien
+//    cree la tarea lo configure de otra forma.»
+//
+// De ahí salen exactamente dos caminos para ver una tarea:
+//
+//   1. ESTAR METIDO EN ELLA — responsable, quien la creó, o colaborador.
+//      Esto manda siempre, incluso si la tarea es privada.
+//
+//   2. SER INTEGRANTE DE SU PROYECTO, y que la tarea no esté marcada como
+//      privada. Ese "salvo que la configure de otra forma" es `visibilidad`.
+//
+// Ser Administrador ya NO alcanza. Antes veía todos los proyectos de la
+// organización; ahora ve los suyos, como todos. El aislamiento por organización
+// sigue por encima de esto: son dos candados distintos, no uno.
+// ---------------------------------------------------------------------------
+const puedeVerTarea = (i) => `(
+        t.responsable_id = $${i}
+     OR t.creado_por = $${i}
+     OR EXISTS (SELECT 1 FROM tarea_colaborador tc WHERE tc.tarea_id = t.id AND tc.usuario_id = $${i})
+     OR (t.visibilidad = 'proyecto' AND t.proyecto_id IS NOT NULL
+         AND EXISTS (SELECT 1 FROM proyecto_integrante pi
+                      WHERE pi.proyecto_id = t.proyecto_id AND pi.usuario_id = $${i}))
+    )`;
+
 const condicionAmbito = (ambito, indiceUsuario) => {
     const colabora = `EXISTS (SELECT 1 FROM tarea_colaborador tc WHERE tc.tarea_id = t.id AND tc.usuario_id = $${indiceUsuario})`;
+    // "Mías" sigue siendo lo que tengo encima: responsable o colaborador. No
+    // incluye lo que solo veo por pertenecer al proyecto.
     if (ambito === 'mias') return `(t.responsable_id = $${indiceUsuario} OR ${colabora})`;
-    return `(t.responsable_id = $${indiceUsuario} OR t.creado_por = $${indiceUsuario} OR ${colabora})`;
+    // "Todas" y "Equipo" son ahora lo mismo: todo lo que puedo ver. Con
+    // integrantes por proyecto la distinción dejó de tener sentido — antes
+    // "Equipo" significaba "toda la organización", y eso ya no existe.
+    return puedeVerTarea(indiceUsuario);
 };
 
 // `scope=equipo|mias` era el nombre viejo; se sigue aceptando para no romper
@@ -189,6 +223,8 @@ const mapTarea = (t) => ({
     // Archivar es un eje aparte del estado: `archivada` sale de la fecha.
     archivada: !!t.archivada_at,
     archivadaAt: t.archivada_at,
+    // 'proyecto' = la ven todos los integrantes · 'privada' = solo los involucrados
+    visibilidad: t.visibilidad || 'proyecto',
     // Módulo de tareas
     proyectoId: t.proyecto_id,
     proyectoNombre: t.proyecto_nombre || null,
@@ -235,14 +271,38 @@ const tareaCompleta = async (id) => {
 export const crearTarea = async (req, res) => {
     try {
         const { titulo, descripcion, tipo, prioridad, personaId, empresaId, responsableId, venceAt, origen,
-            proyectoId, parentId, colaboradores, estado } = req.body;
+            proyectoId, parentId, colaboradores, estado, visibilidad } = req.body;
         if (!titulo?.trim()) return res.status(400).json({ success: false, message: 'El título es obligatorio.' });
+
+        // Una subtarea pertenece al mismo proyecto que su tarea principal, y no
+        // puede colgar de otra subtarea de segundo nivel: dos niveles es el tope.
+        // Sin lo primero, la subtarea quedaba «sin proyecto» y no la veía nadie
+        // del equipo; sin lo segundo, la pantalla se vuelve ilegible.
+        let proyectoFinal = proyectoId || null;
+        let padreFinal = parentId || null;
+        if (padreFinal) {
+            const { rows: padre } = await pool.query(
+                `SELECT proyecto_id, parent_id FROM tarea WHERE id = $1
+                  AND organizacion_id IS NOT DISTINCT FROM $2::uuid`,
+                [padreFinal, req.user?.organizacionId || null]);
+            if (!padre.length) return res.status(404).json({ success: false, message: 'La tarea principal no existe.' });
+            proyectoFinal = padre[0].proyecto_id || proyectoFinal;
+            if (padre[0].parent_id) {
+                const { rows: abuelo } = await pool.query(`SELECT parent_id FROM tarea WHERE id = $1`, [padre[0].parent_id]);
+                if (abuelo[0]?.parent_id) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Se permiten hasta dos niveles de subtareas. Crea esta al mismo nivel.',
+                    });
+                }
+            }
+        }
 
         const { rows } = await pool.query(
             `INSERT INTO tarea
                 (organizacion_id, persona_id, empresa_id, titulo, descripcion, tipo, prioridad, estado,
-                 responsable_id, vence_at, origen, creado_por, proyecto_id, parent_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+                 responsable_id, vence_at, origen, creado_por, proyecto_id, parent_id, visibilidad)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
             [
                 req.user?.organizacionId || null,
                 personaId || null, empresaId || null,
@@ -254,14 +314,28 @@ export const crearTarea = async (req, res) => {
                 venceAt || null,
                 origen === 'ia' ? 'ia' : 'manual',
                 req.user?.usuarioId || null,
-                proyectoId || null,
-                parentId || null,
+                proyectoFinal,
+                padreFinal,
+                visibilidad === 'privada' ? 'privada' : 'proyecto',
             ]
         );
         const nuevaId = rows[0].id;
         if (Array.isArray(colaboradores)) await setColaboradores(nuevaId, colaboradores);
         // Devuelve la tarea ya enriquecida (con nombres, contadores, colaboradores).
         const full = await tareaCompleta(nuevaId);
+
+        // Avisar a quien le tocó el trabajo. Sin esto, la persona se entera
+        // cuando abre la pantalla — y la pantalla no se abre sola.
+        await notificarA(
+            [full.responsableId, ...(colaboradores || [])],
+            {
+                actor: req.user, tipo: 'tarea_asignada',
+                titulo: `${req.user?.nombre || 'Alguien'} te asignó: ${full.titulo}`,
+                descripcion: full.proyectoNombre ? `En el proyecto ${full.proyectoNombre}` : null,
+                entidad: 'tarea', entidadId: nuevaId,
+            }
+        );
+
         return res.status(201).json({ success: true, tarea: full });
     } catch (error) {
         console.error('❌ Error creando tarea:', error.message);
@@ -277,33 +351,57 @@ export const actualizarTarea = async (req, res) => {
         const { id } = req.params;
         const org = req.user?.organizacionId || null;
         // Debe pertenecer a la organización del usuario.
-        const chk = await pool.query(`SELECT id FROM tarea WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`, [id, org]);
+        // Se guarda el responsable anterior para saber si CAMBIÓ, y avisar solo
+        // en ese caso.
+        const chk = await pool.query(
+            `SELECT id, responsable_id FROM tarea WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`, [id, org]);
         if (chk.rows.length === 0) return res.status(404).json({ success: false, message: 'Tarea no encontrada.' });
+        const antes = chk.rows[0];
 
-        const { titulo, descripcion, tipo, prioridad, estado, responsableId, venceAt, proyectoId, colaboradores } = req.body;
+        const { titulo, descripcion, tipo, prioridad, estado, responsableId, venceAt, proyectoId,
+                colaboradores, visibilidad } = req.body;
         const completedAt = estado === 'completada' ? 'NOW()' : (estado ? 'NULL' : 'completed_at');
+        // La descripción necesita poder BORRARSE, no solo cambiarse: con COALESCE
+        // nunca se podía dejar en blanco. Vale para tareas y subtareas por igual.
+        const tocaDescripcion = Object.hasOwn(req.body, 'descripcion');
         await pool.query(
             `UPDATE tarea SET
                 titulo = COALESCE($2, titulo),
-                descripcion = COALESCE($3, descripcion),
-                tipo = COALESCE($4, tipo),
-                prioridad = COALESCE($5, prioridad),
-                estado = COALESCE($6, estado),
-                responsable_id = COALESCE($7, responsable_id),
-                vence_at = COALESCE($8, vence_at),
-                proyecto_id = COALESCE($9, proyecto_id),
+                descripcion = CASE WHEN $3::boolean THEN $4 ELSE descripcion END,
+                tipo = COALESCE($5, tipo),
+                prioridad = COALESCE($6, prioridad),
+                estado = COALESCE($7, estado),
+                responsable_id = COALESCE($8, responsable_id),
+                vence_at = COALESCE($9, vence_at),
+                proyecto_id = COALESCE($10, proyecto_id),
+                visibilidad = COALESCE($11, visibilidad),
                 completed_at = ${completedAt}
              WHERE id = $1`,
             [
-                id, titulo?.trim() || null, descripcion?.trim() || null,
+                id, titulo?.trim() || null,
+                tocaDescripcion, descripcion?.trim() || null,
                 (tipo && TIPOS.includes(tipo)) ? tipo : null,
                 (prioridad && PRIORIDADES.includes(prioridad)) ? prioridad : null,
                 (estado && ESTADOS.includes(estado)) ? estado : null,
                 responsableId || null, venceAt || null, proyectoId || null,
+                ['proyecto', 'privada'].includes(visibilidad) ? visibilidad : null,
             ]
         );
         if (Array.isArray(colaboradores)) await setColaboradores(id, colaboradores);
-        return res.json({ success: true, tarea: await tareaCompleta(id) });
+
+        const actualizada = await tareaCompleta(id);
+        // Solo se avisa si el responsable CAMBIÓ. Si no, cada vez que alguien
+        // corrige una fecha le llegaría un aviso a la misma persona.
+        if (responsableId && responsableId !== antes?.responsable_id) {
+            await notificar({
+                para: responsableId, actor: req.user, tipo: 'tarea_asignada',
+                titulo: `${req.user?.nombre || 'Alguien'} te pasó: ${actualizada.titulo}`,
+                descripcion: actualizada.proyectoNombre ? `En el proyecto ${actualizada.proyectoNombre}` : null,
+                entidad: 'tarea', entidadId: id,
+            });
+        }
+
+        return res.json({ success: true, tarea: actualizada });
     } catch (error) {
         console.error('❌ Error actualizando tarea:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo actualizar la tarea.' });
@@ -383,6 +481,43 @@ export const eliminarTareasCompletadas = async (req, res) => {
     } catch (error) {
         console.error('❌ Error limpiando tareas completadas:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudieron limpiar las tareas.' });
+    }
+};
+
+// ============================================================
+// NOTIFICACIONES · la campana del encabezado
+// ============================================================
+export const listarNotificaciones = async (req, res) => {
+    try {
+        const uid = req.user?.usuarioId;
+        if (!uid) return res.json({ success: true, notificaciones: [], pendientes: 0 });
+        const [lista, pendientes] = await Promise.all([
+            misNotificaciones(uid, { soloPendientes: req.query.pendientes === '1' }),
+            contarPendientes(uid),
+        ]);
+        return res.json({
+            success: true,
+            pendientes,
+            notificaciones: lista.map(n => ({
+                id: n.id, tipo: n.tipo, titulo: n.titulo, descripcion: n.descripcion,
+                entidad: n.entidad, entidadId: n.entidad_id, actor: n.actor_nombre,
+                leida: !!n.leida_at, fecha: n.created_at,
+            })),
+        });
+    } catch (error) {
+        console.error('❌ Error listando notificaciones:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudieron cargar los avisos.' });
+    }
+};
+
+export const marcarNotificaciones = async (req, res) => {
+    try {
+        // Sin id se marcan todas: es el "marcar todo como leído" de la campana.
+        const n = await marcarLeidas(req.user?.usuarioId, req.params.id || null);
+        return res.json({ success: true, marcadas: n, pendientes: await contarPendientes(req.user?.usuarioId) });
+    } catch (error) {
+        console.error('❌ Error marcando notificaciones:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo marcar.' });
     }
 };
 
@@ -748,9 +883,20 @@ export const obtenerTarea = async (req, res) => {
                 `SELECT id, nombre, mime, tamano, usuario_nombre, created_at
                  FROM tarea_adjunto WHERE tarea_id = $1 ORDER BY created_at ASC`, [id]),
         ]);
+
+        // En qué nivel está: 0 = tarea principal, 1 = subtarea, 2 = subtarea de
+        // subtarea. La pantalla lo usa para dejar de ofrecer "nueva subtarea" en
+        // el último nivel, en vez de dejar intentarlo y que el servidor lo
+        // rechace después.
+        let nivel = 0;
+        if (tarea?.parentId) {
+            const { rows: padre } = await pool.query(`SELECT parent_id FROM tarea WHERE id = $1`, [tarea.parentId]);
+            nivel = padre[0]?.parent_id ? 2 : 1;
+        }
+
         return res.json({
             success: true,
-            tarea,
+            tarea: tarea ? { ...tarea, nivel, puedeTenerSubtareas: nivel < 2 } : tarea,
             subtareas: subRes.rows.map(mapTarea),
             comentarios: comRes.rows.map(c => ({
                 id: c.id, usuarioId: c.usuario_id, autor: c.usuario_nombre || 'Sistema',
@@ -787,6 +933,24 @@ export const agregarComentario = async (req, res) => {
             [id, req.user?.usuarioId || null, req.user?.nombre || null, texto.trim()]
         );
         const c = rows[0];
+
+        // Avisar a los involucrados. Esto es lo que hace que un comentario sirva
+        // para responderle a alguien y no sea una nota que nadie lee: era la
+        // tarea «Mejorar respuesta real en dejar una tarea a otro usuario».
+        const { rows: [t] } = await pool.query(
+            `SELECT t.titulo, t.responsable_id, t.creado_por,
+                    COALESCE((SELECT json_agg(tc.usuario_id) FROM tarea_colaborador tc WHERE tc.tarea_id = t.id), '[]') AS colaboradores
+               FROM tarea t WHERE t.id = $1`, [id]);
+        await notificarA(
+            [t?.responsable_id, t?.creado_por, ...(t?.colaboradores || [])],
+            {
+                actor: req.user, tipo: 'tarea_comentada',
+                titulo: `${req.user?.nombre || 'Alguien'} comentó en: ${t?.titulo || 'una tarea'}`,
+                descripcion: texto.trim().slice(0, 140),
+                entidad: 'tarea', entidadId: id,
+            }
+        );
+
         return res.status(201).json({ success: true, comentario: { id: c.id, usuarioId: c.usuario_id, autor: c.usuario_nombre || 'Sistema', texto: c.texto, fecha: new Date(c.created_at).toLocaleString('es-CL') } });
     } catch (error) {
         console.error('❌ Error agregando comentario:', error.message);
@@ -964,24 +1128,30 @@ const TAREAS_QUE_CUENTAN = `
 // no hay nada que mantener. Incluye las subtareas: quien solo tiene una
 // subtarea también es parte del proyecto.
 // ---------------------------------------------------------------------------
+// Los integrantes ahora son EXPLÍCITOS: salen de `proyecto_integrante`, no de
+// quién aparece en las tareas.
+//
+// La versión anterior los deducía —un dato menos que mantener a mano— y era una
+// buena idea mientras la lista fuera informativa. Dejó de serlo cuando el negocio
+// decidió que la pertenencia al proyecto DECIDE QUIÉN VE QUÉ: un permiso no se
+// puede deducir de un efecto secundario, porque entonces asignarle una tarea a
+// alguien le daría acceso al proyecto entero sin que nadie lo decidiera.
 const INTEGRANTES_DEL_PROYECTO = `
     COALESCE((
-        SELECT json_agg(json_build_object('id', x.id, 'nombre', x.nombre) ORDER BY x.nombre)
-        FROM (
-            SELECT DISTINCT us.id, us.nombre
-            FROM usuario us
-            WHERE us.id = pr.responsable_id
-               OR us.id IN (SELECT t2.responsable_id FROM tarea t2 WHERE t2.proyecto_id = pr.id)
-               OR us.id IN (SELECT tc.usuario_id FROM tarea_colaborador tc
-                            JOIN tarea t3 ON t3.id = tc.tarea_id WHERE t3.proyecto_id = pr.id)
-        ) x
+        SELECT json_agg(json_build_object('id', us.id, 'nombre', us.nombre, 'rol', pi.rol) ORDER BY us.nombre)
+          FROM proyecto_integrante pi
+          JOIN usuario us ON us.id = pi.usuario_id
+         WHERE pi.proyecto_id = pr.id
     ), '[]')`;
 
 export const listarProyectos = async (req, res) => {
     try {
         const org = req.user?.organizacionId || null;
+        const uid = req.user?.usuarioId || null;
         const { rows } = await pool.query(
             `SELECT pr.*, u.nombre AS creador, r.nombre AS responsable_nombre,
+                    (SELECT pi.rol FROM proyecto_integrante pi
+                      WHERE pi.proyecto_id = pr.id AND pi.usuario_id = $2) AS mi_rol,
                     (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN}) AS tareas_total,
                     (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN} AND t.estado='completada') AS tareas_hechas,
                     (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN}
@@ -991,9 +1161,13 @@ export const listarProyectos = async (req, res) => {
              LEFT JOIN usuario u ON u.id = pr.creado_por
              LEFT JOIN usuario r ON r.id = pr.responsable_id
              WHERE pr.organizacion_id IS NOT DISTINCT FROM $1::uuid
+               -- Solo mis proyectos. Ser Administrador ya no alcanza: si nadie te
+               -- agregó, no lo ves. Es lo que pidió la tarea SISTEMA DE TAREAS.
+               AND EXISTS (SELECT 1 FROM proyecto_integrante pi
+                            WHERE pi.proyecto_id = pr.id AND pi.usuario_id = $2)
              ORDER BY
                 CASE pr.estado WHEN 'activo' THEN 0 WHEN 'pausado' THEN 1 WHEN 'completado' THEN 2 ELSE 3 END,
-                pr.created_at DESC`, [org]);
+                pr.created_at DESC`, [org, uid]);
         return res.json({ success: true, proyectos: rows.map(mapProyecto) });
     } catch (error) {
         console.error('❌ Error listando proyectos:', error.message);
@@ -1021,13 +1195,18 @@ const mapProyecto = (p) => ({
     tareasPendientes: Math.max(0, (p.tareas_total ?? 0) - (p.tareas_hechas ?? 0)),
     tareasAtrasadas: p.tareas_atrasadas ?? 0,
     integrantes: p.integrantes || [],
+    // Qué puedo hacer yo acá: solo el responsable reparte accesos.
+    miRol: p.mi_rol || null,
+    puedoAdministrar: p.mi_rol === 'responsable',
     avance: p.tareas_total > 0 ? Math.round((p.tareas_hechas / p.tareas_total) * 100) : 0,
 });
 
 // Relee un proyecto con sus contadores, para devolverlo ya armado.
-const proyectoCompleto = async (id) => {
+const proyectoCompleto = async (id, usuarioId = null) => {
     const { rows } = await pool.query(
         `SELECT pr.*, u.nombre AS creador, r.nombre AS responsable_nombre,
+                (SELECT pi.rol FROM proyecto_integrante pi
+                  WHERE pi.proyecto_id = pr.id AND pi.usuario_id = $2) AS mi_rol,
                 (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN}) AS tareas_total,
                 (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN} AND t.estado='completada') AS tareas_hechas,
                 (SELECT COUNT(*)::int FROM tarea t WHERE ${TAREAS_QUE_CUENTAN}
@@ -1036,7 +1215,7 @@ const proyectoCompleto = async (id) => {
          FROM proyecto pr
          LEFT JOIN usuario u ON u.id = pr.creado_por
          LEFT JOIN usuario r ON r.id = pr.responsable_id
-         WHERE pr.id = $1`, [id]);
+         WHERE pr.id = $1`, [id, usuarioId]);
     return rows[0] ? mapProyecto(rows[0]) : null;
 };
 
@@ -1045,7 +1224,7 @@ const fechaONull = (v) => (v && String(v).trim()) ? String(v).trim() : null;
 
 export const crearProyecto = async (req, res) => {
     try {
-        const { nombre, descripcion, color, responsableId, fechaInicio, fechaTermino } = req.body;
+        const { nombre, descripcion, color, responsableId, fechaInicio, fechaTermino, integrantes } = req.body;
         if (!nombre?.trim()) return res.status(400).json({ success: false, message: 'El nombre es obligatorio.' });
 
         const desde = fechaONull(fechaInicio), hasta = fechaONull(fechaTermino);
@@ -1061,8 +1240,37 @@ export const crearProyecto = async (req, res) => {
              color?.trim() || '#199b4d', req.user?.usuarioId || null,
              responsableId || req.user?.usuarioId || null, desde, hasta]
         );
-        return res.status(201).json({ success: true, proyecto: await proyectoCompleto(rows[0].id) });
+        const proyectoId = rows[0].id;
+
+        // Quien crea el proyecto queda dentro como responsable. Si no, crearía un
+        // proyecto que no puede ver —el filtro de integrantes lo dejaría fuera de
+        // su propia lista— y ya no habría forma de recuperarlo.
+        const aInvitar = new Map();
+        aInvitar.set(req.user?.usuarioId, 'responsable');
+        if (responsableId) aInvitar.set(responsableId, 'responsable');
+        for (const id of (Array.isArray(integrantes) ? integrantes : [])) {
+            if (id && !aInvitar.has(id)) aInvitar.set(id, 'integrante');
+        }
+        for (const [usuarioId, rol] of aInvitar) {
+            if (!usuarioId) continue;
+            await pool.query(
+                `INSERT INTO proyecto_integrante (proyecto_id, usuario_id, rol, agregado_por)
+                 VALUES ($1,$2,$3,$4) ON CONFLICT (proyecto_id, usuario_id) DO NOTHING`,
+                [proyectoId, usuarioId, rol, req.user?.usuarioId || null]
+            );
+        }
+
+        return res.status(201).json({ success: true, proyecto: await proyectoCompleto(proyectoId, req.user?.usuarioId) });
     } catch (error) {
+        // La base impide dos proyectos con el mismo nombre en una organización
+        // (uq_proyecto_nombre_por_organizacion). Sin este mensaje, el segundo
+        // intento salía como un error técnico incomprensible.
+        if (error.code === '23505') {
+            return res.status(409).json({
+                success: false,
+                message: `Ya existe un proyecto llamado «${req.body?.nombre?.trim()}». Ábrelo en vez de crear otro.`,
+            });
+        }
         console.error('❌ Error creando proyecto:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo crear el proyecto.' });
     }
@@ -1101,7 +1309,7 @@ export const actualizarProyecto = async (req, res) => {
              org]
         );
         if (r.rows.length === 0) return res.status(404).json({ success: false, message: 'Proyecto no encontrado.' });
-        return res.json({ success: true, proyecto: await proyectoCompleto(id) });
+        return res.json({ success: true, proyecto: await proyectoCompleto(id, req.user?.usuarioId) });
     } catch (error) {
         // La restricción de fechas coherentes llega hasta acá si el cliente la saltó.
         if (error.constraint === 'proyecto_fechas_coherentes') {
@@ -1109,6 +1317,121 @@ export const actualizarProyecto = async (req, res) => {
         }
         console.error('❌ Error actualizando proyecto:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo actualizar el proyecto.' });
+    }
+};
+
+// ============================================================================
+// INTEGRANTES DE UN PROYECTO
+// ----------------------------------------------------------------------------
+// Agregar a alguien a un proyecto le da acceso a todo lo que hay dentro, así que
+// no lo puede hacer cualquiera: solo quien figura como `responsable` del
+// proyecto. Un integrante común ve y trabaja, pero no reparte accesos.
+// ============================================================================
+
+/** Devuelve el rol del usuario en el proyecto, o null si no pertenece. */
+const miRolEnProyecto = async (proyectoId, usuarioId, organizacionId) => {
+    const { rows } = await pool.query(
+        `SELECT pi.rol
+           FROM proyecto_integrante pi
+           JOIN proyecto pr ON pr.id = pi.proyecto_id
+          WHERE pi.proyecto_id = $1 AND pi.usuario_id = $2
+            AND pr.organizacion_id IS NOT DISTINCT FROM $3::uuid`,
+        [proyectoId, usuarioId, organizacionId]
+    );
+    return rows[0]?.rol || null;
+};
+
+export const agregarIntegrante = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { usuarioId, rol } = req.body;
+        const org = req.user?.organizacionId || null;
+
+        const miRol = await miRolEnProyecto(id, req.user?.usuarioId, org);
+        if (!miRol) return res.status(404).json({ success: false, message: 'Proyecto no encontrado.' });
+        if (miRol !== 'responsable') {
+            return res.status(403).json({ success: false, message: 'Solo el responsable del proyecto puede agregar integrantes.' });
+        }
+        if (!usuarioId) return res.status(400).json({ success: false, message: 'Falta indicar a quién agregar.' });
+
+        // No se puede invitar a alguien de otra organización: sería una fuga por
+        // la puerta de atrás, dándole acceso a datos de una firma que no es suya.
+        const { rows: destino } = await pool.query(
+            `SELECT nombre FROM usuario WHERE id = $1 AND activo
+              AND organizacion_id IS NOT DISTINCT FROM $2::uuid`, [usuarioId, org]);
+        if (!destino.length) {
+            return res.status(404).json({ success: false, message: 'Esa persona no pertenece a tu organización.' });
+        }
+
+        await pool.query(
+            `INSERT INTO proyecto_integrante (proyecto_id, usuario_id, rol, agregado_por)
+             VALUES ($1,$2,$3,$4)
+             ON CONFLICT (proyecto_id, usuario_id) DO UPDATE SET rol = EXCLUDED.rol`,
+            [id, usuarioId, rol === 'responsable' ? 'responsable' : 'integrante', req.user?.usuarioId || null]
+        );
+
+        await registrar(req, {
+            modulo: 'tareas', accion: 'agregar_integrante',
+            entidad: 'proyecto', entidadId: id,
+            descripcion: `Agregó a ${destino[0].nombre} al proyecto`,
+        });
+
+        const { rows: [pr] } = await pool.query(`SELECT nombre FROM proyecto WHERE id = $1`, [id]);
+        await notificar({
+            para: usuarioId, actor: req.user, tipo: 'agregado_a_proyecto',
+            titulo: `${req.user?.nombre || 'Alguien'} te agregó al proyecto ${pr?.nombre || ''}`.trim(),
+            descripcion: 'Ya puedes ver sus tareas.',
+            entidad: 'proyecto', entidadId: id,
+        });
+
+        return res.json({ success: true, proyecto: await proyectoCompleto(id, req.user?.usuarioId) });
+    } catch (error) {
+        console.error('❌ Error agregando integrante:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo agregar la persona.' });
+    }
+};
+
+export const quitarIntegrante = async (req, res) => {
+    try {
+        const { id, usuarioId } = req.params;
+        const org = req.user?.organizacionId || null;
+
+        const miRol = await miRolEnProyecto(id, req.user?.usuarioId, org);
+        if (!miRol) return res.status(404).json({ success: false, message: 'Proyecto no encontrado.' });
+        if (miRol !== 'responsable' && req.user?.usuarioId !== usuarioId) {
+            return res.status(403).json({ success: false, message: 'Solo el responsable puede quitar a otras personas.' });
+        }
+
+        // Un proyecto sin responsables queda huérfano: nadie puede volver a
+        // administrarlo ni agregar gente, y no hay forma de arreglarlo desde la
+        // pantalla. Se impide antes de que pase.
+        const { rows: [conteo] } = await pool.query(
+            `SELECT COUNT(*) FILTER (WHERE rol = 'responsable')::int responsables
+               FROM proyecto_integrante WHERE proyecto_id = $1`, [id]);
+        const { rows: [suyo] } = await pool.query(
+            `SELECT rol FROM proyecto_integrante WHERE proyecto_id = $1 AND usuario_id = $2`, [id, usuarioId]);
+        if (suyo?.rol === 'responsable' && conteo.responsables <= 1) {
+            return res.status(409).json({
+                success: false,
+                message: 'Es el único responsable del proyecto. Nombra a otro antes de quitarlo.',
+            });
+        }
+
+        const r = await pool.query(
+            `DELETE FROM proyecto_integrante WHERE proyecto_id = $1 AND usuario_id = $2 RETURNING usuario_id`,
+            [id, usuarioId]);
+        if (!r.rows.length) return res.status(404).json({ success: false, message: 'Esa persona no está en el proyecto.' });
+
+        await registrar(req, {
+            modulo: 'tareas', accion: 'quitar_integrante',
+            entidad: 'proyecto', entidadId: id,
+            descripcion: 'Quitó a una persona del proyecto',
+        });
+
+        return res.json({ success: true, proyecto: await proyectoCompleto(id, req.user?.usuarioId) });
+    } catch (error) {
+        console.error('❌ Error quitando integrante:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo quitar la persona.' });
     }
 };
 

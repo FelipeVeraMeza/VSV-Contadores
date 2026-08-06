@@ -32,6 +32,57 @@ const decryptData = (encryptedValue) => {
     }
 };
 
+// ============================================================================
+// ⚠️ CANDADO DE ORGANIZACIÓN
+// ----------------------------------------------------------------------------
+// Un `empresaId` que llega por la URL no prueba NADA: prueba que quien pide sabe
+// escribir un identificador, no que la empresa sea suya.
+//
+// Hasta el 04-08-2026 las operaciones de escritura no lo comprobaban. El listado
+// sí filtraba por organización —o sea que Victor no veía los clientes de la otra
+// firma— pero si conseguía un id, podía **editarlos, cambiarles el plan y hasta
+// borrarlos con todo su historial**. Se detectó recorriendo el módulo como
+// usuario: Victor modificó y eliminó un cliente ajeno en la prueba.
+//
+// Verlo y poder tocarlo son permisos distintos. Este candado va en TODA
+// operación que reciba un empresaId desde afuera.
+// ============================================================================
+const empresaEsDeLaOrganizacion = async (empresaId, organizacionId) => {
+    if (!empresaId) return false;
+    const { rows } = await pool.query(
+        `SELECT 1 FROM empresa WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`,
+        [empresaId, organizacionId]
+    );
+    return rows.length > 0;
+};
+
+/** Corta con 404 si la empresa no es de quien pide. 404 y no 403: no se delata
+ *  que el cliente existe en otra organización. Devuelve true si hay que cortar. */
+const cortaPorOrganizacion = async (req, res) => {
+    const permitido = await empresaEsDeLaOrganizacion(
+        req.params?.empresaId, req.user?.organizacionId || null);
+    if (!permitido) {
+        res.status(404).json({ success: false, message: 'Cliente no encontrado.' });
+        return true;
+    }
+    return false;
+};
+
+// ============================================================================
+// ESTADO DE PAGO DE UN CLIENTE · una sola fuente: el ciclo de cobro
+// ----------------------------------------------------------------------------
+// El orden importa: primero lo que anula al resto (dado de baja), después lo que
+// explica por qué no hay cobro (servicio suspendido), y solo al final la deuda.
+// Un cliente suspendido no "debe": es que ya no se le factura.
+// ============================================================================
+export const estadoDePago = (c) => {
+    if (c.activo === false) return 'DE BAJA';
+    // Regla del negocio: si el mes pasado no se le emitió factura, dejó el servicio.
+    if (!c.cobro_mes_pasado) return 'SERVICIO SUSPENDIDO';
+    if (Number(c.deuda_vencida) > 0 || c.tiene_cobro_vencido === true) return 'NO PAGADO';
+    return 'AL DIA';
+};
+
 export const getClientesCRM = async (req, res) => {
     try {
         // Multi-tenant por organización:
@@ -51,13 +102,31 @@ export const getClientesCRM = async (req, res) => {
             whereClauses.push(`e.organizacion_id = $${empresaParams.length}`);
         }
 
-        // Solo la cartera vigente (las empresas del Excel de trabajo). Las archivadas
-        // (que ya no están en la planilla) quedan ocultas del CRM, sin borrarlas.
-        whereClauses.push('e.en_cartera IS NOT FALSE');
+        // Por defecto, solo la cartera vigente (las empresas del Excel de trabajo).
+        //
+        // Las que quedaron fuera de la planilla siguen en la base pero NO aparecían
+        // en ninguna pestaña: el 04-08-2026 eran 81 empresas a las que no había
+        // forma de llegar desde el CRM. Si un ex cliente volvía, su ficha era
+        // inalcanzable y había que crearlo de nuevo, duplicándolo.
+        //
+        // Con `?enCartera=fuera` se ven justamente esas, y con `todas` se ve todo.
+        const cartera = req.query.enCartera;
+        if (cartera === 'fuera') whereClauses.push('e.en_cartera = FALSE');
+        else if (cartera !== 'todas') whereClauses.push('e.en_cartera IS NOT FALSE');
 
-        // Cliente: solo sus empresas asignadas dentro de la organización
+        // Solo las empresas asignadas, en dos casos:
+        //
+        //   · rol Cliente — siempre, por definición: es un cliente externo.
+        //   · cualquiera con `ve_solo_empresas_asignadas` — para que alguien entre
+        //     al equipo empezando desde cero. Antes eso se lograba metiéndolo en
+        //     otra organización, y el efecto secundario era que no se le podían
+        //     asignar tareas ni compartir proyectos con él.
+        //
+        // El filtro de organización sigue por encima: esto acota DENTRO de la
+        // organización, no la reemplaza.
         let auditaJoin = '';
-        if (esCliente && req.user?.usuarioId) {
+        const soloAsignadas = esCliente || req.user?.veSoloEmpresasAsignadas === true;
+        if (soloAsignadas && req.user?.usuarioId) {
             empresaParams.push(req.user.usuarioId);
             auditaJoin = ` JOIN audita a ON a.empresa_id = e.id AND a.usuario_id = $${empresaParams.length} `;
         }
@@ -312,7 +381,18 @@ export const getClientesCRM = async (req, res) => {
                 logo: cliente.logo_url,
                 plan: cliente.plan_nombre || 'FREE',
 
-                pagoServicio: cliente.estado_pago || 'AL DIA',
+                // ESTADO DE PAGO · calculado, no escrito a mano.
+                //
+                // Antes salía de `empresa.estado_pago`, un texto que venía de la
+                // importación y que nadie actualizaba: el 04-08-2026 decía que 12
+                // clientes no habían pagado mientras el ciclo de cobro mostraba a
+                // los 93 al día. La ficha y la lista se contradecían, y cambiar la
+                // ficha no movía la lista porque son fuentes distintas.
+                //
+                // Ahora hay una sola verdad —el ciclo de cobro— y este campo se
+                // deduce de ella. Para cambiarlo se registra el pago del cobro, que
+                // es lo que de verdad pasó.
+                pagoServicio: estadoDePago(cliente),
                 estadoFormulario: cliente.estado_f29 || 'PENDIENTE',
 
                 impuestoPagar: parseFloat(cliente.impuesto_pagar) || 0,
@@ -449,6 +529,7 @@ const registrarAuditoria = async (empresaId, user, accion, detalle) => {
 
 export const updateClienteCRM = async (req, res) => {
     try {
+        if (await cortaPorOrganizacion(req, res)) return;
         const { empresaId } = req.params;
         const b = req.body;
         const { rut, repRut, plan, direccion, comuna, ciudad, claveWeb, claveSII } = b;
@@ -463,6 +544,12 @@ export const updateClienteCRM = async (req, res) => {
         if (b.correo !== undefined && String(b.correo).trim() !== '' && !validarCorreoFmt(b.correo)) {
             return res.status(400).json({ success: false, message: 'El correo electrónico no es válido.' });
         }
+        // La razón social es lo único que no se puede dejar en blanco: es el nombre
+        // con el que el cliente aparece en toda la aplicación. Antes se intentaba
+        // escribir nulo y reventaba la base con un error genérico.
+        if (b.razonSocial !== undefined && String(b.razonSocial).trim() === '') {
+            return res.status(400).json({ success: false, message: 'La razón social no puede quedar vacía.' });
+        }
 
         const parseNum = (val) => {
             if (val === undefined || val === null || val === '') return null;
@@ -476,7 +563,11 @@ export const updateClienteCRM = async (req, res) => {
         const textCols = {
             razonSocial: 'razon_social', repNombre: 'nombre_rep', giro: 'giro',
             regimen: 'regimen_tributario', telefono: 'telefono_corporativo', correo: 'email_corporativo',
-            pagoServicio: 'estado_pago', estadoFormulario: 'estado_f29', numeroFactura: 'nro_factura',
+            // `pagoServicio` YA NO se escribe: se calcula desde el ciclo de cobro
+            // (ver estadoDePago). Dejarlo editable era lo que permitía que la ficha
+            // dijera "NO PAGADO" mientras la lista mostraba al cliente al día.
+            // Para cambiarlo se registra el pago del cobro: PUT /cobros/:id/estado.
+            estadoFormulario: 'estado_f29', numeroFactura: 'nro_factura',
             formularioRenta: 'estado_formulario_renta', whatsapp: 'whatsapp', importante: 'nota_urgente',
             logo: 'logo_url'
         };
@@ -633,6 +724,7 @@ const mapNota = (nota) => ({
 
 export const addNotaCRM = async (req, res) => {
     try {
+        if (await cortaPorOrganizacion(req, res)) return;
         const { empresaId } = req.params;
         const { texto, tipo, prioridad, responsable, fechaVencimiento } = req.body;
         if (!texto || !texto.trim()) return res.status(400).json({ success: false, message: 'La nota no puede estar vacía.' });
@@ -759,6 +851,7 @@ export const toggleTicketCRM = async (req, res) => {
 export const cambiarPlanCRM = async (req, res) => {
     const client = await pool.connect();
     try {
+        if (await cortaPorOrganizacion(req, res)) return;
         const { empresaId } = req.params;
         const { planId, motivo } = req.body;
         if (!planId) return res.status(400).json({ success: false, message: 'Debe indicar el nuevo plan.' });
@@ -839,6 +932,7 @@ const PERIODICIDADES = ['mensual', 'bimensual', 'trimestral', 'cuatrimestral', '
 
 export const addServicioCRM = async (req, res) => {
     try {
+        if (await cortaPorOrganizacion(req, res)) return;
         const { empresaId } = req.params;
         const { servicioId, precioPactado, periodicidad, primeraFacturacion } = req.body;
         if (!servicioId) return res.status(400).json({ success: false, message: 'Debe indicar el servicio.' });
@@ -901,9 +995,15 @@ export const removeServicioCRM = async (req, res) => {
     try {
         const { empresaServicioId } = req.params;
         // Suspende el servicio (el trigger registra fecha_termino). No se borra para conservar historial.
+        // El id del servicio no dice de quién es: se comprueba subiendo hasta la
+        // empresa y de ahí a la organización.
         const result = await pool.query(
-            `UPDATE empresa_servicio SET estado = 'Suspendido', updated_at = NOW() WHERE id = $1 RETURNING id`,
-            [empresaServicioId]
+            `UPDATE empresa_servicio es SET estado = 'Suspendido', updated_at = NOW()
+               FROM empresa e
+              WHERE es.id = $1 AND e.id = es.empresa_id
+                AND e.organizacion_id IS NOT DISTINCT FROM $2::uuid
+              RETURNING es.id`,
+            [empresaServicioId, req.user?.organizacionId || null]
         );
         if (result.rows.length === 0) return res.status(404).json({ success: false, message: 'Servicio no encontrado.' });
         return res.json({ success: true });
@@ -918,8 +1018,14 @@ export const reactivarServicioCRM = async (req, res) => {
     try {
         const { empresaServicioId } = req.params;
 
-        // Evita reactivar si ya hay otro servicio activo del mismo tipo
-        const info = await pool.query('SELECT empresa_id, servicio_id FROM empresa_servicio WHERE id = $1', [empresaServicioId]);
+        // Evita reactivar si ya hay otro servicio activo del mismo tipo.
+        // El JOIN con empresa es el candado de organización: si el servicio es de
+        // otra firma, no aparece y se responde 404 sin delatar que existe.
+        const info = await pool.query(
+            `SELECT es.empresa_id, es.servicio_id
+               FROM empresa_servicio es JOIN empresa e ON e.id = es.empresa_id
+              WHERE es.id = $1 AND e.organizacion_id IS NOT DISTINCT FROM $2::uuid`,
+            [empresaServicioId, req.user?.organizacionId || null]);
         if (info.rows.length === 0) return res.status(404).json({ success: false, message: 'Servicio no encontrado.' });
         const { empresa_id, servicio_id } = info.rows[0];
         const dup = await pool.query(
@@ -1083,6 +1189,7 @@ export const crearEmpresaCRM = async (req, res) => {
 export const eliminarEmpresaCRM = async (req, res) => {
     const client = await pool.connect();
     try {
+        if (await cortaPorOrganizacion(req, res)) return;
         const { empresaId } = req.params;
 
         const existe = await client.query('SELECT id, razon_social FROM empresa WHERE id = $1', [empresaId]);

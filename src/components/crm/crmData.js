@@ -43,7 +43,11 @@ const FALLBACK_RISK = [
 // ==============================================================
 // HOOK PRINCIPAL DEL BUNKER
 // ==============================================================
-export const useBunkerData = () => {
+// `enCartera` decide qué universo de empresas se trae: la cartera vigente (por
+// defecto), las que quedaron fuera de la planilla, o todas. Va como argumento y
+// no como filtro en memoria porque son conjuntos distintos en la base: las de
+// fuera de cartera ni siquiera se descargaban.
+export const useBunkerData = (enCartera = '') => {
   const { user, selectedCompany } = useAuth();
   
   const [clients, setClients] = useState([]);
@@ -72,7 +76,7 @@ export const useBunkerData = () => {
 
     try {
       const empresaId = selectedCompany?.id ?? selectedCompany?.empresaId ?? null;
-      const response = await getCrmDataApi(user.sessionId, empresaId);
+      const response = await getCrmDataApi(user.sessionId, empresaId, enCartera);
       const payload = await response.json();
 
       if (!response.ok || payload?.success === false) {
@@ -106,7 +110,7 @@ export const useBunkerData = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.sessionId, selectedCompany?.id, selectedCompany?.empresaId]);
+  }, [user?.sessionId, selectedCompany?.id, selectedCompany?.empresaId, enCartera]);
 
   // Carga inicial y cuando cambia la sesión o la empresa seleccionada
   useEffect(() => {

@@ -368,7 +368,38 @@ de ir a:
 Hoy esas cuatro preguntas obligan a salir del CRM, cambiar de módulo y volver a
 buscar al mismo cliente a mano.
 
-### F · Qué haría, por orden
+### F · Qué se arregló el mismo día
+
+| Antes | Ahora |
+|---|---|
+| Botón **«Activar Empresa»** junto a la etiqueta *Estado del servicio: ACTIVO* | **«Trabajar con esta empresa»**, con aviso de qué hace: contabilidad, facturación y bancos pasan a esa empresa. Ya no se confunde con reactivar un cliente de baja |
+| El correo solo aparecía **si no había teléfono** | Se ven **los dos**, y el correo se copia de un clic sin abrir la ficha |
+| Barra «70%» sin explicación | Al pasar el cursor **lista los campos que faltan**, uno por uno. Deja de ser un adorno y pasa a ser una lista de tareas |
+| «Score 60» sin explicación | Dice qué significa el número y aclara que **lo calcula la base**, no una persona |
+| Tres etiquetas apiladas: deuda, F29 y cobro del mes | **Dos filas**: arriba la cobranza —deuda y cobro del mes juntos, que es lo que se compara—, abajo el F29. Cada cliente ocupa un tercio menos de alto |
+
+### G · Segunda tanda, el mismo día
+
+| Antes | Ahora |
+|---|---|
+| **81 clientes inalcanzables**: los que salieron de la planilla no aparecían en ninguna pestaña | Botón **«Fuera de cartera»**. Verificado: 133 en cartera + 83 fuera = 216, sin repetidos. Un ex cliente que vuelve ya se encuentra en vez de duplicarse |
+| La ficha solo llevaba a Facturador y Bancos | Cuatro accesos más: **Cobro del mes**, **Correos**, **Tareas** — las preguntas que antes obligaban a salir del CRM y buscar al cliente a mano en otro módulo |
+| El filtro por responsable solo funcionaba dentro de «Creadas por usuarios» | Funciona **en toda la lista**, y la columna «Responsable» se ve siempre |
+
+**Verificado, 10 de 10:** los tres conjuntos de cartera cuadran, ningún cliente se
+contradice con su deuda, Victor recibe 404 al editar, cambiar el plan o eliminar
+un cliente ajeno, el dueño sí puede, el giro ya se vacía y la razón social sigue
+protegida con un aviso claro.
+
+### H · Lo que queda pendiente de la interfaz
+
+1. **Última interacción**, para ver a quién no se contacta hace meses. Requiere
+   traer el dato desde `nota` / interacciones: es cambio de backend, no de pantalla.
+2. **Edición en línea** desde la tabla, sin abrir la ficha.
+3. **Acciones en lote** más allá de registrar pago y eliminar: cambiar plan,
+   asignar responsable, dar de baja.
+
+### H · Qué haría, por orden
 
 1. **Renombrar «Activar Empresa»** — es el único que puede provocar un error real
 2. **Mostrar el correo en la lista** y poder copiarlo de un clic

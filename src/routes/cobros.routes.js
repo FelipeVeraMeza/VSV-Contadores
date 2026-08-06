@@ -4,7 +4,7 @@ import {
   listarCobros, resumenCobros, generarCobros, emitirCobro, cambiarEstadoCobro,
   recalcularMontos, editarMontoCobro,
   previsualizarFacturacion, facturarCobrosMasivo, progresoFacturacion, vincularFolios,
-  sincronizarNotasCredito
+  sincronizarNotasCredito, registrarPagoCliente
 } from '../controllers/cobros.controllers.js';
 
 const router = Router();
@@ -19,6 +19,10 @@ router.post('/recalcular', recalcularMontos);      // recalcula montos desde el 
 router.put('/:id/emitir', emitirCobro);            // registra folio + monto emitido
 router.put('/:id/estado', cambiarEstadoCobro);     // PAGADA | PENDIENTE_RECIBO | PENDIENTE_PAGO
 router.put('/:id/monto', editarMontoCobro);        // corrige el monto a mano
+
+// Registrar el pago de un cliente completo, desde el CRM. Con ?soloVencidos=1
+// salda únicamente los meses ya vencidos y deja lo que aún está en plazo.
+router.put('/empresa/:empresaId/pagar', registrarPagoCliente);
 
 // Facturación masiva (robot SII): previsualizar, disparar, seguir progreso y vincular folios
 router.get('/previsualizar-facturacion', previsualizarFacturacion);

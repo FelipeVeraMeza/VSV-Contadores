@@ -1,17 +1,31 @@
 import React from 'react';
-import { Search, Filter, ChevronDown, ChevronUp, Users, AlertTriangle, FileText, CheckCircle2, Building2, User, MessageSquare, SlidersHorizontal, Layers, Trash2, Download, X, CheckSquare } from 'lucide-react';
+import { Search, Filter, ChevronDown, ChevronUp, Users, AlertTriangle, FileText, CheckCircle2, Building2, User, MessageSquare, SlidersHorizontal, Layers, Trash2, Download, X, CheckSquare, Mail, Copy, Archive } from 'lucide-react';
 import { FilterChip } from '../ui/CrmUI';
+import { toast } from '@/components/ui/use-toast';
+
+// Copiar sin salir de la lista. Es de lo que más se usa —el correo y el RUT— y
+// hasta ahora obligaba a abrir la ficha y seleccionar el texto a mano.
+const copiar = async (texto, titulo) => {
+    try {
+        await navigator.clipboard.writeText(texto);
+        toast({ title: titulo, description: texto });
+    } catch {
+        toast({ variant: 'destructive', title: 'No se pudo copiar' });
+    }
+};
 
 const CrmTableList = ({
     filteredClients, stats, onClientSelect, selectedClientId,
     searchTerm, setSearchTerm, statusFilter, setStatusFilter, typeFilter, setTypeFilter,
     planFilter, setPlanFilter, planes = [],
     vista, setVista, // 'activos' | 'suspendidos' | 'completar' | 'baja' | 'usuarios'
+    carteraModo = '', setCarteraModo = () => {}, // '' = cartera vigente · 'fuera' = fuera de la planilla
     conteos = {}, // KPI: cantidad de clientes por pestaña
     creadorFilter, setCreadorFilter, creadores = [], // Filtro por creador (master)
-    onBulkDelete, onBulkEstadoPago, onCrear,
+    onBulkDelete, onBulkRegistrarPago, onCrear,
     esAdminMaster = false, // Solo el Administrador master ve la columna "Creado por"
-    getCompletitud = () => 0 // Medidor de completitud de ficha (0-100)
+    getCompletitud = () => 0, // Medidor de completitud de ficha (0-100)
+    getFaltantes = () => []   // Qué campos faltan, para poder decirlo
 }) => {
     // Si la pestaña "Creadas por usuarios" desaparece (llegó a 0) mientras estaba
     // seleccionada, la vista quedaría filtrando por algo sin botón visible: se
@@ -89,7 +103,7 @@ const CrmTableList = ({
         onBulkDelete?.(selectedClients);
         clearSel();
     };
-    const bulkEstado = (estado) => { onBulkEstadoPago?.(selectedClients, estado); clearSel(); };
+    const bulkPagar = () => { onBulkRegistrarPago?.(selectedClients); clearSel(); };
 
     const getScoreColor = (score) => {
         if(score >= 80) return 'text-emerald-700 bg-emerald-50 border-emerald-200';
@@ -256,6 +270,25 @@ const CrmTableList = ({
                             </span>
                         </button>
                     )}
+
+                    {/* FUERA DE CARTERA · las empresas que salieron de la planilla de
+                        trabajo. Existen en la base pero no aparecían en ninguna
+                        pestaña: eran 81 fichas inalcanzables. Si un ex cliente
+                        volvía, no había forma de encontrarlo y terminaba duplicado.
+                        Es otro conjunto de datos, no un filtro: cambia la consulta. */}
+                    <button
+                        onClick={() => setCarteraModo(carteraModo === 'fuera' ? '' : 'fuera')}
+                        title={carteraModo === 'fuera'
+                            ? 'Volver a la cartera de trabajo'
+                            : 'Ver las empresas que salieron de la planilla de trabajo'}
+                        className={`flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                            carteraModo === 'fuera'
+                            ? 'bg-slate-700 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'
+                        }`}
+                    >
+                        <Archive size={12} /> Fuera de cartera
+                    </button>
                 </div>
 
                 <div className="flex flex-1 gap-2 bg-white p-2 rounded-xl border border-[#efe8dd]">
@@ -297,16 +330,21 @@ const CrmTableList = ({
                         </select>
                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
                     </div>
-                    {esAdminMaster && vista === 'usuarios' && (
+                    {/* Filtrar por quién lleva cada cliente. Antes solo aparecía dentro
+                        de "Creadas por usuarios", que es una pestaña que casi nunca se
+                        usa: en la práctica no había forma de mirar la lista y ver de
+                        quién es cada cliente. */}
+                    {esAdminMaster && creadores.length > 1 && (
                       <div className="relative shrink-0">
                           <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                           <select
                               value={creadorFilter}
                               onChange={(e) => setCreadorFilter(e.target.value)}
-                              aria-label="Filtrar por creador"
+                              aria-label="Filtrar por quién lleva el cliente"
+                              title="Filtrar por quién lleva el cliente"
                               className="h-full bg-slate-50 border border-[#e5ddd0] rounded-lg pl-9 pr-8 py-2 text-xs text-slate-900 outline-none focus:border-purple-500 appearance-none cursor-pointer"
                           >
-                              <option value="Todos">Todos los creadores</option>
+                              <option value="Todos">Todos los responsables</option>
                               {creadores.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
                           </select>
                           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
@@ -348,11 +386,13 @@ const CrmTableList = ({
                 <div className="flex items-center flex-wrap gap-2 flex-shrink-0 bg-emerald-50 border border-[#199b4d]/30 rounded-xl px-3 py-2">
                     <span className="text-[10px] font-black uppercase tracking-widest text-[#199b4d]">{selectedIds.size} seleccionado(s)</span>
                     <div className="h-4 w-px bg-slate-200 mx-1" />
-                    <button onClick={() => bulkEstado('AL DIA')} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:text-emerald-800 bg-emerald-100 hover:bg-emerald-200 px-2.5 py-1 rounded-lg transition-colors">
-                        <CheckCircle2 size={12} /> Marcar Al Día
-                    </button>
-                    <button onClick={() => bulkEstado('NO PAGADO')} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-red-600 hover:text-red-700 bg-red-100 hover:bg-red-200 px-2.5 py-1 rounded-lg transition-colors">
-                        <AlertTriangle size={12} /> Marcar No Pagado
+                    {/* Registrar el pago marca los cobros pendientes del cliente.
+                        Antes había dos botones —"Al día" y "No pagado"— que escribían
+                        un texto que la lista ni miraba: se marcaba y no pasaba nada.
+                        "No pagado" ya no existe: un cliente debe o no debe según sus
+                        cobros, no según lo que alguien apunte a mano. */}
+                    <button onClick={bulkPagar} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700 hover:text-emerald-800 bg-emerald-100 hover:bg-emerald-200 px-2.5 py-1 rounded-lg transition-colors">
+                        <CheckCircle2 size={12} /> Registrar pago
                     </button>
                     <button onClick={bulkDelete} className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-white bg-red-500 hover:bg-red-600 px-2.5 py-1 rounded-lg transition-colors">
                         <Trash2 size={12} /> Eliminar
@@ -384,7 +424,7 @@ const CrmTableList = ({
                       </th>
                       <th className="px-4 py-2.5 font-black">Contacto y Alertas</th>
                       <th className="px-4 py-2.5 font-black">Estados</th>
-                      {esAdminMaster && vista === 'usuarios' && <th className="px-4 py-2.5 font-black">Creado por</th>}
+                      {esAdminMaster && <th className="px-4 py-2.5 font-black" title="Quién lleva este cliente">Responsable</th>}
                       <th className="px-4 py-2.5 font-black text-right">
                         <button onClick={() => toggleSort('neto')} className="flex items-center gap-1 hover:text-slate-900 transition-colors uppercase tracking-widest ml-auto">
                           Neto mensual <SortIcon col="neto" />
@@ -397,6 +437,7 @@ const CrmTableList = ({
                       const razonSocial = client.razon_social || client.razonSocial || 'Sin Nombre';
                       const rut = client.rut_encrypted || client.rut || '';
                       const completitud = getCompletitud(client);
+                      const faltantes = getFaltantes(client);
                       const tipoCliente = client.tipo_cliente || client.type || 'Empresa';
 
                       const plan = client.plan || client.plan_nombre || 'FREE';
@@ -446,7 +487,10 @@ const CrmTableList = ({
                               <div className="flex flex-col min-w-0">
                                  <span className="font-bold text-slate-900 text-xs uppercase tracking-tight truncate max-w-[220px]" title={razonSocial}>{razonSocial}</span>
                                  <span className="text-[10px] text-slate-500 font-mono tracking-wider">{rut}</span>
-                                 <div className="flex items-center gap-1.5 mt-1" title={`Ficha ${completitud}% completa`}>
+                                 <div className="flex items-center gap-1.5 mt-1"
+                                      title={faltantes.length
+                                        ? `Ficha ${completitud}% completa.\nFalta por registrar:\n· ${faltantes.join('\n· ')}`
+                                        : 'Ficha completa: no falta ningún dato'}>
                                     <div className="h-1 w-16 bg-slate-200 rounded-full overflow-hidden">
                                        <div
                                           className={`h-full rounded-full ${completitud >= 80 ? 'bg-emerald-500' : completitud >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
@@ -462,7 +506,14 @@ const CrmTableList = ({
                           <td className="px-4 py-2.5">
                              <div className="flex flex-col items-start gap-1.5">
                                 <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase border max-w-[130px] truncate ${getPlanColor(plan)}`} title={plan}>{plan}</span>
-                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border ${getScoreColor(score)}`}>Score {score}</span>
+                                {/* El score lo calcula un trigger de la base según los
+                                    estados del cliente; no se escribe a mano. Se explica
+                                    acá porque un número suelto del 10 al 100 no dice nada. */}
+                                <span
+                                    title={`Score ${score} de 100 · ${score >= 80 ? 'el cliente está en orden' : score >= 50 ? 'hay algo que revisar' : 'necesita atención'}\nSe calcula solo a partir de los estados del cliente. No se edita a mano.`}
+                                    className={`text-[9px] font-black px-2 py-0.5 rounded-md border cursor-help ${getScoreColor(score)}`}>
+                                    Score {score}
+                                </span>
                              </div>
                           </td>
 
@@ -473,32 +524,58 @@ const CrmTableList = ({
                                         <AlertTriangle size={10} className="shrink-0" /> {importante}
                                     </span>
                                 )}
-                                {whatsapp && whatsapp !== 'SIN_DATO' && whatsapp !== 'Sin Registro' ? (
+                                {/* Teléfono Y correo, no uno u otro.
+                                    Antes el correo solo aparecía cuando NO había teléfono,
+                                    y el correo es justamente el dato con el que salen los
+                                    recordatorios de pago: había que abrir la ficha para verlo. */}
+                                {whatsapp && whatsapp !== 'SIN_DATO' && whatsapp !== 'Sin Registro' && (
                                     <a href={`https://wa.me/${whatsapp.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[10px] font-bold text-[#199b4d] hover:text-[#147a3d] transition-colors" onClick={(e) => e.stopPropagation()}>
                                         <MessageSquare size={12} className="shrink-0" /> {whatsapp}
                                     </a>
-                                ) : (
-                                    <span className="flex items-center gap-1.5 text-[10px] text-slate-500 truncate max-w-[170px]">{correo || 'Sin contacto'}</span>
+                                )}
+                                {correo && correo !== 'SIN_DATO' ? (
+                                    <span className="flex items-center gap-1 group/mail max-w-[190px]">
+                                        <Mail size={11} className="shrink-0 text-slate-400" />
+                                        <span className="text-[10px] text-slate-500 truncate" title={correo}>{correo}</span>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); copiar(correo, 'Correo copiado'); }}
+                                            title="Copiar el correo"
+                                            aria-label={`Copiar el correo de ${razonSocial}`}
+                                            className="shrink-0 text-slate-300 hover:text-emerald-600 opacity-0 group-hover/mail:opacity-100 transition-opacity">
+                                            <Copy size={11} />
+                                        </button>
+                                    </span>
+                                ) : (!whatsapp || whatsapp === 'SIN_DATO') && (
+                                    <span className="text-[10px] text-slate-400 italic">Sin contacto</span>
                                 )}
                              </div>
                           </td>
 
+                          {/* ESTADOS · dos filas, no tres apiladas.
+                              Antes iban una debajo de otra y la deuda acumulada quedaba
+                              justo encima del cobro del mes: se leían como el mismo dato
+                              dicho dos veces, y cada cliente ocupaba el triple de alto.
+                              Ahora la COBRANZA va arriba —deuda y cobro del mes juntos,
+                              que es lo que se compara— y el F29 abajo, que es otro asunto. */}
                           <td className="px-4 py-2.5">
-                             <div className="flex flex-col items-start gap-1.5">
-                                <span title={pSt.title} className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${pSt.c}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${pSt.dot}`} /> {pSt.label}
-                                </span>
-                                <span className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${fSt.c}`}>
+                             <div className="flex flex-col items-start gap-1">
+                                <div className="flex items-center gap-1 flex-wrap">
+                                    <span title={pSt.title} className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${pSt.c}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${pSt.dot}`} /> {pSt.label}
+                                    </span>
+                                    <span className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${cSt.c}`}
+                                          title={`${cSt.title || ''}\n\nEsto es el cobro de ESTE mes. La etiqueta de al lado es la deuda acumulada: son cosas distintas.`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${cSt.dot}`} /> {cSt.label}
+                                    </span>
+                                </div>
+                                <span className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${fSt.c}`}
+                                      title="Estado del formulario 29 del cliente. No tiene relación con el pago de honorarios.">
                                     <span className={`w-1.5 h-1.5 rounded-full ${fSt.dot}`} /> F29 {estadoFormulario}
-                                </span>
-                                {/* Cobro del mes pasado */}
-                                <span className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${cSt.c}`} title={cSt.title}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${cSt.dot}`} /> {cSt.label}
                                 </span>
                              </div>
                           </td>
 
-                          {esAdminMaster && vista === 'usuarios' && (
+                          {esAdminMaster && (
                             <td className="px-4 py-2.5">
                               {client.usuarioCreador && client.usuarioCreador !== 'Sin asignar' ? (
                                 <span className="flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-md border uppercase bg-purple-50 text-purple-700 border-purple-200 max-w-[140px] truncate" title={client.usuarioCreador}>

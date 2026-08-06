@@ -86,11 +86,21 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
     const { selectedCompany, setSelectedCompany } = useAuth();
     const isSelected = selectedCompany?.id === client?.id;
 
+    // OJO: esto NO activa ni reactiva al cliente. Elige la empresa con la que va
+    // a trabajar el resto de la aplicación (contabilidad, facturación, bancos).
+    //
+    // El botón decía "Activar Empresa" y estaba a cuatro centímetros de la
+    // etiqueta "Estado del servicio: ACTIVO". Cualquiera entendía que servía para
+    // reactivar un cliente dado de baja, que es una acción completamente
+    // distinta y que sí existe, en el lápiz de edición.
     const handleSelectCompany = () => {
         if (setSelectedCompany) {
             setSelectedCompany(client);
             const nombreEmpresa = client.razon_social || client.razonSocial || 'la empresa';
-            toast({ title: "Empresa Activa", description: `Has seleccionado a ${nombreEmpresa} para operar en el sistema.` });
+            toast({
+                title: 'Empresa seleccionada',
+                description: `El resto del sistema —contabilidad, facturación y bancos— trabajará con ${nombreEmpresa}.`,
+            });
         }
     };
     // =========================================
@@ -540,7 +550,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                                 </motion.button>
 
                                 {/* Botón: Ir a Bancos */}
-                                <motion.button 
+                                <motion.button
                                     initial={{ opacity: 0, scale: 0.9 }}
                                     animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0, scale: 0.9 }}
@@ -549,19 +559,60 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                                 >
                                     <Landmark size={14} /> Bancos
                                 </motion.button>
+
+                                {/* La ficha era una isla: para saber qué se le facturó,
+                                    si ya se le cobró el mes o si le llegó el recordatorio,
+                                    había que salir del CRM, cambiar de módulo y volver a
+                                    buscar al mismo cliente a mano. */}
+                                <motion.button
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.9 }}
+                                    onClick={() => navigate('/facturacion?sub=cobros')}
+                                    title="Ver el cobro del mes de este cliente"
+                                    className="hidden md:flex items-center gap-1.5 px-3 py-1.5 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] bg-emerald-500/20 text-emerald-700 border border-emerald-500/30 hover:bg-emerald-600 hover:text-white transition-all shadow-lg"
+                                >
+                                    <DollarSign size={14} /> Cobro del mes
+                                </motion.button>
+
+                                <motion.button
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.9 }}
+                                    onClick={() => navigate('/facturacion?sub=correos')}
+                                    title="Ver los correos que se le enviaron"
+                                    className="hidden md:flex items-center gap-1.5 px-3 py-1.5 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] bg-purple-500/20 text-purple-700 border border-purple-500/30 hover:bg-purple-600 hover:text-white transition-all shadow-lg"
+                                >
+                                    <Send size={14} /> Correos
+                                </motion.button>
+
+                                <motion.button
+                                    initial={{ opacity: 0, scale: 0.9 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.9 }}
+                                    onClick={() => navigate('/tareas?sub=todas')}
+                                    title="Ver las tareas pendientes con este cliente"
+                                    className="hidden md:flex items-center gap-1.5 px-3 py-1.5 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] bg-sky-500/20 text-sky-700 border border-sky-500/30 hover:bg-sky-600 hover:text-white transition-all shadow-lg"
+                                >
+                                    <Layers size={14} /> Tareas
+                                </motion.button>
                             </>
                         )}
                     </AnimatePresence>
 
-                    {/* Botón: Seleccionar / Empresa Activa */}
-                    <button 
+                    {/* Elegir con qué empresa trabaja el resto del sistema.
+                        NO tiene nada que ver con dar de alta o de baja al cliente. */}
+                    <button
                         onClick={handleSelectCompany}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] transition-all ${isSelected ? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-blue-500/20'}`}
+                        title={isSelected
+                            ? 'El resto del sistema ya está trabajando con esta empresa'
+                            : 'Contabilidad, facturación y bancos pasarán a trabajar con esta empresa'}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] transition-all ${isSelected ? 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30' : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'}`}
                     >
                         {isSelected ? (
-                            <><CheckCircle2 size={14} /> Seleccionada</>
+                            <><CheckCircle2 size={14} /> Trabajando con esta</>
                         ) : (
-                            'Activar Empresa'
+                            <><Building2 size={14} /> Trabajar con esta empresa</>
                         )}
                     </button>
 
@@ -622,7 +673,14 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                         {isEditing ? (
                             <>
-                                <SelectField label="Estado de Pago" name="pagoServicio" value={formData.pagoServicio || pagoServicio} isEditing={true} onChange={handleInputChange} options={conActual(OPCIONES_PAGO, formData.pagoServicio || pagoServicio)} />
+                                {/* El estado de pago ya NO se edita: se calcula desde el
+                                    ciclo de cobro. Editarlo a mano era lo que hacía que
+                                    la ficha dijera una cosa y la lista mostrara otra. */}
+                                <div className="flex flex-col gap-1.5">
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estado de Pago</span>
+                                    <span className={`w-fit text-[10px] font-black px-2 py-0.5 rounded-full border uppercase ${(pagoServicio === 'AL DIA') ? 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30' : pagoServicio === 'NO PAGADO' ? 'text-red-600 bg-red-500/10 border-red-500/30' : 'text-slate-600 bg-slate-500/10 border-slate-500/30'}`}>{pagoServicio}</span>
+                                    <span className="text-[9px] text-slate-400 italic leading-tight">Sale del ciclo de cobro. Se cambia registrando el pago, no acá.</span>
+                                </div>
                                 <SelectField label="Estado F29" name="estadoFormulario" value={formData.estadoFormulario || estadoF29} isEditing={true} onChange={handleInputChange} options={conActual(OPCIONES_F29, formData.estadoFormulario || estadoF29)} />
                                 <div className="flex flex-col gap-1.5">
                                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Score (automático)</span>

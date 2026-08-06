@@ -5,7 +5,7 @@ import { LayoutList, BarChart3, Building2, ChevronDown, Search, CheckCircle2, Us
 import { toast } from '@/components/ui/use-toast';
 
 import { useBunkerData } from './crm/crmData';
-import { updateClienteApi, eliminarEmpresaApi } from '@/services/crmService';
+import { updateClienteApi, eliminarEmpresaApi, registrarPagoClienteApi } from '@/services/crmService';
 import CrmImportModal from './crm/modals/CrmImportModal';
 import CrmImportProspectosModal from './crm/modals/CrmImportProspectosModal';
 import CrmErrorBoundary from './crm/CrmErrorBoundary';
@@ -75,22 +75,29 @@ const clasificarCliente = (c) => {
 export const esMoroso = (c) => Boolean(c?.cobroVencido) || Number(c?.deudaVencida) > 0;
 
 // Medidor de completitud de la ficha (0-100). Placeholders del alta no cuentan.
+//
+// Cada campo lleva su nombre para poder decir QUÉ falta. Un "70%" sin más no
+// sirve de nada: el usuario ve un número y no sabe si le falta el correo o la
+// comuna. Con los nombres, la barra pasa de ser un adorno a una lista de tareas.
 const CAMPOS_COMPLETITUD = [
-    (c) => c.razon_social || c.razonSocial,
-    (c) => c.giro,
-    (c) => c.regimen || c.regimen_tributario,
-    (c) => c.telefono || c.telefono_corporativo || c.whatsapp,
-    (c) => c.email_corporativo || c.correo,
-    (c) => c.nombre_rep || c.repNombre,
-    (c) => c.rut_rep_encrypted || c.repRut,
-    (c) => c.direccion,
-    (c) => c.comuna,
-    (c) => c.ciudad,
+    ['Razón social',            (c) => c.razon_social || c.razonSocial],
+    ['Giro',                    (c) => c.giro],
+    ['Régimen tributario',      (c) => c.regimen || c.regimen_tributario],
+    ['Teléfono',                (c) => c.telefono || c.telefono_corporativo || c.whatsapp],
+    ['Correo',                  (c) => c.email_corporativo || c.correo],
+    ['Representante legal',     (c) => c.nombre_rep || c.repNombre],
+    ['RUT del representante',   (c) => c.rut_rep_encrypted || c.repRut],
+    ['Dirección',               (c) => c.direccion],
+    ['Comuna',                  (c) => c.comuna],
+    ['Ciudad',                  (c) => c.ciudad],
 ];
 const PLACEHOLDERS_FICHA = ['SIN ESPECIFICAR', 'SIN DIRECCIÓN', 'SIN DIRECCION', 'SIN NOMBRE'];
 const tieneValorReal = (v) => !isEmptyField(v) && !PLACEHOLDERS_FICHA.includes(String(v).trim().toUpperCase());
+
+const camposFaltantes = (c) => CAMPOS_COMPLETITUD.filter(([, leer]) => !tieneValorReal(leer(c))).map(([n]) => n);
+
 const completitudFicha = (c) => {
-    const llenos = CAMPOS_COMPLETITUD.filter(f => tieneValorReal(f(c))).length;
+    const llenos = CAMPOS_COMPLETITUD.length - camposFaltantes(c).length;
     return Math.round((llenos / CAMPOS_COMPLETITUD.length) * 100);
 };
 
@@ -118,7 +125,11 @@ const CRM = () => {
   // El administrador de la organización ve quién creó cada empresa
   const { user, selectedCompany, setSelectedCompany } = useAuth();
   const esAdminMaster = user?.rol === 'Administrador';
-  const { clients: dbClients, planes, serviciosDisponibles, preciosPlanTramo, cashFlow, services, compliance, risk, chartsSample, loading, refresh } = useBunkerData();
+  // Qué universo de empresas se está mirando. '' es la cartera vigente; 'fuera'
+  // son las que salieron de la planilla y hasta ahora no aparecían en ninguna
+  // pestaña —eran 81— así que un ex cliente que volvía resultaba inencontrable.
+  const [carteraModo, setCarteraModo] = useState('');
+  const { clients: dbClients, planes, serviciosDisponibles, preciosPlanTramo, cashFlow, services, compliance, risk, chartsSample, loading, refresh } = useBunkerData(carteraModo);
   const _saved = useMemo(loadFilters, []);
   const [clients, setClients] = useState([]);
   const [searchTerm, setSearchTerm] = useState(_saved.searchTerm || '');
@@ -195,8 +206,10 @@ const CRM = () => {
             : esCreadaPorUsuario(c) ? false
             : vista === 'todas' ? true
             : clasificarCliente(c) === vista;
-          // Filtro por creador: solo aplica dentro de la pestaña "Creadas por usuarios"
-          const matchCreador = vista !== 'usuarios' || creadorFilter === 'Todos' || c.usuarioCreador === creadorFilter;
+          // Filtro por quién lleva el cliente. Antes solo actuaba dentro de la
+          // pestaña "Creadas por usuarios", así que en la lista normal el selector
+          // no hacía nada aunque estuviera puesto.
+          const matchCreador = creadorFilter === 'Todos' || c.usuarioCreador === creadorFilter;
 
           const term = searchTerm.trim().toLowerCase();
           const termClean = cleanStr(term);
@@ -294,17 +307,42 @@ const CRM = () => {
     refresh();
   };
 
-  const handleBulkEstadoPago = async (clientsArr, estado) => {
+  // REGISTRAR PAGOS EN LOTE
+  //
+  // Antes esto escribía `estado_pago` en la ficha, un texto que la lista ni
+  // siquiera miraba: se marcaba "pagado" y el cliente seguía apareciendo moroso.
+  // Ahora marca los cobros pendientes, que es lo que de verdad significa cobrar.
+  //
+  // Se confirma con el monto exacto porque es plata: dar por pagado lo que no se
+  // pagó hace que se deje de perseguir a quien debe.
+  const handleBulkRegistrarPago = async (clientsArr) => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     if (!user.sessionId) return;
-    let ok = 0;
-    for (const c of clientsArr) {
-      try {
-        await updateClienteApi(user.sessionId, c.id, { ...c, pagoServicio: estado });
-        ok++;
-      } catch { /* sigue */ }
+
+    const deuda = clientsArr.reduce((s, c) => s + (Number(c.deudaTotal) || Number(c.deudaVencida) || 0), 0);
+    const conDeuda = clientsArr.filter(c => (Number(c.deudaTotal) || Number(c.deudaVencida) || 0) > 0);
+
+    if (conDeuda.length === 0) {
+      toast({ title: 'Nada que registrar', description: 'Ninguno de los seleccionados tiene cobros pendientes.' });
+      return;
     }
-    toast({ title: "Estado actualizado", description: `${ok} cliente(s) marcados como ${estado}.` });
+    if (!window.confirm(
+      `Se registrará el pago de ${conDeuda.length} cliente(s) por un total de $${deuda.toLocaleString('es-CL')}.\n\n` +
+      `Sus cobros pendientes quedarán como PAGADOS y dejarán de aparecer en la cobranza.\n\n¿Continuar?`
+    )) return;
+
+    let ok = 0, marcados = 0, total = 0;
+    for (const c of conDeuda) {
+      try {
+        const r = await registrarPagoClienteApi(user.sessionId, c.id);
+        const d = await r.json();
+        if (d.success) { ok++; marcados += d.marcados || 0; total += Number(d.total) || 0; }
+      } catch { /* sigue con el resto */ }
+    }
+    toast({
+      title: 'Pagos registrados',
+      description: `${ok} cliente(s) · ${marcados} cobro(s) por $${total.toLocaleString('es-CL')}.`,
+    });
     refresh();
   };
 
@@ -387,14 +425,17 @@ const CRM = () => {
                 vista={vista}
                 setVista={setVista}
                 conteos={conteos}
+                carteraModo={carteraModo}
+                setCarteraModo={setCarteraModo}
                 creadorFilter={creadorFilter}
                 setCreadorFilter={setCreadorFilter}
                 creadores={creadores}
                 onBulkDelete={handleBulkDelete}
-                onBulkEstadoPago={handleBulkEstadoPago}
+                onBulkRegistrarPago={handleBulkRegistrarPago}
                 onCrear={() => setShowCrearEmpresa(true)}
                 esAdminMaster={esAdminMaster}
                 getCompletitud={completitudFicha}
+                getFaltantes={camposFaltantes}
             />
 
             <AnimatePresence>

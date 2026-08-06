@@ -154,6 +154,56 @@ avance = tareas principales completadas / tareas principales que cuentan
 
 ---
 
+## 5bis. Integrantes del proyecto · el modelo, desde el 5 de agosto
+
+El negocio cambió el modelo de visibilidad. Lo pidió textual la tarea «SISTEMA DE
+TAREAS» del proyecto SOFTWARE SIMPLE PYME:
+
+> «Quien crea la tarea puede definir quién la ve. Al crear un proyecto se debe
+> añadir a los usuarios que uno desee, y todos los usuarios del proyecto pueden
+> ver todas las tareas, a no ser que quien cree la tarea lo configure de otra
+> forma.»
+
+**Antes:** espacio compartido. Cualquier administrador de la organización veía
+todos los proyectos y todas las tareas, y los «integrantes» se deducían de quién
+aparecía en las tareas.
+
+**Ahora:** pertenencia explícita.
+
+| | |
+|---|---|
+| `proyecto_integrante` | Quién pertenece, agregado a mano. **Sin fila, no se ve el proyecto — ni siendo Administrador** |
+| Rol `responsable` | Puede agregar y quitar personas |
+| Rol `integrante` | Ve y trabaja, no reparte accesos |
+| `tarea.visibilidad` | `proyecto` (por defecto) o `privada` |
+
+**Una tarea se ve por exactamente dos caminos:** estar metido en ella
+—responsable, creador o colaborador, que manda siempre— o ser integrante de su
+proyecto y que la tarea no sea privada.
+
+**Por qué los integrantes dejaron de deducirse.** Mientras la lista era
+informativa, deducirla era cómodo. Desde que decide quién ve qué es un permiso, y
+un permiso no puede salir de un efecto secundario: asignarle una tarea a alguien
+le daría acceso al proyecto entero sin que nadie lo decidiera.
+
+**Resguardos:**
+
+- Quien crea el proyecto queda dentro como responsable. Si no, crearía un
+  proyecto que no puede ver.
+- No se puede invitar a alguien de otra organización.
+- No se puede quitar al único responsable: el proyecto quedaría huérfano y sin
+  forma de arreglarlo desde la pantalla.
+- La migración dio de alta a todos los que ya participaban, para que nadie
+  perdiera acceso a lo que estaba usando.
+
+**Subtareas: dos niveles.** El equipo pidió poder crear subtareas dentro de
+subtareas; antes el tope era uno. Dos alcanza para desglosar sin que la pantalla
+se vuelva un árbol ilegible, y el tercero lo rechaza el servidor con un mensaje
+claro. Además **toda subtarea hereda el proyecto de su tarea principal**: antes
+quedaban «sin proyecto» y con el modelo nuevo no las habría visto nadie.
+
+---
+
 ## 6. Permisos
 
 | | Usuario | Administrador |

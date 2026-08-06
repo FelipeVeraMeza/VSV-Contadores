@@ -50,6 +50,9 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
     const [form, setForm] = useState({
         titulo: '', descripcion: '', prioridad: 'media', venceAt: '',
         responsableId: getUser().id || '', proyectoId: proyectoActual || '', colaboradores: [],
+        // «Quien crea la tarea puede definir quién la ve». Por defecto la ve todo
+        // el proyecto; privada la deja solo para responsable, creador y colaboradores.
+        visibilidad: 'proyecto',
     });
     const [saving, setSaving] = useState(false);
     const set = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }));
@@ -99,6 +102,25 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
                             </select>
                         </label>
                     </div>
+                    {/* Quién ve esta tarea. Solo tiene sentido dentro de un proyecto:
+                        una tarea suelta ya es privada por naturaleza. */}
+                    {form.proyectoId && (
+                        <div>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">¿Quién la ve?</span>
+                            <div className="flex gap-1.5 mt-1">
+                                {[
+                                    ['proyecto', 'Todo el proyecto', 'La ven todos los integrantes del proyecto'],
+                                    ['privada', 'Solo los involucrados', 'Solo el responsable, quien la crea y los colaboradores'],
+                                ].map(([v, label, ayuda]) => (
+                                    <button type="button" key={v} title={ayuda}
+                                        onClick={() => setForm(p => ({ ...p, visibilidad: v }))}
+                                        className={`flex-1 text-[10px] font-bold px-2 py-1.5 rounded-lg border transition-colors ${form.visibilidad === v ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-50 border-[#efe8dd] text-slate-500'}`}>
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                     {usuarios.length > 0 && (
                         <div>
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Colaboradores</span>
@@ -138,6 +160,9 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
     const [loading, setLoading] = useState(true);
     const [nuevaSub, setNuevaSub] = useState('');
     const [nuevoCom, setNuevoCom] = useState('');
+    // Candados contra el doble envío: sin esto, dos Enter seguidos duplican.
+    const [enviandoCom, setEnviandoCom] = useState(false);
+    const [creandoSub, setCreandoSub] = useState(false);
     const fileRef = React.useRef(null);
 
     const cargar = useCallback(async () => {
@@ -166,13 +191,21 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
         try { await actualizarTareaApi(getSessionId(), tareaId, { estado }); onChanged(); }
         catch { toast({ variant: 'destructive', title: 'Error' }); cargar(); }
     };
+    // Mismo cuidado que en los comentarios: se vacía primero y se bloquea
+    // mientras viaja, o dos Enter seguidos crean dos subtareas iguales.
     const addSub = async () => {
-        if (!nuevaSub.trim()) return;
+        const titulo = nuevaSub.trim();
+        if (!titulo || creandoSub) return;
+        setCreandoSub(true);
+        setNuevaSub('');
         try {
-            const r = await crearTareaApi(getSessionId(), { titulo: nuevaSub, parentId: tareaId });
+            const r = await crearTareaApi(getSessionId(), { titulo, parentId: tareaId });
             const d = await r.json(); if (!d.success) throw new Error(d.message);
-            setNuevaSub(''); cargar(); onChanged();
-        } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
+            cargar(); onChanged();
+        } catch (e) {
+            setNuevaSub(titulo);
+            toast({ variant: 'destructive', title: 'No se pudo crear la subtarea', description: e.message });
+        } finally { setCreandoSub(false); }
     };
     const toggleSub = async (s) => {
         const nuevo = s.estado === 'completada' ? 'pendiente' : 'completada';
@@ -184,13 +217,28 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
         setSubs(prev => prev.filter(x => x.id !== s.id));
         try { await eliminarTareaApi(getSessionId(), s.id); cargar(); onChanged(); } catch { cargar(); }
     };
+    // ⚠️ EL COMENTARIO SE VACÍA ANTES DE ENVIAR, NO DESPUÉS.
+    //
+    // Antes se limpiaba al volver la respuesta. En esos dos segundos el texto
+    // seguía en el campo, así que un segundo Enter —o el clic en el botón
+    // después de haber apretado Enter— pasaba el `if` y mandaba el mismo
+    // comentario de nuevo. Mati lo dejó duplicado a las 13:37:57 y 13:37:59.
+    //
+    // Ahora se vacía primero y se bloquea mientras viaja. Si falla, el texto se
+    // devuelve al campo para no perder lo escrito.
     const addCom = async () => {
-        if (!nuevoCom.trim()) return;
+        const texto = nuevoCom.trim();
+        if (!texto || enviandoCom) return;
+        setEnviandoCom(true);
+        setNuevoCom('');
         try {
-            const r = await agregarComentarioApi(getSessionId(), tareaId, nuevoCom);
+            const r = await agregarComentarioApi(getSessionId(), tareaId, texto);
             const d = await r.json(); if (!d.success) throw new Error(d.message);
-            setComs(prev => [...prev, d.comentario]); setNuevoCom('');
-        } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
+            setComs(prev => [...prev, d.comentario]);
+        } catch (e) {
+            setNuevoCom(texto);   // no se pierde lo escrito
+            toast({ variant: 'destructive', title: 'No se pudo comentar', description: e.message });
+        } finally { setEnviandoCom(false); }
     };
     const delCom = async (c) => {
         setComs(prev => prev.filter(x => x.id !== c.id));
@@ -319,13 +367,47 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                         <span className="text-slate-700 block pt-1">{(data.colaboradores || []).map(c => c.nombre).join(', ') || '—'}</span>
                     </div>
                 </div>
-                {data.descripcion && <div><span className="text-[9px] text-slate-400 uppercase block mb-1">Descripción</span><p className="text-xs text-slate-700 whitespace-pre-wrap">{data.descripcion}</p></div>}
+                {/* DESCRIPCIÓN · editable, y también en las subtareas.
+                    Antes solo se mostraba si ya tenía texto, así que una subtarea
+                    nacida solo con título no había forma de describirla nunca. */}
+                <div>
+                    <span className="text-[9px] text-slate-400 uppercase block mb-1">Descripción</span>
+                    <textarea
+                        defaultValue={data.descripcion || ''}
+                        onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            if (v !== (data.descripcion || '')) guardarCampo('descripcion', v);
+                        }}
+                        rows={data.descripcion ? 3 : 2}
+                        placeholder="Escribe de qué se trata..."
+                        className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-emerald-500 resize-y"
+                    />
+                </div>
 
-                {/* Subtareas */}
-                {/* Un solo nivel de anidación: dentro de una subtarea no se ofrece
-                    crear otra. Sin ese tope se puede anidar sin fin y la pantalla
-                    deja de entenderse. */}
-                {!data.parentId && (
+                {/* QUIÉN LA VE · solo aplica si está dentro de un proyecto. */}
+                {data.proyectoId && (
+                    <div>
+                        <span className="text-[9px] text-slate-400 uppercase block mb-1">¿Quién la ve?</span>
+                        <div className="flex gap-1.5">
+                            {[
+                                ['proyecto', 'Todo el proyecto'],
+                                ['privada', 'Solo los involucrados'],
+                            ].map(([v, label]) => (
+                                <button key={v} onClick={() => guardarCampo('visibilidad', v)}
+                                    className={`flex-1 text-[10px] font-bold px-2 py-1.5 rounded-lg border transition-colors ${(data.visibilidad || 'proyecto') === v ? 'bg-slate-900 border-slate-900 text-white' : 'bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Subtareas · hasta DOS niveles.
+                    El equipo pidió poder crear subtareas dentro de subtareas
+                    («CREAR SUB TAREAS EN LAS SUBTAREAS»). Antes el tope era uno.
+                    Dos alcanza para desglosar un trabajo sin que la pantalla se
+                    vuelva un árbol ilegible; el tercero lo rechaza el servidor. */}
+                {data.puedeTenerSubtareas !== false && (
                 <div>
                     <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5 mb-2"><ListChecks size={13} /> Subtareas ({subs.filter(s => s.estado === 'completada').length}/{subs.length})</span>
                     <div className="space-y-1">
@@ -346,8 +428,12 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                         ))}
                     </div>
                     <div className="flex gap-2 mt-2">
-                        <input value={nuevaSub} onChange={(e) => setNuevaSub(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addSub()} placeholder="Nueva subtarea..." className="flex-1 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500" />
-                        <button onClick={addSub} className="bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg px-2.5"><Plus size={14} /></button>
+                        <input value={nuevaSub} onChange={(e) => setNuevaSub(e.target.value)} disabled={creandoSub}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSub(); } }}
+                            placeholder="Nueva subtarea..." className="flex-1 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 disabled:opacity-60" />
+                        <button onClick={addSub} disabled={creandoSub || !nuevaSub.trim()} className="bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-600 rounded-lg px-2.5">
+                            {creandoSub ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                        </button>
                     </div>
                 </div>
                 )}
@@ -403,8 +489,12 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                         {coms.length === 0 && <p className="text-[10px] text-slate-400 italic">Aún no hay comentarios.</p>}
                     </div>
                     <div className="flex gap-2">
-                        <input value={nuevoCom} onChange={(e) => setNuevoCom(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addCom()} placeholder="Escribe un comentario..." className="flex-1 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500" />
-                        <button onClick={addCom} disabled={!nuevoCom.trim()} className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-2.5"><Send size={14} /></button>
+                        <input value={nuevoCom} onChange={(e) => setNuevoCom(e.target.value)} disabled={enviandoCom}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCom(); } }}
+                            placeholder="Escribe un comentario..." className="flex-1 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 disabled:opacity-60" />
+                        <button onClick={addCom} disabled={enviandoCom || !nuevoCom.trim()} className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg px-2.5">
+                            {enviandoCom ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -465,6 +555,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
     };
     const [nuevoProy, setNuevoProy] = useState(false);
     const [proyNombre, setProyNombre] = useState('');
+    const [creandoProy, setCreandoProy] = useState(false);
 
     // Todos los filtros viajan al servidor (RNF-TA-02). Antes se traía la lista
     // completa y se filtraba en el navegador: con pocas tareas da igual, con
@@ -564,13 +655,21 @@ const TareasPanel = ({ modo = 'todas' }) => {
             cargar();
         } catch (err) { toast({ variant: 'destructive', title: 'Error', description: err.message }); cargar(); }
     };
+    // Acá empezó el problema de los duplicados: sin candado, dos Enter seguidos
+    // creaban dos proyectos iguales. La base ahora también lo impide.
     const crearProyecto = async () => {
-        if (!proyNombre.trim()) return;
+        const nombre = proyNombre.trim();
+        if (!nombre || creandoProy) return;
+        setCreandoProy(true);
+        setProyNombre('');
         try {
-            const r = await crearProyectoApi(getSessionId(), { nombre: proyNombre });
+            const r = await crearProyectoApi(getSessionId(), { nombre });
             const d = await r.json(); if (!d.success) throw new Error(d.message);
-            setProyNombre(''); setNuevoProy(false); cargar();
-        } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
+            setNuevoProy(false); cargar();
+        } catch (e) {
+            setProyNombre(nombre);
+            toast({ variant: 'destructive', title: 'No se pudo crear el proyecto', description: e.message });
+        } finally { setCreandoProy(false); }
     };
     const borrarProyecto = async (p, e) => {
         e.stopPropagation();
@@ -640,7 +739,9 @@ const TareasPanel = ({ modo = 'todas' }) => {
                     </div>
                     {nuevoProy && (
                         <div className="flex gap-1">
-                            <input value={proyNombre} onChange={(e) => setProyNombre(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && crearProyecto()} placeholder="Nombre..." className="flex-1 min-w-0 bg-slate-50 border border-[#efe8dd] rounded-lg px-2 py-1 text-[11px] outline-none focus:border-emerald-500" autoFocus />
+                            <input value={proyNombre} onChange={(e) => setProyNombre(e.target.value)} disabled={creandoProy}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); crearProyecto(); } }}
+                                placeholder="Nombre..." className="flex-1 min-w-0 bg-slate-50 border border-[#efe8dd] rounded-lg px-2 py-1 text-[11px] outline-none focus:border-emerald-500 disabled:opacity-60" autoFocus />
                             <button onClick={crearProyecto} className="bg-emerald-600 text-white rounded-lg px-2"><Check size={12} /></button>
                         </div>
                     )}

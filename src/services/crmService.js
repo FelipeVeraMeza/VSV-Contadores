@@ -1,7 +1,10 @@
 import { fetchWithAuth } from './apiClient';
 
-export const getCrmDataApi = (sessionId, empresaId = null) => {
-  return fetchWithAuth('/clientes/crm', sessionId, {}, empresaId);
+// `enCartera`: '' (la cartera vigente, por defecto) · 'fuera' (las que salieron
+// de la planilla y no aparecían en ninguna pestaña) · 'todas'.
+export const getCrmDataApi = (sessionId, empresaId = null, enCartera = '') => {
+  const qs = enCartera ? `?enCartera=${encodeURIComponent(enCartera)}` : '';
+  return fetchWithAuth(`/clientes/crm${qs}`, sessionId, {}, empresaId);
 };
 
 export const updateClienteApi = (sessionId, empresaId, clientData) => {
@@ -170,3 +173,27 @@ export const actualizarProyectoApi = (sessionId, id, data) =>
 
 export const eliminarProyectoApi = (sessionId, id) =>
   fetchWithAuth(`/crm/proyectos/${id}`, sessionId, { method: 'DELETE' });
+
+// ---- Cobranza desde el CRM ----
+// «Este cliente pagó» se traduce en el servidor a marcar sus cobros pendientes.
+// El estado de pago que muestra la ficha se calcula desde ahí: no se edita a mano.
+export const registrarPagoClienteApi = (sessionId, empresaId, soloVencidos = false) =>
+  fetchWithAuth(`/cobros/empresa/${empresaId}/pagar${soloVencidos ? '?soloVencidos=1' : ''}`,
+    sessionId, { method: 'PUT', body: {} });
+
+// ---- Integrantes del proyecto ----
+// Pertenecer al proyecto es lo que da acceso a ver sus tareas, así que esto no
+// es una lista informativa: es repartir permisos. Solo el responsable puede.
+export const agregarIntegranteApi = (sessionId, proyectoId, usuarioId, rol = 'integrante') =>
+  fetchWithAuth(`/crm/proyectos/${proyectoId}/integrantes`, sessionId, { method: 'POST', body: { usuarioId, rol } });
+
+export const quitarIntegranteApi = (sessionId, proyectoId, usuarioId) =>
+  fetchWithAuth(`/crm/proyectos/${proyectoId}/integrantes/${usuarioId}`, sessionId, { method: 'DELETE' });
+
+// ---- Notificaciones (la campana del encabezado) ----
+export const listarNotificacionesApi = (sessionId) =>
+  fetchWithAuth('/crm/notificaciones', sessionId);
+
+// Sin id marca todas como leídas.
+export const marcarNotificacionesApi = (sessionId, id = null) =>
+  fetchWithAuth(`/crm/notificaciones/${id ? `${id}/leer` : 'leer'}`, sessionId, { method: 'PATCH', body: {} });

@@ -420,6 +420,70 @@ export const cambiarEstadoCobro = async (req, res) => {
 };
 
 // ============================================================================
+// REGISTRAR EL PAGO DE UN CLIENTE DESDE EL CRM
+// ----------------------------------------------------------------------------
+// En el CRM se trabaja por cliente, no por cobro: quien atiende no sabe (ni
+// tiene por qué saber) qué folio corresponde a qué mes. Este endpoint traduce
+// «este cliente pagó» a lo que hay que tocar de verdad, que son sus cobros
+// pendientes.
+//
+// Devuelve SIEMPRE qué se marcó y por cuánto, para que la pantalla pueda
+// confirmarlo antes y dejar constancia después. Registrar un pago que no
+// ocurrió es tan grave como no registrar uno que sí.
+// ============================================================================
+export const registrarPagoCliente = async (req, res) => {
+    try {
+        const { empresaId } = req.params;
+        const organizacionId = req.user?.organizacionId || null;
+        // `soloVencidos`: por defecto se salda TODO lo pendiente. Con esta bandera
+        // se saldan solo los meses ya vencidos y se deja lo que aún está en plazo.
+        const soloVencidos = req.query.soloVencidos === '1' || req.body?.soloVencidos === true;
+
+        const filtroVencidos = soloVencidos ? `AND cm.fecha_vencimiento < CURRENT_DATE` : '';
+
+        const { rows } = await pool.query(
+            `UPDATE cobro_mensual cm
+                SET estado = 'PAGADA',
+                    fecha_pago = COALESCE(cm.fecha_pago, NOW()),
+                    updated_at = NOW()
+              FROM empresa e
+              WHERE cm.empresa_id = e.id
+                AND e.id = $1
+                AND cm.estado = 'PENDIENTE_PAGO'
+                AND ($2::uuid IS NULL OR cm.organizacion_id = $2)
+                ${filtroVencidos}
+              RETURNING cm.id, cm.folio, to_char(cm.periodo,'YYYY-MM') AS periodo,
+                        COALESCE(cm.monto_facturado, cm.monto_esperado) AS monto`,
+            [empresaId, organizacionId]
+        );
+
+        const total = rows.reduce((s, r) => s + Number(r.monto || 0), 0);
+
+        if (rows.length) {
+            await registrar(req, {
+                modulo: 'cobros', accion: 'registrar_pago',
+                entidad: 'empresa', entidadId: empresaId,
+                descripcion: `Pago registrado: ${rows.length} cobro(s) por $${total.toLocaleString('es-CL')}`,
+                detalle: { periodos: rows.map(r => r.periodo), folios: rows.map(r => r.folio), total },
+            });
+        }
+
+        return res.json({
+            success: true,
+            marcados: rows.length,
+            total,
+            periodos: rows.map(r => r.periodo),
+            message: rows.length
+                ? `${rows.length} cobro(s) marcados como pagados por $${total.toLocaleString('es-CL')}.`
+                : 'Este cliente no tenía cobros pendientes.',
+        });
+    } catch (err) {
+        console.error('❌ Error registrando el pago del cliente:', err.message);
+        return res.status(500).json({ success: false, message: 'No se pudo registrar el pago.' });
+    }
+};
+
+// ============================================================================
 // FACTURACIÓN MASIVA — emite en lote las facturas de honorarios de los cobros
 // POR_EMITIR del mes, reutilizando el robot del SII (factura afecta 33).
 // Flujo: previsualizar (revisar/editar/quitar/incluir) → facturar la lista final.

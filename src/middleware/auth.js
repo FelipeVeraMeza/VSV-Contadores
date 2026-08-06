@@ -14,7 +14,8 @@ export async function requireSession(req, res, next) {
 
   try {
     const query = `
-      SELECT s.usuario_id, u.rol, u.nombre, u.organizacion_id, s.expires_at
+      SELECT s.usuario_id, u.rol, u.nombre, u.organizacion_id, s.expires_at,
+             u.ve_solo_empresas_asignadas
       FROM sessions s
       JOIN usuario u ON s.usuario_id = u.id
       WHERE s.session_id = $1
@@ -46,6 +47,8 @@ export async function requireSession(req, res, next) {
       rol: session.rol,
       nombre: session.nombre,
       organizacionId: session.organizacion_id || null,
+      // Empieza en cero dentro del equipo: solo ve las empresas que se le asignen.
+      veSoloEmpresasAsignadas: session.ve_solo_empresas_asignadas === true,
       sessionId: sessionId,
       empresaId: empresaIdFromHeader || null
     };

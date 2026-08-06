@@ -4,12 +4,19 @@ import {
     obtenerTarea, agregarComentario, eliminarComentario,
     subirAdjunto, descargarAdjunto, eliminarAdjunto,
     listarProyectos, crearProyecto, actualizarProyecto, eliminarProyecto,
-    metricasDashboard, guardarMeta, resumenInicio
+    agregarIntegrante, quitarIntegrante,
+    metricasDashboard, guardarMeta, resumenInicio,
+    listarNotificaciones, marcarNotificaciones,
 } from '../controllers/crm.controllers.js';
 import { requireSession, requireModulo } from '../middleware/auth.js';
 import { exigirPermisoTarea } from '../utils/permisosTarea.js';
 
 const router = Router();
+
+// Notificaciones (la campana). Van antes de /tareas/:id para no confundirse.
+router.get('/notificaciones', requireSession, listarNotificaciones);
+router.patch('/notificaciones/leer', requireSession, marcarNotificaciones);
+router.patch('/notificaciones/:id/leer', requireSession, marcarNotificaciones);
 
 // Resumen de la pantalla Inicio del módulo de Tareas
 router.get('/tareas/inicio', requireSession, resumenInicio);
@@ -23,6 +30,9 @@ router.get('/proyectos', requireSession, listarProyectos);
 router.post('/proyectos', requireSession, crearProyecto);
 router.put('/proyectos/:id', requireSession, actualizarProyecto);
 router.delete('/proyectos/:id', requireSession, eliminarProyecto);
+// Integrantes: quién pertenece al proyecto y por lo tanto qué puede ver.
+router.post('/proyectos/:id/integrantes', requireSession, agregarIntegrante);
+router.delete('/proyectos/:id/integrantes/:usuarioId', requireSession, quitarIntegrante);
 
 // Comentarios de tarea
 router.delete('/comentarios/:comentarioId', requireSession, eliminarComentario);

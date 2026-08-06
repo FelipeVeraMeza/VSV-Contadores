@@ -7,9 +7,12 @@
 //
 // DOS COSAS QUE VALE LA PENA SABER AL LEER ESTO:
 //
-// · Los INTEGRANTES no se administran. Salen de quienes realmente participan en
-//   las tareas del proyecto (responsables y colaboradores, subtareas incluidas).
-//   Es un dato menos que mantener y que nunca queda desactualizado.
+// · Los INTEGRANTES se administran a mano y DECIDEN QUIÉN VE EL PROYECTO. Antes
+//   se deducían de quién participaba en las tareas, que era cómodo mientras la
+//   lista fuera informativa. Desde el 05-08-2026 la pertenencia es un permiso, y
+//   un permiso no puede salir de un efecto secundario: asignarle una tarea a
+//   alguien le daría acceso al proyecto entero sin que nadie lo decidiera.
+//   Solo el responsable del proyecto reparte accesos.
 //
 // · El AVANCE cuenta solo tareas principales, sin las archivadas ni las
 //   canceladas. La regla completa está en docs/tareas-requerimientos.md §4 y se
@@ -24,6 +27,7 @@ import {
 import { toast } from '@/components/ui/use-toast';
 import {
     listarProyectosApi, crearProyectoApi, actualizarProyectoApi, eliminarProyectoApi,
+    agregarIntegranteApi, quitarIntegranteApi,
 } from '@/services/crmService';
 import { getCatalogosApi as getCatalogosPersonasApi } from '@/services/personaService';
 
@@ -153,9 +157,103 @@ const ProyectoModal = ({ proyecto, usuarios, onClose, onGuardado }) => {
 };
 
 // ---------------------------------------------------------------
+// Integrantes · quién pertenece al proyecto
+// ---------------------------------------------------------------
+// Esto NO es una lista de adorno: pertenecer al proyecto es lo que da acceso a
+// ver sus tareas. Por eso solo lo abre quien es responsable, y se avisa en
+// palabras claras qué implica agregar a alguien.
+const IntegrantesModal = ({ proyecto, usuarios, onClose, onCambio }) => {
+    const [trabajando, setTrabajando] = useState(false);
+    const [aInvitar, setAInvitar] = useState('');
+    const integrantes = proyecto.integrantes || [];
+    const yaEstan = new Set(integrantes.map(i => i.id));
+    const disponibles = usuarios.filter(u => !yaEstan.has(u.id));
+
+    const invitar = async () => {
+        if (!aInvitar || trabajando) return;
+        setTrabajando(true);
+        try {
+            const r = await agregarIntegranteApi(getSessionId(), proyecto.id, aInvitar);
+            const d = await r.json(); if (!d.success) throw new Error(d.message);
+            setAInvitar('');
+            onCambio(d.proyecto);
+            toast({ title: 'Persona agregada', description: 'Ya puede ver el proyecto y sus tareas.' });
+        } catch (e) { toast({ variant: 'destructive', title: 'No se pudo agregar', description: e.message }); }
+        finally { setTrabajando(false); }
+    };
+
+    const quitar = async (i) => {
+        if (!window.confirm(`¿Quitar a ${i.nombre} del proyecto?\n\nDejará de ver este proyecto y sus tareas.`)) return;
+        setTrabajando(true);
+        try {
+            const r = await quitarIntegranteApi(getSessionId(), proyecto.id, i.id);
+            const d = await r.json(); if (!d.success) throw new Error(d.message);
+            onCambio(d.proyecto);
+            toast({ title: 'Persona quitada' });
+        } catch (e) { toast({ variant: 'destructive', title: 'No se pudo quitar', description: e.message }); }
+        finally { setTrabajando(false); }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[130] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+            <div className="w-full max-w-md bg-white rounded-2xl border border-[#efe8dd] shadow-2xl p-5" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Integrantes</h3>
+                    <button onClick={onClose} className="text-slate-400 hover:text-red-500"><X size={18} /></button>
+                </div>
+                <p className="text-[11px] text-slate-500 mb-4">
+                    Solo estas personas ven <b>{proyecto.nombre}</b> y sus tareas. Ni siquiera un
+                    administrador lo ve si no está en la lista.
+                </p>
+
+                <div className="flex flex-col gap-1.5 mb-4 max-h-56 overflow-y-auto">
+                    {integrantes.map(i => (
+                        <div key={i.id} className="flex items-center gap-2 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5">
+                            <span className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-[9px] font-black text-slate-600 shrink-0">
+                                {iniciales(i.nombre)}
+                            </span>
+                            <span className="text-xs font-bold text-slate-700 truncate flex-1">{i.nombre}</span>
+                            {i.rol === 'responsable' && (
+                                <span className="text-[8px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded">
+                                    Responsable
+                                </span>
+                            )}
+                            {proyecto.puedoAdministrar && (
+                                <button onClick={() => quitar(i)} disabled={trabajando}
+                                    title={`Quitar a ${i.nombre}`}
+                                    className="text-slate-300 hover:text-red-500 shrink-0"><Trash2 size={13} /></button>
+                            )}
+                        </div>
+                    ))}
+                </div>
+
+                {proyecto.puedoAdministrar ? (
+                    disponibles.length > 0 ? (
+                        <div className="flex gap-2">
+                            <select value={aInvitar} onChange={(e) => setAInvitar(e.target.value)} className={`${inp} cursor-pointer`}>
+                                <option value="">Agregar a alguien...</option>
+                                {disponibles.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                            </select>
+                            <button onClick={invitar} disabled={!aInvitar || trabajando}
+                                className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg px-3 text-[10px] font-black uppercase tracking-widest">
+                                {trabajando ? <Loader2 size={14} className="animate-spin" /> : 'Agregar'}
+                            </button>
+                        </div>
+                    ) : <p className="text-[11px] text-slate-400 italic">Ya están todos los de tu organización.</p>
+                ) : (
+                    <p className="text-[11px] text-slate-400 italic">
+                        Solo el responsable del proyecto puede agregar o quitar personas.
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// ---------------------------------------------------------------
 // Tarjeta de un proyecto
 // ---------------------------------------------------------------
-const TarjetaProyecto = ({ p, puedeAdministrar, onEditar, onEliminar, onAbrirTareas }) => {
+const TarjetaProyecto = ({ p, puedeAdministrar, onEditar, onEliminar, onAbrirTareas, onIntegrantes }) => {
     const estado = ESTADOS[p.estado] || ESTADOS.activo;
     const color = p.color || '#199b4d';
     const vencido = p.fechaTermino && new Date(p.fechaTermino) < new Date() && p.estado === 'activo';
@@ -217,11 +315,13 @@ const TarjetaProyecto = ({ p, puedeAdministrar, onEditar, onEliminar, onAbrirTar
                     ) : <span className="text-[10px] text-slate-300 italic">Sin fechas</span>}
                 </div>
 
-                {/* Integrantes: derivados de quienes participan en las tareas. */}
-                <div className="flex items-center -space-x-1.5 shrink-0" title={(p.integrantes || []).map(i => i.nombre).join(', ')}>
+                {/* Integrantes: quiénes ven este proyecto. Se pulsa para administrarlos. */}
+                <button onClick={() => onIntegrantes(p)}
+                    title={`${(p.integrantes || []).map(i => i.nombre).join(', ')}\n\nPulsa para administrar quién ve este proyecto`}
+                    className="flex items-center -space-x-1.5 shrink-0 hover:opacity-80 transition-opacity">
                     {(p.integrantes || []).slice(0, 4).map(i => (
                         <span key={i.id}
-                            className="w-6 h-6 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-[8px] font-black text-slate-600">
+                            className={`w-6 h-6 rounded-full border-2 border-white flex items-center justify-center text-[8px] font-black ${i.rol === 'responsable' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
                             {iniciales(i.nombre)}
                         </span>
                     ))}
@@ -233,7 +333,8 @@ const TarjetaProyecto = ({ p, puedeAdministrar, onEditar, onEliminar, onAbrirTar
                     {(p.integrantes || []).length === 0 && (
                         <span className="text-[10px] text-slate-300 italic flex items-center gap-1"><Users size={10} /> Sin integrantes</span>
                     )}
-                </div>
+                    {p.puedoAdministrar && <span className="w-6 h-6 rounded-full bg-white border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400"><Plus size={11} /></span>}
+                </button>
             </div>
         </div>
     );
@@ -255,6 +356,7 @@ const ProyectosPanel = () => {
     const [busq, setBusq] = useState('');
     const [filtroEstado, setFiltroEstado] = useState('vigentes'); // vigentes | todos | <estado>
     const [modal, setModal] = useState(null); // null | {} | proyecto
+    const [integrantesDe, setIntegrantesDe] = useState(null); // proyecto cuyo acceso se administra
 
     const cargar = useCallback(async () => {
         setLoading(true);
@@ -354,7 +456,8 @@ const ProyectosPanel = () => {
                         {lista.map(p => (
                             <TarjetaProyecto key={p.id} p={p}
                                 puedeAdministrar={puedeAdministrar}
-                                onEditar={setModal} onEliminar={eliminar} onAbrirTareas={abrirTareas} />
+                                onEditar={setModal} onEliminar={eliminar} onAbrirTareas={abrirTareas}
+                                onIntegrantes={setIntegrantesDe} />
                         ))}
                     </div>
                 )}
@@ -366,6 +469,20 @@ const ProyectosPanel = () => {
                     usuarios={usuarios}
                     onClose={() => setModal(null)}
                     onGuardado={cargar}
+                />
+            )}
+
+            {integrantesDe && (
+                <IntegrantesModal
+                    proyecto={integrantesDe}
+                    usuarios={usuarios}
+                    onClose={() => setIntegrantesDe(null)}
+                    onCambio={(actualizado) => {
+                        // Se refresca el modal con lo que devolvió el servidor y también
+                        // la grilla de atrás, para que los avatares queden al día.
+                        setIntegrantesDe(actualizado);
+                        setProyectos(prev => prev.map(p => p.id === actualizado.id ? actualizado : p));
+                    }}
                 />
             )}
         </div>
