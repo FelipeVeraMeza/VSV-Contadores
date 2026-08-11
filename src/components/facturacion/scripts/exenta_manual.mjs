@@ -4,6 +4,8 @@ import pkg from 'pg';
 import crypto from 'crypto'; 
 import { encrypt } from '../../../utils/crypto.js'; 
 import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
+// Bajar el PDF del documento emitido, igual que la factura.
+import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
 
 const { Client } = pkg;
 dotenv.config();
@@ -282,6 +284,14 @@ export async function emitirExentaPuppeteer(datos, credSii = credencialesDelSist
         }
         if (!folio) throw new Error("No se pudo obtener el folio de la Exenta.");
         console.log(`🎉 ¡ÉXITO ABSOLUTO! Folio Exenta N°: ${folio}`);
+
+        // Bajar el PDF. Las exentas no mandan correo, así que este era el único
+        // camino posible y no existía: se emitían y no quedaba ningún archivo.
+        let rutaPdf = null;
+        try {
+            const pdf = await descargarDocumentoSii(page, folio, 34);
+            if (pdf) rutaPdf = pdf.rutaPC;
+        } catch { /* la exenta ya está emitida: no se invalida por esto */ }
 
         // ==============================================================
         // 💾 7. LÓGICA DE BASE DE DATOS (AUTO-CREACIÓN E HISTORIAL)

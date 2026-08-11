@@ -92,3 +92,11 @@ export async function enviarDteABackend(dteJson) {
   }
   return res.json();
 }
+
+// Avance de la factura INDIVIDUAL, para que la pantalla diga en qué paso va.
+export const getProgresoManual   = ()        => dteFetch('/progreso-manual');
+
+// Descargar el PDF de un folio. El servidor lo va a buscar al SII en el momento;
+// no hay copia guardada, así que esto tarda entre 30 y 90 segundos.
+export const descargarPdfFolio = (folio, tipo = 33) =>
+  dteFetch(`/pdf/${folio}?tipo=${tipo}`);

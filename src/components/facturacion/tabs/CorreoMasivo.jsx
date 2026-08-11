@@ -15,12 +15,14 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Mail, Loader2, CheckCircle2, AlertCircle, RefreshCw, Send,
+  Search, X, Upload, FileSpreadsheet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth.jsx';
 import * as apiDTE from '@/services/apiDTE.js';
+import { conciliarCobranzaApi } from '@/services/cobrosService';
 
 // Estado del COBRO de cada folio (no del correo). Sale de `cobro_mensual`.
 const ESTILO_PAGO = {
@@ -75,6 +77,12 @@ const CorreoMasivo = () => {
   const [manualFolio, setManualFolio] = useState('');
   const [selectedFolios, setSelectedFolios] = useState(leerSeleccionGuardada);
   const [isReenviandoMasivo, setIsReenviandoMasivo] = useState(false);
+  // Buscar dentro de la lista. Antes solo se podía marcar de a uno a ojo.
+  const [busqueda, setBusqueda] = useState('');
+  // Resultado de cruzar la planilla de cobranza contra la pantalla.
+  const [conciliacion, setConciliacion] = useState(null);
+  const [conciliando, setConciliando] = useState(false);
+  const archivoRef = useRef(null);
 
   const [isEnviandoRecordatorios, setIsEnviandoRecordatorios] = useState(false);
   const [progresoRecordatorio, setProgresoRecordatorio] = useState(null);
@@ -155,6 +163,135 @@ const CorreoMasivo = () => {
     } finally {
       setReenviandoFolio(null);
     }
+  };
+
+  // ==========================================================================
+  // CARGAR LA PLANILLA DE COBRANZA DEL MES
+  // --------------------------------------------------------------------------
+  // La planilla lista a los que DEBEN. Todo el resto del mes, por definición,
+  // ya pagó. Antes eso se traducía a mano: buscar 39 empresas de a una en una
+  // lista de 169 y marcarlas.
+  //
+  // Acá NO se cambia nada todavía. Se cruza, se muestra qué pasaría, y recién
+  // después se confirma. Marcar un cobro como pagado toca plata: si se hace
+  // sobre quien no corresponde, el cliente deja de aparecer como deudor y nadie
+  // vuelve a cobrarle.
+  //
+  // El cruce es por RUT, no por nombre: "ANITA MARIA VEAS VILLAGRA ASESORIAS
+  // E.I.R.L" en la planilla y en la base no se escriben igual, y un nombre mal
+  // pareado marcaría pagado al cliente equivocado.
+  // ==========================================================================
+  const soloRut = (v) => String(v || '').replace(/[.\-\s]/g, '').toUpperCase();
+
+  const cargarPlanillaCobranza = async (file) => {
+    if (!file) return;
+    setConciliando(true);
+    try {
+      const XLSX = await import('xlsx');
+      const wb = XLSX.read(await file.arrayBuffer());
+      const filasExcel = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: null });
+      if (!filasExcel.length) throw new Error('La planilla está vacía.');
+
+      // La columna del RUT se busca por nombre, sin exigir que se llame exacto.
+      const columnas = Object.keys(filasExcel[0]);
+      const colRut = columnas.find(c => /rut/i.test(c));
+      if (!colRut) {
+        throw new Error(`La planilla no tiene una columna de RUT. Trae: ${columnas.join(', ')}`);
+      }
+      const colNombre = columnas.find(c => /raz[oó]n|nombre|empresa/i.test(c));
+
+      const deben = new Map();
+      for (const f of filasExcel) {
+        const r = soloRut(f[colRut]);
+        if (r) deben.set(r, colNombre ? String(f[colNombre] || '').trim() : '');
+      }
+
+      // Cruce contra lo que hay en pantalla, sobre el mes en curso.
+      const delMes = correosLog;
+      const enPlanilla = [], fueraDePlanilla = [];
+      const vistos = new Set();
+      for (const c of delMes) {
+        const r = soloRut(c.rut);
+        if (r && deben.has(r)) { enPlanilla.push(c); vistos.add(r); }
+        else fueraDePlanilla.push(c);
+      }
+
+      // Los de la planilla que no aparecen en la pantalla: o no tienen cobro
+      // emitido este mes, o el RUT está mal en alguna de las dos partes.
+      const sinCobro = [...deben.entries()]
+        .filter(([r]) => !vistos.has(r))
+        .map(([rut, nombre]) => ({ rut, nombre }));
+
+      // Solo tiene sentido marcar pagado lo que hoy está pendiente.
+      const aMarcarPagado = fueraDePlanilla.filter(
+        c => c.estadoPago === 'PENDIENTE_PAGO' || c.estadoPago === 'PENDIENTE_RECIBO'
+      );
+
+      setConciliacion({
+        archivo: file.name,
+        totalPlanilla: deben.size,
+        deben: enPlanilla,
+        sinCobro,
+        aMarcarPagado,
+        yaPagados: fueraDePlanilla.filter(c => c.estadoPago === 'PAGADA').length,
+        sinCobroAsociado: fueraDePlanilla.filter(c => !c.estadoPago).length,
+      });
+
+      // Se dejan seleccionados los que deben: es lo que se va a mandar.
+      setSelectedFolios(enPlanilla.map(c => String(c.folio)));
+      setFiltroPago('todos');
+
+      toast({
+        title: `${enPlanilla.length} deudores seleccionados`,
+        description: sinCobro.length
+          ? `${sinCobro.length} de la planilla no tienen cobro este mes. Revísalos abajo.`
+          : 'Todos los de la planilla calzaron.',
+      });
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'No se pudo leer la planilla', description: e.message });
+    } finally {
+      setConciliando(false);
+      if (archivoRef.current) archivoRef.current.value = '';
+    }
+  };
+
+  // Marcar como pagados a los que NO están en la planilla.
+  // Primero simula en el servidor y muestra el número exacto; recién con el
+  // "sí" explícito escribe. Marcar pagado a quien no pagó lo saca de la
+  // cobranza y nadie vuelve a cobrarle.
+  const conciliarMes = async () => {
+    if (!conciliacion) return;
+    const ruts = conciliacion.deben.map(c => c.rut).filter(Boolean);
+    if (!ruts.length) {
+      toast({ variant: 'destructive', title: 'Sin RUT para cruzar',
+              description: 'Ninguna fila seleccionada trae RUT. No se marca nada.' });
+      return;
+    }
+    setConciliando(true);
+    try {
+      const sim = await conciliarCobranzaApi(user.sessionId, ruts, { simular: true });
+      const d = await sim.json();
+      if (!d.success) throw new Error(d.message);
+
+      const confirmado = window.confirm(
+        `Se van a marcar ${d.seMarcarianPagados} cobros como PAGADOS `
+        + `por $${Number(d.montoQueSeDaPorPagado).toLocaleString('es-CL')}.\n\n`
+        + `Después de esto seguirán debiendo ${d.seguirianDebiendo} clientes `
+        + `($${Number(d.deudaQueQueda).toLocaleString('es-CL')}).\n\n`
+        + `Un cobro marcado como pagado deja de aparecer en la cobranza.\n\n`
+        + `¿Continuar?`
+      );
+      if (!confirmado) { setConciliando(false); return; }
+
+      const r = await conciliarCobranzaApi(user.sessionId, ruts, { simular: false });
+      const res = await r.json();
+      if (!res.success) throw new Error(res.message);
+      toast({ title: `${res.marcados} cobros marcados como pagados`, description: res.message });
+      setConciliacion(null);
+      cargarCorreosLog();
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'No se pudo conciliar', description: e.message });
+    } finally { setConciliando(false); }
   };
 
   const toggleFolio = (folio) => {
@@ -281,9 +418,27 @@ const CorreoMasivo = () => {
     return true;
   };
 
+  // BUSCAR. Hasta ahora solo se podía marcar de a uno recorriendo la lista con
+  // el ojo: con 169 filas, encontrar una empresa era desplazarse y leer.
+  // Busca en razón social, RUT, folio y correo a la vez, porque uno tiene a
+  // mano cualquiera de los cuatro según de dónde venga el dato.
+  const coincideBusqueda = (c, texto) => {
+    if (!texto) return true;
+    const t = texto.toLowerCase().trim();
+    // El RUT se compara sin puntos ni guion: en la planilla viene de una forma
+    // y en la base de otra, y nadie debería tener que adivinar el formato.
+    const soloNum = t.replace(/[.\-\s]/g, '');
+    return (
+      String(c.razonSocial || '').toLowerCase().includes(t) ||
+      String(c.correo || '').toLowerCase().includes(t) ||
+      String(c.folio || '').includes(soloNum) ||
+      String(c.rut || '').replace(/[.\-\s]/g, '').toLowerCase().includes(soloNum)
+    );
+  };
+
   const filas = useMemo(
-    () => correosLog.filter(c => coincideFiltro(c, filtroPago)),
-    [correosLog, filtroPago]
+    () => correosLog.filter(c => coincideFiltro(c, filtroPago) && coincideBusqueda(c, busqueda)),
+    [correosLog, filtroPago, busqueda]
   );
 
   const cuentaFiltro = (id) => correosLog.filter(c => coincideFiltro(c, id)).length;
@@ -362,12 +517,87 @@ const CorreoMasivo = () => {
             </button>
           ))}
         </div>
-        {deudaVisible > 0 && (
-          <span className="text-[10px] font-black uppercase tracking-widest text-amber-700">
-            Deuda a la vista: ${deudaVisible.toLocaleString('es-CL')}
-          </span>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {deudaVisible > 0 && (
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+              Deuda a la vista: ${deudaVisible.toLocaleString('es-CL')}
+            </span>
+          )}
+          {/* BUSCADOR. Con 169 filas, encontrar una empresa era desplazarse y
+              leer. Busca en nombre, RUT, folio y correo a la vez. */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+            <input
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar empresa, RUT, folio o correo…"
+              className="w-56 lg:w-64 h-7 bg-slate-50 border border-[#efe8dd] rounded-lg pl-8 pr-7 text-[11px] text-slate-900 outline-none focus:border-blue-500 placeholder:text-slate-400"
+            />
+            {busqueda && (
+              <button onClick={() => setBusqueda('')} title="Limpiar"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500">
+                <X size={12} />
+              </button>
+            )}
+          </div>
+          {/* CARGAR LA PLANILLA DEL MES */}
+          <input ref={archivoRef} type="file" accept=".xlsx,.xls,.csv" className="hidden"
+            onChange={(e) => cargarPlanillaCobranza(e.target.files?.[0])} />
+          <Button
+            onClick={() => archivoRef.current?.click()}
+            disabled={conciliando}
+            title="Cargar la planilla de cobranza del mes: los que vienen en ella deben, el resto ya pagó"
+            className="h-7 px-3 bg-slate-100 hover:bg-slate-200 border border-[#efe8dd] text-slate-600 text-[10px] font-black uppercase tracking-widest rounded-lg inline-flex items-center gap-1.5"
+          >
+            {conciliando ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />} Cargar planilla
+          </Button>
+        </div>
       </div>
+
+      {/* Resultado de cruzar la planilla. No cambia nada por sí solo. */}
+      {conciliacion && (
+        <div className="mb-2 flex-shrink-0 bg-white border border-blue-500/30 rounded-xl px-4 py-3">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-widest text-blue-700 flex items-center gap-1.5">
+                <FileSpreadsheet size={12} /> {conciliacion.archivo}
+              </p>
+              <p className="text-[11px] text-slate-600 mt-1">
+                <b>{conciliacion.deben.length}</b> de la planilla quedaron seleccionados y siguen debiendo.
+                {conciliacion.aMarcarPagado.length > 0 && <>
+                  {' '}Los otros <b className="text-emerald-700">{conciliacion.aMarcarPagado.length}</b> pendientes
+                  {' '}se darían por pagados.
+                </>}
+              </p>
+              {conciliacion.sinCobro.length > 0 && (
+                <details className="mt-1.5">
+                  <summary className="text-[10px] font-bold text-amber-700 cursor-pointer">
+                    {conciliacion.sinCobro.length} de la planilla NO tienen cobro este mes — revísalos
+                  </summary>
+                  <ul className="mt-1 text-[10px] text-slate-500 space-y-0.5 max-h-28 overflow-y-auto">
+                    {conciliacion.sinCobro.map(x => (
+                      <li key={x.rut}>· {x.rut} {x.nombre && `— ${x.nombre}`}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {conciliacion.aMarcarPagado.length > 0 && (
+                <Button
+                  onClick={conciliarMes}
+                  disabled={conciliando}
+                  className="h-8 px-4 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg inline-flex items-center gap-1.5"
+                >
+                  {conciliando ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                  Marcar {conciliacion.aMarcarPagado.length} como pagados
+                </Button>
+              )}
+              <button onClick={() => setConciliacion(null)} className="text-slate-400 hover:text-red-500"><X size={16} /></button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Acciones masivas */}
       <div className="flex items-center justify-between mb-2 flex-shrink-0 gap-3 flex-wrap bg-white border border-[#efe8dd] rounded-xl px-4 py-2">

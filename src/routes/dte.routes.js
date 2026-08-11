@@ -25,6 +25,8 @@ import {
 // ==========================================
 import { estadoRobot, detenerRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
 import { estadoRobotExenta, detenerRobotExenta } from '../components/facturacion/scripts/exenta_masiva.mjs';
+import { estadoFacturaManual } from '../components/facturacion/scripts/factura_manual.mjs';
+import { buscarYDescargarPdf, estadoDescarga } from '../components/facturacion/scripts/buscar_pdf_folio.mjs';
 import { requireSession, requireAdmin, requireModulo } from '../middleware/auth.js';
 import { envioMasivoLimiter } from '../config/security.js';
 
@@ -71,6 +73,38 @@ const soloAdmin = [requireAdmin];
 dteRoutes.post('/emitir-manual', emitirManualController);
 dteRoutes.post('/emitir-masivo', envioMasivoLimiter, emitirMasivoController);
 dteRoutes.get('/progreso-masivo', (req, res) => res.json(estadoRobot));
+// Avance de la factura INDIVIDUAL. Emitir una tarda entre 30 y 90 segundos y
+// hasta ahora la pantalla no podia decir en que paso iba.
+dteRoutes.get('/progreso-manual', (req, res) => res.json(estadoFacturaManual));
+
+// ============================================================================
+// DESCARGAR EL PDF DE UN FOLIO  ·  se va a buscar al SII en el momento
+// ----------------------------------------------------------------------------
+// No se guarda ningún documento: el robot entra al SII, busca el folio y
+// devuelve el PDF. Tarda entre 30 y 90 segundos, que es el precio de tener
+// siempre el documento oficial sin copias que puedan quedar viejas.
+// ============================================================================
+dteRoutes.get('/pdf/:folio', soloAdmin, async (req, res) => {
+    const { folio } = req.params;
+    const tipo = Number(req.query.tipo) || 33;
+    // ?ver=1 abre el navegador a la vista para poder mirar qué hace el robot.
+    // Solo tiene sentido con el servidor corriendo en el propio computador.
+    const verNavegador = req.query.ver === '1';
+    try {
+        const { contenido, nombre } = await buscarYDescargarPdf(folio, tipo, { verNavegador });
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${nombre}"`);
+        res.setHeader('Content-Length', contenido.length);
+        return res.end(contenido);
+    } catch (err) {
+        console.error(`❌ [PDF] Folio ${folio}: ${err.message}`);
+        // JSON y no un PDF roto: la pantalla necesita poder mostrar el motivo.
+        return res.status(502).json({ ok: false, error: err.message });
+    }
+});
+
+// En qué va la descarga (la pantalla lo consulta mientras espera).
+dteRoutes.get('/pdf-progreso', soloAdmin, (req, res) => res.json(estadoDescarga));
 dteRoutes.post('/detener-masivo', (req, res) => {
     detenerRobot();
     res.json({ ok: true, message: "Orden de detención enviada (DTE 33)." });

@@ -2,6 +2,8 @@ import puppeteer from 'puppeteer';
 import dotenv from 'dotenv';
 import pkg from 'pg'; 
 import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
+// Bajar el PDF de la nota, igual que las facturas.
+import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
 
 const { Client } = pkg;
 dotenv.config();
@@ -286,6 +288,16 @@ export async function emitirNotaCDPuppeteer(datos, credSii = credencialesDelSist
         const folioGenerado = await capturarFolio(page);
         console.log(`🎉 ¡MISIÓN CUMPLIDA! Folio Oficial Generado: ${folioGenerado}`);
 
+        // Bajar el PDF. Las notas de crédito y débito no mandan correo, así que
+        // hasta ahora se emitían y no quedaba archivo en ninguna parte. El tipo
+        // va en el nombre: un "Factura_1367.pdf" para una nota de crédito
+        // confunde a quien después busca el documento en la carpeta.
+        let rutaPdf = null;
+        try {
+            const pdf = await descargarDocumentoSii(page, folioGenerado, Number(datos.tipo_documento) || 61);
+            if (pdf) rutaPdf = pdf.rutaPC;
+        } catch { /* la nota ya está emitida ante el SII */ }
+
         // --- LÓGICA DE GUARDADO SQL INTELIGENTE ---
         let empresaIdFinal = datos.empresa_id;
 
@@ -372,6 +384,7 @@ export async function emitirNotaCDPuppeteer(datos, credSii = credencialesDelSist
             ok: true,
             folio: folioGenerado,
             tipo: Number(datos.tipo_documento),
+            rutaPdf,
             fileName: `DTE_${datos.tipo_documento}_${folioGenerado}.pdf`
         };
 

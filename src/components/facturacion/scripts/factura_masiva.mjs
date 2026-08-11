@@ -8,6 +8,8 @@ import { encrypt } from '../../../utils/crypto.js';
 import { pool } from '../../../database/db.js';
 import { enviarCorreoFacturaEnSesion } from './revisar para envios/mensajes_facturador_masivo.mjs';
 import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
+// La descarga del PDF deja de depender de que el correo salga bien.
+import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
 
 const { Client } = pkg;
 dotenv.config();
@@ -717,6 +719,12 @@ export async function emitirLotePuppeteer(facturasFront, credSii = credencialesD
 
                     if (folio) {
                         console.log(`🎉 ¡ÉXITO! Folio N°: ${folio}`);
+                        // El PDF se baja ACÁ, no al mandar el correo. Antes iban
+                        // juntos: si el correo fallaba, la factura quedaba emitida
+                        // y sin archivo. Con 90 facturas en un lote, eso son 90
+                        // documentos que había que ir a buscar al SII a mano.
+                        try { await descargarDocumentoSii(page, folio, 33); }
+                        catch { /* la factura ya está emitida; sigue el lote */ }
                         fs.appendFileSync(RUTA_LOG, `${f.rutReceptor} - Folio: ${folio}\n`);
                         resultados.push({ rut: f.rutReceptor, nombre: razonSocialCapturadaDelSII, estado: 'exito', folio: folio });
                         estadoRobot.resultados.push({

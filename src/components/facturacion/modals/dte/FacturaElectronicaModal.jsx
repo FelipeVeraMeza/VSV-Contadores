@@ -19,8 +19,12 @@ import { cleanRut } from "@/lib/rut.js";
 import * as XLSX from "xlsx";
 
 // CONTEXTO Y SERVICIOS
-import { useAuth } from "@/hooks/useAuth.jsx"; 
+import { useAuth } from "@/hooks/useAuth.jsx";
 import { getCrmDataApi } from "@/services/crmService.js";
+// Faltaba. Se usa en cuatro lugares de este archivo —emitir manual, emitir
+// masivo, consultar el progreso y detener— y al no estar importado, emitir una
+// factura moría con "apiDTE is not defined" antes de llegar al servidor.
+import * as apiDTE from "@/services/apiDTE.js";
 
 // --- CONFIGURACIONES ---
 const DOC_CONFIG = {
@@ -162,6 +166,10 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [folioGenerado, setFolioGenerado] = useState(null);
+  // Avance en vivo de la factura individual. El robot va marcando en qué paso
+  // está; sin esto la pantalla solo mostraba un girito y parecía colgada.
+  const [avanceManual, setAvanceManual] = useState({ numero: 0, total: 11, paso: '' });
+  const [segundosEmitiendo, setSegundosEmitiendo] = useState(0);
 
   const [allClientes, setAllClientes] = useState([]); 
   const [searchTerm, setSearchTerm] = useState("");
@@ -690,6 +698,29 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     });
   };
 
+
+  // Mientras se emite UNA factura, se le pregunta al servidor en qué paso va.
+  // El robot tarda entre 30 y 90 segundos; sin esto la pantalla se veía quieta
+  // y no había forma de saber si seguía viva o se había caído.
+  useEffect(() => {
+    if (!isSubmitting || activeTab !== TABS.UNICA) {
+      setSegundosEmitiendo(0);
+      return;
+    }
+    const arranque = Date.now();
+    const reloj = setInterval(() => {
+      setSegundosEmitiendo(Math.round((Date.now() - arranque) / 1000));
+    }, 1000);
+    const consulta = setInterval(async () => {
+      try {
+        const r = await apiDTE.getProgresoManual();
+        const d = await r.json();
+        if (d && typeof d.numero === 'number') setAvanceManual(d);
+      } catch { /* si no responde, se queda en el último paso conocido */ }
+    }, 1500);
+    return () => { clearInterval(reloj); clearInterval(consulta); };
+  }, [isSubmitting, activeTab]);
+
   const handleSubmitUnica = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!empresaEfectiva) return toast({ variant: "destructive", title: "Falta Cliente", description: "Busca o registra una empresa." });
@@ -751,12 +782,40 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                     <Building2 size={24} className="text-slate-700 animate-pulse" />
                   </div>
                 </div>
-                <div>
-                  <h3 className="text-2xl font-black uppercase italic tracking-widest text-slate-700 mb-2">
-                    Emitiendo al SII...
+                {/* Antes acá solo había un girito y un cartel rojo que decía
+                    "SISTEMA BLOQUEADO". Eso no dice en qué va ni si sigue viva,
+                    y emitir tarda entre 30 y 90 segundos: parecía colgada. */}
+                <div className="w-full max-w-md">
+                  <h3 className="text-2xl font-black uppercase italic tracking-widest text-white mb-1 text-center">
+                    Emitiendo la factura
                   </h3>
-                  <p className="text-red-500 font-bold uppercase tracking-widest text-xs animate-pulse bg-red-500/10 px-4 py-2 rounded-full border border-red-500/20">
-                    ⚠️ SISTEMA BLOQUEADO MIENTRAS SE EMITE. NO CIERRE LA VENTANA.
+                  <p className="text-slate-400 text-xs text-center mb-5">
+                    Es <b className="text-white">una sola factura</b>
+                    {razonSocialSegura && razonSocialSegura !== '---' ? <> · {razonSocialSegura}</> : null}
+                  </p>
+
+                  <div className="bg-white/10 rounded-xl px-4 py-3 border border-white/15">
+                    <div className="flex items-baseline justify-between mb-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        Paso {avanceManual.numero || 1} de {avanceManual.total || 11}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400 tabular-nums">
+                        {segundosEmitiendo}s
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-white/15 rounded-full overflow-hidden mb-3">
+                      <div className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                           style={{ width: `${Math.round(((avanceManual.numero || 1) / (avanceManual.total || 11)) * 100)}%` }} />
+                    </div>
+                    <p className="text-sm text-white font-bold text-center min-h-[1.4em]">
+                      {avanceManual.paso || 'Preparando…'}
+                    </p>
+                  </div>
+
+                  <p className="text-slate-500 text-[11px] text-center mt-4 leading-relaxed">
+                    El robot está trabajando en el portal del SII. Puede tardar
+                    hasta minuto y medio si el SII está lento.
+                    <br />No cierres esta ventana.
                   </p>
                 </div>
               </div>

@@ -71,3 +71,9 @@ export const vincularFoliosApi = (sessionId) => {
 export const sincronizarNotasCreditoApi = (sessionId) => {
   return fetchWithAuth('/cobros/sincronizar-notas-credito', sessionId, { method: 'POST' });
 };
+
+// ---- Conciliar el mes contra la planilla de cobranza ----
+// Los RUT que se mandan son los que DEBEN; el resto del periodo queda pagado.
+// Arranca simulando: sin `simular: false` el servidor no escribe nada.
+export const conciliarCobranzaApi = (sessionId, rutsQueDeben, { simular = true, periodo } = {}) =>
+  fetchWithAuth('/cobros/conciliar', sessionId, { method: 'POST', body: { rutsQueDeben, simular, periodo } });

@@ -7,6 +7,8 @@ import crypto from 'crypto';
 import { encrypt } from '../../../utils/crypto.js';
 import { pool } from '../../../database/db.js';
 import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
+// Bajar el PDF del documento emitido, igual que la factura.
+import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
 
 const { Client } = pkg;
 dotenv.config();
@@ -363,6 +365,12 @@ export async function emitirLoteExentaPuppeteer(facturasFront, credSii = credenc
 
                     if (folio) {
                         console.log(`🎉 ¡ÉXITO! Folio Exento N°: ${folio}`);
+                        // Bajar el PDF de cada exenta del lote.
+                        let rutaPdf = null;
+                        try {
+                            const pdf = await descargarDocumentoSii(page, folio, 34);
+                            if (pdf) rutaPdf = pdf.rutaPC;
+                        } catch { /* ya emitida; se sigue con el lote */ }
                         fs.appendFileSync(RUTA_LOG, `${f.rutReceptor} - Folio: ${folio}\n`); 
                         resultados.push({ rut: f.rutReceptor, nombre: razonSocialCapturadaDelSII, estado: 'exito', folio: folio });
                         

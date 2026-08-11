@@ -3739,5 +3739,25 @@
     "estado": "enviado",
     "motivo": "",
     "datos": {}
+  },
+  {
+    "fecha": "2026-08-07T00:57:35.505Z",
+    "folio": "1367",
+    "rut": "",
+    "razonSocial": "",
+    "correo": "",
+    "estado": "fallido",
+    "motivo": "Error: net::ERR_CONNECTION_TIMED_OUT at https://www1.sii.cl/cgi-bin/Portal001/mipeSelEmpresa.cgi?DESDE_DONDE_URL=OPCION%3D2%26TIPO%3D4",
+    "datos": {}
+  },
+  {
+    "fecha": "2026-08-07T01:13:55.888Z",
+    "folio": "1367",
+    "rut": "",
+    "razonSocial": "CALDERÓN GESTIÓN INMOBILIARIA SPA",
+    "correo": "talo19@gmail.com",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {}
   }
 ]

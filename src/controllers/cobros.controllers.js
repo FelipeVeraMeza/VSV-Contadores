@@ -1,5 +1,5 @@
 import { pool } from '../database/db.js';
-import { decrypt } from '../utils/crypto.js';
+import { decrypt, generateHash } from '../utils/crypto.js';
 import { cleanRut } from '../lib/rut.js';
 // Robot masivo del SII (el mismo de Emisión de DTE → Factura Electrónica).
 import { emitirLotePuppeteer, estadoRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
@@ -797,5 +797,181 @@ export const sincronizarNotasCredito = async (req, res) => {
     } catch (err) {
         console.error('❌ Error sincronizando notas de crédito:', err.message);
         return res.status(500).json({ success: false, message: 'Error al descontar las notas de crédito.' });
+    }
+};
+
+// ============================================================================
+// CONCILIAR EL MES CONTRA LA PLANILLA DE COBRANZA
+// ----------------------------------------------------------------------------
+// La planilla mensual lista a los que DEBEN. Todo el resto del periodo, por
+// definición, ya pagó. Antes eso se traducía a mano: buscar 39 empresas de a
+// una en una lista de 169 y marcar el resto.
+//
+// DOS REGLAS QUE NO SE NEGOCIAN:
+//
+//   1. `simular: true` (el modo por defecto) NO escribe nada. Devuelve
+//      exactamente lo que cambiaría. Marcar pagado a quien no pagó lo saca de
+//      la cobranza y nadie vuelve a cobrarle: eso tiene que verse antes.
+//
+//   2. El cruce es por RUT, nunca por nombre. "ANITA MARIA VEAS VILLAGRA
+//      ASESORIAS E.I.R.L" no se escribe igual en la planilla que en la base, y
+//      un nombre mal pareado marca pagada a la empresa equivocada.
+// ============================================================================
+export const conciliarCobranza = async (req, res) => {
+    try {
+        const organizacionId = req.user?.organizacionId || null;
+        const { rutsQueDeben = [], periodo, simular = true } = req.body;
+
+        if (!Array.isArray(rutsQueDeben) || rutsQueDeben.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No llegó ningún RUT. Si la planilla viniera vacía se marcaría '
+                       + 'todo el mes como pagado, así que se prefiere no hacer nada.',
+            });
+        }
+
+        // ¿Sobre qué mes se concilia?
+        //
+        // NO es el mes en curso. La cobranza va siempre un mes atrás: la planilla
+        // "agosto cobranza" lista lo que se está cobrando en agosto, que son las
+        // facturas de JULIO. Al 06-08-2026 agosto todavía no tenía ni un cobro
+        // generado, así que apuntar al mes actual conciliaba sobre cero: cero
+        // marcados, cero deudores, y la sensación de que funcionó.
+        //
+        // Por eso, si no se indica un periodo, se toma el más reciente que
+        // TENGA cobros pendientes. Es el que se está cobrando de verdad.
+        let mes = /^\d{4}-\d{2}$/.test(periodo || '') ? `${periodo}-01` : null;
+        if (!mes) {
+            const { rows: [ultimo] } = await pool.query(
+                `SELECT to_char(MAX(periodo), 'YYYY-MM-DD') AS p
+                   FROM cobro_mensual
+                  WHERE estado IN ('PENDIENTE_PAGO','PENDIENTE_RECIBO')
+                    AND ($1::uuid IS NULL OR organizacion_id = $1)`,
+                [organizacionId]
+            );
+            mes = ultimo?.p || null;
+        }
+        if (!mes) {
+            return res.json({
+                success: true, simulado: true,
+                seMarcarianPagados: 0, montoQueSeDaPorPagado: 0,
+                seguirianDebiendo: 0, deudaQueQueda: 0, empresas: [],
+                message: 'No hay ningún cobro pendiente en ningún periodo. No hay nada que conciliar.',
+            });
+        }
+
+        // Los hash de RUT de quienes deben. Se comparan contra empresa.rut_hash,
+        // que es como el sistema identifica a una empresa sin descifrar nada.
+        //
+        // El hash se calcula SIEMPRE sobre el formato de `cleanRut` —cuerpo-DV,
+        // con guion—, que es el que se usó al guardar. Normalizar de otra forma
+        // (por ejemplo quitando el guion) da un hash distinto, no calza ninguna
+        // empresa, y el resultado es que TODOS quedarían fuera de la planilla y
+        // se marcarían como pagados. Eso ya pasó: con el guion quitado la
+        // simulación daba 81 marcados y 0 deudores.
+        const rutsLimpios = [...new Set(
+            rutsQueDeben.map(r => cleanRut(String(r || ''))).filter(r => r.length > 2)
+        )];
+        const hashes = rutsLimpios.map(generateHash);
+
+        // Si la planilla trae RUT pero NINGUNO calza con la base, algo está mal:
+        // el archivo equivocado, otra columna, otro formato. Seguir marcaría el
+        // periodo completo como pagado.
+        const { rows: [calce] } = await pool.query(
+            `SELECT COUNT(*)::int n FROM empresa WHERE rut_hash = ANY($1)`, [hashes]);
+        if (calce.n === 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Ninguno de los ${rutsLimpios.length} RUT de la planilla existe en el sistema. `
+                       + `Revisa que sea el archivo correcto y que la columna del RUT sea la que corresponde. `
+                       + `No se marcó nada.`,
+            });
+        }
+
+        // Qué se marcaría como pagado: pendientes del periodo que NO están en la
+        // planilla y pertenecen a la organización de quien pide.
+        const seleccion = `
+              FROM cobro_mensual cm
+              JOIN empresa e ON e.id = cm.empresa_id
+             WHERE cm.estado IN ('PENDIENTE_PAGO','PENDIENTE_RECIBO')
+               AND ($1::uuid IS NULL OR cm.organizacion_id = $1)
+               AND cm.periodo = $2::date
+               AND NOT (e.rut_hash = ANY($3))`;
+
+        const { rows: afectados } = await pool.query(
+            `SELECT cm.id, cm.folio, e.razon_social,
+                    COALESCE(cm.monto_facturado, cm.monto_esperado) AS monto
+             ${seleccion}
+             ORDER BY e.razon_social`,
+            [organizacionId, mes, hashes]
+        );
+
+        // Y cuántos de la planilla sí quedan como deudores (para cuadrar).
+        const { rows: [quedan] } = await pool.query(
+            `SELECT COUNT(*)::int n,
+                    COALESCE(SUM(COALESCE(cm.monto_facturado, cm.monto_esperado)),0)::float total
+               FROM cobro_mensual cm
+               JOIN empresa e ON e.id = cm.empresa_id
+              WHERE cm.estado IN ('PENDIENTE_PAGO','PENDIENTE_RECIBO')
+                AND ($1::uuid IS NULL OR cm.organizacion_id = $1)
+                AND cm.periodo = $2::date
+                AND e.rut_hash = ANY($3)`,
+            [organizacionId, mes, hashes]
+        );
+
+        const total = afectados.reduce((s, r) => s + Number(r.monto || 0), 0);
+
+        if (simular) {
+            return res.json({
+                success: true, simulado: true,
+                periodo: String(mes).slice(0, 7),
+                seMarcarianPagados: afectados.length,
+                montoQueSeDaPorPagado: total,
+                seguirianDebiendo: quedan.n,
+                deudaQueQueda: quedan.total,
+                empresas: afectados.map(r => ({
+                    folio: r.folio, razonSocial: r.razon_social, monto: Number(r.monto || 0),
+                })),
+                message: `Simulación: se marcarían ${afectados.length} cobros como pagados `
+                       + `por $${total.toLocaleString('es-CL')}. No se cambió nada.`,
+            });
+        }
+
+        // ---- De verdad ----
+        const ids = afectados.map(r => r.id);
+        if (!ids.length) {
+            return res.json({ success: true, marcados: 0, message: 'No había nada pendiente que marcar.' });
+        }
+        const { rows: hechos } = await pool.query(
+            `UPDATE cobro_mensual
+                SET estado = 'PAGADA',
+                    fecha_pago = COALESCE(fecha_pago, NOW()),
+                    updated_at = NOW()
+              WHERE id = ANY($1)
+              RETURNING id, folio`,
+            [ids]
+        );
+
+        await registrar(req, {
+            modulo: 'cobros', accion: 'conciliar_cobranza',
+            entidad: 'periodo', entidadId: null,
+            descripcion: `Conciliación con planilla: ${hechos.length} cobros marcados como pagados `
+                       + `por $${total.toLocaleString('es-CL')}. Siguen debiendo ${quedan.n}.`,
+            detalle: {
+                folios: hechos.map(h => h.folio),
+                rutsQueDeben: rutsQueDeben.length,
+                total,
+            },
+        });
+
+        return res.json({
+            success: true, marcados: hechos.length, monto: total,
+            periodo: String(mes).slice(0, 7),
+            seguirianDebiendo: quedan.n,
+            message: `${hechos.length} cobros marcados como pagados. Quedan ${quedan.n} deudores.`,
+        });
+    } catch (error) {
+        console.error('❌ Error conciliando cobranza:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo conciliar la cobranza.' });
     }
 };

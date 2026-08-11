@@ -48,12 +48,24 @@ const ES_CORREO = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // sola dirección malformada y ese cliente no recibe nada.
 //
 // Devuelve la lista lista para el campo `to`, o null si no quedó ninguna válida.
+// También se separa por ESPACIO. Hay fichas cargadas así —"karlla@x.cl
+// mary@x.cl", sin punto y coma— y con el separador anterior quedaban como una
+// sola dirección malformada: ese cliente no recibía nada y nadie se enteraba.
+//
+// La comparación para no repetir es en minúsculas: "Ventas@x.cl" y
+// "ventas@x.cl" son el mismo buzón, y mandar dos veces se ve descuidado.
 export const normalizarCorreos = (crudo) => {
-    const validos = String(crudo || '')
-        .split(/[;,]/)
-        .map(c => c.trim())
-        .filter(c => ES_CORREO.test(c));
-    return validos.length ? [...new Set(validos)].join(', ') : null;
+    const vistos = new Set();
+    const validos = [];
+    for (const trozo of String(crudo || '').split(/[;,\s]+/)) {
+        const c = trozo.trim();
+        if (!ES_CORREO.test(c)) continue;
+        const clave = c.toLowerCase();
+        if (vistos.has(clave)) continue;
+        vistos.add(clave);
+        validos.push(c);
+    }
+    return validos.length ? validos.join(', ') : null;
 };
 
 // 📊 Estado en vivo para que la página pueda mostrar el progreso (como estadoRobot).
@@ -116,7 +128,17 @@ export async function obtenerDestinatariosRecordatorio({ periodo = null, soloAct
                 c.folio,
                 c.monto_facturado    AS "monto",
                 to_char(c.periodo, 'YYYY-MM') AS "periodo",
-                COALESCE(cf.correo, e.email_corporativo) AS correo
+                -- LOS DOS, no uno u otro.
+                --
+                -- Antes esto era COALESCE(cf.correo, e.email_corporativo): si la
+                -- factura se había enviado a una dirección, la de la ficha se
+                -- ignoraba por completo. El resultado es que a quien tenía DOS
+                -- correos cargados a propósito —el dueño y su contador, por
+                -- ejemplo— el recordatorio le llegaba solo a uno.
+                --
+                -- Al 06-08-2026 eran 4 de los 81 deudores de julio. Se juntan
+                -- las dos fuentes y normalizarCorreos saca los repetidos.
+                CONCAT_WS('; ', cf.correo, e.email_corporativo) AS correo
            FROM cobro_mensual c
            JOIN empresa e ON e.id = c.empresa_id
            LEFT JOIN LATERAL (

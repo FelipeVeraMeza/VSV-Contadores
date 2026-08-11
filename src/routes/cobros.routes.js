@@ -4,7 +4,7 @@ import {
   listarCobros, resumenCobros, generarCobros, emitirCobro, cambiarEstadoCobro,
   recalcularMontos, editarMontoCobro,
   previsualizarFacturacion, facturarCobrosMasivo, progresoFacturacion, vincularFolios,
-  sincronizarNotasCredito, registrarPagoCliente
+  sincronizarNotasCredito, registrarPagoCliente, conciliarCobranza
 } from '../controllers/cobros.controllers.js';
 
 const router = Router();
@@ -23,6 +23,11 @@ router.put('/:id/monto', editarMontoCobro);        // corrige el monto a mano
 // Registrar el pago de un cliente completo, desde el CRM. Con ?soloVencidos=1
 // salda únicamente los meses ya vencidos y deja lo que aún está en plazo.
 router.put('/empresa/:empresaId/pagar', registrarPagoCliente);
+
+// Conciliar el mes contra la planilla de cobranza: los que vienen en la
+// planilla deben, el resto queda pagado. Arranca en modo SIMULACIÓN: sin
+// `simular: false` no escribe nada.
+router.post('/conciliar', conciliarCobranza);
 
 // Facturación masiva (robot SII): previsualizar, disparar, seguir progreso y vincular folios
 router.get('/previsualizar-facturacion', previsualizarFacturacion);

@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth.jsx';
 import { useEmpresasLista } from '@/hooks/useEmpresasLista';
 import { obtenerHistorialBunker, obtenerComprasBunker } from '@/services/dteConsultasService';
+import { descargarPdfFolio } from '@/services/apiDTE.js';
 import { API_BASE_URL } from '../../../../config.js'; 
 
 const NOMBRES_DTE = {
@@ -46,6 +47,9 @@ const DocumentosDTE = () => {
   const [documentos, setDocumentos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false); 
+  // Folio que se está bajando en este momento (uno a la vez: el SII no admite
+  // dos sesiones simultáneas de la misma cuenta).
+  const [bajando, setBajando] = useState(null);
 
   const [tipoVista, setTipoVista] = useState('VENTAS'); 
   const [vistaGlobal, setVistaGlobal] = useState(false); 
@@ -240,6 +244,60 @@ const DocumentosDTE = () => {
   );
 
   const isModoGlobalActivo = !selectedCompany || esPrincipal || vistaGlobal;
+
+
+  // ==========================================================================
+  // DESCARGAR EL PDF DE UN DOCUMENTO
+  // --------------------------------------------------------------------------
+  // No hay copia guardada: el servidor entra al SII, busca el folio y lo trae.
+  // Tarda entre 30 y 90 segundos, así que se avisa antes de empezar; si no,
+  // parece que el botón no hizo nada.
+  // ==========================================================================
+  const bajarPdf = async (dte) => {
+    const folio = String(dte.folio || '').trim();
+    if (!folio) {
+      return toast({ variant: 'destructive', title: 'Sin folio', description: 'Este documento no tiene folio.' });
+    }
+    if (bajando) {
+      return toast({ title: 'Espera un momento', description: 'Ya hay una descarga en curso. El SII acepta una sola a la vez.' });
+    }
+
+    setBajando(folio);
+    toast({
+      title: `Buscando el folio ${folio} en el SII`,
+      description: 'Puede tardar hasta minuto y medio. No cierres la pestaña.',
+      duration: 8000,
+    });
+
+    try {
+      const res = await descargarPdfFolio(folio, dte.tipo_dte || 33);
+      if (!res.ok) {
+        // El servidor manda JSON cuando falla, para poder decir el motivo.
+        let motivo = 'No se pudo obtener el documento.';
+        try { motivo = (await res.json()).error || motivo; } catch { /* respuesta no-JSON */ }
+        throw new Error(motivo);
+      }
+
+      // Llega el PDF en crudo: se arma la descarga en el navegador.
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Factura_${folio}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Sin esto el blob queda en memoria toda la sesión.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      toast({ title: `Folio ${folio} descargado` });
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'No se pudo descargar', description: e.message });
+    } finally {
+      setBajando(null);
+    }
+  };
+
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -492,20 +550,23 @@ const DocumentosDTE = () => {
                                 )}
                             </div>
                           </td>
+                          {/* El PDF no se guarda en ninguna parte: se va a buscar
+                              al SII en el momento. Por eso ya no existe el "Sin
+                              PDF": cualquier documento emitido se puede bajar,
+                              solo que hay que esperar a que el robot lo traiga. */}
                           <td className="px-6 py-4 text-center whitespace-nowrap">
-                            {dte.url_pdf ? (
-                              <a 
-                                href={dte.url_pdf} 
-                                target="_blank" 
-                                rel="noreferrer" 
-                                className="inline-flex items-center justify-center h-9 w-9 rounded-xl bg-slate-50 text-slate-600 border border-[#efe8dd] hover:bg-white hover:text-black transition-all shadow-lg active:scale-90"
-                                title="Ver PDF"
-                              >
-                                <Download size={16} />
-                              </a>
-                            ) : (
-                              <span className="text-[8px] text-slate-400 font-black uppercase italic bg-white px-2 py-1 rounded border border-[#efe8dd]">Sin PDF</span>
-                            )}
+                            <button
+                              onClick={() => bajarPdf(dte)}
+                              disabled={bajando === String(dte.folio)}
+                              title={bajando === String(dte.folio)
+                                ? 'Buscando el documento en el SII…'
+                                : `Descargar el PDF del folio ${dte.folio} desde el SII`}
+                              className="inline-flex items-center justify-center h-9 w-9 rounded-xl bg-slate-50 text-slate-600 border border-[#efe8dd] hover:bg-white hover:text-black transition-all shadow-lg active:scale-90 disabled:opacity-60 disabled:cursor-wait"
+                            >
+                              {bajando === String(dte.folio)
+                                ? <Loader2 size={16} className="animate-spin text-blue-600" />
+                                : <Download size={16} />}
+                            </button>
                           </td>
                         </motion.tr>
                     );
