@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { Search, User, Phone, Mail, Loader2, UserPlus, RefreshCw, ArrowRightCircle, Trash2, RotateCcw, CheckCircle2, X, UserMinus, AlertTriangle, Clock, FileSpreadsheet } from 'lucide-react';
+import { Search, User, Phone, Mail, Loader2, UserPlus, RefreshCw, ArrowRightCircle, Trash2, RotateCcw, CheckCircle2, X, UserMinus, AlertTriangle, FileSpreadsheet, CalendarClock } from 'lucide-react';
 import { listarPersonasApi, cambiarEstadoPersonaApi, eliminarPersonaApi } from '@/services/personaService';
 import { toast } from '@/components/ui/use-toast';
 import PersonaDetailDrawer from '../modals/PersonaDetailDrawer';
@@ -30,6 +30,58 @@ const diasDesde = (fecha) => {
     const d = new Date(fecha);
     if (isNaN(d)) return null;
     return Math.floor((Date.now() - d.getTime()) / 86400000);
+};
+
+// --- Cuándo hay que contactar ------------------------------------------------
+// `proximo_contacto` es timestamptz y llega como "2026-08-06T00:00:00.000Z".
+// Se toma el día tal cual viene y se rearma en horario local: pasarlo por
+// `new Date(...)` a secas lo corre un día hacia atrás en Chile (UTC-4) y una
+// llamada agendada para el 6 aparecería como el 5.
+const soloFecha = (valor) => {
+    if (!valor) return null;
+    const m = String(valor).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+    const d = new Date(valor);
+    return isNaN(d) ? null : d;
+};
+// Días que faltan. Negativo = ya se pasó la fecha.
+const diasHasta = (d) => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    return Math.round((d.getTime() - hoy.getTime()) / 86400000);
+};
+
+// La fecha sola no dice nada a las 9 de la mañana con 80 prospectos al frente.
+// Lo que se necesita saber de un vistazo es a quién le toca HOY y a quién se le
+// pasó la fecha, así que el color y el "hace 3d" van junto al dato.
+const CuandoContactar = ({ valor, estado }) => {
+    const d = soloFecha(valor);
+    if (!d) return <span className="text-[10px] text-slate-400">—</span>;
+
+    // Un perdido o un inactivo no está "atrasado": no se le sigue.
+    const enCarrera = estado === 'prospecto' || estado === 'activo';
+    const dias = diasHasta(d);
+
+    const tono = !enCarrera ? 'text-slate-500 border-[#efe8dd] bg-slate-50'
+        : dias < 0 ? 'text-red-600 border-red-400/30 bg-red-400/10'
+        : dias === 0 ? 'text-amber-700 border-amber-400/40 bg-amber-400/15'
+        : dias <= 7 ? 'text-emerald-700 border-emerald-400/30 bg-emerald-400/10'
+        : 'text-slate-600 border-[#efe8dd] bg-slate-50';
+
+    const cuando = !enCarrera ? null
+        : dias < 0 ? `vencido hace ${Math.abs(dias)}d`
+        : dias === 0 ? 'hoy'
+        : dias === 1 ? 'mañana'
+        : `en ${dias}d`;
+
+    return (
+        <div className="flex flex-col items-start gap-0.5">
+            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border whitespace-nowrap ${tono}`}>
+                <CalendarClock size={10} /> {d.toLocaleDateString('es-CL')}
+            </span>
+            {cuando && <span className="text-[9px] text-slate-400">{cuando}</span>}
+        </div>
+    );
 };
 
 const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
@@ -226,7 +278,7 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
             <div className="flex-1 min-h-0 flex gap-4 items-stretch">
             <div className={`min-h-[420px] overflow-hidden rounded-2xl border border-[#efe8dd] bg-white flex flex-col transition-all ${selectedId ? 'lg:w-3/5' : 'w-full'}`}>
                 <div className="overflow-auto flex-1 scrollbar-hide">
-                    <table className="w-full min-w-[640px] text-left border-collapse">
+                    <table className="w-full min-w-[760px] text-left border-collapse">
                         <thead className="bg-white sticky top-0 z-10">
                             <tr className="border-b border-[#efe8dd] text-[10px] uppercase tracking-widest text-slate-500">
                                 <th className="pl-3 pr-1 py-2.5 w-8">
@@ -235,6 +287,7 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                                 <th className="px-4 py-2.5 font-black">Cliente</th>
                                 <th className="px-4 py-2.5 font-black">Contacto</th>
                                 <th className="px-4 py-2.5 font-black">Qué necesita</th>
+                                <th className="px-4 py-2.5 font-black">Contactar</th>
                                 <th className="px-4 py-2.5 font-black">Origen</th>
                                 <th className="px-4 py-2.5 font-black">Estado</th>
                                 <th className="px-4 py-2.5 font-black text-right">Acciones</th>
@@ -242,9 +295,9 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan="7" className="p-8 text-center text-slate-500"><Loader2 size={20} className="animate-spin inline" /></td></tr>
+                                <tr><td colSpan="8" className="p-8 text-center text-slate-500"><Loader2 size={20} className="animate-spin inline" /></td></tr>
                             ) : lista.length === 0 ? (
-                                <tr><td colSpan="7" className="p-8 text-center text-slate-500 text-sm">No hay registros para este filtro. Usa <span className="text-blue-600 font-bold">+ Crear Prospecto</span>.</td></tr>
+                                <tr><td colSpan="8" className="p-8 text-center text-slate-500 text-sm">No hay registros para este filtro. Usa <span className="text-blue-600 font-bold">+ Crear Prospecto</span>.</td></tr>
                             ) : lista.map(p => (
                                 <tr key={p.id} onClick={() => setSelectedId(p.id)} className={`border-b border-[#efe8dd] hover:bg-white/[0.04] transition-colors cursor-pointer ${selectedId === p.id ? 'bg-blue-500/10' : selectedIds.has(p.id) ? 'bg-blue-500/[0.06]' : ''}`}>
                                     <td className="pl-3 pr-1 py-2.5" onClick={(e) => toggleRow(p.id, e)}>
@@ -272,20 +325,16 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                                     {(p.telefonos || []).length === 0 && (p.correos || []).length === 0 && (
                                                 <span className="text-[10px] text-slate-500 italic">Sin contacto</span>
                                             )}
-                                            {/* Indicadores de seguimiento */}
+                                            {/* Estancado: sin fecha agendada y hace rato sin hablarle.
+                                                El atraso de los que SÍ tienen fecha lo muestra la
+                                                columna "Contactar", no se repite acá. */}
                                             {(() => {
                                                 const activoParaSeguir = p.estado === 'prospecto' || p.estado === 'activo';
                                                 const dUlt = diasDesde(p.fechaUltimoContacto);
-                                                const dProx = p.proximoContacto ? diasDesde(p.proximoContacto) : null;
+                                                if (!activoParaSeguir || p.proximoContacto) return null;
+                                                if (dUlt === null || dUlt < DIAS_ESTANCADO) return null;
                                                 return (
-                                                    <>
-                                                        {dProx !== null && dProx >= 0 && activoParaSeguir && (
-                                                            <span className="flex items-center gap-1 text-[9px] font-bold text-red-600"><Clock size={9} /> Seguir (vencido)</span>
-                                                        )}
-                                                        {activoParaSeguir && (dProx === null) && dUlt !== null && dUlt >= DIAS_ESTANCADO && (
-                                                            <span className="flex items-center gap-1 text-[9px] font-bold text-amber-700"><AlertTriangle size={9} /> {dUlt}d sin contacto</span>
-                                                        )}
-                                                    </>
+                                                    <span className="flex items-center gap-1 text-[9px] font-bold text-amber-700"><AlertTriangle size={9} /> {dUlt}d sin contacto</span>
                                                 );
                                             })()}
                                         </div>
@@ -304,6 +353,9 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                                         })()}
                                         {p.rubro && <span className="block text-[9px] text-slate-500 truncate">🏷️ {p.rubro}</span>}
                                         {p.ejecutivoNombre && <span className="block text-[9px] text-slate-500">👤 {p.ejecutivoNombre}</span>}
+                                    </td>
+                                    <td className="px-4 py-2.5">
+                                        <CuandoContactar valor={p.proximoContacto} estado={p.estado} />
                                     </td>
                                     <td className="px-4 py-2.5"><span className="text-[9px] uppercase tracking-widest text-slate-500">{p.origen}</span></td>
                                     <td className="px-4 py-2.5">

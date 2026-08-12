@@ -31,8 +31,8 @@ const CAMPOS = [
     { id: 'correo',          label: 'Correo',              icono: Mail,     pista: ['mail', 'correo', 'email', 'e-mail'] },
     { id: 'necesidad',       label: 'Qué necesita',        icono: null,     pista: ['que necesita', 'qué necesita', 'necesidad', 'requiere', 'servicio'] },
     { id: 'estado',          label: 'Estado',              icono: null,     pista: ['estado', 'estado del cliente', 'situacion', 'situación'] },
-    { id: 'proximoContacto', label: 'Cuándo contactar',    icono: Calendar, pista: ['contactar', 'proximo contacto', 'próximo contacto', 'seguimiento'] },
-    { id: 'fechaLlegada',    label: 'Cuándo llegó',        icono: Calendar, pista: ['cuando llego', 'cuándo llegó', 'fecha', 'ingreso'] },
+    { id: 'proximoContacto', label: 'Cuándo contactar',    icono: Calendar, pista: ['cuando contactar', 'cuándo contactar', 'contactar', 'proximo contacto', 'próximo contacto', 'seguimiento'] },
+    { id: 'fechaLlegada',    label: 'Cuándo llegó',        icono: Calendar, pista: ['cuando llego', 'cuándo llegó', 'cuando llegó', 'fecha', 'ingreso'] },
     { id: 'telefono2',       label: 'Intentos de llamada', icono: null,     pista: ['telefono 2', 'teléfono 2', 'llamadas', 'intentos'] },
     { id: 'llamados',        label: 'Notas',               icono: null,     pista: ['llamados', 'notas', 'observaciones', 'comentarios'] },
     { id: 'accion',          label: 'Acción siguiente',    icono: null,     pista: ['accion', 'acción', 'siguiente', 'tarea'] },
@@ -41,6 +41,38 @@ const CAMPOS = [
 // Sin tildes y en minúsculas, para que "Teléfono" y "telefono" se emparejen.
 const normaliza = (s) => String(s || '').trim().toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+// Empareja columnas con campos. Dos vueltas, y el orden importa:
+//
+//   1ª · coincidencia exacta. Es la que resuelve los casos peligrosos:
+//        "Telefono" se queda con el teléfono y "TELEFONO 2" con los intentos
+//        de llamada, y no al revés.
+//   2ª · el encabezado CONTIENE la pista. Acá caen los títulos que la gente
+//        escribe de verdad: "CUANDO CONTACTAR", "Fecha próximo contacto".
+//        Sin esta vuelta esas columnas quedaban en «— ninguna —» y su dato
+//        —la fecha en que hay que llamar— no se importaba nunca.
+//
+// Se propone, no se impone: el paso 2 muestra el resultado para corregirlo.
+const emparejar = (columnas) => {
+    const mapa = {};
+    const usadas = new Set();
+    const libre = (c) => !usadas.has(c);
+    const asigna = (campo, col) => { mapa[campo.id] = col; usadas.add(col); };
+
+    for (const campo of CAMPOS) {
+        const exacta = columnas.find(c => libre(c) && campo.pista.includes(normaliza(c)));
+        if (exacta) asigna(campo, exacta);
+    }
+    for (const campo of CAMPOS) {
+        if (mapa[campo.id]) continue;
+        const parcial = columnas.find(c => libre(c) && campo.pista.some(p =>
+            // Solo pistas de 5+ letras: "fono" dentro de otra palabra da falsos
+            // positivos; "contactar" dentro de "CUANDO CONTACTAR" no.
+            normaliza(p).length >= 5 && normaliza(c).includes(normaliza(p))));
+        if (parcial) asigna(campo, parcial);
+    }
+    return mapa;
+};
 
 const inp = "w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-emerald-500";
 
@@ -85,13 +117,7 @@ const ImportarProspectosModal = ({ onClose, onImportado }) => {
             setFilas(datos);
 
             // Propuesta automática de mapeo, que después se puede corregir.
-            const auto = {};
-            const usadas = new Set();
-            for (const campo of CAMPOS) {
-                const hallada = cols.find(c => !usadas.has(c) && campo.pista.includes(normaliza(c)));
-                if (hallada) { auto[campo.id] = hallada; usadas.add(hallada); }
-            }
-            setMapa(auto);
+            setMapa(emparejar(cols));
             setPaso(2);
         } catch (e) {
             toast({ variant: 'destructive', title: 'No se pudo leer la planilla', description: e.message });
@@ -212,6 +238,43 @@ const ImportarProspectosModal = ({ onClose, onImportado }) => {
                                 <Dato n={previa.repetidasEnPlanilla} label="Repetidos en la planilla" tono="text-amber-600" />
                                 <Dato n={previa.descartadas} label="Sin datos útiles" tono="text-slate-400" />
                             </div>
+
+                            {/* Cuándo contactar. Es la única columna que se
+                                convierte en trabajo agendado, así que se muestra
+                                aparte: si sale 0 habiendo mapeado la columna, el
+                                problema está en el formato de la fecha y hay que
+                                verlo ANTES de importar, no después. */}
+                            {mapa.proximoContacto ? (
+                                <div className={`rounded-xl p-3 flex items-start gap-2 border ${previa.conProximoContacto > 0
+                                    ? 'bg-emerald-500/5 border-emerald-500/25'
+                                    : 'bg-amber-500/5 border-amber-500/25'}`}>
+                                    <Calendar size={14} className={`shrink-0 mt-0.5 ${previa.conProximoContacto > 0 ? 'text-emerald-600' : 'text-amber-600'}`} />
+                                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                                        {previa.conProximoContacto > 0 ? (
+                                            <>
+                                                <b>{previa.conProximoContacto}</b> traen fecha para contactar
+                                                (columna «{mapa.proximoContacto}»). Quedan agendados y aparecen
+                                                en la columna <b>Contactar</b> de la lista de prospectos.
+                                            </>
+                                        ) : (
+                                            <>
+                                                Ninguna fila de «{mapa.proximoContacto}» trae una fecha legible.
+                                                Se importarán sin fecha de contacto. Se esperan formatos como
+                                                <b> 6/8/2026</b> (día/mes/año) o <b>2026-08-06</b>.
+                                            </>
+                                        )}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="bg-amber-500/5 border border-amber-500/25 rounded-xl p-3 flex items-start gap-2">
+                                    <Calendar size={14} className="text-amber-600 shrink-0 mt-0.5" />
+                                    <p className="text-[11px] text-slate-600 leading-relaxed">
+                                        No indicaste qué columna es <b>«Cuándo contactar»</b>. Los prospectos
+                                        entran sin fecha de seguimiento. Vuelve <b>Atrás</b> si tu planilla
+                                        la trae.
+                                    </p>
+                                </div>
+                            )}
 
                             <div className="bg-emerald-500/5 border border-emerald-500/25 rounded-xl p-3 flex items-start gap-2">
                                 <Users size={14} className="text-emerald-600 shrink-0 mt-0.5" />

@@ -290,7 +290,7 @@ const CrmImportProspectosModal = ({ onClose, onImported }) => {
                             <div className="overflow-x-auto">
                                 <table className="w-full text-[10px] text-left">
                                     <thead className="text-slate-400 uppercase">
-                                        <tr><th className="pr-3 py-1">Nombre</th><th className="pr-3 py-1">Teléfono</th><th className="pr-3 py-1">Qué necesita</th><th className="pr-3 py-1">Llegó</th></tr>
+                                        <tr><th className="pr-3 py-1">Nombre</th><th className="pr-3 py-1">Teléfono</th><th className="pr-3 py-1">Qué necesita</th><th className="pr-3 py-1">Contactar</th><th className="pr-3 py-1">Llegó</th></tr>
                                     </thead>
                                     <tbody className="text-slate-600">
                                         {enRango.slice(0, 5).map((m, i) => (
@@ -298,6 +298,14 @@ const CrmImportProspectosModal = ({ onClose, onImported }) => {
                                                 <td className="pr-3 py-1">{m.nombre || <span className="text-slate-400 italic">sin nombre</span>}</td>
                                                 <td className="pr-3 py-1 font-mono">{m.telefonos[0] || '—'}</td>
                                                 <td className="pr-3 py-1 max-w-[160px] truncate" title={m._necesita || ''}>{m._necesita || '—'}</td>
+                                                {/* La fecha en que hay que llamar es lo que convierte la
+                                                    planilla en trabajo. Si sale "—" habiendo columna, es
+                                                    que el formato no se entendió: mejor verlo acá. */}
+                                                <td className="pr-3 py-1 font-mono">
+                                                    {m.proximoContacto
+                                                        ? <span className="text-emerald-700 font-bold">{m.proximoContacto}</span>
+                                                        : <span className="text-amber-600">—</span>}
+                                                </td>
                                                 <td className="pr-3 py-1 font-mono">{m._fechaTxt}</td>
                                             </tr>
                                         ))}

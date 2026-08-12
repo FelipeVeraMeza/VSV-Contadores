@@ -36,6 +36,16 @@ const textoLimpio = (v) => {
 // --- Fechas ------------------------------------------------------------------
 // Excel guarda las fechas como días desde el 30-12-1899. Un 46233 suelto no es
 // una fecha para nadie, así que se convierte acá.
+//
+// Cuando la celda viene como texto —que es lo normal en las planillas de
+// prospección, porque se escriben a mano— llega en formato chileno: día
+// primero. Eso NO se puede dejar en manos de `new Date()`, que lee al revés:
+//
+//   "6/8/2026"  → new Date lo entiende como 8 de junio, siendo el 6 de agosto
+//   "26/5/2026" → new Date devuelve Invalid Date (no existe el mes 26)
+//
+// O sea: la mitad de las fechas quedaban corridas y la otra mitad se perdía en
+// silencio. Por eso se parsea explícitamente antes de tocar `new Date`.
 export const fechaDesdeExcel = (v) => {
     if (v === null || v === undefined || v === '') return null;
     if (v instanceof Date) return isNaN(v) ? null : v;
@@ -44,7 +54,28 @@ export const fechaDesdeExcel = (v) => {
         if (v < 20000 || v > 60000) return null;
         return new Date(Date.UTC(1899, 11, 30) + v * 86400000);
     }
-    const d = new Date(String(v));
+
+    const s = String(v).trim();
+    if (!s) return null;
+
+    // Formato chileno: d/m/aaaa, d-m-aaaa o d.m.aaaa. Año de 2 dígitos → 2000+.
+    const cl = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
+    if (cl) {
+        const dia = Number(cl[1]);
+        const mes = Number(cl[2]);
+        const anio = Number(cl[3]) < 100 ? 2000 + Number(cl[3]) : Number(cl[3]);
+        if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+        const d = new Date(Date.UTC(anio, mes - 1, dia));
+        // Un 31/02 no revienta: Date lo corre al mes siguiente. Se descarta,
+        // porque una fecha inventada agenda una llamada el día equivocado.
+        return d.getUTCMonth() === mes - 1 && d.getUTCDate() === dia ? d : null;
+    }
+
+    // Serial de Excel que llegó como texto ("46233").
+    if (/^\d{4,6}$/.test(s)) return fechaDesdeExcel(Number(s));
+
+    // ISO (2026-08-06) y cualquier otro formato que el motor sepa leer.
+    const d = new Date(s);
     return isNaN(d) ? null : d;
 };
 
@@ -75,6 +106,11 @@ export const leerIntentos = (v) => {
 export const leerEstado = (v) => {
     const t = String(v ?? '').trim().toLowerCase();
     if (!t) return { estado: 'prospecto', etapa: null };
+    // Un signo de pregunta cambia el sentido de la frase entera: "contrata ?"
+    // no es que contrató, es que todavía no se sabe. Darlo por ganado lo saca
+    // de la lista de prospectos —que filtra por ese estado— y el lead se pierde
+    // de vista justo cuando había que insistirle.
+    if (t.includes('?')) return { estado: 'prospecto', etapa: 'En conversación' };
     if (/contrat|pagando|acept/.test(t))       return { estado: 'activo',    etapa: 'Ganado' };
     if (/pausa|no aplica|desist|rechaz/.test(t)) return { estado: 'inactivo', etapa: 'En pausa' };
     if (/perdid|no le interes/.test(t))        return { estado: 'perdido',   etapa: 'Perdido' };
