@@ -5,6 +5,7 @@ import { X, Building2, User, Edit, DollarSign, Briefcase, FileSpreadsheet, Key, 
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { EditableField, SecureField, SelectField } from '../ui/CrmUI';
+import LogoUploader from '@/components/ui/LogoUploader';
 import { createNotaApi, editarNotaApi, eliminarNotaApi, cambiarPlanApi, addServicioApi, removeServicioApi, reactivarServicioApi, toggleTicketApi } from '@/services/crmService';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -813,7 +814,12 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                         <EditableField label="Ciudad" name="ciudad" value={isEditing ? formData.ciudad : ciudad} isEditing={isEditing} onChange={handleInputChange} />
                         {isEditing && (
                             <div className="col-span-2 lg:col-span-3">
-                                <EditableField label="URL del Logo (opcional)" name="logo" value={formData.logo || ''} isEditing={true} onChange={handleInputChange} />
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Logo del cliente</p>
+                                <LogoUploader
+                                    value={formData.logo || formData.logo_url || ''}
+                                    onChange={(dataUri) => setFormData(prev => ({ ...prev, logo: dataUri }))}
+                                    onError={(msg) => toast({ variant: 'destructive', title: 'Logo', description: msg })}
+                                />
                             </div>
                         )}
                     </div>

@@ -433,11 +433,11 @@ const CrmDashboard = ({ onCrear }) => {
                     <SectionLabel>Resumen</SectionLabel>
                     {/* ===== KPIs principales (RF-001) ===== */}
                     <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-                        <Kpi icon={DollarSign} label="Ventas del mes" value={fmt(m.ventasMes)} sub="Recaudado este mes" color="text-emerald-600" bg="bg-emerald-500/15" />
+                        <Kpi icon={DollarSign} label={`Ventas · ${PERIODOS.find(p => p.id === periodo)?.label || 'Mes'}`} value={fmt(m.ventasPeriodo ?? m.ventasMes)} sub="Recaudado en el período elegido" color="text-emerald-600" bg="bg-emerald-500/15" />
                         <Kpi icon={Target} label="Meta mensual" value={fmt(m.metaMensual)} color="text-blue-600" bg="bg-blue-500/15"
                             right={esAdmin && <button onClick={() => { setEditandoMeta(true); setMetaInput(String(m.metaMensual || '')); }} className="text-[9px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5"><Pencil size={9} /> Editar</button>} />
                         <Kpi icon={TrendingUp} label="Avance" value={`${m.avance || 0}%`} sub={m.metaMensual ? `${fmtK(m.ventasMes)} de ${fmtK(m.metaMensual)}` : 'Fija una meta'} color="text-amber-600" bg="bg-amber-500/15" />
-                        <Kpi icon={Percent} label="Conversión" value={`${m.tasaConversion || 0}%`} sub={`${m.activos || 0} de ${m.totalPersonas || 0} clientes`} color="text-purple-600" bg="bg-purple-500/15" />
+                        <Kpi icon={Percent} label="Conversión" value={`${m.tasaConversion || 0}%`} sub={`${m.activos || 0} de ${m.totalPersonas || 0} prospectos`} color="text-purple-600" bg="bg-purple-500/15" />
                     </div>
 
                     {editandoMeta && (
@@ -470,13 +470,12 @@ const CrmDashboard = ({ onCrear }) => {
 
                     {/* ===== Indicadores comerciales (RF-013) ===== */}
                     {widgets.indicadores && (
-                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
                             <Mini icon={UserPlus} label="Prospectos nuevos" value={m.prospectosNuevos || 0} color="text-blue-600" />
                             <Mini icon={Users} label="Clientes activos" value={m.clientesActivos || 0} color="text-emerald-600" />
                             <Mini icon={FileText} label="Facturas pendientes" value={m.facturasPendientes || 0} color="text-amber-600" />
                             <Mini icon={AlertTriangle} label="Cobros vencidos" value={m.cobrosVencidos || 0} color="text-red-600" />
                             <Mini icon={TrendingUp} label="Ingresos esperados" value={fmtK(m.ingresosEsperados)} color="text-purple-600" />
-                            <Mini icon={DollarSign} label="Cobrado hoy" value={fmtK(m.cobradoHoy)} color="text-emerald-600" />
                         </div>
                     )}
 

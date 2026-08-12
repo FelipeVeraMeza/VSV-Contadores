@@ -32,6 +32,23 @@ export const cambiarEstadoPersonaApi = (sessionId, id, estado, motivo = '') => {
   return fetchWithAuth(`/personas/${id}/estado`, sessionId, { method: 'PUT', body: { estado, motivo } });
 };
 
+// ---- Agenda de acciones del prospecto (#5/#6/#7) ----
+export const listarAccionesApi = (sessionId, personaId) =>
+  fetchWithAuth(`/personas/${personaId}/acciones`, sessionId);
+
+export const crearAccionApi = (sessionId, personaId, data) =>
+  fetchWithAuth(`/personas/${personaId}/acciones`, sessionId, { method: 'POST', body: data });
+
+export const completarAccionApi = (sessionId, accionId, estado = 'completada') =>
+  fetchWithAuth(`/personas/acciones/${accionId}`, sessionId, { method: 'PATCH', body: { estado } });
+
+export const eliminarAccionApi = (sessionId, accionId) =>
+  fetchWithAuth(`/personas/acciones/${accionId}`, sessionId, { method: 'DELETE' });
+
+// Crear un servicio de interés al vuelo (#4)
+export const crearServicioApi = (sessionId, nombre, categoria = 'Soporte') =>
+  fetchWithAuth('/personas/catalogos/servicio', sessionId, { method: 'POST', body: { nombre, categoria } });
+
 export const eliminarPersonaApi = (sessionId, id) => {
   return fetchWithAuth(`/personas/${id}`, sessionId, { method: 'DELETE' });
 };

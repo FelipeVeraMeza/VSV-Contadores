@@ -4,7 +4,7 @@ import { X, UserPlus, AlertTriangle, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { cleanRut, formatRut } from '@/lib/rut';
-import { crearPersonaApi, buscarDuplicadosApi, getCatalogosApi } from '@/services/personaService';
+import { crearPersonaApi, buscarDuplicadosApi, getCatalogosApi, crearServicioApi, crearAccionApi } from '@/services/personaService';
 
 // Validación de RUT (dígito verificador, módulo 11) — lado cliente
 const validarRut = (rut) => {
@@ -25,6 +25,10 @@ const getSessionId = () => {
     try { return JSON.parse(localStorage.getItem('user') || '{}').sessionId; }
     catch { return null; }
 };
+const getUserId = () => {
+    try { return JSON.parse(localStorage.getItem('user') || '{}').id || ''; }
+    catch { return ''; }
+};
 
 const Field = ({ label, children }) => (
     <div className="flex flex-col gap-1">
@@ -38,12 +42,39 @@ const inputClass = "bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 tex
 const CrearClienteModal = ({ onClose, onCreated, empresaId = null }) => {
     const [form, setForm] = useState({
         nombre: '', segundoNombre: '', apellidos: '', fechaNacimiento: '',
-        rut: '', telefono: '', correo: '', direccion: '', comuna: '', region: '',
-        rubro: '', observaciones: '', origen: 'manual', ejecutivoId: '', etiquetasStr: '',
+        rut: '', telefono: '', telefono2: '', correo: '', direccion: '', comuna: '', region: '',
+        // El ejecutivo arranca en quien crea el prospecto (lo pidió Mati). Igual se
+        // puede cambiar en el desplegable.
+        rubro: '', observaciones: '', origen: 'manual', ejecutivoId: getUserId(), etiquetasStr: '',
         necesidad: ''
     });
     const [catalogos, setCatalogos] = useState({ etiquetas: [], ejecutivos: [], servicios: [] });
     const [serviciosSel, setServiciosSel] = useState([]);
+    // Crear un servicio al vuelo (#4)
+    const [nuevoServicio, setNuevoServicio] = useState('');
+    const [creandoServicio, setCreandoServicio] = useState(false);
+    // Próxima acción (#5/#6): qué hacer y cuándo. Al crear el prospecto se agenda.
+    const [accion, setAccion] = useState({ tipo: 'llamar', fechaHora: '', titulo: '' });
+
+    // Agrega un servicio nuevo al catálogo (sin duplicar) y lo deja seleccionado.
+    const crearServicioInline = async () => {
+        const nombre = nuevoServicio.trim();
+        if (!nombre || creandoServicio) return;
+        setCreandoServicio(true);
+        try {
+            const r = await crearServicioApi(getSessionId(), nombre);
+            const d = await r.json();
+            if (!d.success) throw new Error(d.message || 'No se pudo crear el servicio');
+            setCatalogos(prev => prev.servicios.some(s => s.id === d.servicio.id)
+                ? prev
+                : { ...prev, servicios: [...prev.servicios, d.servicio] });
+            setServiciosSel(prev => prev.includes(d.servicio.id) ? prev : [...prev, d.servicio.id]);
+            setNuevoServicio('');
+            if (d.yaExistia) toast({ title: 'Ese servicio ya existía', description: `Se seleccionó "${d.servicio.nombre}".` });
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'Error', description: e.message });
+        } finally { setCreandoServicio(false); }
+    };
 
     useEffect(() => {
         (async () => {
@@ -102,7 +133,7 @@ const CrearClienteModal = ({ onClose, onCreated, empresaId = null }) => {
             const payload = {
                 nombre: form.nombre, segundoNombre: form.segundoNombre, apellidos: form.apellidos,
                 fechaNacimiento: form.fechaNacimiento || null, rut: form.rut,
-                telefonos: form.telefono ? [form.telefono] : [],
+                telefonos: [form.telefono, form.telefono2].map(t => String(t || '').trim()).filter(Boolean),
                 correos: form.correo ? [form.correo] : [],
                 direccion: form.direccion, comuna: form.comuna, region: form.region,
                 rubro: form.rubro, observaciones: form.observaciones, origen: form.origen,
@@ -120,6 +151,18 @@ const CrearClienteModal = ({ onClose, onCreated, empresaId = null }) => {
                 return;
             }
             if (!data.success) throw new Error(data.message || 'Error');
+            // Agenda inicial: si se indicó una próxima acción, se crea (y con eso
+            // queda seteado el "próximo contacto" del prospecto). Es opcional: si
+            // falla, el prospecto igual quedó creado.
+            if (data.persona?.id && (accion.fechaHora || accion.titulo.trim())) {
+                try {
+                    await crearAccionApi(getSessionId(), data.persona.id, {
+                        tipo: accion.tipo,
+                        titulo: accion.titulo.trim() || null,
+                        fechaHora: accion.fechaHora || null,
+                    });
+                } catch { /* acción opcional */ }
+            }
             toast({ title: 'Cliente creado', description: 'Se registró como prospecto.' });
             if (onCreated) onCreated(data.persona);
             onClose();
@@ -171,6 +214,7 @@ const CrearClienteModal = ({ onClose, onCreated, empresaId = null }) => {
                         {/* Contacto */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <Field label="Teléfono"><input className={inputClass} value={form.telefono} onChange={set('telefono')} placeholder="+56 9 1234 5678" /></Field>
+                            <Field label="Teléfono 2 (opcional)"><input className={inputClass} value={form.telefono2} onChange={set('telefono2')} placeholder="Segundo número de contacto" /></Field>
                             <Field label="Correo electrónico"><input className={inputClass} value={form.correo} onChange={set('correo')} placeholder="correo@ejemplo.cl" /></Field>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -204,18 +248,42 @@ const CrearClienteModal = ({ onClose, onCreated, empresaId = null }) => {
                             </Field>
                         </div>
 
-                        {catalogos.servicios.length > 0 && (
-                            <Field label="Servicios de interés">
-                                <div className="flex flex-wrap gap-1.5">
-                                    {catalogos.servicios.map(s => (
-                                        <button type="button" key={s.id} onClick={() => toggleServicio(s.id)}
-                                            className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors ${serviciosSel.includes(s.id) ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
-                                            {s.nombre}
-                                        </button>
-                                    ))}
-                                </div>
-                            </Field>
-                        )}
+                        <Field label="Servicios de interés">
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                                {catalogos.servicios.map(s => (
+                                    <button type="button" key={s.id} onClick={() => toggleServicio(s.id)}
+                                        className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors ${serviciosSel.includes(s.id) ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-50 border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
+                                        {s.nombre}
+                                    </button>
+                                ))}
+                                {catalogos.servicios.length === 0 && <span className="text-[10px] text-slate-400 italic">Sin servicios en el catálogo. Crea el primero abajo.</span>}
+                            </div>
+                            {/* Crear un servicio al vuelo, sin duplicar (#4) */}
+                            <div className="flex gap-2">
+                                <input className={inputClass} value={nuevoServicio} onChange={(e) => setNuevoServicio(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); crearServicioInline(); } }}
+                                    placeholder="Crear un servicio nuevo…" />
+                                <button type="button" onClick={crearServicioInline} disabled={creandoServicio || !nuevoServicio.trim()}
+                                    className="shrink-0 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-600 rounded-lg px-3 text-[11px] font-black uppercase tracking-widest">
+                                    {creandoServicio ? '…' : '+ Crear'}
+                                </button>
+                            </div>
+                        </Field>
+
+                        {/* Próxima acción con el prospecto: qué y cuándo (#5/#6) */}
+                        <Field label="Próxima acción (opcional)">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                <select className={`${inputClass} cursor-pointer`} value={accion.tipo} onChange={(e) => setAccion(a => ({ ...a, tipo: e.target.value }))}>
+                                    <option value="llamar">Llamar</option>
+                                    <option value="reunion">Reunión</option>
+                                    <option value="seguimiento">Seguimiento</option>
+                                    <option value="prospectar">Prospectar</option>
+                                    <option value="otro">Otro</option>
+                                </select>
+                                <input type="datetime-local" className={inputClass} value={accion.fechaHora} onChange={(e) => setAccion(a => ({ ...a, fechaHora: e.target.value }))} />
+                                <input className={inputClass} value={accion.titulo} onChange={(e) => setAccion(a => ({ ...a, titulo: e.target.value }))} placeholder="Ej: Llamar a Marleny 13:30" />
+                            </div>
+                        </Field>
 
                         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
                             <Field label="¿Qué necesita?">

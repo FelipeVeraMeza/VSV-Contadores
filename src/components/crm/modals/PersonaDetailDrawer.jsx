@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import {
     obtenerPersonaApi, actualizarPersonaApi, agregarNotaPersonaApi, cambiarEstadoPersonaApi, eliminarPersonaApi,
-    getCatalogosApi, getEmpresasListaApi, asociarEmpresaApi, desasociarEmpresaApi, editarNotaApi, eliminarNotaApi, fusionarPersonaApi, listarPersonasApi, crearEmpresaParaPersonaApi
+    getCatalogosApi, getEmpresasListaApi, asociarEmpresaApi, desasociarEmpresaApi, editarNotaApi, eliminarNotaApi, fusionarPersonaApi, listarPersonasApi, crearEmpresaParaPersonaApi,
+    listarAccionesApi, crearAccionApi, completarAccionApi, eliminarAccionApi
 } from '@/services/personaService';
 
 const getSessionId = () => {
@@ -94,6 +95,32 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
     };
 
     useEffect(() => { cargar(); setIsEditing(false); }, [personaId]);
+
+    // ---- Agenda de acciones del prospecto (#5/#6/#7) ----
+    const [acciones, setAcciones] = useState([]);
+    const [nuevaAccion, setNuevaAccion] = useState({ tipo: 'llamar', fechaHora: '', titulo: '' });
+    const cargarAcciones = async () => {
+        try { const r = await listarAccionesApi(getSessionId(), personaId); const d = await r.json(); if (d.success) setAcciones(d.acciones || []); } catch { /* */ }
+    };
+    useEffect(() => { if (personaId) cargarAcciones(); }, [personaId]);
+    const addAccion = async () => {
+        if (!nuevaAccion.titulo.trim() && !nuevaAccion.fechaHora) { toast({ variant: 'destructive', title: 'Falta info', description: 'Pon un título o una fecha/hora.' }); return; }
+        try {
+            const r = await crearAccionApi(getSessionId(), personaId, { tipo: nuevaAccion.tipo, titulo: nuevaAccion.titulo.trim() || null, fechaHora: nuevaAccion.fechaHora || null });
+            const d = await r.json(); if (!d.success) throw new Error(d.message);
+            setNuevaAccion({ tipo: 'llamar', fechaHora: '', titulo: '' });
+            cargarAcciones(); cargar();
+        } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
+    };
+    const toggleAccion = async (a) => {
+        const nuevo = a.estado === 'completada' ? 'pendiente' : 'completada';
+        setAcciones(prev => prev.map(x => x.id === a.id ? { ...x, estado: nuevo } : x));
+        try { await completarAccionApi(getSessionId(), a.id, nuevo); cargarAcciones(); cargar(); } catch { cargarAcciones(); }
+    };
+    const delAccion = async (a) => {
+        setAcciones(prev => prev.filter(x => x.id !== a.id));
+        try { await eliminarAccionApi(getSessionId(), a.id); cargar(); } catch { cargarAcciones(); }
+    };
 
     const set = (k) => (e) => setForm(prev => ({ ...prev, [k]: e.target.value }));
 
@@ -372,6 +399,37 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
                                 <CheckCircle2 size={14} /> Reactivar Cliente
                             </button>
                         )}
+
+                        {/* AGENDA DE ACCIONES · qué hacer y cuándo (#5/#6/#7) */}
+                        <div className="mt-4 border-t border-[#efe8dd] pt-3">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1 mb-2"><Clock size={11} /> Agenda de acciones</span>
+                            <div className="space-y-1 mb-2">
+                                {acciones.length === 0 && <p className="text-[10px] text-slate-400 italic">Sin acciones agendadas.</p>}
+                                {acciones.map(a => {
+                                    const hecha = a.estado === 'completada';
+                                    return (
+                                        <div key={a.id} className="flex items-start gap-2 group bg-slate-50 border border-[#efe8dd] rounded-lg px-2 py-1.5">
+                                            <button onClick={() => toggleAccion(a)} className="shrink-0 mt-0.5" title={hecha ? 'Reabrir' : 'Completar'}>
+                                                {hecha ? <CheckCircle2 size={14} className="text-emerald-500" /> : <Clock size={14} className="text-slate-300 hover:text-emerald-500" />}
+                                            </button>
+                                            <div className="min-w-0 flex-1">
+                                                <p className={`text-[11px] font-bold ${hecha ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{a.titulo || a.tipo}</p>
+                                                <p className="text-[9px] text-slate-400 capitalize">{a.tipo}{a.fechaHora ? ` · ${new Date(a.fechaHora).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}</p>
+                                            </div>
+                                            <button onClick={() => delAccion(a)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"><Trash2 size={11} /></button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+                                <select value={nuevaAccion.tipo} onChange={(e) => setNuevaAccion(a => ({ ...a, tipo: e.target.value }))} className="bg-white border border-[#efe8dd] rounded-lg px-2 py-1.5 text-xs outline-none focus:border-emerald-500 cursor-pointer">
+                                    <option value="llamar">Llamar</option><option value="reunion">Reunión</option><option value="seguimiento">Seguimiento</option><option value="prospectar">Prospectar</option><option value="otro">Otro</option>
+                                </select>
+                                <input type="datetime-local" value={nuevaAccion.fechaHora} onChange={(e) => setNuevaAccion(a => ({ ...a, fechaHora: e.target.value }))} className="bg-white border border-[#efe8dd] rounded-lg px-2 py-1.5 text-xs outline-none focus:border-emerald-500" />
+                                <input value={nuevaAccion.titulo} onChange={(e) => setNuevaAccion(a => ({ ...a, titulo: e.target.value }))} placeholder="Ej: Llamar a Marleny 13:30" className="bg-white border border-[#efe8dd] rounded-lg px-2 py-1.5 text-xs outline-none focus:border-emerald-500" />
+                                <button onClick={addAccion} className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-2 py-1.5 text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-1"><Plus size={12} /> Agendar</button>
+                            </div>
+                        </div>
                     </div>
 
                     {/* Contenido */}

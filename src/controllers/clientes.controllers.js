@@ -1200,8 +1200,8 @@ export const crearEmpresaCRM = async (req, res) => {
                 telefono_corporativo, email_corporativo, whatsapp,
                 nombre_rep, rut_rep_encrypted, rut_rep_hash,
                 plan_id, tipo_cliente, nota_urgente, organizacion_id, responsable_id,
-                drive_url, en_cartera
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+                drive_url, en_cartera, logo_url
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
             RETURNING id, razon_social`,
             [
                 nombreFinal,
@@ -1226,7 +1226,9 @@ export const crearEmpresaCRM = async (req, res) => {
                 // Un cliente que se crea a mano es un cliente que se va a
                 // facturar. Si naciera fuera de cartera no entraría al cobro del
                 // mes y nadie se daría cuenta hasta fin de mes.
-                req.body.enCartera === false ? false : true
+                req.body.enCartera === false ? false : true,
+                // Logo del cliente: imagen embebida (data URI base64) o null.
+                req.body.logo?.trim() || null
             ]
         );
         const empresaId = ins.rows[0].id;

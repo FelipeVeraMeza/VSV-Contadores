@@ -29,6 +29,7 @@ import { toast } from '@/components/ui/use-toast';
 import { crearEmpresaApi } from '@/services/crmService';
 import { getCatalogosApi } from '@/services/personaService';
 import { formatRut } from '@/lib/rut';
+import LogoUploader from '@/components/ui/LogoUploader';
 
 const getSessionId = () => {
     try { return JSON.parse(localStorage.getItem('user') || '{}').sessionId; }
@@ -100,6 +101,7 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
         // empresa y cuál del representante está por definirse (ticket aparte).
         claveSII: '', claveWeb: '', correoSII: '',
         driveUrl: '', tipoCliente: 'Empresa',
+        logo: '',
     });
     const [verClaves, setVerClaves] = useState(false);
     // Arranca con una fila vacía para que se vea dónde escribir.
@@ -281,6 +283,15 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
                             <Campo label="Régimen Tributario">
                                 <input className={inputCls} value={form.regimen} onChange={(e) => set('regimen', e.target.value)} placeholder="Ej: 14 D N°3 (Propyme)" />
                             </Campo>
+                        </div>
+
+                        <div className="border-t border-[#efe8dd] pt-3">
+                            <h3 className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2">Logo (opcional)</h3>
+                            <LogoUploader
+                                value={form.logo}
+                                onChange={(dataUri) => set('logo', dataUri)}
+                                onError={(msg) => toast({ variant: 'destructive', title: 'Logo', description: msg })}
+                            />
                         </div>
 
                         <div className="border-t border-[#efe8dd] pt-3">

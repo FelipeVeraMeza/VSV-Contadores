@@ -915,3 +915,141 @@ export const fusionarPersona = async (req, res) => {
         client.release();
     }
 };
+
+// ============================================================
+// AGENDA DE ACCIONES DEL PROSPECTO  (pedidos de Mati #5, #6, #7)
+// ------------------------------------------------------------
+// Cada acción es algo que hay que hacer con el prospecto: llamar, reunión,
+// seguimiento… con su fecha/hora y una nota. La "próxima acción" del prospecto
+// (persona.proximo_contacto + accion_siguiente) se mantiene en sincronía con la
+// acción pendiente más cercana, así el dashboard y la lista siguen funcionando.
+// ============================================================
+const TIPOS_ACCION = ['llamar', 'reunion', 'seguimiento', 'prospectar', 'otro'];
+
+// Deja en persona.proximo_contacto / accion_siguiente la acción pendiente más próxima.
+const sincronizarProxima = async (client, personaId) => {
+    const { rows } = await client.query(
+        `SELECT tipo, titulo, fecha_hora FROM persona_accion
+          WHERE persona_id = $1 AND estado = 'pendiente' AND fecha_hora IS NOT NULL
+          ORDER BY fecha_hora ASC LIMIT 1`, [personaId]);
+    const prox = rows[0] || null;
+    await client.query(
+        `UPDATE persona SET proximo_contacto = $2, accion_siguiente = $3, updated_at = NOW() WHERE id = $1`,
+        [personaId, prox?.fecha_hora || null, prox ? (prox.titulo || prox.tipo) : null]);
+};
+
+export const listarAcciones = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { rows } = await pool.query(
+            `SELECT a.id, a.tipo, a.titulo, a.fecha_hora AS "fechaHora", a.nota, a.estado,
+                    a.completed_at AS "completedAt", u.nombre AS "creadoPor"
+               FROM persona_accion a LEFT JOIN usuario u ON u.id = a.creado_por
+              WHERE a.persona_id = $1
+              ORDER BY (a.estado = 'pendiente') DESC, a.fecha_hora ASC NULLS LAST, a.created_at DESC`,
+            [id]);
+        return res.json({ success: true, acciones: rows });
+    } catch (e) {
+        console.error('❌ listarAcciones:', e.message);
+        return res.status(500).json({ success: false, message: 'No se pudieron cargar las acciones.' });
+    }
+};
+
+export const crearAccion = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        const { tipo = 'llamar', titulo, fechaHora, nota } = req.body;
+        const tipoOk = TIPOS_ACCION.includes(tipo) ? tipo : 'otro';
+        if (!titulo?.trim() && !fechaHora && !nota?.trim()) {
+            return res.status(400).json({ success: false, message: 'La acción necesita al menos un título, una fecha o una nota.' });
+        }
+        const p = await client.query(
+            `SELECT id FROM persona WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`,
+            [id, req.user?.organizacionId || null]);
+        if (!p.rows.length) return res.status(404).json({ success: false, message: 'Prospecto no encontrado.' });
+
+        await client.query('BEGIN');
+        const { rows } = await client.query(
+            `INSERT INTO persona_accion (persona_id, tipo, titulo, fecha_hora, nota, creado_por)
+             VALUES ($1,$2,$3,$4,$5,$6)
+             RETURNING id, tipo, titulo, fecha_hora AS "fechaHora", nota, estado`,
+            [id, tipoOk, titulo?.trim() || null, fechaHora || null, nota?.trim() || null, req.user?.usuarioId || null]);
+        await sincronizarProxima(client, id);
+        await client.query('COMMIT');
+        return res.status(201).json({ success: true, accion: rows[0] });
+    } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('❌ crearAccion:', e.message);
+        return res.status(500).json({ success: false, message: 'No se pudo crear la acción.' });
+    } finally { client.release(); }
+};
+
+export const completarAccion = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { accionId } = req.params;
+        const nuevo = req.body?.estado === 'pendiente' ? 'pendiente' : 'completada';
+        await client.query('BEGIN');
+        const { rows } = await client.query(
+            `UPDATE persona_accion
+                SET estado = $2, completed_at = CASE WHEN $2 = 'completada' THEN NOW() ELSE NULL END
+              WHERE id = $1 RETURNING persona_id`,
+            [accionId, nuevo]);
+        if (!rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ success: false, message: 'Acción no encontrada.' }); }
+        // Completar una acción cuenta como contacto hecho.
+        if (nuevo === 'completada') {
+            await client.query(`UPDATE persona SET fecha_ultimo_contacto = NOW() WHERE id = $1`, [rows[0].persona_id]);
+        }
+        await sincronizarProxima(client, rows[0].persona_id);
+        await client.query('COMMIT');
+        return res.json({ success: true });
+    } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('❌ completarAccion:', e.message);
+        return res.status(500).json({ success: false, message: 'No se pudo actualizar la acción.' });
+    } finally { client.release(); }
+};
+
+export const eliminarAccion = async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { accionId } = req.params;
+        await client.query('BEGIN');
+        const { rows } = await client.query(`DELETE FROM persona_accion WHERE id = $1 RETURNING persona_id`, [accionId]);
+        if (rows.length) await sincronizarProxima(client, rows[0].persona_id);
+        await client.query('COMMIT');
+        return res.json({ success: true });
+    } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('❌ eliminarAccion:', e.message);
+        return res.status(500).json({ success: false, message: 'No se pudo eliminar la acción.' });
+    } finally { client.release(); }
+};
+
+// Crear un servicio "al vuelo" desde el formulario de prospecto (pedido #4).
+// Sin duplicados: si el slug ya existe, se devuelve el que había.
+export const crearServicioCRM = async (req, res) => {
+    try {
+        const nombre = String(req.body?.nombre || '').trim();
+        if (!nombre) return res.status(400).json({ success: false, message: 'Falta el nombre del servicio.' });
+        const CATS = ['Tributaria', 'Contabilidad', 'RRHH', 'Soporte', 'Legal'];
+        const categoria = CATS.includes(req.body?.categoria) ? req.body.categoria : 'Soporte';
+        const slug = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+            .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+        if (!slug) return res.status(400).json({ success: false, message: 'Nombre de servicio inválido.' });
+
+        const dup = await pool.query(`SELECT id, nombre FROM servicio WHERE slug = $1`, [slug]);
+        if (dup.rows.length) return res.json({ success: true, servicio: dup.rows[0], yaExistia: true });
+
+        const { rows } = await pool.query(
+            `INSERT INTO servicio (id, nombre, slug, es_critico, categoria, activo, organizacion_id)
+             VALUES (gen_random_uuid(), $1, $2, false, $3, true, $4)
+             RETURNING id, nombre`,
+            [nombre, slug, categoria, req.user?.organizacionId || null]);
+        return res.status(201).json({ success: true, servicio: rows[0] });
+    } catch (e) {
+        console.error('❌ crearServicioCRM:', e.message);
+        return res.status(500).json({ success: false, message: 'No se pudo crear el servicio.' });
+    }
+};

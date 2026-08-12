@@ -171,6 +171,12 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   const [avanceManual, setAvanceManual] = useState({ numero: 0, total: 11, paso: '' });
   const [segundosEmitiendo, setSegundosEmitiendo] = useState(0);
 
+  // Con qué EMPRESA EMISORA se emite (el RUT que va como emisor en el SII).
+  // Antes el robot elegía siempre una posición fija del desplegable del SII, así
+  // que todo salía con la misma empresa. Ahora el usuario la elige acá y el robot
+  // la selecciona por su RUT.
+  const [rutEmisor, setRutEmisor] = useState('');
+
   const [allClientes, setAllClientes] = useState([]); 
   const [searchTerm, setSearchTerm] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -193,6 +199,20 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
   const empresaEfectiva = selectedCompany || empresaEncontrada;
   const isExternal = empresaEncontrada?.id === 'EXTERNO';
   const razonSocialSegura = empresaEfectiva?.razon_social || empresaEfectiva?.razonSocial || (searchTerm.length > 0 ? 'Buscando...' : '---');
+
+  // Empresas con las que este usuario puede emitir (las que tiene asignadas en el
+  // sistema, con su RUT). Es la lista del selector de "Empresa emisora".
+  const empresasEmisoras = useMemo(
+    () => (user?.assignedCompanies || []).filter(e => e?.rut),
+    [user]
+  );
+  // Al abrir, si todavía no hay emisora elegida, se deja puesta la primera para no
+  // obligar a elegir en el caso normal (una sola empresa emisora).
+  useEffect(() => {
+    if (isOpen && !rutEmisor && empresasEmisoras.length > 0) {
+      setRutEmisor(cleanRut(empresasEmisoras[0].rut || ''));
+    }
+  }, [isOpen, empresasEmisoras, rutEmisor]);
 
   // ====================================================
   // 🔥 LÓGICA DE PAGINACIÓN DE LA TABLA
@@ -736,6 +756,9 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
       
       const payload = {
         empresa_id: empresaEfectiva.id,
+        // RUT de la empresa EMISORA elegida arriba: el robot la busca por este RUT
+        // en el desplegable del SII en vez de tomar una fija.
+        rutEmisor: cleanRut(rutEmisor || ''),
         razonSocial: razonSocialSegura,
         rutReceptor: rutFull,
         dvReceptor: dv,
@@ -865,6 +888,36 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
               {activeTab === TABS.UNICA && (
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 animate-in fade-in duration-300">
                   <div className="space-y-6 pb-4">
+                    {/* EMPRESA EMISORA · con qué RUT se emite en el SII */}
+                    <div className="bg-white border border-[#efe8dd] rounded-2xl p-6 shadow-inner relative">
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <Building2 size={14} /> Empresa Emisora
+                      </h4>
+                      {empresasEmisoras.length > 0 ? (
+                        <select
+                          value={rutEmisor}
+                          onChange={(e) => setRutEmisor(e.target.value)}
+                          className="w-full h-12 bg-slate-50 border border-[#efe8dd] rounded-xl px-4 text-sm font-bold text-slate-700 outline-none focus:border-blue-500 cursor-pointer"
+                        >
+                          {empresasEmisoras.map((e) => {
+                            const rutLimpio = cleanRut(e.rut || '');
+                            return (
+                              <option key={e.id} value={rutLimpio}>
+                                {(e.razonSocial || e.razon_social)} — {formatRutSimple(e.rut)}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      ) : (
+                        <p className="text-xs text-amber-600 font-semibold">
+                          No hay empresas emisoras asignadas a tu usuario. La factura saldrá con la empresa que el SII tenga por defecto.
+                        </p>
+                      )}
+                      <p className="text-[10px] text-slate-400 mt-2">
+                        Es la empresa con cuyo RUT se emite en el SII. El robot la selecciona automáticamente.
+                      </p>
+                    </div>
+
                     <div className="bg-white border border-[#efe8dd] rounded-2xl p-6 shadow-inner relative">
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
                         <Search size={14} /> {selectedCompany ? 'Cliente Seleccionado' : 'Buscador de Clientes Búnker'}

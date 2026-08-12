@@ -703,19 +703,25 @@ export const metricasDashboard = async (req, res) => {
             // Indicadores de dinero (nivel firma / organización). RF-001, RF-007, RF-013
             pool.query(
                 `SELECT
-                    COALESCE(SUM(COALESCE(monto_facturado,monto_esperado)) FILTER (WHERE periodo=date_trunc('month',CURRENT_DATE)::date AND estado='PAGADA'),0)::float AS ventas_mes,
-                    COALESCE(SUM(monto_esperado) FILTER (WHERE periodo=date_trunc('month',CURRENT_DATE)::date AND estado IN ('POR_EMITIR','PENDIENTE_PAGO')),0)::float AS ingresos_esperados,
+                    -- Recaudado DENTRO DEL PERÍODO elegido (hoy/semana/mes/año/rango):
+                    -- lo pagado con fecha de pago en [desde, hasta]. Es la métrica que
+                    -- responde al filtro de arriba.
+                    COALESCE(SUM(COALESCE(monto_facturado,monto_esperado)) FILTER (WHERE estado='PAGADA' AND fecha_pago >= $2::timestamptz AND fecha_pago <= $3::timestamptz),0)::float AS ventas_periodo,
+                    -- Recaudado del MES en curso: se usa para el avance contra la meta
+                    -- mensual, que siempre es mensual.
+                    COALESCE(SUM(COALESCE(monto_facturado,monto_esperado)) FILTER (WHERE date_trunc('month',periodo)=date_trunc('month',CURRENT_DATE) AND estado='PAGADA'),0)::float AS ventas_mes,
+                    COALESCE(SUM(monto_esperado) FILTER (WHERE date_trunc('month',periodo)=date_trunc('month',CURRENT_DATE) AND estado IN ('POR_EMITIR','PENDIENTE_PAGO')),0)::float AS ingresos_esperados,
                     COUNT(*) FILTER (WHERE estado='PENDIENTE_PAGO')::int AS facturas_pendientes,
                     COUNT(*) FILTER (WHERE estado='PENDIENTE_PAGO' AND fecha_vencimiento < CURRENT_DATE)::int AS cobros_vencidos,
                     COALESCE(SUM(COALESCE(monto_facturado,monto_esperado)) FILTER (WHERE fecha_pago::date = CURRENT_DATE AND estado='PAGADA'),0)::float AS cobrado_hoy
-                 FROM cobro_mensual WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid`, [org]),
+                 FROM cobro_mensual WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid`, [org, desde, hasta]),
             pool.query(
-                `SELECT to_char(periodo,'YYYY-MM') AS mes,
+                `SELECT to_char(date_trunc('month',periodo),'YYYY-MM') AS mes,
                         COALESCE(SUM(COALESCE(monto_facturado,monto_esperado)) FILTER (WHERE estado='PAGADA'),0)::float AS recaudado
                  FROM cobro_mensual
                  WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid
                    AND periodo >= (date_trunc('month',CURRENT_DATE) - INTERVAL '5 months')::date
-                 GROUP BY periodo ORDER BY periodo`, [org]),
+                 GROUP BY date_trunc('month',periodo) ORDER BY date_trunc('month',periodo)`, [org]),
             pool.query(`SELECT meta_mensual FROM crm_config WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid`, [org]),
             // Conteos de personas + clientes activos (empresas). RF-001, RF-013
             pool.query(
@@ -807,7 +813,7 @@ export const metricasDashboard = async (req, res) => {
             metricas: {
                 periodo: label, desde, hasta,
                 // RF-001
-                ventasMes, metaMensual: meta,
+                ventasMes, ventasPeriodo: money.ventas_periodo || 0, metaMensual: meta,
                 avance: meta > 0 ? Math.min(100, Math.round((ventasMes / meta) * 100)) : 0,
                 tasaConversion,
                 // conteos personas + RF-013

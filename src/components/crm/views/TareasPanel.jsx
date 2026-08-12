@@ -193,6 +193,47 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
     );
 };
 
+// ¿El adjunto es una imagen? Se mira el mime y, por si viniera vacío, la extensión.
+const esImagen = (a) =>
+    /^image\//i.test(a?.mime || '') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(a?.nombre || '');
+
+// ---------------------------------------------------------------
+// Miniatura de un adjunto de imagen
+// ---------------------------------------------------------------
+// Las imágenes viven como binario en la base (tarea_adjunto.contenido). Este
+// componente las baja UNA vez, arma un blob en memoria y las muestra en pantalla
+// —sin guardarlas en el disco—. Al hacer clic se abren a tamaño completo.
+// Si por lo que sea no carga, cae al ícono de clip como cualquier archivo.
+const ImagenAdjunta = ({ adjunto, onVer }) => {
+    const [url, setUrl] = useState(null);
+    const [error, setError] = useState(false);
+    useEffect(() => {
+        let vivo = true; let objUrl = null;
+        (async () => {
+            try {
+                const r = await descargarAdjuntoApi(getSessionId(), adjunto.id);
+                if (!r.ok) throw new Error();
+                objUrl = URL.createObjectURL(await r.blob());
+                if (vivo) setUrl(objUrl); else URL.revokeObjectURL(objUrl);
+            } catch { if (vivo) setError(true); }
+        })();
+        return () => { vivo = false; if (objUrl) URL.revokeObjectURL(objUrl); };
+    }, [adjunto.id]);
+
+    if (error) return <Paperclip size={13} className="text-slate-400 shrink-0" />;
+    if (!url) return (
+        <div className="w-11 h-11 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+            <Loader2 size={13} className="animate-spin text-slate-400" />
+        </div>
+    );
+    return (
+        <button type="button" onClick={() => onVer(url, adjunto.nombre)} className="shrink-0" title="Ver imagen">
+            <img src={url} alt={adjunto.nombre}
+                 className="w-11 h-11 rounded-lg object-cover border border-[#efe8dd] hover:ring-2 hover:ring-emerald-400 transition" />
+        </button>
+    );
+};
+
 // ---------------------------------------------------------------
 // Panel de detalle: subtareas + comentarios + estado
 // ---------------------------------------------------------------
@@ -214,6 +255,8 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
     const [enviandoCom, setEnviandoCom] = useState(false);
     const [creandoSub, setCreandoSub] = useState(false);
     const [guardandoPlantilla, setGuardandoPlantilla] = useState(false);
+    // Imagen abierta a tamaño completo (visor). null = cerrado.
+    const [verImagen, setVerImagen] = useState(null);
     const fileRef = React.useRef(null);
 
     const cargar = useCallback(async () => {
@@ -580,7 +623,9 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                     <div className="space-y-1 mb-2">
                         {adjs.map(a => (
                             <div key={a.id} className="flex items-center gap-2 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 group">
-                                <Paperclip size={13} className="text-slate-400 shrink-0" />
+                                {esImagen(a)
+                                    ? <ImagenAdjunta adjunto={a} onVer={(url, nombre) => setVerImagen({ url, nombre })} />
+                                    : <Paperclip size={13} className="text-slate-400 shrink-0" />}
                                 <div className="min-w-0 flex-1">
                                     <p className="text-[11px] font-bold text-slate-700 truncate">{a.nombre}</p>
                                     <p className="text-[9px] text-slate-400">{kb(a.tamano)} · {a.autor}</p>
@@ -624,6 +669,24 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Visor de imagen a tamaño completo (clic afuera o en Cerrar para salir) */}
+            {verImagen && (
+                <div className="fixed inset-0 z-[130] bg-black/80 flex items-center justify-center p-6"
+                     onClick={() => setVerImagen(null)}>
+                    <div className="max-w-3xl max-h-[90vh] flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                        <img src={verImagen.url} alt={verImagen.nombre}
+                             className="max-w-full max-h-[80vh] rounded-lg object-contain shadow-2xl" />
+                        <div className="flex items-center gap-4">
+                            <span className="text-white/90 text-xs font-semibold truncate max-w-[60vw]">{verImagen.nombre}</span>
+                            <button onClick={() => setVerImagen(null)}
+                                    className="text-white/70 hover:text-white text-[11px] font-black uppercase tracking-widest">
+                                Cerrar ✕
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
