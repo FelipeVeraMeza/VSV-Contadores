@@ -13,8 +13,10 @@ import {
 } from "lucide-react";
 import { cleanRut } from "@/lib/rut.js";
 
-import { useAuth } from "@/hooks/useAuth.jsx"; 
+import { useAuth } from "@/hooks/useAuth.jsx";
 import { getCrmDataApi } from "@/services/crmService.js";
+// Faltaba este import: sin él la emisión moría con "apiDTE is not defined".
+import * as apiDTE from "@/services/apiDTE.js";
 
 // --- CONFIGURACIONES ---
 const DOC_CONFIG = {

@@ -11,6 +11,9 @@ import { useAuth } from "@/hooks/useAuth.jsx";
 // Servicios
 import { getCrmDataApi } from "@/services/crmService.js";
 import { obtenerHistorialBunker } from '@/services/dteConsultasService';
+// La emisión de la nota moría con "apiDTE is not defined" porque faltaba este import
+// (mismo bug que tuvo la factura electrónica).
+import * as apiDTE from "@/services/apiDTE.js";
 
 // ==========================================
 // 🛠️ UTILIDADES DE BÚSQUEDA Y FORMATO

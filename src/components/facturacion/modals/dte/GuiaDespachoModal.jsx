@@ -14,6 +14,8 @@ import { toast } from "@/components/ui/use-toast";
 import { buildDteJson } from "@/lib/dte/buildDte";
 import { API_BASE_URL } from "../../../../../config.js";
 import { cleanRut } from "@/lib/rut.js";
+// Faltaba este import: sin él la emisión moría con "apiDTE is not defined".
+import * as apiDTE from "@/services/apiDTE.js";
 import {
   Select,
   SelectContent,
