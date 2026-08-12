@@ -74,9 +74,15 @@ export const AuthProvider = ({ children }) => {
                 setSelectedCompany(null);
                 localStorage.removeItem('selectedCompany');
                 localStorage.removeItem('empresaActivaCRM');
-                // Sesión nueva: no hay elección previa de "consolidado", así que el
-                // efecto de abajo dejará puesta la empresa principal.
-                localStorage.removeItem('companyScope');
+                // Al iniciar sesión, el Administrador arranca en "Todas las empresas"
+                // (consolidado). El efecto de abajo respeta companyScope='ALL' y no le
+                // impone la empresa principal. Un rol Cliente NO puede ver el
+                // consolidado, así que a ese se le sigue eligiendo una empresa.
+                if (data.rol === 'Administrador') {
+                    localStorage.setItem('companyScope', 'ALL');
+                } else {
+                    localStorage.removeItem('companyScope');
+                }
 
                 setLoading(false);
                 navigate('/dashboard', { replace: true });

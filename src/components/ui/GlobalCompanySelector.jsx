@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth.jsx';
 import { useBunkerData } from '../crm/crmData';
 import { useEmpresasLista } from '@/hooks/useEmpresasLista';
 
-const LABEL_CONSOLIDADO = 'Todas las empresas (consolidado)';
+const LABEL_CONSOLIDADO = 'Todas las empresas';
 
 const GlobalCompanySelector = () => {
     const { user, selectedCompany, setSelectedCompany } = useAuth();

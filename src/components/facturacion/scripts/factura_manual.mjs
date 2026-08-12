@@ -159,60 +159,23 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
 
             const selectBox = await page.$('select[name="RUT_EMP"]');
             if (selectBox) {
-                // ================================================================
-                // ELEGIR LA EMPRESA EMISORA CORRECTA
-                // ----------------------------------------------------------------
-                // Antes se tomaba SIEMPRE una posición fija del desplegable
-                // (options[1] u options[2]), así que toda factura salía con la
-                // misma empresa sin importar cuál se hubiera elegido en la app.
-                // Ahora se busca la opción cuyo RUT coincide con la empresa emisora
-                // seleccionada por el usuario (datos.rutEmisor).
-                // ================================================================
-                const rutObjetivo = String(datos.rutEmisor || '').replace(/[^0-9kK]/gi, '').toUpperCase();
-                console.log(`🏢 Empresa emisora pedida (RUT): ${rutObjetivo || '(no informado)'}`);
-
-                const eleccion = await page.evaluate((rutObjetivo) => {
-                    const sel = document.querySelector('select[name="RUT_EMP"]');
-                    if (!sel || sel.options.length === 0) return { estado: 'sin_opciones' };
-
-                    const soloRut = (s) => String(s || '').replace(/[^0-9kK]/gi, '').toUpperCase();
-                    const cuerpo  = (r) => (r.length > 1 ? r.slice(0, -1) : r);
-                    const coincide = (a, b) => {
-                        if (!a || !b) return false;
-                        return a === b || cuerpo(a) === cuerpo(b) || a === cuerpo(b) || cuerpo(a) === b;
-                    };
-                    const disponibles = Array.from(sel.options)
-                        .filter(o => soloRut(o.value) || soloRut(o.text))
-                        .map(o => o.text.trim());
-
-                    if (rutObjetivo) {
-                        for (const opt of sel.options) {
-                            if (coincide(soloRut(opt.text), rutObjetivo) || coincide(soloRut(opt.value), rutObjetivo)) {
-                                return { estado: 'match', value: opt.value, label: opt.text.trim() };
-                            }
+                console.log('🏢 Seleccionando empresa emisora...');
+                const valueSegundaEmpresa = await page.evaluate(() => {
+                    const selectElement = document.querySelector('select[name="RUT_EMP"]');
+                    if (selectElement && selectElement.options.length > 0) {
+                        let targetIndex = 1;
+                        if (selectElement.options[0].text.toLowerCase().includes('seleccione')) {
+                            if (selectElement.options.length > 2) targetIndex = 2;
+                        } else {
+                            if (selectElement.options.length > 1) targetIndex = 1;
                         }
-                        // Se pidió una empresa concreta y NO está en esta cuenta del
-                        // SII: se aborta en vez de emitir con la empresa equivocada.
-                        return { estado: 'no_encontrada', disponibles };
+                        return selectElement.options[targetIndex].value;
                     }
+                    return null;
+                });
 
-                    // Sin RUT pedido: se conserva el comportamiento anterior
-                    // (primera opción real, saltando el "Seleccione...").
-                    let idx = sel.options[0].text.toLowerCase().includes('seleccione')
-                        ? (sel.options.length > 1 ? 1 : 0) : 0;
-                    return { estado: 'por_defecto', value: sel.options[idx].value, label: sel.options[idx].text.trim() };
-                }, rutObjetivo);
-
-                if (eleccion.estado === 'no_encontrada') {
-                    throw new Error(
-                        `La empresa emisora (RUT ${datos.rutEmisor}) no está habilitada en esta cuenta del SII. ` +
-                        `Empresas disponibles: ${(eleccion.disponibles || []).join(' | ') || 'ninguna'}.`
-                    );
-                }
-
-                if (eleccion.value) {
-                    console.log(`🏢 Empresa emisora seleccionada (${eleccion.estado}): ${eleccion.label}`);
-                    await page.select('select[name="RUT_EMP"]', eleccion.value);
+                if (valueSegundaEmpresa) {
+                    await page.select('select[name="RUT_EMP"]', valueSegundaEmpresa);
                     await delay(500);
                     await Promise.all([
                         page.waitForNavigation({ waitUntil: 'networkidle2' }),
@@ -463,9 +426,12 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
         }
 
         if (empresaIdFinal) {
-            const tipoDte = datos.tipo_documento ? parseInt(datos.tipo_documento) : 33; 
+            const tipoDte = datos.tipo_documento ? parseInt(datos.tipo_documento) : 33;
             const montoNeto = parseInt(datos.producto.precio);
-            const fechaEmision = new Date().toISOString(); 
+            // IVA y total: la factura afecta (33) lleva 19%; una exenta (34/41) no.
+            const montoIva = (tipoDte === 34 || tipoDte === 41) ? 0 : Math.round(montoNeto * 0.19);
+            const montoTotal = montoNeto + montoIva;
+            const fechaEmision = new Date().toISOString();
 
             try {
                 const checkQuery = `SELECT id FROM documentos_emitidos WHERE rut_cliente = $1 AND tipo_dte = $2 AND folio = $3`;
@@ -473,12 +439,12 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
 
                 if (checkRes.rows.length === 0) {
                     const queryInsert = `
-                        INSERT INTO documentos_emitidos 
-                        (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, fecha_emision, url_pdf)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        INSERT INTO documentos_emitidos
+                        (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision, url_pdf)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                         RETURNING id;
                     `;
-                    const valores = [empresaIdFinal, rutOriginal, tipoDte, folio, montoNeto, fechaEmision, rutaPdf];
+                    const valores = [empresaIdFinal, rutOriginal, tipoDte, folio, montoNeto, montoIva, montoTotal, fechaEmision, rutaPdf];
                     const resDB = await client.query(queryInsert, valores);
                     
                     if (resDB.rowCount > 0) {

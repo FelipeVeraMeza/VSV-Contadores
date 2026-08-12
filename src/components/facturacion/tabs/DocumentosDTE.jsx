@@ -60,6 +60,8 @@ const DocumentosDTE = () => {
   const [filterTipo, setFilterTipo] = useState("TODOS");
   const [filterMes, setFilterMes] = useState("TODOS");
   const [filterAnio, setFilterAnio] = useState("TODOS");
+  // Ordenamiento de la tabla: columna + dirección. Se alterna al clic en el encabezado.
+  const [orden, setOrden] = useState({ col: 'fecha', dir: 'desc' });
 
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 9; 
@@ -73,7 +75,7 @@ const DocumentosDTE = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterTipo, filterMes, filterAnio, tipoVista, vistaGlobal, selectedCompany]);
+  }, [searchTerm, filterTipo, filterMes, filterAnio, tipoVista, vistaGlobal, selectedCompany, orden]);
 
   useEffect(() => {
     if (tableContainerRef.current && currentPage > 1) {
@@ -202,11 +204,12 @@ const DocumentosDTE = () => {
         const nombreNormalizado = normalizeText(ent.nombre);
         const rutLimpio = cleanRutForSearch(ent.rut);
 
-        // CONDICIÓN CLAVE: El nombre o el rut deben EMPEZAR con lo que se escribió
-        const empiezaConNombre = nombreNormalizado.startsWith(termText);
-        const empiezaConRut = termRut !== "" && rutLimpio.startsWith(termRut);
+        // El nombre o el rut deben CONTENER lo que se escribió (antes exigía que
+        // empezara, y "pasta" no sugería "MR PASTA SPA").
+        const coincideNombre = nombreNormalizado.includes(termText);
+        const coincideRut = termRut !== "" && rutLimpio.includes(termRut);
 
-        return empiezaConNombre || empiezaConRut;
+        return coincideNombre || coincideRut;
     });
 
     // Ordenamos alfabéticamente para que se vea más profesional y limitamos a 6
@@ -224,10 +227,14 @@ const DocumentosDTE = () => {
       const rutOriginal = tipoVista === 'VENTAS' ? doc.rut_cliente : doc.rut_proveedor;
       const rutDocClean = cleanRutForSearch(rutOriginal);
 
-      // CONDICIÓN CLAVE ACTUALIZADA: La tabla ahora también exige que el nombre o RUT EMPIECE con lo que escribes
-      const matchSearch = termText === "" || 
-                          razonSocialDoc.startsWith(termText) || 
-                          (termRut !== "" && rutDocClean.startsWith(termRut));
+      // Búsqueda "contiene" (antes exigía que EMPEZARA con el texto, por eso
+      // "pasta" no encontraba "MR PASTA SPA"). Ahora matchea el nombre en
+      // cualquier parte, el RUT, o el número de folio.
+      const termFolio = searchTerm.trim();
+      const matchSearch = termText === "" ||
+                          razonSocialDoc.includes(termText) ||
+                          (termRut !== "" && rutDocClean.includes(termRut)) ||
+                          (termFolio !== "" && String(doc.folio || '').includes(termFolio));
 
       const matchTipo = filterTipo === "TODOS" || doc.tipo_dte.toString() === filterTipo;
       const matchAnio = filterAnio === "TODOS" || fecha.getUTCFullYear().toString() === filterAnio;
@@ -237,9 +244,63 @@ const DocumentosDTE = () => {
     });
   }, [documentos, searchTerm, filterTipo, filterMes, filterAnio, tipoVista]);
 
-  const totalPages = Math.ceil(documentosFiltrados.length / ITEMS_PER_PAGE) || 1;
-  const currentData = documentosFiltrados.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE, 
+  // Monto total de un documento, robusto: si monto_total viene en 0 (documentos
+  // viejos que solo guardaron el neto) se cae al neto + IVA.
+  const totalDe = (d) => (Number(d.monto_total) || 0) || ((Number(d.monto_neto) || 0) + (Number(d.monto_iva) || 0));
+
+  // Clic en el encabezado: cambia la columna de orden, o alterna asc/desc.
+  const cambiarOrden = (col) =>
+    setOrden((o) => ({ col, dir: o.col === col && o.dir === 'desc' ? 'asc' : 'desc' }));
+
+  const documentosOrdenados = useMemo(() => {
+    const arr = [...documentosFiltrados];
+    const signo = orden.dir === 'asc' ? 1 : -1;
+    arr.sort((a, b) => {
+      let va, vb;
+      if (orden.col === 'folio') { va = Number(a.folio) || 0; vb = Number(b.folio) || 0; }
+      else if (orden.col === 'monto') { va = totalDe(a); vb = totalDe(b); }
+      else { va = new Date(a.fecha_emision).getTime() || 0; vb = new Date(b.fecha_emision).getTime() || 0; }
+      return (va - vb) * signo;
+    });
+    return arr;
+  }, [documentosFiltrados, orden]);
+
+  // Totales del filtro: suma sobre TODO lo filtrado (no solo la página visible).
+  const totales = useMemo(() => documentosFiltrados.reduce((acc, d) => {
+    const neto = Number(d.monto_neto) || 0;
+    const iva = Number(d.monto_iva) || 0;
+    acc.neto += neto; acc.iva += iva; acc.total += totalDe(d);
+    return acc;
+  }, { neto: 0, iva: 0, total: 0 }), [documentosFiltrados]);
+
+  // Exporta lo que está filtrado (y ordenado) a un CSV que Excel abre directo.
+  const exportarCSV = () => {
+    if (documentosOrdenados.length === 0) return;
+    const encabezado = ['Documento', 'Folio', 'Nombre', 'RUT', 'Emision', 'Neto', 'IVA', 'Total'];
+    const filas = documentosOrdenados.map((d) => {
+      const nombre = tipoVista === 'VENTAS' ? (d.razon_social || '') : (d.razon_social_proveedor || '');
+      const rut = tipoVista === 'VENTAS' ? (d.rut_cliente || '') : (d.rut_proveedor || '');
+      const fecha = d.fecha_emision ? new Date(d.fecha_emision).toLocaleDateString('es-CL', { timeZone: 'UTC' }) : '';
+      return [
+        NOMBRES_DTE[d.tipo_dte] || `DTE ${d.tipo_dte}`,
+        d.folio, `"${String(nombre).replace(/"/g, '""')}"`, rut, fecha,
+        Number(d.monto_neto) || 0, Number(d.monto_iva) || 0, totalDe(d),
+      ].join(';');
+    });
+    const csv = [encabezado.join(';'), ...filas].join('\n');
+    // El BOM (﻿) hace que Excel abra bien los acentos.
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${tipoVista.toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const totalPages = Math.ceil(documentosOrdenados.length / ITEMS_PER_PAGE) || 1;
+  const currentData = documentosOrdenados.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
 
@@ -357,7 +418,7 @@ const DocumentosDTE = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={15} />
           <input 
             type="text"
-            placeholder="Buscar por Nombre o RUT..."
+            placeholder="Buscar por Nombre, RUT o Folio..."
             value={searchTerm}
             onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -434,37 +495,48 @@ const DocumentosDTE = () => {
         </select>
       </div>
 
-      <div className="flex items-center justify-between px-2">
-        <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${tipoVista === 'VENTAS' ? 'text-blue-500' : 'text-emerald-500'}`}>
-          <FileText size={12} /> {documentosFiltrados.length} {tipoVista} encontradas
-        </span>
-        
-        {/* ========================================================== */}
-        {/* BOTÓN MÁGICO DE SINCRONIZACIÓN TOTAL */}
-        {/* ========================================================== */}
-        <Button 
-            onClick={handleSincronizarSII} 
-            disabled={isSyncing} 
-            variant="outline" 
-            size="sm" 
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-2">
+        {/* Conteo + TOTALES del filtro (neto / IVA / total) */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${tipoVista === 'VENTAS' ? 'text-blue-500' : 'text-emerald-500'}`}>
+            <FileText size={12} /> {documentosFiltrados.length} {tipoVista} encontradas
+          </span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Neto <b className="text-slate-700 font-mono normal-case">${totales.neto.toLocaleString('es-CL')}</b></span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">IVA <b className="text-slate-700 font-mono normal-case">${totales.iva.toLocaleString('es-CL')}</b></span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total <b className={`font-mono normal-case ${tipoVista === 'VENTAS' ? 'text-blue-600' : 'text-emerald-600'}`}>${totales.total.toLocaleString('es-CL')}</b></span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Exportar el filtro actual a Excel (CSV) */}
+          <Button
+            onClick={exportarCSV}
+            disabled={documentosFiltrados.length === 0}
+            variant="outline"
+            size="sm"
+            className="text-[10px] font-black uppercase tracking-widest border bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 border-[#efe8dd] disabled:opacity-50"
+          >
+            <Download size={14} className="mr-2 text-emerald-600" /> Exportar Excel
+          </Button>
+
+          {/* Sincronización total con el SII */}
+          <Button
+            onClick={handleSincronizarSII}
+            disabled={isSyncing}
+            variant="outline"
+            size="sm"
             className={`text-[10px] font-black uppercase tracking-widest transition-all border ${
-                isSyncing 
-                ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/50 cursor-wait' 
+                isSyncing
+                ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/50 cursor-wait'
                 : 'bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 border-[#efe8dd]'
             }`}
-        >
+          >
             {isSyncing ? (
-                <>
-                    <Loader2 size={14} className="mr-2 animate-spin" />
-                    Sincronizando Todo...
-                </>
+                <><Loader2 size={14} className="mr-2 animate-spin" /> Sincronizando Todo...</>
             ) : (
-                <>
-                    <Globe size={14} className="mr-2 text-indigo-400" />
-                    Sincronizar Todo el SII
-                </>
+                <><Globe size={14} className="mr-2 text-indigo-400" /> Sincronizar Todo el SII</>
             )}
-        </Button>
+          </Button>
+        </div>
       </div>
 
       <div ref={tableContainerRef} className="overflow-hidden rounded-2xl border border-[#efe8dd] bg-slate-50 backdrop-blur-xl shadow-2xl flex flex-col pt-2 scroll-mt-24">
@@ -473,12 +545,18 @@ const DocumentosDTE = () => {
             <thead className="bg-slate-50 border-b border-[#efe8dd]">
               <tr>
                 <th className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest">Documento</th>
-                <th className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest">Folio</th>
+                <th onClick={() => cambiarOrden('folio')} className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest cursor-pointer select-none hover:text-slate-800 transition-colors">
+                  Folio {orden.col === 'folio' ? (orden.dir === 'asc' ? '▲' : '▼') : ''}
+                </th>
                 <th className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest">
                     {tipoVista === 'VENTAS' ? 'Cliente' : 'Proveedor'}
                 </th>
-                <th className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest">Emisión</th>
-                <th className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest text-right">Monto</th>
+                <th onClick={() => cambiarOrden('fecha')} className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest cursor-pointer select-none hover:text-slate-800 transition-colors">
+                  Emisión {orden.col === 'fecha' ? (orden.dir === 'asc' ? '▲' : '▼') : ''}
+                </th>
+                <th onClick={() => cambiarOrden('monto')} className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 tracking-widest text-right cursor-pointer select-none hover:text-slate-800 transition-colors">
+                  Monto {orden.col === 'monto' ? (orden.dir === 'asc' ? '▲' : '▼') : ''}
+                </th>
                 <th className="px-6 py-5 text-[10px] font-black uppercase text-slate-500 text-center">PDF</th>
               </tr>
             </thead>
@@ -503,9 +581,12 @@ const DocumentosDTE = () => {
                         ? dte.rut_cliente 
                         : dte.rut_proveedor;
 
-                    const montoPrincipal = tipoVista === 'VENTAS' 
-                        ? dte.monto_neto 
-                        : (dte.monto_total || dte.monto_neto);
+                    // Neto / IVA / Total del documento. El total se calcula robusto
+                    // (monto_total viene como numeric → texto, y "0" es truthy): si
+                    // está en 0 se cae a neto + IVA.
+                    const netoDte = Number(dte.monto_neto) || 0;
+                    const ivaDte = Number(dte.monto_iva) || 0;
+                    const totalDte = totalDe(dte);
 
                     return (
                         <motion.tr 
@@ -541,11 +622,11 @@ const DocumentosDTE = () => {
                           <td className="px-6 py-4 text-right whitespace-nowrap">
                             <div className="flex flex-col items-end">
                                 <span className={`text-sm font-black font-mono tracking-tighter ${tipoVista === 'VENTAS' ? 'text-blue-600' : 'text-emerald-600'}`}>
-                                    ${Number(montoPrincipal || 0).toLocaleString('es-CL')}
+                                    ${totalDte.toLocaleString('es-CL')}
                                 </span>
-                                {tipoVista === 'COMPRAS' && dte.monto_iva > 0 && (
+                                {ivaDte > 0 && (
                                     <span className="text-[9px] text-slate-400 uppercase tracking-widest mt-0.5">
-                                        IVA: ${Number(dte.monto_iva).toLocaleString('es-CL')}
+                                        Neto ${netoDte.toLocaleString('es-CL')} · IVA ${ivaDte.toLocaleString('es-CL')}
                                     </span>
                                 )}
                             </div>

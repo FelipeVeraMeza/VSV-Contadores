@@ -211,8 +211,8 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
         ...createEmptyItem(),
         rutFacturar: formatRutSimple(selectedCompany.rut_encrypted || selectedCompany.rut || ""),
         contactoReceptor: email,
-        name: selectedCompany.plan_nombre || selectedCompany.plan || "", 
-        precio: selectedCompany.impuesto_pagar || selectedCompany.neto || "",
+        name: selectedCompany.plan_nombre || selectedCompany.plan || "",
+        precio: selectedCompany.honorarioNeto || selectedCompany.honorario_neto || selectedCompany.precioMensual || selectedCompany.impuesto_pagar || selectedCompany.neto || "",
         descripcionProducto: `SERVICIOS CORRESPONDIENTES A ${getCurrentMonth()}`,
       });
     }
@@ -251,7 +251,7 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
     setItem(prev => ({
       ...prev, rutFacturar: rut, contactoReceptor: email,
       name: cliente.plan_nombre || cliente.plan || prev.name,
-      precio: cliente.impuesto_pagar || cliente.neto || prev.precio,
+      precio: cliente.honorarioNeto || cliente.honorario_neto || cliente.precioMensual || cliente.impuesto_pagar || cliente.neto || prev.precio,
       descripcionProducto: `SERVICIOS CORRESPONDIENTES A ${getCurrentMonth()}`
     }));
   };
@@ -295,7 +295,7 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
             let precioFinal = "";
             if (parsed.netoNum > 0) precioFinal = parsed.netoStr;
             else if (linea.includes("$0")) precioFinal = "0"; 
-            else precioFinal = crmMatch ? String(crmMatch.impuesto_pagar || crmMatch.neto || '') : '';
+            else precioFinal = crmMatch ? String(crmMatch.honorarioNeto || crmMatch.honorario_neto || crmMatch.precioMensual || crmMatch.impuesto_pagar || crmMatch.neto || '') : '';
 
             const razonFinal = parsed.razonSocial.length > 2 ? parsed.razonSocial : (crmMatch ? (crmMatch.razon_social || crmMatch.razonSocial) : 'NUEVO CLIENTE (SII)');
             const estadoFila = Number(precioFinal) > 0 ? 'pendiente' : 'omitir';
@@ -335,7 +335,7 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
         newRows[absoluteIndex].id = match.id;
         newRows[absoluteIndex].razonSocial = match.razon_social || match.razonSocial;
         newRows[absoluteIndex].plan = match.plan_nombre || match.plan || "Servicio Contable";
-        newRows[absoluteIndex].precio = match.impuesto_pagar || match.neto || "";
+        newRows[absoluteIndex].precio = match.honorarioNeto || match.honorario_neto || match.precioMensual || match.impuesto_pagar || match.neto || "";
         newRows[absoluteIndex].contacto = (match.email_corporativo || match.correo || "").split(/[,;/\s]+/)[0].trim();
       }
     }
@@ -348,7 +348,7 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
     newRows[absoluteIndex].rut = formatRutSimple(cliente.rut_encrypted || cliente.rut);
     newRows[absoluteIndex].razonSocial = cliente.razon_social || cliente.razonSocial;
     newRows[absoluteIndex].plan = cliente.plan_nombre || cliente.plan || "Servicios";
-    newRows[absoluteIndex].precio = cliente.impuesto_pagar || cliente.neto || "";
+    newRows[absoluteIndex].precio = cliente.honorarioNeto || cliente.honorario_neto || cliente.precioMensual || cliente.impuesto_pagar || cliente.neto || "";
     newRows[absoluteIndex].contacto = (cliente.email_corporativo || cliente.correo || "").split(/[,;/\s]+/)[0].trim();
     newRows[absoluteIndex].searchQuery = "";
     setBulkRows(newRows);

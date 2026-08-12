@@ -404,7 +404,8 @@ export async function emitirLoteExentaPuppeteer(facturasFront, credSii = credenc
                                 const checkQuery = `SELECT id FROM documentos_emitidos WHERE rut_cliente = $1 AND tipo_dte = 34 AND folio = $2`;
                                 const checkRes = await dbClient.query(checkQuery, [rutOriginal, folio]);
                                 if (checkRes.rows.length === 0) {
-                                    await dbClient.query(`INSERT INTO documentos_emitidos (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, fecha_emision) VALUES ($1, $2, 34, $3, $4, $5)`, [empresaIdFinal, rutOriginal, folio, parseInt(f.producto.precio), new Date().toISOString()]);
+                                    // Exenta: IVA 0 y total = neto (se reutiliza $4).
+                                    await dbClient.query(`INSERT INTO documentos_emitidos (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision) VALUES ($1, $2, 34, $3, $4, 0, $4, $5)`, [empresaIdFinal, rutOriginal, folio, parseInt(f.producto.precio), new Date().toISOString()]);
                                     console.log(`✅ Guardado en Bóveda Historial (Exenta 34).`);
                                 }
                             }

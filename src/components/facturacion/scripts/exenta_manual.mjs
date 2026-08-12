@@ -324,9 +324,12 @@ export async function emitirExentaPuppeteer(datos, credSii = credencialesDelSist
         }
 
         if (empresaIdFinal) {
-            const tipoDte = datos.tipo_documento ? parseInt(datos.tipo_documento) : 34; 
+            const tipoDte = datos.tipo_documento ? parseInt(datos.tipo_documento) : 34;
             const montoNeto = parseInt(datos.producto.precio);
-            const fechaEmision = new Date().toISOString(); 
+            // Exenta: sin IVA, así que el total es igual al neto.
+            const montoIva = 0;
+            const montoTotal = montoNeto;
+            const fechaEmision = new Date().toISOString();
 
             try {
                 const checkQuery = `SELECT id FROM documentos_emitidos WHERE rut_cliente = $1 AND tipo_dte = $2 AND folio = $3`;
@@ -334,12 +337,12 @@ export async function emitirExentaPuppeteer(datos, credSii = credencialesDelSist
 
                 if (checkRes.rows.length === 0) {
                     const queryInsert = `
-                        INSERT INTO documentos_emitidos 
-                        (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, fecha_emision, url_pdf)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        INSERT INTO documentos_emitidos
+                        (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision, url_pdf)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                         RETURNING id;
                     `;
-                    const valores = [empresaIdFinal, rutOriginal, tipoDte, folio, montoNeto, fechaEmision, null];
+                    const valores = [empresaIdFinal, rutOriginal, tipoDte, folio, montoNeto, montoIva, montoTotal, fechaEmision, null];
                     const resDB = await client.query(queryInsert, valores);
                     
                     if (resDB.rowCount > 0) {

@@ -182,7 +182,9 @@ export default function NotaCreditoDebitoModal({ isOpen, setIsOpen, prefillData 
       }
 
       setDocumentoOriginal(doc);
-      setMontoAjuste(doc.monto_total || doc.monto_neto || 0);
+      // monto_total viene como numeric → el driver lo entrega como texto ("0"),
+      // que es truthy. Se convierte a número para que un total en 0 caiga al neto.
+      setMontoAjuste(Number(doc.monto_total) || Number(doc.monto_neto) || 0);
       setCodigoSii("1"); 
 
       if (doc.tipo_dte === 61) {
@@ -385,7 +387,7 @@ export default function NotaCreditoDebitoModal({ isOpen, setIsOpen, prefillData 
                                             </td>
                                             <td className="p-4 text-right align-top">
                                                 <div className="pt-1">
-                                                    <span className="font-black text-slate-900 text-sm tracking-tight">${Number(doc.monto_total || doc.monto_neto).toLocaleString('es-CL')}</span>
+                                                    <span className="font-black text-slate-900 text-sm tracking-tight">${(Number(doc.monto_total) || Number(doc.monto_neto) || 0).toLocaleString('es-CL')}</span>
                                                 </div>
                                             </td>
                                         </tr>

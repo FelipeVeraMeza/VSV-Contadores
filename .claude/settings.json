@@ -132,7 +132,8 @@
       "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./package.json'\\).scripts,null,2\\)\\)\")",
       "Bash(curl -s -w '\\\\nHTTP %{http_code}\\\\n' -H 'x-session-id: __TRACKED_VAR__' http://localhost:4000/api/personas/empresas-lista)",
       "Bash(node --input-type=module -e ' *)",
-      "Bash(node src/DatabaseThings/migrations/aplicar_migracion.mjs src/DatabaseThings/migrations/2026-08-04_empresa_campos_opcionales.sql)"
+      "Bash(node src/DatabaseThings/migrations/aplicar_migracion.mjs src/DatabaseThings/migrations/2026-08-04_empresa_campos_opcionales.sql)",
+      "Bash(grep -nE 'hover:\\\\$\\\\{' src/components/facturacion/tabs/EmisionDTE.jsx)"
     ]
   }
 }
