@@ -15,7 +15,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Mail, Loader2, CheckCircle2, AlertCircle, RefreshCw, Send,
-  Search, X, Upload, FileSpreadsheet,
+  Search, X, Upload, FileSpreadsheet, FlaskConical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -86,6 +86,7 @@ const CorreoMasivo = () => {
 
   const [isEnviandoRecordatorios, setIsEnviandoRecordatorios] = useState(false);
   const [progresoRecordatorio, setProgresoRecordatorio] = useState(null);
+  const [probandoCorreo, setProbandoCorreo] = useState(false);
 
   const timers = useRef([]);
   const programar = (fn, ms) => { timers.current.push(setTimeout(fn, ms)); };
@@ -162,6 +163,63 @@ const CorreoMasivo = () => {
       toast({ variant: 'destructive', title: 'Error de conexión', description: e.message });
     } finally {
       setReenviandoFolio(null);
+    }
+  };
+
+  // ====================================================
+  // 🧪 CORREO DE PRUEBA
+  // ----------------------------------------------------
+  // Responde una sola pregunta: ¿este servidor manda correo? Es la forma de
+  // comprobarlo en Railway sin escribirle a un cliente de verdad. La casilla de
+  // destino la decide el servidor, no esta pantalla.
+  //
+  // Lo importante de la respuesta es POR CUÁL VÍA salió: Railway bloquea SMTP,
+  // así que un envío que sale por SMTP en local va a fallar igual al desplegar.
+  // ====================================================
+  const NOMBRE_VIA = {
+    'resend':    'Resend (HTTPS)',
+    'gmail-api': 'API de Gmail (HTTPS)',
+    'smtp':      'Gmail SMTP',
+  };
+
+  const enviarCorreoDePrueba = async () => {
+    setProbandoCorreo(true);
+    try {
+      const res = await apiDTE.probarCorreo();
+      const data = await res.json();
+
+      if (!data.ok) {
+        return toast({
+          variant: 'destructive',
+          title: 'No se pudo enviar',
+          description: data.error || 'El servidor rechazó el envío.',
+          duration: 12000,
+        });
+      }
+
+      const via = NOMBRE_VIA[data.via] || data.via || 'desconocida';
+      // Que salga por SMTP no es un éxito completo: en Railway ese puerto está
+      // cerrado. Vale la pena que se note ahora y no cuando falle en producción.
+      if (data.via === 'smtp') {
+        toast({
+          title: `Llegó, pero salió por ${via}`,
+          description: `Enviado a ${data.destinatario} desde "${data.entorno}". `
+            + 'SMTP funciona en local pero Railway lo bloquea: en producción esto fallaría. '
+            + 'Falta cargar RESEND_API_KEY en las variables de Railway.',
+          duration: 15000,
+        });
+      } else {
+        toast({
+          title: `Correo enviado vía ${via}`,
+          description: `A ${data.destinatario}, desde ${data.remitente} (entorno "${data.entorno}"). `
+            + 'Revisa la bandeja, y también spam la primera vez.',
+          duration: 12000,
+        });
+      }
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Error de conexión', description: e.message });
+    } finally {
+      setProbandoCorreo(false);
     }
   };
 
@@ -489,6 +547,19 @@ const CorreoMasivo = () => {
               {reenviandoFolio === manualFolio ? <Loader2 size={13} className="animate-spin" /> : 'Enviar'}
             </Button>
           </div>
+          {/* 🧪 PRUEBA DE ENVÍO. Va acá arriba, junto a "Refrescar", y NO al lado
+              de los botones de envío masivo: son los que le escriben a los
+              clientes de verdad y no conviene tener uno inofensivo mezclado
+              entre ellos. Por eso también es gris y no de color. */}
+          <Button
+            onClick={enviarCorreoDePrueba}
+            disabled={probandoCorreo}
+            title="Manda un correo de prueba a la casilla interna y dice por qué vía salió. No le llega a ningún cliente."
+            className="h-9 px-4 bg-slate-100 hover:bg-slate-200 border border-[#efe8dd] text-slate-600 text-[10px] font-black uppercase tracking-widest rounded-lg inline-flex items-center gap-2"
+          >
+            {probandoCorreo ? <Loader2 size={14} className="animate-spin" /> : <FlaskConical size={14} />}
+            {probandoCorreo ? 'Enviando…' : 'Correo de prueba'}
+          </Button>
           <Button
             onClick={cargarCorreosLog}
             disabled={isLoadingCorreos}

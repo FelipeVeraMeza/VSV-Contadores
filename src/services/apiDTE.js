@@ -68,6 +68,9 @@ export const emitirDte  = (dteJson) => dteFetch('/emitir-dte',  { method: 'POST'
 // Correos
 // ---------------------------------------------------------------------
 export const getCorreosLog          = ()              => dteFetch('/correos-log');
+// Correo de prueba. No recibe destinatario: la casilla está fija en el servidor
+// para que este botón no pueda escribirle a un cliente.
+export const probarCorreo           = ()              => dteFetch('/prueba-correo', { method: 'POST', body: {} });
 export const reenviarCorreo         = (folio, datos)  => dteFetch('/reenviar-correo', { method: 'POST', body: { folio, datos: datos || null } });
 export const reenviarCorreosMasivo  = (items)         => dteFetch('/reenviar-correos-masivo', { method: 'POST', body: { items } });
 

@@ -1,6 +1,11 @@
 # Correo: por qué funciona en local y no en Railway
 
-**Fecha:** 30-jul-2026 · **Estado:** diagnóstico cerrado, falta ejecutar la solución.
+**Fecha:** 30-jul-2026 · *actualizado 14-ago-2026.*
+
+**Estado:** ✅ **Resuelto en local.** El dominio `vsvconsultores.com` quedó verificado en
+Resend y ya envía desde `matias.olivos@vsvconsultores.com` (prueba con HTTP 200).
+**Falta un paso para producción:** subir `RESEND_API_KEY` y `RESEND_FROM` a Railway
+(pendiente 3, sección 6).
 
 ---
 
@@ -65,23 +70,28 @@ La cuenta que envía es **`matias.olivosb@gmail.com`** y la contraseña guardada
 
 ---
 
-## 4. Estado de Resend (probado el 30-jul)
+## 4. Estado de Resend
 
-Se hicieron dos envíos reales de prueba a `felipe.veram2001@gmail.com`:
+### ✅ Resuelto el 14-ago-2026
 
-| Remitente | HTTP | Resultado |
-|---|---|---|
-| `matias.olivos@vsvconsultores.com` (el `RESEND_FROM`) | **403** | `The vsvconsultores.com domain is not verified` |
-| `onboarding@resend.dev` (dominio de pruebas) | **200** | Enviado, id `6b74b0fb-...` |
+Con el dominio ya verificado (sección 5), se repitió el envío que antes fallaba:
 
-**Conclusiones:**
+| Fecha | Remitente | HTTP | Resultado |
+|---|---|---|---|
+| 30-jul | `matias.olivos@vsvconsultores.com` | **403** | `The vsvconsultores.com domain is not verified` |
+| 30-jul | `onboarding@resend.dev` | 200 | Enviado, pero el remitente dice "resend.dev" |
+| **14-ago** | **`matias.olivos@vsvconsultores.com`** | **200** | **Enviado, id `6a5c16ee-fabc-...`** |
 
-- La **API key de Resend funciona**. No hay problema de cuenta ni de plan.
-- El **dominio `vsvconsultores.com` está en `Failed`** en resend.com/domains: nunca se
-  completó la verificación DNS. Por eso rechaza los envíos.
+**El dominio propio ya envía.** El 403 desapareció al publicar los registros DNS.
+
+### Lo que sigue valiendo
+
 - **Resend NUNCA va a poder enviar desde `@gmail.com`.** Estos servicios solo permiten
   remitentes de dominios verificados por DNS, y `gmail.com` no es nuestro. Si se necesita
-  que el correo salga literalmente del Gmail de Mati, la única vía es la **API de Gmail**.
+  que el correo salga literalmente del Gmail de Mati, la única vía es la **API de Gmail**
+  (Camino B, sección 5).
+- Los primeros correos de un dominio recién verificado pueden caer en **spam** hasta que
+  gane reputación. Es normal y se corrige solo con volumen legítimo.
 
 ---
 
@@ -92,20 +102,116 @@ Se hicieron dos envíos reales de prueba a `felipe.veram2001@gmail.com`:
 Los correos saldrían desde **`matias.olivos@vsvconsultores.com`**.
 
 **Dónde está el DNS:** los nameservers son `dns1.dnscl.net` / `dns2.dnscl.net` →
-el dominio se administra en **DonWeb**. El correo actual de `@vsvconsultores.com` lo recibe
-ese mismo servidor (el MX apunta al propio dominio).
+el dominio se administra en **DonWeb**, que entrega un **cPanel** (usuario `vsvconsu`,
+IP compartida `192.141.51.210`). El editor de zona es **Zone Editor**, en la sección
+*Dominios*. El correo actual de `@vsvconsultores.com` lo recibe ese mismo servidor
+(el MX del dominio apunta al propio dominio, con prioridad 0) y hay 13 cuentas de correo
+activas ahí — por eso no se toca nada de la raíz.
 
-**Pasos:**
+#### Los 3 registros a agregar
 
-1. En [resend.com/domains](https://resend.com/domains) → clic en `vsvconsultores.com`.
-   Muestra 3 registros a copiar (un MX y dos TXT: SPF y DKIM).
-2. En el panel de **DonWeb** → *Mis dominios* → `vsvconsultores.com` → **Zona DNS**.
-3. Agregar los 3 registros tal cual.
-   - **Nombre:** si el panel ya agrega el dominio solo, escribir únicamente `send`,
-     NO `send.vsvconsultores.com` (queda duplicado y falla).
-   - **No tocar el SPF existente** (`v=spf1 +a +mx +ip4:192.141.51.208 ... include:spff.dww.cl ~all`).
-     Es el que hace andar el correo actual. El de Resend va en el subdominio `send` y conviven.
-4. Volver a Resend → **Verify DNS Records**. Tarda entre 5 minutos y un par de horas.
+Resend los entregó el **14-ago-2026** para la región `sa-east-1` (São Paulo). Van tal cual:
+
+| # | Tipo | Nombre | Valor | Prioridad | TTL |
+|---|---|---|---|---|---|
+| 1 | `TXT` | `resend._domainkey` | `p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC/PfLYZkphm3VUYA0EZYBw51Td1Jd7cER0rTU07q15ZRJ9OFR29ZuenTVmWBF4LS2TK61BGss/d4yM0iC3ApKiUDspV4BeQ4PQl2BocQKWgv0g+aVoc0wrScOTpYupxdDCaY1TicQBIGwJArfHtSYg1QrFLWBs5L0ohuKy2Yl6nQIDAQAB` | — | Auto / 3600 |
+| 2 | `MX` | `send` | `feedback-smtp.sa-east-1.amazonses.com` | `10` | Auto / 3600 |
+| 3 | `TXT` | `send` | `v=spf1 include:amazonses.com ~all` | — | Auto / 3600 |
+
+- El **1** es el DKIM: la firma con la que Resend prueba que el correo es nuestro.
+- El **2 y 3** son del subdominio `send`, que Resend usa como *Return-Path* (rebotes).
+
+#### Pasos en cPanel (DonWeb entrega cPanel, usuario `vsvconsu`)
+
+1. En cPanel, sección **Dominios** → **Zone Editor**.
+   *(No confundir con "Dominios", "Subdominios" ni "Email Deliverability".)*
+2. En la fila de `vsvconsultores.com` → botón **Administrar**. Se abre la zona completa.
+3. **Agregar registro** (arriba a la derecha) → se llena una fila nueva. Repetir 3 veces:
+
+   **Registro 1 — DKIM**
+   - Nombre: `resend._domainkey`
+   - TTL: `14400`
+   - Tipo: `TXT`
+   - Registro / Valor: el `p=MIGf...AQAB` completo de la tabla de arriba
+
+   **Registro 2 — MX de rebotes**
+   - Nombre: `send`
+   - TTL: `14400`
+   - Tipo: `MX`
+   - Prioridad: `10`
+   - Destino: `feedback-smtp.sa-east-1.amazonses.com`
+
+   **Registro 3 — SPF del subdominio**
+   - Nombre: `send`
+   - TTL: `14400`
+   - Tipo: `TXT`
+   - Registro / Valor: `v=spf1 include:amazonses.com ~all`
+
+4. **Guardar registro** en cada uno.
+5. Volver a [resend.com/domains](https://resend.com/domains) → `vsvconsultores.com` →
+   **Verify DNS Records**. Tarda entre 5 minutos y un par de horas.
+
+#### Trampas de este panel (leer antes de pegar)
+
+- **Nombre:** cPanel agrega el dominio solo. Escribir únicamente `send` y
+  `resend._domainkey`, **NO** `send.vsvconsultores.com` — queda
+  `send.vsvconsultores.com.vsvconsultores.com` y falla. Después de escribirlo, cPanel
+  muestra el nombre final: tiene que decir `resend._domainkey.vsvconsultores.com.`
+  (con un solo `vsvconsultores.com` y punto al final).
+- **NO crear un subdominio `send`** en *Subdominios*. Es solo un registro DNS; crear el
+  subdominio arma carpetas y un sitio web que no queremos. Además quedan 4/5 usados.
+- **NO usar *Email Deliverability* para "reparar"** nada. Ese botón reescribe el SPF y el
+  DKIM del dominio raíz y puede pisar el SPF de DonWeb que hace andar el correo actual.
+  Todo esto va por Zone Editor a mano.
+- **NO tocar el SPF que ya existe** en la raíz:
+  `v=spf1 +a +mx +ip4:192.141.51.208 +ip4:192.141.51.210 include:spff.dww.cl ~all`.
+  Ese hace andar el correo actual. El de Resend va en el subdominio `send` y conviven sin
+  pisarse. **Nunca puede haber dos SPF en el mismo nombre** — por eso van separados.
+- **NO tocar el MX de la raíz** (`vsvconsultores.com`, prioridad 0). El de Resend es del
+  subdominio `send`, es otro registro distinto.
+- **DKIM:** son 218 caracteres, bajo el límite de 255, así que entra en un solo registro,
+  sin partir en trozos. Pegarlo **completo y sin espacios ni saltos de línea** — es el error
+  más común. Empieza en `p=` y termina en `AQAB`. Si el panel exige comillas, van rodeando
+  todo el valor.
+- **MX:** cPanel suele agregarle el punto final solo. Si te deja escribirlo, va
+  `feedback-smtp.sa-east-1.amazonses.com.` (con el punto final). El campo **Prioridad**
+  aparece recién al elegir el tipo `MX`.
+- **TXT:** cPanel pone las comillas solo. No las escribas tú o quedan dobles.
+- También hay un TXT `brevo-code:1091dfd8...` en la raíz, de una prueba vieja con Brevo.
+  No estorba, se puede dejar.
+
+#### Cómo comprobar que quedó (antes de darle Verify)
+
+Desde PowerShell:
+
+```powershell
+nslookup -type=TXT resend._domainkey.vsvconsultores.com 8.8.8.8
+nslookup -type=TXT send.vsvconsultores.com 8.8.8.8
+nslookup -type=MX  send.vsvconsultores.com 8.8.8.8
+```
+
+Los tres tienen que devolver valor. Si dicen `Non-existent domain`, todavía no propaga
+(esperar) o el nombre quedó mal escrito (revisar la trampa del nombre duplicado).
+
+**Estado al 14-ago-2026, 10:45:** ✅ **los 3 registros están publicados y correctos.**
+Se cargaron por Zone Editor y se verificaron contra los valores que pidió Resend:
+
+| Chequeo | Resultado |
+|---|---|
+| DKIM `resend._domainkey` | coincide **exacto**, 218/218 caracteres |
+| SPF `send` | `v=spf1 include:amazonses.com ~all` |
+| MX `send` | `feedback-smtp.sa-east-1.amazonses.com`, prioridad 10 |
+| SPF y MX de la **raíz** | intactos, el correo de las 13 cuentas no se tocó |
+
+Resend pasó de `Failed` a **DNS verified** y el envío de prueba desde
+`matias.olivos@vsvconsultores.com` devolvió **HTTP 200** (ver sección 4). La verificación
+quedó completa; no queda nada por hacer en cPanel.
+
+#### Después de que Resend diga *Verified*
+
+- `RESEND_FROM` ya está en `matias.olivos@vsvconsultores.com`, no hay que cambiarlo.
+- Subir `RESEND_API_KEY` y `RESEND_FROM` a las *Variables* de Railway (ver pendiente 3).
+- Probar primero a `felipe.veram2001@gmail.com`, nunca directo a un cliente.
 
 ### Camino B — API de Gmail
 
@@ -136,13 +242,20 @@ El refresh token no expira mientras no se revoque.
 
 ## 6. Pendientes
 
-1. **Elegir camino A o B** y ejecutarlo (son los pasos de la sección 5).
-   Los dos pueden convivir: la cascada usa la vía que esté disponible.
-2. **Llevar la cascada de 3 vías a `src/utils/mailer.js`**, para que todo el sistema
-   (Remuneraciones, recordatorios, F29, suspensiones) funcione en Railway y no solo el
-   facturador masivo. Es el trabajo de desarrollo que queda.
-3. **Subir las variables nuevas a Railway** (*Variables* del proyecto). El `.env` local
-   no viaja al deploy.
+1. ~~**Elegir camino A o B** y ejecutarlo.~~ ✅ **Hecho el 14-ago-2026.** Se tomó el
+   **Camino A**: los 3 registros DNS están publicados en cPanel, verificados, y el envío
+   de prueba desde el dominio propio dio 200 (secciones 4 y 5).
+   El Camino B (API de Gmail) queda disponible si algún día se necesita que el correo
+   salga literalmente desde el Gmail de Mati — la cascada usa la vía que esté configurada.
+2. ~~**Llevar la cascada de 3 vías a `src/utils/mailer.js`.**~~ ✅ **Hecho.**
+   [`mailer.js`](../src/utils/mailer.js) ya importa `enviarConReintentos` del facturador
+   masivo, así que todo el sistema (Remuneraciones, recordatorios, F29, suspensiones) usa
+   la misma cascada.
+3. ⬅️ **LO QUE FALTA AHORA: subir `RESEND_API_KEY` y `RESEND_FROM` a Railway**
+   (*Variables* del proyecto). El `.env` local **no viaja al deploy**, así que en
+   producción el correo sigue sin salir hasta que se carguen ahí.
+   - `RESEND_FROM` = `Matías Olivos <matias.olivos@vsvconsultores.com>`
+   - `RESEND_API_KEY` = la misma del `.env` local
 4. **Unificar los nombres de las variables** — hoy hay tres convenciones y dos variables
    muertas (`GMAIL_EMAIL`, `GMAIL_PASSWORD`).
 5. **Rotar credenciales**: el 30-jul se pegaron en un chat las claves de Anthropic, OpenAI,
