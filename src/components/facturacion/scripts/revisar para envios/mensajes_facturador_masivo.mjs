@@ -407,26 +407,10 @@ const normalizarDestinatarios = (to) => {
     return [...new Set(lista)];
 };
 
-// ============================================================================
-// 🔎 POR QUÉ VÍA SALIÓ EL ÚLTIMO CORREO
-// ----------------------------------------------------------------------------
-// La cascada devuelve `true` sin decir cuál de las tres vías funcionó, y eso es
-// justo lo que hace falta saber en Railway: si sale por Resend (HTTPS) el
-// problema del SMTP bloqueado está resuelto; si sale por SMTP, estamos en local
-// y en producción va a fallar igual.
-//
-// Es un objeto mutable a propósito: quien lo importa lee siempre el último
-// estado sin tener que cambiar lo que `enviarConReintentos` devuelve.
-// ============================================================================
-export const diagnosticoCorreo = { via: null, detalle: null, intentos: [] };
-
 // Envía el correo: si hay RESEND_API_KEY usa Resend (HTTPS, sirve en Railway);
 // si no, o si Resend falla, cae a Gmail SMTP (587 → 465, 2 rondas).
 // 📤 Exportada para reutilizarla en otros envíos (ej: recordatorios de pago).
 export async function enviarConReintentos(mailOptions) {
-    diagnosticoCorreo.via = null;
-    diagnosticoCorreo.detalle = null;
-    diagnosticoCorreo.intentos = [];
     const destinatarios = normalizarDestinatarios(mailOptions.to);
     if (destinatarios.length === 0) {
         console.log(`   ⚠️ Sin destinatario válido (${mailOptions.to || 'vacío'}), no se envía.`);
@@ -442,12 +426,9 @@ export async function enviarConReintentos(mailOptions) {
         try {
             await enviarPorGmailApi(mailOptions);
             console.log('   ✅ Enviado vía API de Gmail (HTTPS).');
-            diagnosticoCorreo.via = 'gmail-api';
-            diagnosticoCorreo.detalle = 'API de Gmail por HTTPS';
             return true;
         } catch (err) {
             console.log(`   ⚠️ Gmail API falló: ${err.message}. Probando otros métodos...`);
-            diagnosticoCorreo.intentos.push({ via: 'gmail-api', error: err.message });
         }
     }
 
@@ -456,12 +437,9 @@ export async function enviarConReintentos(mailOptions) {
         try {
             await enviarPorResend(mailOptions);
             console.log('   ✅ Enviado vía Resend (HTTPS).');
-            diagnosticoCorreo.via = 'resend';
-            diagnosticoCorreo.detalle = `Resend por HTTPS · remitente ${process.env.RESEND_FROM || mailOptions.from}`;
             return true;
         } catch (err) {
             console.log(`   ⚠️ Resend falló: ${err.message}. Probando por SMTP...`);
-            diagnosticoCorreo.intentos.push({ via: 'resend', error: err.message });
         }
     }
 
@@ -473,13 +451,10 @@ export async function enviarConReintentos(mailOptions) {
                 const transporter = crearTransporterGmail(port);
                 await transporter.sendMail(mailOptions);
                 if (port !== 587 || ronda !== 1) console.log(`   ✅ Enviado por SMTP puerto ${port}.`);
-                diagnosticoCorreo.via = 'smtp';
-                diagnosticoCorreo.detalle = `Gmail SMTP puerto ${port} (ronda ${ronda}) — esta vía NO funciona en Railway`;
                 return true;
             } catch (err) {
                 ultimoError = err;
                 console.log(`   ⚠️ SMTP falló (puerto ${port}, ronda ${ronda}): ${err.message}`);
-                diagnosticoCorreo.intentos.push({ via: `smtp:${port}`, error: err.message });
                 await new Promise(r => setTimeout(r, 1500));
             }
         }

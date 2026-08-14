@@ -11,7 +11,10 @@
 // la plantilla "cierre de F29" con fecha 20-08 sirve un mes y después miente.
 // =====================================================================
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, Plus, Trash2, X, LayoutTemplate, ListChecks, Check, Pencil } from 'lucide-react';
+import {
+    Loader2, Plus, Trash2, X, LayoutTemplate, ListChecks, Check, Pencil,
+    GripVertical, ChevronUp, ChevronDown,
+} from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import {
     listarPlantillasApi, crearPlantillaApi, actualizarPlantillaApi, eliminarPlantillaApi,
@@ -122,6 +125,33 @@ const FormPlantilla = ({ inicial, proyectos, usuarios, onGuardado, onCancelar })
         setNuevoPaso('');
     };
 
+    // ---- ORDENAR LOS PASOS ----
+    // El orden importa: los pasos son la secuencia del trabajo («firma escritura»
+    // va antes que «inicio de actividades»), y hasta ahora el único orden posible
+    // era el de escritura. Corregir un paso mal puesto obligaba a borrar todos
+    // los de abajo y volver a escribirlos.
+    //
+    // Con el arrastre que trae el navegador, sin librería: es una lista corta y
+    // no justifica sumar una dependencia. Mismo criterio que el tablero.
+    const [arrastrando, setArrastrando] = useState(null);
+    const [encima, setEncima] = useState(null);
+
+    const mover = (desde, hasta) => {
+        if (hasta < 0 || hasta >= pasos.length || desde === hasta) return;
+        setPasos(prev => {
+            const copia = [...prev];
+            const [sacado] = copia.splice(desde, 1);
+            copia.splice(hasta, 0, sacado);
+            return copia;
+        });
+    };
+
+    const soltarEn = (destino) => {
+        if (arrastrando !== null) mover(arrastrando, destino);
+        setArrastrando(null);
+        setEncima(null);
+    };
+
     const guardar = async () => {
         if (!f.nombre.trim()) { toast({ variant: 'destructive', title: 'Falta el nombre' }); return; }
         setGuardando(true);
@@ -152,6 +182,25 @@ const FormPlantilla = ({ inicial, proyectos, usuarios, onGuardado, onCancelar })
                 value={f.nombre} onChange={set('nombre')} autoFocus />
             <input className={inp} placeholder="Para qué sirve (opcional)"
                 value={f.descripcion} onChange={set('descripcion')} />
+
+            {/* TÍTULO DE LA TAREA · este campo no existía, y esa era la razón de
+                que todas las tareas salieran con el nombre de la plantilla. Son
+                dos cosas distintas y ahora se ven separadas. */}
+            <label className="block">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    Título de la tarea que se crea
+                </span>
+                <input className={inp} placeholder="Se escribe al usarla (ej: Alta de — nombre del cliente)"
+                    value={f.titulo} onChange={set('titulo')} />
+                <span className="text-[9px] text-slate-400 block mt-0.5">
+                    Déjalo vacío para escribirlo cada vez. Así dos tareas de la misma
+                    plantilla no quedan con el mismo nombre.
+                </span>
+            </label>
+
+            <textarea className={`${inp} resize-none`} rows={2}
+                placeholder="Descripción que llevará la tarea (opcional)"
+                value={f.detalle} onChange={set('detalle')} />
 
             <div className="grid grid-cols-2 gap-2">
                 <label className="block">
@@ -191,10 +240,30 @@ const FormPlantilla = ({ inicial, proyectos, usuarios, onGuardado, onCancelar })
                 </span>
                 <div className="space-y-1 mb-1.5">
                     {pasos.map((p, i) => (
-                        <div key={`${p}-${i}`} className="flex items-center gap-2 bg-white border border-[#efe8dd] rounded-lg px-2 py-1 group">
+                        <div
+                            key={`${p}-${i}`}
+                            draggable
+                            onDragStart={() => setArrastrando(i)}
+                            onDragEnd={() => { setArrastrando(null); setEncima(null); }}
+                            onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setEncima(i); }}
+                            onDrop={(e) => { e.preventDefault(); soltarEn(i); }}
+                            className={`flex items-center gap-2 bg-white border rounded-lg px-2 py-1 group cursor-grab active:cursor-grabbing transition-colors
+                                ${encima === i && arrastrando !== null && arrastrando !== i
+                                    ? 'border-emerald-500 bg-emerald-500/5'
+                                    : 'border-[#efe8dd]'}
+                                ${arrastrando === i ? 'opacity-40' : ''}`}
+                        >
+                            <GripVertical size={11} className="text-slate-300 shrink-0" />
                             <span className="text-[9px] font-black text-slate-300 tabular-nums w-4">{i + 1}</span>
                             <span className="text-xs text-slate-700 flex-1 truncate">{p}</span>
+                            {/* Subir/bajar además del arrastre: en una pantalla táctil
+                                arrastrar no funciona, y con dos pasos es más rápido. */}
+                            <button type="button" onClick={() => mover(i, i - 1)} disabled={i === 0}
+                                title="Subir" className="text-slate-300 hover:text-emerald-600 disabled:opacity-0"><ChevronUp size={11} /></button>
+                            <button type="button" onClick={() => mover(i, i + 1)} disabled={i === pasos.length - 1}
+                                title="Bajar" className="text-slate-300 hover:text-emerald-600 disabled:opacity-0"><ChevronDown size={11} /></button>
                             <button type="button" onClick={() => setPasos(prev => prev.filter((_, x) => x !== i))}
+                                title="Quitar el paso"
                                 className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 size={11} /></button>
                         </div>
                     ))}
@@ -289,8 +358,13 @@ export const PlantillasModal = ({ plantillas, proyectos, usuarios, onClose, onCa
                                                 )}
                                             </div>
                                         </div>
-                                        <button onClick={() => setEditando(p)} title="Editar"
-                                            className="text-slate-300 hover:text-emerald-600 opacity-0 group-hover:opacity-100 shrink-0"><Pencil size={13} /></button>
+                                        {/* Editar SIEMPRE visible. Existía desde antes, pero
+                                            escondido tras `opacity-0` hasta pasar el mouse por
+                                            encima: en la práctica nadie sabía que se podía
+                                            editar una plantilla. Eliminar sí se queda oculto,
+                                            porque no tiene vuelta atrás. */}
+                                        <button onClick={() => setEditando(p)} title="Editar la plantilla"
+                                            className="text-slate-400 hover:text-emerald-600 shrink-0"><Pencil size={13} /></button>
                                         <button onClick={() => borrar(p)} title="Eliminar"
                                             className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={13} /></button>
                                     </div>

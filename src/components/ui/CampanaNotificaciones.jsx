@@ -123,7 +123,17 @@ const CampanaNotificaciones = () => {
         }
         // Llevar a donde ocurrió. Una notificación que no lleva a ninguna parte
         // obliga a buscar la tarea a mano, que es justo lo que se quería evitar.
-        if (a.entidad === 'tarea') navigate('/tareas?sub=todas');
+        //
+        // Con `?tarea=<id>` la lista abre ESA tarea al llegar, en vez de dejar
+        // en la lista completa para que uno la busque. Sirve también cuando el
+        // aviso es de una subtarea: el detalle se pide por id.
+        //
+        // Si el aviso viejo no trae `entidadId` se cae a la lista, como antes.
+        if (a.entidad === 'tarea') {
+            navigate(a.entidadId
+                ? `/tareas?sub=todas&tarea=${encodeURIComponent(a.entidadId)}`
+                : '/tareas?sub=todas');
+        }
         else if (a.entidad === 'proyecto') navigate('/tareas?sub=proyectos');
     };
 

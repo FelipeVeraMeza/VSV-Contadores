@@ -16,9 +16,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
     Loader2, AlertTriangle, Clock, CheckCircle2, ListChecks, Flame,
-    Plus, FolderPlus, CalendarDays, User, ArrowRight,
+    Plus, FolderPlus, CalendarDays, User, ArrowRight, Circle,
 } from 'lucide-react';
-import { resumenInicioApi } from '@/services/crmService';
+import { resumenInicioApi, completarTareaApi } from '@/services/crmService';
+import { toast } from '@/components/ui/use-toast';
 
 const getUser = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
 const getSessionId = () => getUser().sessionId;
@@ -53,31 +54,61 @@ const Tarjeta = ({ icono: Icono, n, label, tono, onClick }) => (
     </button>
 );
 
-const FilaTarea = ({ t, atrasada }) => (
-    <div className="flex items-center gap-2.5 px-3 py-2 border-b border-[#f5f0e8] last:border-0">
-        <div className="min-w-0 flex-1">
-            <p className={`text-xs font-bold truncate ${t.estado === 'completada' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
-                {t.titulo}
-            </p>
-            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                {t.proyectoNombre && (
-                    <span className="text-[9px] font-bold" style={{ color: t.proyectoColor || '#199b4d' }}>● {t.proyectoNombre}</span>
-                )}
-                {t.responsableNombre && (
-                    <span className="text-[9px] text-slate-500 flex items-center gap-0.5"><User size={9} /> {t.responsableNombre}</span>
-                )}
-            </div>
-        </div>
-        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 ${PRIO[t.prioridad] || PRIO.media}`}>
-            {t.prioridad}
-        </span>
-        <span className={`text-[10px] font-bold shrink-0 w-20 text-right ${atrasada ? 'text-red-600' : 'text-slate-500'}`}>
-            {cuandoTexto(t.estado === 'completada' ? t.completedAt : t.venceAt)}
-        </span>
-    </div>
-);
+// La fila entera abre la tarea, y el círculo de la izquierda la finaliza sin
+// salir de acá. Antes esta pantalla era solo de lectura: se veía qué estaba
+// atrasado pero para hacer algo al respecto había que ir a buscarlo a la lista.
+const FilaTarea = ({ t, atrasada, onAbrir, onCompletar, cerrando }) => {
+    const hecha = t.estado === 'completada';
+    return (
+        <div
+            onClick={() => onAbrir(t.id)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(t.id); } }}
+            title="Abrir la tarea"
+            className="flex items-center gap-2.5 px-3 py-2 border-b border-[#f5f0e8] last:border-0 cursor-pointer hover:bg-slate-50 transition-colors"
+        >
+            {/* El botón NO propaga el clic: si lo hiciera, finalizar abriría
+                además el detalle de la tarea recién cerrada. */}
+            {hecha ? (
+                <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+            ) : (
+                <button
+                    onClick={(e) => { e.stopPropagation(); onCompletar(t); }}
+                    disabled={cerrando}
+                    title="Finalizar la tarea"
+                    className="shrink-0 disabled:opacity-50"
+                >
+                    {cerrando
+                        ? <Loader2 size={15} className="animate-spin text-emerald-500" />
+                        : <Circle size={15} className="text-slate-300 hover:text-emerald-500 transition-colors" />}
+                </button>
+            )}
 
-const Bloque = ({ titulo, icono: Icono, tono, tareas, vacio, atrasadas, onVerTodas }) => (
+            <div className="min-w-0 flex-1">
+                <p className={`text-xs font-bold truncate ${hecha ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                    {t.titulo}
+                </p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {t.proyectoNombre && (
+                        <span className="text-[9px] font-bold" style={{ color: t.proyectoColor || '#199b4d' }}>● {t.proyectoNombre}</span>
+                    )}
+                    {t.responsableNombre && (
+                        <span className="text-[9px] text-slate-500 flex items-center gap-0.5"><User size={9} /> {t.responsableNombre}</span>
+                    )}
+                </div>
+            </div>
+            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 ${PRIO[t.prioridad] || PRIO.media}`}>
+                {t.prioridad}
+            </span>
+            <span className={`text-[10px] font-bold shrink-0 w-20 text-right ${atrasada ? 'text-red-600' : 'text-slate-500'}`}>
+                {cuandoTexto(hecha ? t.completedAt : t.venceAt)}
+            </span>
+        </div>
+    );
+};
+
+const Bloque = ({ titulo, icono: Icono, tono, tareas, vacio, atrasadas, onVerTodas, onAbrir, onCompletar, cerrando }) => (
     <div className="bg-white border border-[#efe8dd] rounded-2xl overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-[#efe8dd]">
             <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
@@ -93,7 +124,10 @@ const Bloque = ({ titulo, icono: Icono, tono, tareas, vacio, atrasadas, onVerTod
         <div className="flex-1">
             {tareas.length === 0
                 ? <p className="text-[11px] text-slate-400 italic px-3.5 py-5 text-center">{vacio}</p>
-                : tareas.map(t => <FilaTarea key={t.id} t={t} atrasada={atrasadas} />)}
+                : tareas.map(t => (
+                    <FilaTarea key={t.id} t={t} atrasada={atrasadas}
+                        onAbrir={onAbrir} onCompletar={onCompletar} cerrando={cerrando === t.id} />
+                ))}
         </div>
     </div>
 );
@@ -117,6 +151,30 @@ const InicioPanel = ({ modo = 'todas' }) => {
     useEffect(() => { cargar(); }, [cargar]);
 
     const irA = (params) => setSearchParams({ sub: 'todas', ...params });
+
+    // Abrir una tarea = ir a la lista con `?tarea=<id>`, que es el mismo camino
+    // que usa la campana. Así hay UNA sola forma de abrir una tarea desde fuera
+    // de la lista, y el panel de detalle no se duplica en cada pantalla.
+    const abrirTarea = (id) => irA({ tarea: id });
+
+    // Finalizar sin salir de Inicio. La fila se marca al instante y recién
+    // después se pide el resumen de nuevo: esperar la ida y vuelta del servidor
+    // para tachar una línea se siente lento.
+    const [cerrando, setCerrando] = useState(null);
+    const completar = async (t) => {
+        setCerrando(t.id);
+        try {
+            const r = await completarTareaApi(getSessionId(), t.id);
+            const d = await r.json().catch(() => ({}));
+            if (d.success === false) throw new Error(d.message || 'No se pudo finalizar.');
+            toast({ title: 'Tarea finalizada', description: t.titulo });
+            await cargar();   // los seis contadores de arriba cambian con esto
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'No se pudo finalizar', description: e.message });
+        } finally {
+            setCerrando(null);
+        }
+    };
 
     if (loading) return (
         <div className="flex items-center justify-center py-20 text-slate-400"><Loader2 className="animate-spin" /></div>
@@ -174,11 +232,14 @@ const InicioPanel = ({ modo = 'todas' }) => {
             {/* Las tres listas */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 flex-1 min-h-0">
                 <Bloque titulo="Atrasadas" icono={AlertTriangle} tono="text-red-500" atrasadas
-                    tareas={data.vencidas} vacio="Nada atrasado." onVerTodas={() => irA({})} />
+                    tareas={data.vencidas} vacio="Nada atrasado." onVerTodas={() => irA({})}
+                    onAbrir={abrirTarea} onCompletar={completar} cerrando={cerrando} />
                 <Bloque titulo="Próximas a vencer" icono={Clock} tono="text-blue-500"
-                    tareas={data.proximas} vacio={`Nada vence en los próximos ${r.diasProximas} días.`} onVerTodas={() => irA({})} />
+                    tareas={data.proximas} vacio={`Nada vence en los próximos ${r.diasProximas} días.`} onVerTodas={() => irA({})}
+                    onAbrir={abrirTarea} onCompletar={completar} cerrando={cerrando} />
                 <Bloque titulo="Cerradas hace poco" icono={CheckCircle2} tono="text-emerald-500"
-                    tareas={data.recientes} vacio="Todavía no cierras nada esta semana." />
+                    tareas={data.recientes} vacio="Todavía no cierras nada esta semana."
+                    onAbrir={abrirTarea} onCompletar={completar} cerrando={cerrando} />
             </div>
         </div>
     );

@@ -16,6 +16,8 @@ import {
   ChevronLeft, ChevronRight
 } from "lucide-react";
 import { cleanRut } from "@/lib/rut.js";
+import { campoMonto, soloDigitos } from "@/components/facturacion/utils/montos.js";
+import BotonDescargarFolio from "./BotonDescargarFolio.jsx";
 import * as XLSX from "xlsx";
 
 // CONTEXTO Y SERVICIOS
@@ -574,7 +576,10 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
         newRows[absoluteIndex].id = match.id;
         newRows[absoluteIndex].razonSocial = match.razon_social || match.razonSocial;
         newRows[absoluteIndex].plan = match.plan_nombre || match.plan || "Servicio Contable";
-        newRows[absoluteIndex].precio = match.honorarioNeto || match.honorario_neto || match.precioMensual || match.impuesto_pagar || match.neto || "";
+        // `soloDigitos`: el honorario puede venir del CRM ya formateado
+        // («190.000»), y así guardado la proyección de abajo hace Number() y da
+        // NaN, dejando el total en blanco sin decir por qué.
+        newRows[absoluteIndex].precio = soloDigitos(match.honorarioNeto || match.honorario_neto || match.precioMensual || match.impuesto_pagar || match.neto || "");
         newRows[absoluteIndex].contacto = (match.email_corporativo || match.correo || "").split(/[,;/\s]+/)[0].trim();
       }
     }
@@ -590,7 +595,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
     newRows[absoluteIndex].searchQuery = rutLimpio;
     newRows[absoluteIndex].razonSocial = cliente.razon_social || cliente.razonSocial;
     newRows[absoluteIndex].plan = cliente.plan_nombre || cliente.plan || newRows[absoluteIndex].plan;
-    newRows[absoluteIndex].precio = cliente.honorarioNeto || cliente.honorario_neto || cliente.precioMensual || cliente.impuesto_pagar || cliente.neto || newRows[absoluteIndex].precio;
+    newRows[absoluteIndex].precio = soloDigitos(cliente.honorarioNeto || cliente.honorario_neto || cliente.precioMensual || cliente.impuesto_pagar || cliente.neto || newRows[absoluteIndex].precio);
     newRows[absoluteIndex].contacto = (cliente.correo || cliente.email_corporativo || '').split(/[,;/\s]+/)[0].trim();
     setBulkRows(newRows);
     setActiveRowIndex(null);
@@ -829,9 +834,15 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                   <h3 className="text-3xl font-black uppercase italic tracking-tighter mb-1">¡Proceso Finalizado!</h3>
                   <p className="font-mono text-xl text-emerald-600 font-bold">Folio N° {folioGenerado}</p>
                 </div>
-                <Button onClick={() => setIsOpen(false)} className="bg-emerald-600 hover:bg-emerald-700 w-full mt-4 rounded-xl font-black uppercase tracking-widest h-14">
-                  Volver al CRM
-                </Button>
+                {/* Descargar va PRIMERO: es lo que se quiere hacer estando acá.
+                    «Volver al CRM» cierra el cuadro y, con él, la última
+                    oportunidad de bajar el documento sin ir a buscarlo al SII. */}
+                <div className="w-full mt-4 space-y-2">
+                  <BotonDescargarFolio folio={folioGenerado} tipo={33} />
+                  <Button onClick={() => setIsOpen(false)} className="bg-emerald-600 hover:bg-emerald-700 w-full rounded-xl font-black uppercase tracking-widest h-14">
+                    Volver al CRM
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -947,7 +958,7 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
                         <Label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Valor Neto ($)</Label>
                         <div className="relative">
                           <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                          <Input type="number" value={item.precio} onChange={(e) => setItem({...item, precio: e.target.value})} className="pl-11 h-12 bg-slate-50 border-[#efe8dd] rounded-xl font-mono text-lg font-bold text-emerald-500" placeholder="0"/>
+                          <Input {...campoMonto(item.precio, (v) => setItem({ ...item, precio: v }))} className="pl-11 h-12 bg-slate-50 border-[#efe8dd] rounded-xl font-mono text-lg font-bold text-emerald-500" placeholder="0"/>
                         </div>
                       </div>
                       <div className="md:col-span-2 space-y-2">
@@ -1150,12 +1161,10 @@ export default function FacturaElectronicaModal({ isOpen, setIsOpen }) {
 
                                   {/* 6. VALOR NETO ($) */}
                                   <td className="px-3 py-1.5">
-                                    <Input 
-                                      type="number" 
-                                      value={row.precio} 
-                                      onChange={(e) => updateBulkRow(absoluteIndex, 'precio', e.target.value)} 
-                                      className="h-9 bg-transparent border-transparent hover:border-[#efe8dd] focus:bg-slate-50 focus:border-emerald-500 text-[11px] font-black font-mono text-emerald-600 rounded-lg shadow-none transition-all text-right" 
-                                      placeholder="0" 
+                                    <Input
+                                      {...campoMonto(row.precio, (v) => updateBulkRow(absoluteIndex, 'precio', v))}
+                                      className="h-9 bg-transparent border-transparent hover:border-[#efe8dd] focus:bg-slate-50 focus:border-emerald-500 text-[11px] font-black font-mono text-emerald-600 rounded-lg shadow-none transition-all text-right"
+                                      placeholder="0"
                                       disabled={isBulkSubmitting || row.estado === 'completado' || isOmitted}
                                     />
                                   </td>

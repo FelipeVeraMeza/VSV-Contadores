@@ -175,6 +175,11 @@ export const listarTareas = async (req, res) => {
             `SELECT t.*, u.nombre AS responsable_nombre,
                     (p.nombre || ' ' || COALESCE(p.apellidos,'')) AS persona_nombre,
                     pr.nombre AS proyecto_nombre, pr.color AS proyecto_color,
+                    -- Título de la tarea madre. Sin esto, una subtarea suelta en
+                    -- la lista (pasa al filtrar por "Finalizadas") no dice a qué
+                    -- pertenece: se ve «EDITAR PLANTILLAS» sin saber que cuelga
+                    -- de «CREAR PLANTILLAS DE TAREAS».
+                    padre.titulo AS padre_titulo,
                     COUNT(*) OVER()::int AS total_filtrado,
                     (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id) AS subtareas_total,
                     (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.estado='completada') AS subtareas_hechas,
@@ -186,6 +191,7 @@ export const listarTareas = async (req, res) => {
              LEFT JOIN usuario u ON u.id = t.responsable_id
              LEFT JOIN persona p ON p.id = t.persona_id
              LEFT JOIN proyecto pr ON pr.id = t.proyecto_id
+             LEFT JOIN tarea padre ON padre.id = t.parent_id
              WHERE ${where.join(' AND ')}
              ORDER BY ${ORDEN_TAREAS}
              LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -233,6 +239,8 @@ const mapTarea = (t) => ({
     proyectoNombre: t.proyecto_nombre || null,
     proyectoColor: t.proyecto_color || null,
     parentId: t.parent_id,
+    // Solo lo traen las consultas que hacen el JOIN con la madre.
+    padreTitulo: t.padre_titulo || null,
     subtareasTotal: t.subtareas_total ?? 0,
     subtareasHechas: t.subtareas_hechas ?? 0,
     comentarios: t.comentarios ?? 0,

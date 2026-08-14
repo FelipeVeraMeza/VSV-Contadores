@@ -1,7 +1,12 @@
 # Módulo de Tareas · Requerimientos
 
-**Última revisión:** 31 de julio de 2026
+**Última revisión:** 14 de agosto de 2026
 **Estado:** en construcción por fases (ver el final del documento)
+
+> **Lo último (14-ago-2026):** nueve pedidos del equipo resueltos y una vista
+> nueva de árbol. Todo eso está en la **sección 10**, al final, junto con lo que
+> quedó bloqueado esperando respuestas. Lo de acá arriba es la especificación
+> original de julio y sigue valiendo.
 
 Este documento recoge la especificación que definió el módulo, más las decisiones
 de diseño que se tomaron al implementarla y las razones de cada una. Se escribe
@@ -454,3 +459,108 @@ kanban, las notificaciones dentro del sistema y el segundo nivel de subtareas.
 `2026-07-31_tareas_fase1_modelo.sql`, `2026-08-05_proyecto_nombre_unico.sql`,
 `2026-08-05_proyecto_integrantes.sql`, `2026-08-05_subtarea_hereda_proyecto.sql`,
 `2026-08-05_notificaciones.sql`, `2026-08-05_plantillas_tarea.sql`.
+
+---
+
+## 10. Trabajo del 14-ago-2026
+
+Nueve pedidos que el equipo había dejado como tareas dentro del propio módulo
+(la rama **SISTEMA DE TAREAS** del proyecto SOFTWARE SIMPLE PYME), más una vista
+nueva que salió de mirar los datos reales.
+
+> ⚠️ **Lección del día, y vale para todo el proyecto:** varias de estas tareas
+> figuraban como resueltas en un comentario de cierre, y no lo estaban. La más
+> clara: NOTIFICACIONES DE TAREAS decía *"El aviso lleva a la tarea"* desde el
+> 05-ago, pero el código llevaba a la lista completa. **Un comentario que dice
+> "cerrado" no es prueba de nada.** Y al revés: los pedidos concretos estaban en
+> los COMENTARIOS de cada tarea, no en su descripción — leer solo la descripción
+> hace perder la mitad del alcance.
+
+### 10.1 Vista de ÁRBOL · `src/components/tareas/ArbolTareas.jsx`
+
+Tercer botón junto a Lista y Tablero.
+
+**El problema medido:** de 59 tareas, la lista mostraba **10**. La consulta pide
+`soloRaiz=1`, así que las 49 subtareas solo existían dentro del panel de detalle,
+de a una. El árbol real tiene tres niveles (10 raíces → 36 → 13).
+
+**Qué hace:** dibuja la jerarquía completa, agrupada por proyecto, con estado,
+prioridad, responsable y vencimiento a la derecha de cada fila. Nace desplegado.
+
+**Decisiones:**
+
+- **No toca el backend.** La API ya devolvía `parentId`; `soloRaiz` era opcional.
+- Pide **300 por página** en vez de 60 (`POR_PAGINA_ARBOL`): un árbol al que le
+  falta media rama se dibuja mal, porque un hijo cuyo padre quedó en la página
+  siguiente aparecería suelto arriba como si fuera raíz.
+- Fuerza el filtro a **"Todas"**. Con "Activas" un padre ya cerrado no viene y
+  sus hijas abiertas se dibujan sueltas. Ojo: esto hay que forzarlo **también al
+  inicializar el estado**, no solo al cambiar de vista — la vista se restaura
+  desde `localStorage` sin pasar por `cambiarVista`. El síntoma en el log del
+  servidor era `/api/crm/tareas?limite=300&estado=activas`.
+- Una hija cuyo padre no está en la lista se dibuja **como raíz** en vez de
+  desaparecer, para que el total siempre cuadre.
+
+### 10.2 Los ocho arreglos
+
+| Pedido | Qué se encontró |
+|---|---|
+| **La notificación abre su tarea** | Llevaba a `/tareas?sub=todas`. Ahora `?tarea=<id>` abre ese detalle al llegar; sirve para subtareas porque el panel pide sus datos por id. |
+| **Inicio: tareas clickeables** | Inicio era de solo lectura. Las filas abren la tarea por el mismo camino que la campana. |
+| **Inicio: finalizar desde ahí** | Círculo en cada fila; los seis contadores se recalculan al cerrar una. |
+| **Subtareas finalizadas visibles** | Era peor de lo que parecía: al cerrar una subtarea desaparecía de todos lados. **El filtro "Finalizadas" mostraba 3 y ahora muestra 20** — había 17 invisibles. Cada una muestra su tarea madre, pulsable. |
+| **Ctrl+V adjunta una imagen** | Se renombra con fecha y hora: el portapapeles entrega todo como `image.png`. |
+| **Imágenes dentro del texto** | Ver 10.3. |
+| **Editar plantillas** | **Ya existía.** El lápiz estaba con `opacity-0` y solo aparecía al pasar el mouse. Ahora siempre visible; eliminar sigue oculto porque no tiene vuelta atrás. |
+| **El nombre de la tarea ≠ el de la plantilla** | Causa: `titulo: p.titulo \|\| p.nombre` en el controlador **y un campo que nunca existió en el formulario**. Dar de alta tres clientes dejaba tres tareas llamadas igual. |
+| **Pasos arrastrables** | Arrastre del navegador, sin librería (mismo criterio que el tablero). Con flechas subir/bajar además, porque en táctil arrastrar no funciona. |
+
+### 10.3 Imágenes dentro del comentario y la descripción
+
+Pegando con el cursor en el comentario o la descripción, la imagen se sube como
+adjunto y en el texto queda una marca `[img:<id>]` en el punto exacto del cursor.
+Al dibujar el texto, la marca se reemplaza por la imagen. Pegando fuera de esos
+campos se adjunta como antes.
+
+**Por qué marcas y no un editor de texto enriquecido:** los comentarios ya son
+texto plano en `tarea_comentario.texto`. Guardar HTML obligaría a migrar lo ya
+escrito y a sanear el HTML que llegue — un problema mayor que el que resuelve.
+
+Además, **vista previa en pop-up** de los adjuntos que no son imagen: los PDF se
+abren dentro del sistema en vez de bajarlos al computador; Word y Excel avisan
+que el navegador no puede mostrarlos y ofrecen descargar.
+
+> 🐛 **Trampa que costó encontrar y que conviene recordar:** la expresión que
+> detecta las marcas lleva bandera `g`, y `.test()` sobre una regex global
+> **avanza su `lastIndex`**. Preguntar dos veces por el mismo texto devuelve
+> `true, false, true, false`, así que las imágenes de la descripción se habrían
+> visto un render sí y otro no. Para preguntar "¿tiene imágenes?" hay una regex
+> aparte, sin `g` (`tieneImagenes`).
+
+### 10.4 Lo que quedó bloqueado
+
+Cada una tiene las preguntas escritas en sus comentarios, en formato P1/P2/P3, y
+está asignada a **Mati** con aviso en la campana.
+
+| Tarea | Qué falta |
+|---|---|
+| **Plantillas predeterminadas de los productos** | La lista de productos, sus pasos, los días de cada paso y el responsable. Es conocimiento de la oficina: una plantilla con pasos inventados es peor que no tenerla. |
+| **Plantillas asignables a empresa / cliente / prospecto** | Decisión de alcance. La base ya aguanta (`tarea.persona_id` y `empresa_id` existen y `crearTarea` los acepta), pero `usarPlantilla` no los recibe y `/personas/catalogos` no devuelve empresas ni personas. |
+
+### 10.5 Lo que se puede hacer sin preguntarle a nadie
+
+Pendiente al cierre del 14-ago:
+
+1. **Bug:** una subtarea finalizada que se vuelve a marcar como activa no se
+   puede abrir.
+2. **Pop-up de tarea asignada con su urgencia.** La campana y el sonido están; el
+   pop-up del pedido original nunca se hizo.
+3. **Vista "Tareas de hoy"** en Inicio. Hay contador de "vencen hoy" pero no
+   lista. Estaba pedido en un comentario y se cerró sin hacerlo.
+
+### 10.6 Estado de los datos al 14-ago-2026
+
+59 tareas, ninguna archivada. **37 de las 39 abiertas no tienen fecha de
+vencimiento**, así que nada puede aparecer atrasado y los contadores de Inicio
+—que son lo primero que se ve— quedan casi siempre en cero. Es el dato más flojo
+del módulo hoy, y ninguna funcionalidad lo arregla: hay que cargar las fechas.

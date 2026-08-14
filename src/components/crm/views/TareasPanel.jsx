@@ -4,9 +4,10 @@ import {
     Plus, Search, Loader2, X, Trash2, Check, Clock, Folder, FolderPlus,
     MessageSquare, ListChecks, ChevronRight, Circle, CircleDot, CheckCircle2,
     Flag, User, Users, Calendar, Send, Paperclip, Download, Eye, Archive, ArchiveRestore,
-    List, Kanban, LayoutTemplate
+    List, Kanban, LayoutTemplate, Network
 } from 'lucide-react';
 import TableroTareas from '@/components/tareas/TableroTareas';
+import ArbolTareas from '@/components/tareas/ArbolTareas';
 import { usePlantillas, SelectorPlantillas, PlantillasModal } from '@/components/tareas/PlantillasTarea';
 import { toast } from '@/components/ui/use-toast';
 import {
@@ -44,6 +45,29 @@ const ESTADOS_ORDEN = ['pendiente', 'en_proceso', 'en_revision', 'completada'];
 // Cuántas tareas se piden por vez. La lista no se trae completa nunca: el resto
 // llega con "Ver más". El servidor recorta a 500 aunque se pida más.
 const POR_PAGINA = 60;
+// El árbol necesita padres e hijos juntos para dibujarse entero, así que pide
+// más de una vez. El servidor recorta a 500 igual.
+const POR_PAGINA_ARBOL = 300;
+
+// Las tres formas de ver las tareas. La elegida se recuerda entre visitas.
+const VISTAS = ['lista', 'tablero', 'arbol'];
+const LLAVE_VISTA = 'tareas:vista';
+
+// A nivel de módulo y no dentro del componente porque hace falta ANTES de
+// declarar el estado `vista`: el filtro de estado se inicializa según cuál sea
+// la vista guardada, y leerlo de la variable daría error de zona muerta.
+const vistaGuardada = () => {
+    try {
+        const v = localStorage.getItem(LLAVE_VISTA);
+        return VISTAS.includes(v) ? v : 'lista';
+    } catch { return 'lista'; }
+};
+
+// El tablero y el árbol necesitan ver TODOS los estados: en el tablero la
+// columna de finalizadas quedaría vacía para siempre, y en el árbol un padre ya
+// cerrado no vendría y sus hijas abiertas se dibujarían sueltas arriba, como si
+// no tuvieran padre.
+const necesitaTodos = (v) => v === 'tablero' || v === 'arbol';
 const inp = "w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500";
 const fechaCorta = (d) => d ? new Date(d).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }) : null;
 
@@ -76,7 +100,12 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
             : '';
         setForm(prev => ({
             ...prev,
-            titulo: prev.titulo.trim() || p.titulo || p.nombre,
+            // Solo se sugiere un título si la plantilla guardó uno propio. Antes
+            // caía al NOMBRE de la plantilla, así que todas las tareas creadas
+            // desde «Alta de cliente nuevo» se llamaban igual y no había forma
+            // de distinguirlas en la lista. Sin título sugerido, el campo queda
+            // vacío y se escribe de quién es esta vez.
+            titulo: prev.titulo.trim() || p.titulo || '',
             descripcion: prev.descripcion.trim() || p.detalle || '',
             prioridad: p.prioridad || prev.prioridad,
             venceAt: fecha || prev.venceAt,
@@ -204,21 +233,89 @@ const esImagen = (a) =>
 // componente las baja UNA vez, arma un blob en memoria y las muestra en pantalla
 // —sin guardarlas en el disco—. Al hacer clic se abren a tamaño completo.
 // Si por lo que sea no carga, cae al ícono de clip como cualquier archivo.
-const ImagenAdjunta = ({ adjunto, onVer }) => {
+// Baja un adjunto UNA vez y lo deja como blob en memoria. Lo usan la miniatura
+// de la lista y las imágenes incrustadas en el texto, que necesitan lo mismo.
+const useUrlAdjunto = (id) => {
     const [url, setUrl] = useState(null);
     const [error, setError] = useState(false);
     useEffect(() => {
         let vivo = true; let objUrl = null;
         (async () => {
             try {
-                const r = await descargarAdjuntoApi(getSessionId(), adjunto.id);
+                const r = await descargarAdjuntoApi(getSessionId(), id);
                 if (!r.ok) throw new Error();
                 objUrl = URL.createObjectURL(await r.blob());
                 if (vivo) setUrl(objUrl); else URL.revokeObjectURL(objUrl);
             } catch { if (vivo) setError(true); }
         })();
         return () => { vivo = false; if (objUrl) URL.revokeObjectURL(objUrl); };
-    }, [adjunto.id]);
+    }, [id]);
+    return { url, error };
+};
+
+// ---------------------------------------------------------------
+// IMÁGENES DENTRO DEL TEXTO  ·  «VISUALIZAR IMAGENES ADJUNTAS»
+// ---------------------------------------------------------------
+// Al pegar una imagen en un comentario o en la descripción, el archivo se sube
+// como adjunto normal y en el texto queda una marca `[img:<id>]`. Al dibujar el
+// texto, esa marca se reemplaza por la imagen.
+//
+// Se hace así y no con un editor de texto enriquecido porque los comentarios ya
+// son texto plano en la base (`tarea_comentario.texto`): guardar HTML obligaría
+// a migrar lo que ya está escrito y a limpiar el HTML que llegue, que es un
+// problema mucho más grande que el que se quiere resolver.
+//
+// Si la imagen se borró o no carga, se ve un aviso corto en su lugar; el resto
+// del comentario se sigue leyendo.
+const TOKEN_IMG = /\[img:([0-9a-fA-F-]{36})\]/g;
+export const marcaImagen = (id) => `[img:${id}]`;
+
+// Regex APARTE y sin `g` para preguntar "¿tiene imágenes?".
+// Con la global no se puede: `.test()` sobre una regex con bandera `g` avanza su
+// `lastIndex`, así que la misma pregunta sobre el mismo texto devuelve true y
+// después false, y la descripción mostraría sus imágenes un render sí y otro no.
+const tieneImagenes = (texto) => /\[img:[0-9a-fA-F-]{36}\]/.test(texto || '');
+
+const ImagenEnTexto = ({ id, onVer }) => {
+    const { url, error } = useUrlAdjunto(id);
+    if (error) return <span className="text-[10px] text-slate-400 italic">[imagen no disponible]</span>;
+    if (!url) return (
+        <span className="inline-flex items-center gap-1 text-[10px] text-slate-400">
+            <Loader2 size={10} className="animate-spin" /> cargando imagen…
+        </span>
+    );
+    return (
+        <button type="button" onClick={() => onVer({ url, nombre: 'Imagen', mime: 'image/*' })}
+            className="block my-1.5" title="Ver a tamaño completo">
+            <img src={url} alt="Imagen pegada"
+                 className="max-w-full max-h-64 rounded-lg border border-[#efe8dd] hover:ring-2 hover:ring-emerald-400 transition" />
+        </button>
+    );
+};
+
+const TextoConImagenes = ({ texto, onVer, className }) => {
+    if (!texto) return null;
+    const partes = [];
+    let desde = 0, m;
+    TOKEN_IMG.lastIndex = 0;
+    while ((m = TOKEN_IMG.exec(texto)) !== null) {
+        if (m.index > desde) partes.push({ tipo: 'txt', valor: texto.slice(desde, m.index) });
+        partes.push({ tipo: 'img', valor: m[1] });
+        desde = m.index + m[0].length;
+    }
+    if (desde < texto.length) partes.push({ tipo: 'txt', valor: texto.slice(desde) });
+
+    return (
+        <div className={className}>
+            {partes.map((p, i) => p.tipo === 'img'
+                ? <ImagenEnTexto key={`i${i}`} id={p.valor} onVer={onVer} />
+                : <span key={`t${i}`} className="whitespace-pre-wrap">{p.valor}</span>)}
+        </div>
+    );
+};
+
+const ImagenAdjunta = ({ adjunto, onVer }) => {
+    const { url, error } = useUrlAdjunto(adjunto.id);
 
     if (error) return <Paperclip size={13} className="text-slate-400 shrink-0" />;
     if (!url) return (
@@ -227,7 +324,8 @@ const ImagenAdjunta = ({ adjunto, onVer }) => {
         </div>
     );
     return (
-        <button type="button" onClick={() => onVer(url, adjunto.nombre)} className="shrink-0" title="Ver imagen">
+        <button type="button" onClick={() => onVer({ url, nombre: adjunto.nombre, mime: adjunto.mime })}
+            className="shrink-0" title="Ver imagen">
             <img src={url} alt={adjunto.nombre}
                  className="w-11 h-11 rounded-lg object-cover border border-[#efe8dd] hover:ring-2 hover:ring-emerald-400 transition" />
         </button>
@@ -255,8 +353,9 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
     const [enviandoCom, setEnviandoCom] = useState(false);
     const [creandoSub, setCreandoSub] = useState(false);
     const [guardandoPlantilla, setGuardandoPlantilla] = useState(false);
-    // Imagen abierta a tamaño completo (visor). null = cerrado.
-    const [verImagen, setVerImagen] = useState(null);
+    // Archivo abierto en el visor. null = cerrado. Antes solo servía para
+    // imágenes; ahora también para PDF, que es el otro adjunto habitual.
+    const [verArchivo, setVerArchivo] = useState(null);
     const fileRef = React.useRef(null);
 
     const cargar = useCallback(async () => {
@@ -339,20 +438,20 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
         try { await eliminarComentarioApi(getSessionId(), c.id); } catch { cargar(); }
     };
     // ---- Adjuntos (se guardan como binario en la base) ----
-    const subirArchivo = async (e) => {
-        const file = e.target.files?.[0];
-        if (fileRef.current) fileRef.current.value = '';
-        if (!file) return;
+    // El cuerpo de la subida vive aparte porque tiene DOS entradas: el botón del
+    // clip y pegar con Ctrl+V. Antes estaba metido dentro del `onChange` del
+    // input, así que pegar habría significado copiar todo el bloque.
+    const subirBlob = async (file) => {
         // Se avisa acá antes de gastar la subida; el servidor vuelve a revisarlo
         // igual, porque esta comprobación se puede saltar.
         if (file.size > limites.porArchivo) {
             toast({ variant: 'destructive', title: 'Archivo muy grande', description: `«${file.name}» pesa ${kb(file.size)} y el máximo es ${kb(limites.porArchivo)}.` });
-            return;
+            return null;
         }
         if (limites.usado + file.size > limites.porTarea) {
             const libre = Math.max(0, limites.porTarea - limites.usado);
             toast({ variant: 'destructive', title: 'No cabe en esta tarea', description: `Quedan ${kb(libre)} libres de ${kb(limites.porTarea)}. Elimina algún archivo.` });
-            return;
+            return null;
         }
         setSubiendo(true);
         try {
@@ -366,10 +465,112 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
             const d = await r.json(); if (!d.success) throw new Error(d.message);
             setAdjs(prev => [...prev, d.adjunto]);
             setLimites(l => ({ ...l, usado: l.usado + Number(d.adjunto?.tamano || 0) }));
-            toast({ title: 'Archivo subido' });
-        } catch (err) { toast({ variant: 'destructive', title: 'Error', description: err.message }); }
-        finally { setSubiendo(false); }
+            // Devuelve el adjunto —y no un true— porque quien pega una imagen en
+            // el texto necesita su id para dejar la marca `[img:<id>]`.
+            return d.adjunto;
+        } catch (err) {
+            toast({ variant: 'destructive', title: 'Error', description: err.message });
+            return null;
+        } finally { setSubiendo(false); }
     };
+
+    const subirArchivo = async (e) => {
+        const file = e.target.files?.[0];
+        if (fileRef.current) fileRef.current.value = '';
+        if (!file) return;
+        if (await subirBlob(file)) toast({ title: 'Archivo subido' });
+    };
+
+    // ---- PEGAR UNA IMAGEN CON Ctrl+V ----
+    // Para adjuntar un pantallazo había que guardarlo en el disco, apretar el
+    // clip, buscarlo en la carpeta y subirlo. Con esto se pega y ya.
+    //
+    // DOS DESTINOS SEGÚN DÓNDE ESTÉ EL CURSOR:
+    //
+    //   · En el comentario o en la descripción → la imagen queda DENTRO del
+    //     texto, en el punto donde estaba el cursor. Es lo que se pidió: «como
+    //     en Asana, pegar una imagen en los comentarios y descripción».
+    //   · En cualquier otro lugar → se adjunta a la tarea, como antes.
+    //
+    // En los dos casos el archivo se sube igual; lo único que cambia es si
+    // además se deja una marca `[img:<id>]` en el texto.
+    //
+    // El oyente va en `document` porque uno pega apenas abre la tarea, sin haber
+    // pulsado antes en ningún lugar determinado. Si en el portapapeles no hay
+    // imagen no se toca nada, así que pegar texto sigue funcionando igual.
+    useEffect(() => {
+        const alPegar = async (e) => {
+            const imagenes = [...(e.clipboardData?.items || [])]
+                .filter(i => i.kind === 'file' && /^image\//i.test(i.type))
+                .map(i => i.getAsFile())
+                .filter(Boolean);
+            if (!imagenes.length) return;
+
+            e.preventDefault();
+            // `data-imagen-inline` marca los campos que aceptan la imagen dentro
+            // del texto. Se lee del elemento con el foco al momento de pegar.
+            const campo = document.activeElement;
+            const destino = campo?.dataset?.imagenInline || null;
+
+            const marcas = [];
+            for (const img of imagenes) {
+                // El portapapeles entrega todo como «image.png». Con dos
+                // pantallazos en la misma tarea quedarían dos archivos con el
+                // mismo nombre y no habría forma de distinguirlos en la lista.
+                const ext = (img.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+                const sello = new Date().toLocaleString('sv-SE').replace(/[: ]/g, '-');
+                const conNombre = new File([img], `pantallazo-${sello}.${ext}`, { type: img.type });
+                const adj = await subirBlob(conNombre);
+                if (adj?.id) marcas.push(marcaImagen(adj.id));
+            }
+            if (!marcas.length) return;
+
+            if (!destino) {
+                toast({ title: marcas.length === 1 ? 'Imagen adjuntada' : `${marcas.length} imágenes adjuntadas` });
+                return;
+            }
+
+            // Se inserta donde estaba el cursor, no al final: si alguien escribió
+            // «mirá este error:» y pega, la imagen va justo ahí.
+            const texto = marcas.join(' ');
+            if (destino === 'comentario') {
+                const pos = campo.selectionStart ?? nuevoCom.length;
+                setNuevoCom(prev => `${prev.slice(0, pos)}${prev.slice(0, pos) ? ' ' : ''}${texto} ${prev.slice(pos)}`.trimStart());
+            } else if (destino === 'descripcion') {
+                // La descripción es un textarea NO controlado que guarda al salir
+                // del campo, así que se escribe su valor y se guarda a mano: si
+                // solo cambiara el valor, bastaría con no volver a tocarlo para
+                // que la imagen se perdiera.
+                const pos = campo.selectionStart ?? campo.value.length;
+                const nuevo = `${campo.value.slice(0, pos)}${campo.value.slice(0, pos) ? ' ' : ''}${texto} ${campo.value.slice(pos)}`.trimStart();
+                campo.value = nuevo;
+                guardarCampo('descripcion', nuevo.trim());
+            }
+            toast({ title: marcas.length === 1 ? 'Imagen pegada' : `${marcas.length} imágenes pegadas` });
+        };
+        document.addEventListener('paste', alPegar);
+        return () => document.removeEventListener('paste', alPegar);
+    }, [tareaId, limites.porArchivo, limites.porTarea, limites.usado, nuevoCom]);
+    // Vista previa de un adjunto que NO es imagen (un PDF, sobre todo). La
+    // miniatura de imagen ya trae su blob cargado; acá hay que pedirlo.
+    //
+    // `propio: true` marca que esta URL la creamos nosotros y hay que liberarla
+    // al cerrar. Las de las miniaturas NO se liberan acá: son del componente que
+    // las dibuja, y soltarlas dejaría la miniatura rota en la lista.
+    const abrirPrevia = async (a) => {
+        try {
+            const r = await descargarAdjuntoApi(getSessionId(), a.id);
+            if (!r.ok) throw new Error('No se pudo abrir el archivo.');
+            const url = URL.createObjectURL(await r.blob());
+            setVerArchivo({ url, nombre: a.nombre, mime: a.mime, propio: true });
+        } catch (err) {
+            toast({ variant: 'destructive', title: 'Error', description: err.message });
+        }
+    };
+    const cerrarVisor = () => {
+        setVerArchivo(v => { if (v?.propio) URL.revokeObjectURL(v.url); return null; });
+    };
+
     const descargar = async (a) => {
         try {
             const r = await descargarAdjuntoApi(getSessionId(), a.id);
@@ -500,15 +701,24 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                 <div>
                     <span className="text-[9px] text-slate-400 uppercase block mb-1">Descripción</span>
                     <textarea
+                        key={data.id}
+                        data-imagen-inline="descripcion"
                         defaultValue={data.descripcion || ''}
                         onBlur={(e) => {
                             const v = e.target.value.trim();
                             if (v !== (data.descripcion || '')) guardarCampo('descripcion', v);
                         }}
                         rows={data.descripcion ? 3 : 2}
-                        placeholder="Escribe de qué se trata..."
+                        placeholder="Escribe de qué se trata...  (puedes pegar una imagen con Ctrl+V)"
                         className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-emerald-500 resize-y"
                     />
+                    {/* Vista de la descripción con sus imágenes. El textarea guarda
+                        el texto con marcas `[img:…]`, que sin dibujar no se ven
+                        como imágenes; acá abajo se muestran de verdad. */}
+                    {tieneImagenes(data.descripcion) && (
+                        <TextoConImagenes texto={data.descripcion} onVer={setVerArchivo}
+                            className="mt-1.5 text-xs text-slate-700" />
+                    )}
                 </div>
 
                 {/* QUIÉN LA VE · solo aplica si está dentro de un proyecto. */}
@@ -624,12 +834,16 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                         {adjs.map(a => (
                             <div key={a.id} className="flex items-center gap-2 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 group">
                                 {esImagen(a)
-                                    ? <ImagenAdjunta adjunto={a} onVer={(url, nombre) => setVerImagen({ url, nombre })} />
-                                    : <Paperclip size={13} className="text-slate-400 shrink-0" />}
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-[11px] font-bold text-slate-700 truncate">{a.nombre}</p>
+                                    ? <ImagenAdjunta adjunto={a} onVer={setVerArchivo} />
+                                    : <button type="button" onClick={() => abrirPrevia(a)} title="Vista previa"
+                                        className="shrink-0 text-slate-400 hover:text-emerald-600"><Paperclip size={13} /></button>}
+                                {/* El nombre también abre la previa: apuntarle al clip de
+                                    13 píxeles es más puntería de la que corresponde. */}
+                                <button type="button" onClick={() => abrirPrevia(a)}
+                                    className="min-w-0 flex-1 text-left" title="Vista previa">
+                                    <p className="text-[11px] font-bold text-slate-700 truncate hover:text-emerald-700">{a.nombre}</p>
                                     <p className="text-[9px] text-slate-400">{kb(a.tamano)} · {a.autor}</p>
-                                </div>
+                                </button>
                                 <button onClick={() => descargar(a)} title="Descargar" className="text-slate-400 hover:text-emerald-600 shrink-0"><Download size={13} /></button>
                                 <button onClick={() => delAdj(a)} title="Eliminar" className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={12} /></button>
                             </div>
@@ -654,15 +868,18 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                                     <span className="text-[9px] text-slate-400">· {c.fecha}</span>
                                     <button onClick={() => delCom(c)} className="ml-auto text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 size={11} /></button>
                                 </div>
-                                <p className="text-xs text-slate-700 whitespace-pre-wrap">{c.texto}</p>
+                                <TextoConImagenes texto={c.texto} onVer={setVerArchivo}
+                                    className="text-xs text-slate-700" />
                             </div>
                         ))}
                         {coms.length === 0 && <p className="text-[10px] text-slate-400 italic">Aún no hay comentarios.</p>}
                     </div>
                     <div className="flex gap-2">
                         <input value={nuevoCom} onChange={(e) => setNuevoCom(e.target.value)} disabled={enviandoCom}
+                            data-imagen-inline="comentario"
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCom(); } }}
-                            placeholder="Escribe un comentario..." className="flex-1 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 disabled:opacity-60" />
+                            placeholder="Escribe un comentario…  (Ctrl+V pega una imagen)"
+                            className="flex-1 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 disabled:opacity-60" />
                         <button onClick={addCom} disabled={enviandoCom || !nuevoCom.trim()} className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg px-2.5">
                             {enviandoCom ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                         </button>
@@ -670,16 +887,36 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                 </div>
             </div>
 
-            {/* Visor de imagen a tamaño completo (clic afuera o en Cerrar para salir) */}
-            {verImagen && (
+            {/* Visor a tamaño completo (clic afuera o en Cerrar para salir).
+                Antes solo dibujaba imágenes; un PDF adjunto había que bajarlo al
+                computador y abrirlo aparte para saber qué decía. */}
+            {verArchivo && (
                 <div className="fixed inset-0 z-[130] bg-black/80 flex items-center justify-center p-6"
-                     onClick={() => setVerImagen(null)}>
-                    <div className="max-w-3xl max-h-[90vh] flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                        <img src={verImagen.url} alt={verImagen.nombre}
-                             className="max-w-full max-h-[80vh] rounded-lg object-contain shadow-2xl" />
+                     onClick={() => cerrarVisor()}>
+                    <div className="w-full max-w-4xl max-h-[90vh] flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                        {/^image\//i.test(verArchivo.mime || '') || /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(verArchivo.nombre || '') ? (
+                            <img src={verArchivo.url} alt={verArchivo.nombre}
+                                 className="max-w-full max-h-[80vh] rounded-lg object-contain shadow-2xl" />
+                        ) : /pdf/i.test(verArchivo.mime || '') || /\.pdf$/i.test(verArchivo.nombre || '') ? (
+                            <iframe src={verArchivo.url} title={verArchivo.nombre}
+                                    className="w-full h-[80vh] rounded-lg bg-white shadow-2xl" />
+                        ) : (
+                            // Word, Excel y demás no los dibuja el navegador. Se
+                            // dice claro en vez de mostrar un recuadro en blanco.
+                            <div className="bg-white rounded-lg p-8 flex flex-col items-center gap-3 max-w-sm text-center">
+                                <Paperclip size={28} className="text-slate-400" />
+                                <p className="text-xs text-slate-600">
+                                    Este tipo de archivo no se puede previsualizar en el navegador.
+                                </p>
+                                <a href={verArchivo.url} download={verArchivo.nombre}
+                                   className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-4 py-2 text-[10px] font-black uppercase tracking-widest inline-flex items-center gap-1.5">
+                                    <Download size={13} /> Descargar
+                                </a>
+                            </div>
+                        )}
                         <div className="flex items-center gap-4">
-                            <span className="text-white/90 text-xs font-semibold truncate max-w-[60vw]">{verImagen.nombre}</span>
-                            <button onClick={() => setVerImagen(null)}
+                            <span className="text-white/90 text-xs font-semibold truncate max-w-[60vw]">{verArchivo.nombre}</span>
+                            <button onClick={() => cerrarVisor()}
                                     className="text-white/70 hover:text-white text-[11px] font-black uppercase tracking-widest">
                                 Cerrar ✕
                             </button>
@@ -704,7 +941,15 @@ const TareasPanel = ({ modo = 'todas' }) => {
     const [proyectos, setProyectos] = useState([]);
     const [usuarios, setUsuarios] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filtroEstado, setFiltroEstado] = useState('activas'); // activas | completada | todas
+    // activas | completada | todas
+    //
+    // No basta con forzarlo en `cambiarVista`: al recargar la página la vista se
+    // restaura desde localStorage SIN pasar por ahí, y el filtro se quedaba en
+    // "activas" aunque la vista fuera el árbol. Se veía en el log del servidor
+    // como `/api/crm/tareas?limite=300&estado=activas`.
+    const [filtroEstado, setFiltroEstado] = useState(
+        () => necesitaTodos(vistaGuardada()) ? 'todas' : 'activas'
+    );
 
     // El proyecto elegido vive en la URL (`?proyecto=`) y no en el estado: así
     // "entrar a un proyecto" desde la pantalla de Proyectos es solo navegar, y
@@ -716,23 +961,31 @@ const TareasPanel = ({ modo = 'todas' }) => {
         setSearchParams(p, { replace: true });
     };
     const [busq, setBusq] = useState('');
-    const [selId, setSelId] = useState(null);
+    // `?tarea=<id>` abre esa tarea al entrar. Es lo que permite que un aviso de
+    // la campana lleve a LA tarea del aviso y no a la lista completa: antes
+    // dejaba en «todas» y había que buscarla a mano, que era justo lo que la
+    // notificación venía a evitar.
+    //
+    // Sirve para cualquier tarea, incluidas las subtareas: el panel de detalle
+    // pide sus propios datos por id, así que no necesita que esté en la lista.
+    const [selId, setSelId] = useState(() => searchParams.get('tarea') || null);
     const [filtroPrioridad, setFiltroPrioridad] = useState('');
     const [filtroResponsable, setFiltroResponsable] = useState('');
 
     // CÓMO SE VEN LAS TAREAS · «VISUALIZACIÓN DE TAREAS»
-    // Antes había una sola forma: una lista plana. Ahora son dos, y la elección
+    // Antes había una sola forma: una lista plana. Ahora son tres, y la elección
     // se recuerda entre visitas porque cada persona tiende a quedarse con una.
-    const [vista, setVista] = useState(() => {
-        try { return localStorage.getItem('tareas:vista') === 'tablero' ? 'tablero' : 'lista'; }
-        catch { return 'lista'; }
-    });
+    //
+    //   lista   · plana, solo las raíces
+    //   tablero · por estado, se arrastra
+    //   arbol   · la jerarquía completa, padres e hijos juntos
+    const [vista, setVista] = useState(vistaGuardada);
     const cambiarVista = (v) => {
         setVista(v);
-        try { localStorage.setItem('tareas:vista', v); } catch { /* modo privado */ }
-        // En el tablero las columnas SON los estados: entrar con el filtro en
-        // "Activas" dejaría la columna de finalizadas vacía para siempre.
-        if (v === 'tablero' && filtroEstado !== 'archivadas') setFiltroEstado('todas');
+        try { localStorage.setItem(LLAVE_VISTA, v); } catch { /* modo privado */ }
+        // Ver `necesitaTodos` arriba: el tablero y el árbol se rompen visualmente
+        // con el filtro en "Activas". El archivo es una vista aparte y se respeta.
+        if (necesitaTodos(v) && filtroEstado !== 'archivadas') setFiltroEstado('todas');
     };
     // Agrupar la lista. '' = una sola lista corrida, como estaba.
     const [agrupar, setAgrupar] = useState('');
@@ -759,6 +1012,26 @@ const TareasPanel = ({ modo = 'todas' }) => {
             setSearchParams(p, { replace: true });
         }
     };
+    // Si llega otro `?tarea=` estando YA en esta pantalla, hay que hacerle caso.
+    // Es el caso normal: se está mirando la lista y se pulsa un aviso de la
+    // campana. El componente no se vuelve a montar, así que el valor inicial de
+    // `selId` no se recalcula solo y el panel se quedaría en la tarea anterior.
+    const pedidaEnUrl = searchParams.get('tarea');
+    useEffect(() => {
+        if (pedidaEnUrl) setSelId(pedidaEnUrl);
+    }, [pedidaEnUrl]);
+
+    // Al cerrar el detalle se limpia la URL: si `?tarea=` quedara puesto,
+    // recargar la página volvería a abrir la tarea que se acaba de cerrar.
+    const cerrarDetalle = () => {
+        setSelId(null);
+        if (searchParams.get('tarea')) {
+            const p = new URLSearchParams(searchParams);
+            p.delete('tarea');
+            setSearchParams(p, { replace: true });
+        }
+    };
+
     const [nuevoProy, setNuevoProy] = useState(false);
     const [proyNombre, setProyNombre] = useState('');
     const [creandoProy, setCreandoProy] = useState(false);
@@ -769,7 +1042,24 @@ const TareasPanel = ({ modo = 'todas' }) => {
     // para ver tres resultados.
     const filtros = useCallback((desplazamiento) => {
         // soloRaiz: las subtareas se ven dentro de su tarea, no sueltas en la lista.
-        const o = { soloRaiz: '1', ambito: modo, limite: String(POR_PAGINA), desplazamiento: String(desplazamiento) };
+        //
+        // El ÁRBOL es la excepción: ahí las subtareas son el punto, así que se
+        // piden todas. Y se piden de a más por página, porque un árbol al que le
+        // falta la mitad de las ramas se dibuja mal: un hijo cuyo padre quedó en
+        // la página siguiente aparecería suelto arriba, como si fuera una raíz.
+        // FINALIZADAS es la otra excepción. Al terminar una subtarea desaparecía
+        // de todas partes: de la lista no estaba nunca (por `soloRaiz`) y en
+        // «Finalizadas» tampoco salía, así que lo que uno cerraba se esfumaba y
+        // no había dónde revisar lo hecho. Ahí sí se muestran sueltas, con el
+        // nombre de su tarea madre al lado para saber de dónde salieron.
+        const esArbol = vista === 'arbol';
+        const verSubtareas = esArbol || filtroEstado === 'completada';
+        const o = {
+            ambito: modo,
+            limite: String(esArbol ? POR_PAGINA_ARBOL : POR_PAGINA),
+            desplazamiento: String(desplazamiento),
+        };
+        if (!verSubtareas) o.soloRaiz = '1';
         if (proyectoSel) o.proyectoId = proyectoSel;
         // El archivo es una vista aparte: o se ve lo vivo, o se ve lo archivado.
         if (filtroEstado === 'archivadas') o.archivadas = 'solo';
@@ -778,7 +1068,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
         if (filtroResponsable) o.responsableId = filtroResponsable;
         if (busqAplicada) o.q = busqAplicada;
         return o;
-    }, [modo, proyectoSel, filtroEstado, filtroPrioridad, filtroResponsable, busqAplicada]);
+    }, [vista, modo, proyectoSel, filtroEstado, filtroPrioridad, filtroResponsable, busqAplicada]);
 
     const cargar = useCallback(async () => {
         setLoading(true);
@@ -941,7 +1231,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
                     {/* Lista o tablero. Es lo primero de la barra porque cambia
                         todo lo que viene después. */}
                     <div className="flex bg-white border border-[#efe8dd] rounded-lg p-0.5">
-                        {[['lista', 'Lista', List], ['tablero', 'Tablero', Kanban]].map(([v, label, Icono]) => (
+                        {[['lista', 'Lista', List], ['tablero', 'Tablero', Kanban], ['arbol', 'Árbol', Network]].map(([v, label, Icono]) => (
                             <button key={v} onClick={() => cambiarVista(v)} title={`Ver como ${label.toLowerCase()}`}
                                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-colors ${vista === v ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'}`}>
                                 <Icono size={12} /> {label}
@@ -1066,6 +1356,8 @@ const TareasPanel = ({ modo = 'todas' }) => {
                             </div>
                         ) : vista === 'tablero' ? (
                             <TableroTareas tareas={lista} selId={selId} onAbrir={setSelId} onMover={moverEstado} />
+                        ) : vista === 'arbol' ? (
+                            <ArbolTareas tareas={lista} selId={selId} onAbrir={setSelId} onCompletar={completar} />
                         ) : (grupos || [{ clave: '_todo', label: null, tareas: lista }]).map(g => (
                           <div key={g.clave}>
                             {g.label && (
@@ -1087,6 +1379,21 @@ const TareasPanel = ({ modo = 'todas' }) => {
                                     <div className="min-w-0 flex-1">
                                         <p className={`text-xs font-bold truncate ${t.estado === 'completada' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{t.titulo}</p>
                                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                            {/* De qué tarea cuelga. Solo aparece en las subtareas, y
+                                                es lo que hace legible el filtro "Finalizadas": ahí
+                                                salen sueltas y «EDITAR PLANTILLAS» sin contexto no
+                                                dice de dónde salió. Se puede pulsar para subir a la
+                                                madre sin buscarla en la lista. */}
+                                            {t.padreTitulo && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); setSelId(t.parentId); }}
+                                                    title={`Abrir la tarea madre: ${t.padreTitulo}`}
+                                                    className="text-[9px] font-bold text-slate-400 hover:text-emerald-600 flex items-center gap-0.5 max-w-[14rem] truncate"
+                                                >
+                                                    <ChevronRight size={9} className="rotate-180 shrink-0" />
+                                                    <span className="truncate">{t.padreTitulo}</span>
+                                                </button>
+                                            )}
                                             {t.proyectoNombre && <span className="text-[9px] font-bold" style={{ color: t.proyectoColor || '#199b4d' }}>● {t.proyectoNombre}</span>}
                                             {t.responsableNombre && <span className="text-[9px] text-slate-500 flex items-center gap-0.5"><User size={9} /> {t.responsableNombre}</span>}
                                             {t.subtareasTotal > 0 && <span className="text-[9px] text-slate-500 flex items-center gap-0.5"><ListChecks size={9} /> {t.subtareasHechas}/{t.subtareasTotal}</span>}
@@ -1120,7 +1427,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
                 </div>
 
                 {/* Detalle */}
-                {selId && <DetalleTarea tareaId={selId} onClose={() => setSelId(null)} onChanged={cargar} usuarios={usuarios} onAbrir={setSelId} />}
+                {selId && <DetalleTarea tareaId={selId} onClose={cerrarDetalle} onChanged={cargar} usuarios={usuarios} onAbrir={setSelId} />}
             </div>
 
             {crear && <CrearTareaModal onClose={cerrarCrear} onCreated={cargar} proyectos={proyectos} usuarios={usuarios} proyectoActual={proyectoSel} />}

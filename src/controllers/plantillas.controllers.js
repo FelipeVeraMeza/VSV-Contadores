@@ -27,9 +27,19 @@ const mapPlantilla = (p) => ({
     id: p.id,
     nombre: p.nombre,
     descripcion: p.descripcion,
-    // Si no se guardó un título propio, el nombre de la plantilla hace de
-    // título: en la mayoría de los casos son el mismo texto.
-    titulo: p.titulo || p.nombre,
+    // El título va TAL CUAL está guardado, sin caer al nombre de la plantilla.
+    //
+    // Antes acá decía `p.titulo || p.nombre`, y como el formulario nunca ofreció
+    // dónde escribir un título, en la práctica era SIEMPRE el nombre: la
+    // plantilla «Alta de cliente nuevo» creaba una tarea llamada «Alta de
+    // cliente nuevo», y con tres clientes quedaban tres tareas idénticas
+    // imposibles de distinguir en la lista.
+    //
+    // Son dos cosas distintas: el nombre identifica la plantilla en el
+    // administrador, el título es cómo se llamará la tarea. Devolver `null`
+    // permite que la pantalla sepa que no hay título sugerido y deje que la
+    // persona lo escriba.
+    titulo: p.titulo || null,
     detalle: p.detalle,
     prioridad: p.prioridad,
     diasPlazo: p.dias_plazo,

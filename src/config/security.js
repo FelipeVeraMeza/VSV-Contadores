@@ -85,27 +85,3 @@ export const envioMasivoLimiter = rateLimit({
     error: 'Demasiados envíos masivos seguidos. Espera unos minutos: si el anterior salió bien, no hace falta repetirlo.'
   }
 });
-
-// ============================================================================
-// LÍMITE DEL CORREO DE PRUEBA
-// ----------------------------------------------------------------------------
-// El de arriba (5 cada 15 min) es correcto para un envío a 93 clientes, pero
-// asfixia al botón de prueba: diagnosticar un despliegue son varios intentos
-// seguidos, y quedarse sin cupo a la mitad obliga a esperar 15 minutos sin
-// saber si el correo sale o no.
-//
-// Igual va limitado, porque manda un correo de verdad. El riesgo es acotado:
-// el destinatario está fijo en el controlador, así que lo peor que puede pasar
-// es llenar UNA casilla conocida, no escribirle a un cliente.
-// ============================================================================
-export const pruebaCorreoLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.user?.usuarioId || ipKeyGenerator(req.ip),
-  message: {
-    ok: false,
-    error: 'Demasiadas pruebas seguidas. Espera unos minutos.'
-  }
-});

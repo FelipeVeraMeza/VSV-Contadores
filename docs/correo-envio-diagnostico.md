@@ -24,18 +24,41 @@ SMTP. Hay dos formas de hacerlo, ver sección 5.
 
 ## 2. Cómo está el envío hoy
 
-Hay **11 archivos** que envían correo. Todos usan SMTP directo salvo uno.
+*(Revisado el 14-ago-2026. Antes esta sección decía que los 11 archivos usaban SMTP
+salvo uno; eso quedó viejo.)*
 
-| Archivo | Método | Sirve en Railway |
+Hay que separar dos grupos, porque no corren en el mismo lugar.
+
+### A. Lo que envía la APLICACIÓN (botones de la pantalla) — ✅ todo por la cascada
+
+| Qué lo dispara | Cadena | Sirve en Railway |
 |---|---|---|
-| `src/utils/mailer.js` | SMTP | ❌ |
-| `src/components/facturacion/scripts/revisar para envios/*.mjs` (9 archivos) | SMTP | ❌ |
-| `.../mensajes_facturador_masivo.mjs` | **cascada de 3 vías** | ✅ parcialmente |
+| Facturación **manual** | `factura_manual.mjs:532` → `enviarCorreoFacturaEnSesion` → `enviarCorreo` → `enviarConReintentos` | ✅ |
+| Facturación **masiva** | `factura_masiva.mjs:887` → idem | ✅ |
+| Reenvío individual / masivo | `dte.controllers.js` → `reenviarCorreoIndividual` / `reenviarCorreosMasivo` → idem | ✅ |
+| Recordatorios de pago | `recordatorio_pago.mjs:294` → `enviarConReintentos` | ✅ |
+| Liquidaciones de Remuneraciones | `utils/mailer.js:49` → `enviarConReintentos` | ✅ |
 
-### La cascada que ya existe
+El adjunto también está cubierto: `enviarPorResend` manda el PDF de la factura como
+adjunto y embebe la firma de Mati como imagen dentro del HTML.
+
+### B. Scripts que se corren A MANO (`node "src/.../archivo.mjs"`)
+
+Ninguno está enganchado a un botón: no los ejecuta el servidor, así que **no los afecta
+el bloqueo de Railway**. Se corren desde el computador, donde SMTP sí funciona.
+
+| Script | Método |
+|---|---|
+| `aviso_general.mjs`, `aviso_f29_lista.mjs`, `aviso_suspension_lista.mjs`, `recordatorio_pago_lista.mjs` | cascada ✅ |
+| `factura_impaga_masivo.mjs`, `f29_disponible_masivo.mjs`, `f29_declarado_masivo.mjs`, `oficina_virtual_masivo.mjs`, `notificar_mensaje.mjs`, `notificados_mensaje.mjs`, `notificar_socios_mensaje.mjs`, `aviso_oficina_virtual_por_vencer.mjs`, `enviador_correos.mjs` | SMTP crudo ⚠️ |
+
+Los del segundo grupo solo se romperían si algún día se enganchan a un botón. Si eso pasa,
+hay que cambiarles el `transporter.sendMail(...)` por `enviarConReintentos(...)`.
+
+### La cascada
 
 En [`mensajes_facturador_masivo.mjs`](../src/components/facturacion/scripts/revisar%20para%20envios/mensajes_facturador_masivo.mjs)
-(líneas 296-450) ya está resuelto el problema, con tres vías en orden:
+(`enviarConReintentos`), tres vías en orden:
 
 ```
 1. Gmail API por HTTPS   → si hay GMAIL_CLIENT_ID + SECRET + REFRESH_TOKEN
@@ -43,8 +66,9 @@ En [`mensajes_facturador_masivo.mjs`](../src/components/facturacion/scripts/revi
 3. Gmail SMTP            → funciona en local, bloqueado en Railway
 ```
 
-Intenta una, y si falla pasa a la siguiente. **Ese patrón es el que hay que llevar a
-`utils/mailer.js`** para que lo use todo el sistema, no solo ese script.
+Intenta una, y si falla pasa a la siguiente, y escribe en la consola del servidor por cuál
+salió. Ese dato importa: que el correo llegue no basta, si salió por SMTP en Railway
+habría fallado.
 
 ---
 
@@ -251,11 +275,15 @@ El refresh token no expira mientras no se revoque.
    [`mailer.js`](../src/utils/mailer.js) ya importa `enviarConReintentos` del facturador
    masivo, así que todo el sistema (Remuneraciones, recordatorios, F29, suspensiones) usa
    la misma cascada.
-3. ⬅️ **LO QUE FALTA AHORA: subir `RESEND_API_KEY` y `RESEND_FROM` a Railway**
-   (*Variables* del proyecto). El `.env` local **no viaja al deploy**, así que en
-   producción el correo sigue sin salir hasta que se carguen ahí.
+3. **Subir `RESEND_API_KEY` y `RESEND_FROM` a Railway** (*Variables* del proyecto).
+   El `.env` local no viaja al deploy.
    - `RESEND_FROM` = `Matías Olivos <matias.olivos@vsvconsultores.com>`
    - `RESEND_API_KEY` = la misma del `.env` local
+
+   → *El 14-ago a las 11:40 el botón de prueba mandó un correo que llegó bien y decía
+   entorno **`production`**. Si eso salió del despliegue de Railway, este pendiente ya
+   está hecho: allá el SMTP está bloqueado, así que el correo solo pudo salir por Resend.
+   Queda confirmar que la prueba no fue local con `NODE_ENV=production`.*
 4. **Unificar los nombres de las variables** — hoy hay tres convenciones y dos variables
    muertas (`GMAIL_EMAIL`, `GMAIL_PASSWORD`).
 5. **Rotar credenciales**: el 30-jul se pegaron en un chat las claves de Anthropic, OpenAI,
@@ -263,7 +291,23 @@ El refresh token no expira mientras no se revoque.
 
 ---
 
-## 7. Notas sueltas
+## 7. El botón "Correo de prueba" *(agregado y retirado el 14-ago-2026)*
+
+Se hizo un botón en **Correo Masivo** que mandaba un correo a una casilla fija y decía por
+cuál vía había salido. Cumplió su función: con él se comprobó que el envío funciona desde
+Railway (llegó marcado como entorno `production`, ver sección 4).
+
+**Se retiró el mismo día**, una vez confirmado. Vivió en el commit `07a2d78`, por si algún
+día hay que reponerlo: tocaba `CorreoMasivo.jsx`, `apiDTE.js`, `dte.routes.js`,
+`dte.controllers.js`, `security.js` y `mensajes_facturador_masivo.mjs`.
+
+Si vuelve a hacer falta diagnosticar el envío, la forma rápida sin tocar la interfaz es
+mirar la **consola del servidor**: `enviarConReintentos` ya escribe por cuál vía salió
+(`✅ Enviado vía Resend (HTTPS)` / `✅ Enviado por SMTP puerto …`).
+
+---
+
+## 8. Notas sueltas
 
 - **Correo de pruebas:** `felipe.veram2001@gmail.com`. Siempre enviar ahí antes de escribirle
   a un cliente real.

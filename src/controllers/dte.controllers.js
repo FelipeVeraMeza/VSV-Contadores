@@ -8,7 +8,7 @@ import { crear_cliente } from '../controllers/clientes.controllers.js';
 // Robots para Factura Electrónica (DTE 33)
 import { emitirFacturaPuppeteer } from '../components/facturacion/scripts/factura_manual.mjs';
 import { emitirLotePuppeteer, estadoRobot } from '../components/facturacion/scripts/factura_masiva.mjs';
-import { reenviarCorreoIndividual, reenviarCorreosMasivo, enviarConReintentos, diagnosticoCorreo } from '../components/facturacion/scripts/revisar para envios/mensajes_facturador_masivo.mjs';
+import { reenviarCorreoIndividual, reenviarCorreosMasivo } from '../components/facturacion/scripts/revisar para envios/mensajes_facturador_masivo.mjs';
 import { obtenerDestinatariosRecordatorio, enviarRecordatoriosPago, estadoRecordatorio } from '../components/facturacion/scripts/revisar para envios/recordatorio_pago.mjs';
 import { credencialesParaFacturar, describirCredenciales } from '../utils/credencialesFacturacion.js';
 import { registrar } from '../utils/bitacora.js';
@@ -176,100 +176,6 @@ export const reenviarCorreoController = async (req, res) => {
         correoEnCurso = false;
         console.error("❌ Error en reenviarCorreoController:", error);
         if (!res.headersSent) res.status(500).json({ ok: false, error: error.message });
-    }
-};
-
-// ============================================================================
-// 🧪 CORREO DE PRUEBA  ·  POST /api/dte/prueba-correo
-// ----------------------------------------------------------------------------
-// Sirve para una sola pregunta: **¿el correo sale desde este servidor?**
-// En Railway los puertos SMTP están bloqueados, así que el envío depende de que
-// funcione alguna de las vías por HTTPS. Hasta ahora la única forma de saberlo
-// era mandarle una factura de verdad a un cliente y esperar a ver qué pasaba.
-//
-// Tres decisiones a propósito:
-//
-//   · El destinatario está FIJO en el código. No lo elige la pantalla ni viaja
-//     en el body: así este botón no puede escribirle a un cliente por accidente
-//     ni convertirse en una forma de mandar correo a cualquier dirección.
-//   · Es SÍNCRONO. El resto de los envíos responden al toque y siguen en
-//     segundo plano; acá el resultado ES la respuesta, no sirve de nada un
-//     "iniciado" que no dice si funcionó.
-//   · Devuelve POR CUÁL VÍA salió. Si dice `resend` el problema del SMTP
-//     bloqueado está resuelto; si dice `smtp` estamos en local y en producción
-//     va a fallar igual.
-// ============================================================================
-const CORREO_DE_PRUEBA = 'felipe.veram2001@gmail.com';
-
-export const pruebaCorreoController = async (req, res) => {
-    // Qué vías están configuradas en ESTE servidor. Solo si existen: nunca se
-    // devuelve el valor de una credencial.
-    const vias = {
-        gmailApi: Boolean(process.env.GMAIL_CLIENT_ID && process.env.GMAIL_CLIENT_SECRET && process.env.GMAIL_REFRESH_TOKEN),
-        resend:   Boolean(process.env.RESEND_API_KEY),
-        smtp:     Boolean(process.env.GMAIL_EMAIL_PRINCIPAL && process.env.GMAIL_PASSWORD_PRINCIPAL),
-    };
-    const remitente = process.env.RESEND_FROM || 'Matías Olivos <matias.olivos@vsvconsultores.com>';
-
-    if (!vias.gmailApi && !vias.resend && !vias.smtp) {
-        return res.status(503).json({
-            ok: false, vias,
-            error: 'Este servidor no tiene ninguna vía de correo configurada. '
-                 + 'Faltan las variables de entorno (RESEND_API_KEY es la que sirve en Railway).',
-        });
-    }
-
-    const marca = new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' });
-    const entorno = process.env.RAILWAY_ENVIRONMENT_NAME || process.env.NODE_ENV || 'local';
-
-    try {
-        await enviarConReintentos({
-            from: remitente,
-            to: CORREO_DE_PRUEBA,
-            subject: `Correo de prueba · ${entorno} · ${marca}`,
-            html: `
-                <div style="font-family:system-ui,-apple-system,sans-serif;max-width:520px;color:#1f2937">
-                  <h2 style="color:#199b4d;margin:0 0 8px">Correo de prueba</h2>
-                  <p style="margin:0 0 12px">Si estás leyendo esto, el envío de correos
-                     funciona desde <b>${entorno}</b>.</p>
-                  <table style="font-size:13px;border-collapse:collapse">
-                    <tr><td style="padding:2px 12px 2px 0;color:#6b7280">Remitente</td><td>${remitente}</td></tr>
-                    <tr><td style="padding:2px 12px 2px 0;color:#6b7280">Enviado</td><td>${marca}</td></tr>
-                    <tr><td style="padding:2px 12px 2px 0;color:#6b7280">Lo pidió</td><td>${req.user?.nombre || 'sin nombre'}</td></tr>
-                  </table>
-                  <p style="margin:14px 0 0;font-size:12px;color:#6b7280">
-                    Correo automático de diagnóstico. No lo recibe ningún cliente.</p>
-                </div>`,
-        });
-
-        // `enviarConReintentos` devuelve false cuando no hay destinatario válido,
-        // pero acá la dirección es una constante: si llegó hasta aquí, salió.
-        console.log(`✅ [PRUEBA CORREO] Enviado a ${CORREO_DE_PRUEBA} vía ${diagnosticoCorreo.via}`);
-
-        await registrar(req, {
-            modulo: 'correos', accion: 'prueba_envio',
-            entidad: 'correo', entidadId: CORREO_DE_PRUEBA,
-            descripcion: `Correo de prueba enviado a ${CORREO_DE_PRUEBA} vía ${diagnosticoCorreo.via || 'desconocida'}`,
-        });
-
-        return res.json({
-            ok: true,
-            destinatario: CORREO_DE_PRUEBA,
-            remitente,
-            entorno,
-            via: diagnosticoCorreo.via,
-            detalle: diagnosticoCorreo.detalle,
-            fallidas: diagnosticoCorreo.intentos,
-            vias,
-        });
-    } catch (error) {
-        console.error('❌ [PRUEBA CORREO] Falló:', error.message);
-        return res.status(502).json({
-            ok: false,
-            error: error.message,
-            fallidas: diagnosticoCorreo.intentos,
-            vias,
-        });
     }
 };
 

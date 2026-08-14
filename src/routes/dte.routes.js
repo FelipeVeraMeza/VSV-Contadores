@@ -12,7 +12,6 @@ import {
     reenviarCorreoController,
     reenviarCorreosMasivoController,
     getCorreosLogController,
-    pruebaCorreoController,
     previewRecordatoriosController,
     enviarRecordatoriosController,
     getProgresoRecordatoriosController,
@@ -29,7 +28,7 @@ import { estadoRobotExenta, detenerRobotExenta } from '../components/facturacion
 import { estadoFacturaManual } from '../components/facturacion/scripts/factura_manual.mjs';
 import { buscarYDescargarPdf, estadoDescarga } from '../components/facturacion/scripts/buscar_pdf_folio.mjs';
 import { requireSession, requireAdmin, requireModulo } from '../middleware/auth.js';
-import { envioMasivoLimiter, pruebaCorreoLimiter } from '../config/security.js';
+import { envioMasivoLimiter } from '../config/security.js';
 
 const dteRoutes = Router();
 
@@ -119,12 +118,6 @@ dteRoutes.post('/reenviar-correos-masivo', soloAdmin, envioMasivoLimiter, reenvi
 
 // 📒 Registro de correos enviados (desde la BD) — requiere sesión
 dteRoutes.get('/correos-log', getCorreosLogController);
-
-// 🧪 Correo de prueba a una casilla FIJA. Responde por cuál vía salió, que es
-// como se comprueba en Railway que el envío por HTTPS funciona con el SMTP
-// bloqueado. Limitador propio: manda correo de verdad, pero diagnosticar un
-// despliegue son varios intentos seguidos.
-dteRoutes.post('/prueba-correo', soloAdmin, pruebaCorreoLimiter, pruebaCorreoController);
 
 // 📢 Recordatorios de pago (módulo aparte)
 dteRoutes.get('/recordatorios/preview', soloAdmin, previewRecordatoriosController);

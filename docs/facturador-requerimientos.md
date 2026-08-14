@@ -1,6 +1,16 @@
 # Facturador — Requerimientos y estado real
 
-**Fecha de la revisión:** 31-jul-2026
+**Fecha de la revisión:** 31-jul-2026 · *actualizado el 14-ago-2026 (ver el final).*
+
+> **Lo último (14-ago-2026):** separador de miles en los montos, botón para
+> descargar la factura al terminar la emisión, y un bug latente de la proyección
+> del lote. Está todo al final, en **«Trabajo del 14-ago-2026»**, junto con las
+> tres tareas del facturador que quedaron esperando definiciones.
+>
+> Además, el **correo desde Railway ya funciona**: el dominio
+> `vsvconsultores.com` se verificó en Resend ese mismo día, así que lo que dice
+> RNF-04 más abajo quedó viejo. Ver
+> [correo-envio-diagnostico.md](correo-envio-diagnostico.md).
 **Alcance:** módulo Facturación completo — Emitir DTE, Historial de Documentos,
 Cobro del Mes y Correo Masivo.
 
@@ -123,13 +133,19 @@ cualquier administrador vería los correos enviados de la otra firma.
 
 ### RNF-04 · Confiabilidad: funcionar en producción — ❌
 
-**Ningún correo sale desde Railway.** Railway bloquea los puertos de SMTP y
-Resend rechaza los envíos porque el dominio `vsvconsultores.com` no está
-verificado.
+> ✅ **RESUELTO el 14-ago-2026.** Lo de abajo describe cómo estaba hasta esa
+> fecha y se deja como historia. Hoy el correo **sí sale desde Railway**: se
+> verificó el dominio `vsvconsultores.com` en Resend (3 registros DNS en el
+> cPanel de DonWeb) y el envío pasa por HTTPS, que Railway no bloquea. Probado
+> desde producción. Detalle en
+> [correo-envio-diagnostico.md](correo-envio-diagnostico.md).
+
+*(Estado hasta el 14-ago)* **Ningún correo salía desde Railway.** Railway bloquea
+los puertos de SMTP y Resend rechazaba los envíos porque el dominio
+`vsvconsultores.com` no estaba verificado.
 
 Todo lo que se probó el 31-jul funcionó **porque se corrió desde el computador
-local**. Está documentado con los dos caminos posibles en
-[correo-envio-diagnostico.md](correo-envio-diagnostico.md).
+local**.
 
 ### RNF-05 · Confiabilidad: no perder el estado al reiniciar — ❌
 
@@ -200,3 +216,72 @@ pérdida de estado al navegar, y la fuga del archivo de configuración.
 | 2 | **Bitácora en base de datos** (RF-28, RF-29, RNF-06) | Sin esto no se puede responder quién hizo qué. Ya hizo falta dos veces |
 | 3 | **`organizacion_id` en `correos_facturas`** (RNF-03) | Antes de que entre el segundo tenant, después es más caro |
 | 4 | **Correo en producción** (RNF-04) | Verificar el dominio en Resend o activar la API de Gmail |
+
+---
+
+## Trabajo del 14-ago-2026
+
+Dos pedidos que estaban como subtareas de **FACTURADOR** en el módulo de Tareas.
+El resto de esa rama quedó bloqueado esperando definiciones (ver el final).
+
+### Separador de miles en los montos
+
+Los campos de plata eran `<input type="number">`. Ese tipo de campo **no admite
+separador de miles** —el navegador no lo permite— así que un honorario de
+1.190.000 se veía `1190000` y había que contar los ceros con el dedo. En una
+factura eso es un error caro.
+
+Ahora se dibujan con puntos mientras **el valor guardado sigue siendo solo
+dígitos**. Es importante que sea así: el resto del facturador hace
+`Number(row.precio)` para la proyección y `String(...).replace(/[^0-9]/g,'')`
+antes de mandar al SII.
+
+```
+estado:   "1190000"      ← lo que se guarda y viaja
+pantalla: "1.190.000"    ← lo que se ve
+```
+
+Helper compartido en `src/components/facturacion/utils/montos.js`. Aplicado en
+los tres campos de monto: afecta individual, afecta masiva (columna Valor Neto de
+la tabla) y exenta.
+
+> 🐛 **Bug latente que apareció al probar esto y que nadie había reportado.**
+> Cuando el honorario venía del CRM ya formateado (`"190.000"`), la fila lo
+> guardaba tal cual y la *Proyección Neta* del lote hacía `Number("190.000")`,
+> que en JavaScript da **190** — el punto se lee como separador decimal. El total
+> proyectado salía en `1.380` en vez de `1.380.000`, y era **imposible de notar**
+> porque el número se veía plausible. Se corrigió limpiando el valor al
+> asignarlo desde el CRM (`soloDigitos`).
+
+### Botón «Descargar factura» al terminar la emisión
+
+En el cuadro de «¡Proceso Finalizado!» estaba solo *Volver al CRM*. Si la
+descarga automática no salía —o se cerraba la ventana sin querer— la única forma
+de recuperar el documento era ir a buscarlo al SII a mano.
+
+El botón va **arriba** de *Volver al CRM* a propósito: ese botón cierra el cuadro
+y con él la última oportunidad de bajar el documento. Está en los dos modales:
+afecta (DTE 33) y exenta (DTE 34).
+
+**No hay copia guardada del PDF.** El servidor levanta el robot, entra al SII y
+lo trae, así que **tarda entre 30 y 90 segundos**. El botón lo avisa antes de
+apretarlo y muestra «Buscándola en el SII…» mientras trabaja; sin eso parece
+colgado y se aprieta tres veces. Si falla, el mensaje aclara que **la factura YA
+fue emitida** y que esto es solo la copia en PDF.
+
+Componente: `src/components/facturacion/modals/dte/BotonDescargarFolio.jsx`.
+
+### Lo que quedó bloqueado
+
+Las tres tienen las preguntas escritas en sus comentarios (formato P1/P2/P3) y
+están asignadas a **Mati** con aviso en la campana.
+
+| Tarea | Por qué no avanza |
+|---|---|
+| **FACTURADOR** (madre) | «Emitir UNA factura debería funcionar igual que la masiva» y «enviar por WhatsApp más rápido» son ideas, no algo programable. Falta saber qué pasos de más tiene la individual, cómo se manda hoy por WhatsApp, y un ejemplo real de mensaje de error. |
+| **EMISOR DE FACTURAS** (alta) | Bloqueada por una **decisión**, no por código. El 11-ago se construyó el selector de «Empresa Emisora» y el 12-ago **se revirtió entero** porque se prefirió la factura sin selector. Hoy el código está igual que antes de todo eso. Si siempre se factura con SIMPLE PYME, la tarea se cierra sin escribir una línea. |
+| **EMISOR DE NOTA DE CRÉDITO** (alta) | **Ya arreglada** el 11-ago (faltaba importar `apiDTE` en `NotaCreditoDebitoModal.jsx`, por eso tiraba *"apiDTE is not defined"*). Solo espera redeploy y una emisión real de prueba. |
+
+> Sobre WhatsApp, la decisión que define esa tarea: abrir WhatsApp Web con el
+> mensaje ya escrito es **gratis** y sale en días; que se mande solo necesita
+> contratar la **API de WhatsApp Business** y se paga por mensaje.

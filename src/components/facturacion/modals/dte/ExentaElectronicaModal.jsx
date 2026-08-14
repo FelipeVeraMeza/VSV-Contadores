@@ -12,6 +12,8 @@ import {
   ChevronLeft, ChevronRight, Receipt
 } from "lucide-react";
 import { cleanRut } from "@/lib/rut.js";
+import { campoMonto } from "@/components/facturacion/utils/montos.js";
+import BotonDescargarFolio from "./BotonDescargarFolio.jsx";
 
 import { useAuth } from "@/hooks/useAuth.jsx";
 import { getCrmDataApi } from "@/services/crmService.js";
@@ -467,9 +469,14 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
                   <h3 className="text-3xl font-black uppercase italic tracking-tighter mb-1">¡Proceso Finalizado!</h3>
                   <p className="font-mono text-xl text-emerald-600 font-bold">Folio N° {folioGenerado}</p>
                 </div>
-                <Button onClick={() => setIsOpen(false)} className="bg-emerald-600 hover:bg-emerald-700 w-full mt-4 rounded-xl font-black uppercase tracking-widest h-14">
-                  Volver al CRM
-                </Button>
+                {/* Mismo criterio que en la factura afecta: descargar primero,
+                    porque «Volver al CRM» cierra el cuadro. */}
+                <div className="w-full mt-4 space-y-2">
+                  <BotonDescargarFolio folio={folioGenerado} tipo={34} etiqueta="Descargar exenta" />
+                  <Button onClick={() => setIsOpen(false)} className="bg-emerald-600 hover:bg-emerald-700 w-full rounded-xl font-black uppercase tracking-widest h-14">
+                    Volver al CRM
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -558,7 +565,7 @@ export default function ExentaElectronicaModal({ isOpen, setIsOpen }) {
                     <Label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest ml-1">Monto Exento</Label>
                     <div className="relative">
                       <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 font-bold">$</span>
-                      <Input type="number" value={item.precio} onChange={(e) => setItem({...item, precio: e.target.value})} className="pl-11 h-12 bg-slate-50 border-[#efe8dd] rounded-xl font-mono text-lg font-bold text-emerald-500" />
+                      <Input {...campoMonto(item.precio, (v) => setItem({ ...item, precio: v }))} className="pl-11 h-12 bg-slate-50 border-[#efe8dd] rounded-xl font-mono text-lg font-bold text-emerald-500" />
                     </div>
                   </div>
                   <div className="md:col-span-2 space-y-2">
