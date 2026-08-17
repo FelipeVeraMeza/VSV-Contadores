@@ -4,6 +4,7 @@ import pkg from 'pg';
 import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
 // Bajar el PDF de la nota, igual que las facturas.
 import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
+import { cerrarNavegador, cerrarCliente } from './cerrarNavegador.mjs';
 
 const { Client } = pkg;
 dotenv.config();
@@ -396,8 +397,9 @@ export async function emitirNotaCDPuppeteer(datos, credSii = credencialesDelSist
         if (page && !page.isClosed()) {
             try { await page.goto("https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout", { timeout: 3000 }); } catch (e) {}
         }
-        if (browser) await browser.close();
-        if (client) await client.end();
+        // La base PRIMERO: ver la nota en factura_manual.mjs.
+        await cerrarCliente(client, 'NOTA');
+        await cerrarNavegador(browser, 'NOTA');
         console.log("🏁 Robot finalizado y desconectado.");
     }
 }

@@ -6,6 +6,8 @@ import { Loader2 } from 'lucide-react';
 
 const LoginPage = lazy(() => import('../components/autenticacion/LoginPage.jsx'));
 const RegisterPage = lazy(() => import('../components/autenticacion/RegisterPage'));
+// Página pública de cancelar suscripción (enlace al pie de los correos).
+const BajaCorreo = lazy(() => import('../components/publico/BajaCorreo.jsx'));
 // Eliminamos la importación de CompanyGuard y SelectionPage
 const MainPage = lazy(() => import('../components/MainPage'));
 const Dashboard = lazy(() => import('../components/Dashboard'));
@@ -63,10 +65,17 @@ function App() {
             element={!isAuthenticated ? <LoginPage onLogin={login} /> : <Navigate to="/dashboard" replace />} 
           />
           
-          <Route 
-            path="/register" 
-            element={!isAuthenticated ? <RegisterPage onRegister={register} /> : <Navigate to="/dashboard" replace />} 
+          <Route
+            path="/register"
+            element={!isAuthenticated ? <RegisterPage onRegister={register} /> : <Navigate to="/dashboard" replace />}
           />
+
+          {/* Cancelar suscripción. Es donde aterriza el cliente que pulsa el
+              enlace al pie de un correo, y NO se puede proteger: quien llega es
+              un cliente sin cuenta en el sistema. Va acá arriba, fuera de
+              ProtectedRoute, y sin el `!isAuthenticated` de login/register —
+              tiene que funcionar igual esté o no la sesión iniciada. */}
+          <Route path="/baja" element={<BajaCorreo />} />
 
           {/* --- 🔐 RUTAS PRIVADAS --- */}
           <Route element={<ProtectedRoute isAdminRequired={false} />}>

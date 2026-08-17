@@ -6,6 +6,7 @@ import { encrypt } from '../../../utils/crypto.js';
 import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
 // Bajar el PDF del documento emitido, igual que la factura.
 import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
+import { cerrarNavegador, cerrarCliente } from './cerrarNavegador.mjs';
 
 const { Client } = pkg;
 dotenv.config();
@@ -367,15 +368,11 @@ export async function emitirExentaPuppeteer(datos, credSii = credencialesDelSist
             try { await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { timeout: 5000 }); } catch (e) {}
         }
         
-        if (browser) {
-            console.log('🛑 Cerrando navegador Puppeteer...');
-            await browser.close();
-        }
-        
-        if (client) {
-            await client.end();
-        }
-        
+        // La base PRIMERO: ver la nota en factura_manual.mjs.
+        await cerrarCliente(client, 'EXENTA');
+        console.log('🛑 Cerrando navegador Puppeteer...');
+        await cerrarNavegador(browser, 'EXENTA');
+
         console.log('🏁 Recursos liberados. ¡Misión Exenta Cumplida!');
     }
 }

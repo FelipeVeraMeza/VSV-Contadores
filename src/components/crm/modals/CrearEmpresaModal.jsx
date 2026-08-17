@@ -531,17 +531,23 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <Campo label="Clave SII"
-                                ayuda="La que hoy usa el sistema para entrar al portal del SII.">
+                            {/* El NOMBRE DEL CAMPO no cambia (`claveSII`/`claveWeb`):
+                                se renombra solo lo que se lee en pantalla. Los dos
+                                nombres viejos —«Clave SII» y «Clave Portal Web»— no
+                                decían de quién era cada clave, y cargar una en el
+                                lugar de la otra deja al robot de compras y ventas
+                                entrando al SII con la credencial equivocada. */}
+                            <Campo label="Clave SII · Representante Legal"
+                                ayuda="Va con el RUT del REPRESENTANTE LEGAL. Es la que usa el robot para sacar compras y ventas del SII.">
                                 <input type={verClaves ? 'text' : 'password'} className={`${inputCls} font-mono`}
                                     value={form.claveSII} onChange={(e) => set('claveSII', e.target.value)}
-                                    placeholder="Clave del SII" autoComplete="new-password" />
+                                    placeholder="Clave del representante legal" autoComplete="new-password" />
                             </Campo>
-                            <Campo label="Clave Portal Web"
-                                ayuda="La otra clave del portal, para los demás trámites.">
+                            <Campo label="Clave SII · Empresa"
+                                ayuda="Va con el RUT DE LA EMPRESA. Es la del portal web, para los demás trámites.">
                                 <input type={verClaves ? 'text' : 'password'} className={`${inputCls} font-mono`}
                                     value={form.claveWeb} onChange={(e) => set('claveWeb', e.target.value)}
-                                    placeholder="Clave del portal web" autoComplete="new-password" />
+                                    placeholder="Clave de la empresa" autoComplete="new-password" />
                             </Campo>
                         </div>
 
@@ -552,12 +558,13 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
                                 placeholder={form.correo || 'correo@empresa.cl'} />
                         </Campo>
 
-                        {/* Nota honesta: hoy los nombres de las dos claves no
-                            distinguen de quién es cada una. Está en un ticket. */}
-                        <p className="text-[10px] text-slate-400 leading-relaxed border-l-2 border-[#efe8dd] pl-2.5">
-                            Los nombres «Clave SII» y «Clave Portal Web» son los que usa el sistema hoy.
-                            Cuál corresponde a la empresa y cuál al representante legal está pendiente
-                            de definir — ver el ticket <b>CLAVE SII CLIENTE</b> en Tareas.
+                        {/* Antes esta nota decía que faltaba definir cuál era cuál.
+                            Quedó definido el 06-08-2026 y confirmado por Felipe, así
+                            que ahora dice la respuesta en vez de la duda. */}
+                        <p className="text-[10px] text-slate-500 leading-relaxed border-l-2 border-amber-400 pl-2.5">
+                            <b>No las confundas:</b> la del <b>representante legal</b> es la que el sistema
+                            usa para entrar al SII a buscar las compras y ventas de esta empresa. Si ahí
+                            va la clave de la empresa, el robot no puede entrar y el mes no se puede cerrar.
                         </p>
 
                         <div className="border-t border-[#efe8dd] pt-3">

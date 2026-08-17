@@ -373,8 +373,12 @@ const EmpresaFormModal = ({ isOpen, setIsOpen, onSave, initialData = null }) => 
                     <Input id="siiEmail" type="email" value={formData.siiEmail} onChange={handleChange} className="bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700 font-medium" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Clave SII *</Label>
+                    {/* Esta pantalla guarda en `sii_password_encrypted`, que es la
+                        clave del REPRESENTANTE LEGAL — no la de la empresa. Con la
+                        equivocada acá, el robot no puede sacar compras y ventas. */}
+                    <Label className="text-[10px] uppercase font-black text-slate-400 tracking-widest ml-1">Clave SII · Representante Legal *</Label>
                     <Input id="siiPassword" type="password" value={formData.siiPassword} onChange={handleChange} className="bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700 font-mono" placeholder={initialData ? "Sin cambios" : "Ingresa la clave"} />
+                    <p className="text-[9px] text-slate-400 ml-1">Va con el RUT del representante legal, no con el de la empresa.</p>
                   </div>
                 </div>
               </div>

@@ -307,6 +307,58 @@ mirar la **consola del servidor**: `enviarConReintentos` ya escribe por cuál v�
 
 ---
 
+## 7bis. El módulo de envío a clientes *(16-ago-2026)*
+
+Este documento trata de **cómo sale** un correo (la cascada, el dominio, Railway).
+La pantalla para **escribirle a los clientes** —seleccionar empresas, redactar con
+datos combinables, plantillas y firmas por persona— es otra cosa y tiene su propio
+documento: **[correos-requerimientos.md](correos-requerimientos.md)**, con los
+requerimientos funcionales, los no funcionales, los legales y lo que falta.
+
+Dos cosas de ahí que conviene saber acá, porque dependen de este diagnóstico:
+
+- El envío por persona **solo es posible porque el dominio quedó verificado**: una
+  vez verificado, Resend deja enviar desde cualquier dirección `@vsvconsultores.com`.
+- Queda **sin confirmar el límite diario del plan de Resend**. El gratuito ronda
+  los 100 correos por día y la cartera con correo son 132.
+
+---
+
+## 7ter. La firma no se veía en Gmail *(16-ago-2026)*
+
+**Síntoma:** el correo llegaba bien pero la imagen de la firma no aparecía.
+
+**Causa:** la imagen viajaba **incrustada como data URI** dentro del HTML. Dos
+problemas independientes, y cada uno bastaba por sí solo:
+
+1. **Gmail elimina las imágenes `data:`** al mostrar un correo recibido. No las
+   bloquea a la espera de un clic: las saca.
+2. La firma pesa ~130 KB, que en base64 dejaban el HTML en ~170 KB. **Gmail
+   recorta los mensajes sobre 102 KB** y esconde el resto tras «Ver mensaje
+   completo» — y lo que recorta es el final, justo donde va la firma.
+
+**Arreglo:** la imagen va como **adjunto en línea con `Content-ID`** y el HTML la
+referencia con `<img src="cid:firma_vsv">`. Es la forma estándar. El HTML volvió
+a pesar **0,3 KB** en vez de 170.
+
+Hubo que tocar **dos** lugares, porque el arreglo a medias no servía:
+
+- `correos.controllers.js` — escribe la firma a `tmp/` una vez por campaña y la
+  suma a los adjuntos con `cid`, igual que los adjuntos normales.
+- `mensajes_facturador_masivo.mjs` → `enviarPorResend()` — **este era el que
+  mandaba**. Recibía el `cid:` y lo **volvía a convertir en data URI**, así que
+  arreglar solo el controlador no habría cambiado nada. Ahora manda la imagen
+  como adjunto con `content_id`.
+
+> Ese segundo cambio **también arregla la firma del facturador**, que tenía el
+> mismo problema por el mismo motivo (usa `cid:firma_mati`).
+
+**Ojo con la cascada:** hoy **Gmail API no está configurada**, así que todo sale
+por **Resend**. Los caminos de Gmail API y SMTP arman el MIME con nodemailer, que
+maneja `cid` bien desde siempre; el único que lo rompía era Resend.
+
+---
+
 ## 8. Notas sueltas
 
 - **Correo de pruebas:** `felipe.veram2001@gmail.com`. Siempre enviar ahí antes de escribirle

@@ -53,12 +53,18 @@ async function ejecutarRobotBHE() {
         
         console.log(`\n💾 ¡Tabla de resumen guardada con éxito en ${nombreArchivo}!`);
 
-        await cerrarSesion(page);
-
     } catch (error) {
         console.error("\n❌ ERROR CRÍTICO EN EL ROBOT BHE:", error);
     } finally {
-        console.log("\n🏁 PROCESO DE HONORARIOS COMPLETADO. Puedes cerrar el navegador manualmente.");
+        // Este robot era el peor de todos: el cierre de sesión estaba dentro del
+        // `try` (no corría si algo fallaba) y ADEMÁS nunca cerraba el navegador
+        // —el mensaje decía «puedes cerrar el navegador manualmente»—, así que
+        // cada corrida dejaba un Chrome vivo para siempre.
+        try { await cerrarSesion(page); }
+        catch (e) { console.log(`⚠️ No se pudo cerrar la sesión del SII: ${e.message}`); }
+
+        try { await browser.close(); } catch (e) { try { browser.process()?.kill('SIGKILL'); } catch {} }
+        console.log("\n🏁 PROCESO DE HONORARIOS COMPLETADO.");
     }
 }
 

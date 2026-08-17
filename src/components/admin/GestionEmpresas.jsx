@@ -116,8 +116,12 @@
             <div className="grid grid-cols-2 gap-2">
               <DataField label="RUT EMPRESA" value={company.siiRut || company.sii_rut} icon={Hash} />
               <div className="relative group">
-                <DataField 
-                  label="Clave SII"
+                {/* OJO al leer esta ficha: el RUT de arriba es el de la EMPRESA,
+                    pero esta clave es la del REPRESENTANTE LEGAL. Van juntos en
+                    pantalla pero no son de la misma persona, y esta pantalla
+                    escribe `sii_password_encrypted`, que es la del representante. */}
+                <DataField
+                  label="Clave SII · Rep. Legal"
                   value={showPass ? (company.siiClave || company.sii_clave || company.sii_password || company.sii_password_encrypted || company.siiPassword) : '••••••••••••'}
                   icon={Lock}
                 />

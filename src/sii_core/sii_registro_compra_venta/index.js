@@ -75,13 +75,18 @@ async function ejecutarRobotRCV() {
             }
         }
 
-        await cerrarSesion(page);
-
     } catch (error) {
         console.error("\n❌ ERROR CRÍTICO EN EL ROBOT PRINCIPAL:", error);
     } finally {
-        await browser.close();
-        console.log("\n🏁 PROCESO DEL AÑO 2025 COMPLETADO.");
+        // El cierre de sesión estaba ARRIBA, dentro del `try`: si el robot fallaba
+        // en cualquier mes, nunca se ejecutaba y la sesión quedaba tomada en el
+        // portal del SII hasta que caducara sola por inactividad. Va en el
+        // `finally` y protegido, que es donde tiene que estar.
+        try { await cerrarSesion(page); }
+        catch (e) { console.log(`⚠️ No se pudo cerrar la sesión del SII: ${e.message}`); }
+
+        try { await browser.close(); } catch (e) { try { browser.process()?.kill('SIGKILL'); } catch {} }
+        console.log("\n🏁 PROCESO COMPLETADO.");
     }
 }
 

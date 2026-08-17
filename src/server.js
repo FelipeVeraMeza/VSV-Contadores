@@ -37,6 +37,9 @@ import cajaRoutes from "./routes/caja.routes.js";
 import credencialesRoutes from "./routes/credenciales.routes.js";
 import cobrosRoutes from "./routes/cobros.routes.js";
 import whatsappRoutes from "./routes/whatsapp.routes.js";
+import correosRoutes from "./routes/correos.routes.js";
+import bajaRoutes from "./routes/baja.routes.js";
+import { cerrarCampanasZombi } from "./controllers/correos.controllers.js";
 import { reconectarSesionesGuardadas } from "./services/whatsapp/whatsappBot.js";
 
 // Importación del Robot Manual
@@ -113,6 +116,15 @@ app.use("/api/caja", apiLimiter, cajaRoutes);
 app.use('/api/credenciales', apiLimiter, credencialesRoutes);
 app.use('/api/cobros', apiLimiter, requireSession, requireModulo('facturacion'), cobrosRoutes);
 app.use('/api/whatsapp', apiLimiter, whatsappRoutes);
+// Correos personalizados a un conjunto de clientes. Va bajo el módulo `crm`
+// porque se escribe a la cartera, no a los documentos tributarios.
+app.use('/api/correos', apiLimiter, requireSession, requireModulo('crm'), correosRoutes);
+
+// Desuscripción: PÚBLICA a propósito, sin `requireSession`. Quien pulsa
+// «cancelar suscripción» al pie de un correo es un cliente que no tiene cuenta
+// en el sistema; un enlace de baja que exige iniciar sesión no sirve de nada.
+// La protección está en la firma del token, no en la sesión.
+app.use('/api/baja', apiLimiter, bajaRoutes);
 
 // ============================================================================
 // 🤖 MOTOR CENTRAL DE SINCRONIZACIÓN (Bóveda Global)
@@ -374,6 +386,12 @@ const server = app.listen(PORT, () => {
   // Vuelve a levantar las sesiones de WhatsApp ya vinculadas (las credenciales
   // viven en la BD). Las que nunca se escanearon esperan al botón "Conectar".
   reconectarSesionesGuardadas();
+
+  // Si el servidor se cayó (o se desplegó) a mitad de un envío masivo, la
+  // campaña quedó en 'enviando' en la base aunque en memoria ya no hay nada
+  // corriendo. Se cierran acá para que el registro no mienta y para saber a
+  // quiénes NO les llegó.
+  cerrarCampanasZombi();
 });
 
 // --- Cierre Seguro ---

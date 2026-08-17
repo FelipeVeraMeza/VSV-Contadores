@@ -105,8 +105,10 @@ const CompanyDashboard = ({ client, onClearSelection }) => {
                                 <Lock className="w-4 h-4 text-purple-600" /> Accesos y Credenciales
                             </h3>
                             <div className="space-y-4">
-                                <SecureField label="Clave Portal Web" name="claveWeb" value={client.claveWeb || 'No registrada'} />
-                                <SecureField label="Clave SII" name="claveSII" value={client.claveSII || 'No registrada'} />
+                                {/* Ver ClientDetailDrawer: la etiqueta dice de quién
+                                    es cada clave, el `name` no cambia. */}
+                                <SecureField label="Clave SII · Empresa" name="claveWeb" value={client.claveWeb || 'No registrada'} />
+                                <SecureField label="Clave SII · Representante Legal" name="claveSII" value={client.claveSII || 'No registrada'} />
                                 <SecureField label="Clave Previred" name="clavePrevired" value={client.clavePrevired || 'No registrada'} />
                             </div>
                         </div>

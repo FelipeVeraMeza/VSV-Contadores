@@ -352,19 +352,35 @@ async function enviarPorGmailApi(mailOptions) {
 }
 
 // Envía por la API HTTPS de Resend (funciona donde SMTP está bloqueado, ej: Railway).
-// Reusa el mismo mailOptions de nodemailer: lee los adjuntos (PDF) y embebe la firma inline.
+// Reusa el mismo mailOptions de nodemailer: los adjuntos (PDF) van como adjuntos y
+// la firma va como imagen EN LÍNEA, referenciada desde el HTML con cid:.
 async function enviarPorResend(mailOptions) {
     const apiKey = process.env.RESEND_API_KEY;
-    let html = mailOptions.html;
+    const html = mailOptions.html;
     const attachments = [];
 
     for (const att of (mailOptions.attachments || [])) {
         try {
             const content = fs.readFileSync(att.path);
             if (att.cid) {
-                // Imagen inline (firma): la embebemos como data URI en el HTML.
-                const mime = att.filename.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
-                html = html.replace(`cid:${att.cid}`, `data:${mime};base64,${content.toString('base64')}`);
+                // IMAGEN EN LÍNEA (la firma).
+                //
+                // Antes se embebía como data URI dentro del HTML, y por eso la
+                // firma NO se veía en Gmail. Dos motivos, cada uno suficiente:
+                //
+                //   1. Gmail elimina las imágenes `data:` al mostrar el correo.
+                //   2. Una firma de 130 KB en base64 deja el HTML sobre los
+                //      102 KB que Gmail recorta, y lo que recorta es el final
+                //      del correo: justo donde va la firma.
+                //
+                // Como adjunto con `content_id` la imagen viaja aparte, el HTML
+                // vuelve a pesar un par de KB y el cliente la muestra en su
+                // lugar. Es la forma estándar de meter imágenes en un correo.
+                attachments.push({
+                    filename: att.filename,
+                    content: content.toString('base64'),
+                    content_id: att.cid,
+                });
             } else {
                 attachments.push({ filename: att.filename, content: content.toString('base64') });
             }

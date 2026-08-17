@@ -831,8 +831,12 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                         <Key size={14} /> Accesos y Credenciales
                     </h3>
                     <div className="grid grid-cols-2 gap-3">
-                        <SecureField label="Clave Portal Web" name="claveWeb" value={isEditing ? formData.claveWeb : claveWeb} isEditing={isEditing} onChange={handleInputChange} />
-                        <SecureField label="Clave SII" name="claveSII" value={isEditing ? formData.claveSII : claveSII} isEditing={isEditing} onChange={handleInputChange} />
+                        {/* Solo cambia la etiqueta; el `name` sigue siendo el que
+                            entiende la API. «Clave SII» a secas no decía de quién
+                            era, y son de dos personas distintas: una va con el RUT
+                            de la empresa y la otra con el del representante legal. */}
+                        <SecureField label="Clave SII · Empresa" name="claveWeb" value={isEditing ? formData.claveWeb : claveWeb} isEditing={isEditing} onChange={handleInputChange} />
+                        <SecureField label="Clave SII · Representante Legal" name="claveSII" value={isEditing ? formData.claveSII : claveSII} isEditing={isEditing} onChange={handleInputChange} />
                     </div>
                 </div>
 

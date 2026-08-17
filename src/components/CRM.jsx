@@ -13,7 +13,10 @@ import CrmTableList from './crm/views/CrmTableList';
 import CrmAnalytics from './crm/modals/CrmAnalytics';
 import ClientDetailDrawer from './crm/modals/ClientDetailDrawer';
 import WhatsappPanel from './crm/views/WhatsappPanel';
-import EmailPanel from './crm/views/EmailPanel';
+// La pestaña «Correo» era una maqueta con datos falsos (EmailPanel, sin backend).
+// Se reemplaza por el envío real; el archivo viejo queda por si se retoma la
+// idea de la bandeja de entrada, que es otro problema —recibir, no enviar—.
+import EnvioCorreos from './crm/views/EnvioCorreos';
 import InteraccionesPanel from './crm/views/InteraccionesPanel';
 import CrearClienteModal from './crm/modals/CrearClienteModal';
 import CrearEmpresaModal from './crm/modals/CrearEmpresaModal';
@@ -474,7 +477,7 @@ const CRM = () => {
 
       {activeTab === 'correo' && (
         <div className="flex-1 min-h-0">
-          <EmailPanel />
+          <EnvioCorreos />
         </div>
       )}
 

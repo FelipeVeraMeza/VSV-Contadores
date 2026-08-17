@@ -8,6 +8,7 @@ import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.j
 import { enviarCorreoFacturaEnSesion } from './revisar para envios/mensajes_facturador_masivo.mjs';
 // Bajar el PDF es su propia responsabilidad, no un efecto del correo.
 import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
+import { cerrarNavegador, cerrarCliente } from './cerrarNavegador.mjs';
 
 const { Client } = pkg;
 dotenv.config();
@@ -557,15 +558,13 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
             try { await page.goto('https://misiir.sii.cl/cgi_misii/siu/cgi_misii_logout', { timeout: 5000 }); } catch (e) {}
         }
         
-        if (browser) {
-            console.log('🛑 Cerrando navegador Puppeteer...');
-            await browser.close();
-        }
-        
-        if (client) {
-            await client.end();
-        }
-        
+        // La base PRIMERO. Antes iba después del navegador y, si `browser.close()`
+        // se colgaba, esta línea no corría nunca: quedaba una conexión abierta y
+        // el candado del SII sin soltar, o sea sin poder volver a facturar.
+        await cerrarCliente(client, 'FACTURA');
+        console.log('🛑 Cerrando navegador Puppeteer...');
+        await cerrarNavegador(browser, 'FACTURA');
+
         console.log('🏁 Recursos liberados. ¡Misión Cumplida!');
     }
 }

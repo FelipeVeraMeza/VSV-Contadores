@@ -1,6 +1,7 @@
 import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
+import { cerrarNavegador } from '../../facturacion/scripts/cerrarNavegador.mjs';
 
 // ==========================================
 // FUNCIÓN PRINCIPAL
@@ -165,16 +166,27 @@ export async function ejecutarRobotSII({
         console.error("❌ Error crítico:", e.message);
         return { success: false, error: e.message };
     } finally {
-        // Guardar archivo único
-        const dir = path.join(process.cwd(), 'src', 'components', 'contabilidad', 'scripts', 'datos_sii');
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        
-        const rutaFinal = path.join(dir, 'reporte_completo_sii.json');
-        fs.writeFileSync(rutaFinal, JSON.stringify(masterData, null, 2));
-        console.log(`💾 Reporte único guardado en: ${rutaFinal}`);
+        // Cada paso de la limpieza va protegido POR SEPARADO. Antes eran cuatro
+        // líneas encadenadas: si fallaba la escritura del archivo o el logout,
+        // `browser.close()` no llegaba a correr y quedaba un Chrome vivo comiendo
+        // memoria hasta reiniciar el servidor.
+        try {
+            const dir = path.join(process.cwd(), 'src', 'components', 'contabilidad', 'scripts', 'datos_sii');
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            const rutaFinal = path.join(dir, 'reporte_completo_sii.json');
+            fs.writeFileSync(rutaFinal, JSON.stringify(masterData, null, 2));
+            console.log(`💾 Reporte único guardado en: ${rutaFinal}`);
+        } catch (e) {
+            console.log(`⚠️ No se pudo guardar el reporte: ${e.message}`);
+        }
 
-        await cerrarSesion(page);
-        await browser.close();
+        // Cerrar la sesión del SII es lo primero y lo más importante: si se cae
+        // el navegador sin salir, la sesión queda tomada en el portal y el
+        // siguiente intento se encuentra con que "ya hay una sesión activa".
+        try { await cerrarSesion(page); }
+        catch (e) { console.log(`⚠️ No se pudo cerrar la sesión del SII por la vía normal: ${e.message}`); }
+
+        await cerrarNavegador(browser, 'SYNC-SII');
     }
 }
 
