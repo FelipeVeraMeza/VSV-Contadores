@@ -7,7 +7,7 @@ import {
     listarPlantillasCorreo, guardarPlantillaCorreo, eliminarPlantillaCorreo,
     miPerfilCorreo, guardarPerfilCorreo,
     detenerCampanaController, historialCampanas, detalleCampana, enviosDeEmpresa,
-    listarBajas, quitarBaja, cuotaController,
+    listarBajas, quitarBaja, cuotaController, empresasConImpaga,
 } from '../controllers/correos.controllers.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { envioMasivoLimiter } from '../config/security.js';
@@ -38,6 +38,11 @@ router.get('/campanas', requireAdmin, historialCampanas);
 router.get('/campanas/:id', requireAdmin, detalleCampana);
 // «¿le llegó a este cliente?» — la pregunta que motivó todo el registro.
 router.get('/empresa/:empresaId/envios', requireAdmin, enviosDeEmpresa);
+
+// Quiénes tienen facturas sin pagar. Para marcarlas de una en vez de buscarlas
+// a mano entre toda la cartera, que es donde se cuela el «le cobré a uno que ya
+// había pagado».
+router.get('/impagas', requireAdmin, empresasConImpaga);
 
 // Quiénes pidieron no recibir más, y reactivar a alguien a mano.
 router.get('/bajas', requireAdmin, listarBajas);

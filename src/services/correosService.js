@@ -9,6 +9,10 @@ export const camposCorreoApi = (sessionId) =>
 export const cuotaCorreoApi = (sessionId) =>
     fetchWithAuth('/correos/cuota', sessionId);
 
+/** Empresas con facturas en PENDIENTE_PAGO, para el correo de cobranza. */
+export const empresasImpagasApi = (sessionId) =>
+    fetchWithAuth('/correos/impagas', sessionId);
+
 /**
  * Qué recibiría cada empresa, con los datos ya reemplazados. No manda nada.
  * Devuelve también las que quedan fuera y las marcas mal escritas.
@@ -34,8 +38,9 @@ export const detenerCampanaApi = (sessionId) =>
 // ---------------------------------------------------------------------
 // Registro · qué se envió, a quién y con qué resultado
 // ---------------------------------------------------------------------
-export const historialCampanasApi = (sessionId) =>
-    fetchWithAuth('/correos/campanas', sessionId);
+/** Las campañas enviadas. Con `pruebas` también muestra los envíos de ensayo. */
+export const historialCampanasApi = (sessionId, pruebas = false) =>
+    fetchWithAuth(`/correos/campanas${pruebas ? '?pruebas=1' : ''}`, sessionId);
 
 export const detalleCampanaApi = (sessionId, id) =>
     fetchWithAuth(`/correos/campanas/${id}`, sessionId);

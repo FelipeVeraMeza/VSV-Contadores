@@ -389,14 +389,28 @@ async function enviarPorResend(mailOptions) {
         }
     }
 
-    const from = process.env.RESEND_FROM || mailOptions.from || 'Simple Pyme <onboarding@resend.dev>';
+    // El remitente que pide QUIEN ENVÍA manda sobre la variable de entorno.
+    // Estaba al revés, y así `RESEND_FROM` pisaba el remitente de cada persona:
+    // escribiera quien escribiera, al cliente le llegaba a nombre de Matías.
+    // `RESEND_FROM` queda como valor por omisión para quien no pide ninguno.
+    const from = mailOptions.from || process.env.RESEND_FROM || 'Simple Pyme <onboarding@resend.dev>';
     const payload = {
         from,
         // Resend exige un arreglo de direcciones, no una cadena con varias.
         to: normalizarDestinatarios(mailOptions.to),
         subject: mailOptions.subject,
         html,
-        attachments
+        attachments,
+        // A DÓNDE CONTESTA EL CLIENTE.
+        // Faltaba, y era la razón de que las respuestas no llegaran: sin esto el
+        // cliente le responde a la dirección del remitente —una casilla
+        // @vsvconsultores.com que vive en el servidor del hosting— en vez de al
+        // correo que la persona lee todos los días.
+        ...(mailOptions.replyTo ? { reply_to: mailOptions.replyTo } : {}),
+        // COPIA OCULTA. Sirve para dejar en la casilla propia el registro de lo
+        // que salió. Oculta y no CC a propósito: en CC el cliente ve que uno se
+        // copió, y queda una dirección interna a la vista de todos.
+        ...(mailOptions.bcc ? { bcc: normalizarDestinatarios(mailOptions.bcc) } : {}),
     };
 
     const res = await fetch('https://api.resend.com/emails', {

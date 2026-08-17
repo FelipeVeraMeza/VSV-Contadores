@@ -31,11 +31,11 @@ export const correoConfigurado = () => Boolean(
 /**
  * Envía un correo por la primera vía que funcione.
  *
- * @param {{to:string, subject:string, html:string, attachments?:Array, replyTo?:string, from?:string}} opts
+ * @param {{to:string, subject:string, html:string, attachments?:Array, replyTo?:string, from?:string, bcc?:string}} opts
  * @returns {Promise<boolean>} true si salió por alguna vía.
  * @throws  Si ninguna vía está configurada, o si todas fallaron.
  */
-export const enviarCorreo = async ({ to, subject, html, attachments, replyTo, from }) => {
+export const enviarCorreo = async ({ to, subject, html, attachments, replyTo, from, bcc }) => {
     if (!correoConfigurado()) {
         const err = new Error(
             'El correo no está configurado. Hace falta al menos una vía: ' +
@@ -47,11 +47,17 @@ export const enviarCorreo = async ({ to, subject, html, attachments, replyTo, fr
     }
 
     return enviarConReintentos({
-        from: from || `"Matias Olivos" <${REMITENTE}>`,
+        // Quien envía manda; si no pide ninguno, el de la variable de entorno; y
+        // si tampoco está, la dirección de siempre. El orden importa: con el
+        // valor fijo primero, `RESEND_FROM` no se aplicaba nunca, porque acá
+        // siempre había un `from` armado antes de llegar al proveedor.
+        from: from || process.env.RESEND_FROM || `"Matias Olivos" <${REMITENTE}>`,
         to,
         subject,
         html,
         ...(attachments ? { attachments } : {}),
         ...(replyTo ? { replyTo } : {}),
+        // Copia oculta, para dejar registro en la casilla propia.
+        ...(bcc ? { bcc } : {}),
     });
 };

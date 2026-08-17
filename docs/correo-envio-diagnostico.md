@@ -359,6 +359,52 @@ maneja `cid` bien desde siempre; el único que lo rompía era Resend.
 
 ---
 
+## 7quater. Las respuestas no llegaban · «Enviados» no existe en Gmail *(17-ago-2026)*
+
+Dos preguntas del mismo día, con la misma raíz: **los correos no pasan por Gmail.**
+Salen por Resend, por HTTPS, desde sus servidores.
+
+### «No me aparecen en Enviados de Gmail»
+
+No van a aparecer nunca, y no es una falla. Gmail no se entera de que existen.
+Además son dos casillas distintas: los correos salen desde
+`matias.olivos@vsvconsultores.com` y uno mira `matias.olivosb@gmail.com`.
+
+**Solución:** el botón **Enviados** en Correo Masivo. El registro ya existía en la
+base (`correo_campana` + `correo_envio`); lo que faltaba era la pantalla. Muestra
+más que Gmail: a quién llegó, a quién no y **por qué**, y el texto exacto que
+recibió cada uno, con sus datos ya reemplazados.
+
+### «Cuando responden no me llega» — este era grave
+
+Las respuestas iban a la casilla `@vsvconsultores.com`. **El MX de
+vsvconsultores.com apunta a DonWeb**, no a Google: ese buzón vive en el servidor
+del hosting y no lo lee nadie. Las respuestas de clientes se perdían **sin error
+y sin rebote**.
+
+**Solución:** `Reply-To` por usuario (`usuario.correo_respuesta`, migración
+`2026-08-17_correo_respuesta.sql`). A diferencia de `correo_remitente`, **este NO
+se valida contra el dominio**: la gracia es que sea el Gmail donde la persona lee.
+
+### Tres cosas rotas en el payload de Resend
+
+Todas en `enviarPorResend()`, y ninguna daba error — por eso ninguna se notó:
+
+| Qué | Consecuencia |
+|---|---|
+| No se mandaba `reply_to` | Las respuestas se perdían |
+| `RESEND_FROM` pisaba `mailOptions.from` | Todo salía a nombre de Matías, aunque escribiera otro |
+| El `cid:` se convertía en data URI | La firma no se veía (ver 7ter) |
+
+Y una cuarta en `mailer.js`: armaba un `from` fijo antes de llegar al proveedor,
+así que **`RESEND_FROM` no se aplicaba nunca**. Ahora el orden es: el que pide
+quien envía → `RESEND_FROM` → la dirección de siempre.
+
+> El envío por persona estaba construido y **no funcionaba**, en silencio, desde
+> el primer día. Ojo con esto al revisar cualquier cosa que dependa de `from`.
+
+---
+
 ## 8. Notas sueltas
 
 - **Correo de pruebas:** `felipe.veram2001@gmail.com`. Siempre enviar ahí antes de escribirle

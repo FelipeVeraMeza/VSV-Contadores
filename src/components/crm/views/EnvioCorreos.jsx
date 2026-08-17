@@ -21,16 +21,18 @@ import {
     Mail, Search, Send, Users, Eye, Loader2, AlertTriangle, CheckCircle2,
     X, ChevronLeft, ChevronRight, FlaskConical, Building2, Sparkles,
     LayoutTemplate, Save, Trash2, Check, PenLine, Users2, Lock,
-    Paperclip, Square, Link2, FileSpreadsheet, Upload, Table2,
+    Paperclip, Square, Link2, FileSpreadsheet, Upload, Table2, History,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import LogoUploader from '@/components/ui/LogoUploader';
+import HistorialCorreosModal from '@/components/crm/modals/HistorialCorreosModal';
 import { getCrmDataApi } from '@/services/crmService';
 import {
     camposCorreoApi, previewCampanaApi, enviarCampanaApi, progresoCampanaApi,
     listarPlantillasCorreoApi, guardarPlantillaCorreoApi, eliminarPlantillaCorreoApi,
     miPerfilCorreoApi, guardarPerfilCorreoApi, detenerCampanaApi, cuotaCorreoApi,
+    empresasImpagasApi,
 } from '@/services/correosService';
 
 const getUser = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
@@ -148,6 +150,23 @@ const EnvioCorreos = () => {
     // contador de arriba, el botón de enviar y la vista previa.
     const elegidos = modo === 'planilla' ? filasAEnviar.length : seleccion.length;
 
+    // ESCONDER LO NO ELEGIDO.
+    // Pasados unos cuantos, los no elegidos estorban para repasar a quién le vas
+    // a escribir. Se enciende SOLO al pasar de 10, que es cuando la lista deja
+    // de caber de una mirada.
+    //
+    // Es un filtro y no un «desaparecen y ya»: escondiendo lo no elegido sin
+    // vuelta atrás, no habría forma de agregar al número 11. Por eso queda el
+    // botón para apagarlo, y apagado a mano NO se vuelve a encender solo.
+    const [soloElegidos, setSoloElegidos] = useState(false);
+    const yaSaltó = useRef(false);
+    useEffect(() => {
+        if (elegidos > 10 && !yaSaltó.current) { yaSaltó.current = true; setSoloElegidos(true); }
+        // Bajo 10 se ve la lista entera igual: el filtro no aporta y se rearma
+        // para la próxima vez que se pase.
+        if (elegidos <= 10) { yaSaltó.current = false; setSoloElegidos(false); }
+    }, [elegidos]);
+
     const [asunto, setAsunto] = useState('');
     const [cuerpo, setCuerpo] = useState('');
     const [firma, setFirma] = useState('');
@@ -157,7 +176,10 @@ const EnvioCorreos = () => {
     // misma siempre y reescribirla en cada envío no tiene sentido.
     const [perfil, setPerfil] = useState(null);
     const [editandoPerfil, setEditandoPerfil] = useState(false);
-    const [perfilBorrador, setPerfilBorrador] = useState({ correoRemitente: '', firmaTexto: '', firmaImagen: null });
+    const [perfilBorrador, setPerfilBorrador] = useState({
+        correoRemitente: '', correoRespuesta: '', copiaOculta: false, correoCopia: '',
+        firmaTexto: '', firmaImagen: null,
+    });
     const [guardandoPerfil, setGuardandoPerfil] = useState(false);
 
     const [previa, setPrevia] = useState(null);
@@ -230,8 +252,13 @@ const EnvioCorreos = () => {
     // reusarlos en todos los destinatarios.
     const [adjuntos, setAdjuntos] = useState([]);
     const adjRef = useRef(null);
-    const [replyTo, setReplyTo] = useState('');
     const [correoPrueba, setCorreoPrueba] = useState('');
+    // El registro de lo enviado. Vive acá porque los correos NO pasan por Gmail
+    // —salen por Resend, por HTTPS— y en «Enviados» de Gmail no van a aparecer.
+    const [verEnviados, setVerEnviados] = useState(false);
+    // Quiénes deben. Se carga al entrar para poder marcarlas de una: buscarlas a
+    // mano entre 137 clientes es donde se cuela el «le cobré a uno que ya pagó».
+    const [impagas, setImpagas] = useState([]);
 
     const MAX_ADJ = 7 * 1024 * 1024;
     const kb = (n) => n > 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
@@ -379,12 +406,15 @@ const EnvioCorreos = () => {
     useEffect(() => {
         (async () => {
             try {
-                const [rc, rcampos, rperfil, rcuota] = await Promise.all([
+                const [rc, rcampos, rperfil, rcuota, rimp] = await Promise.all([
                     getCrmDataApi(getSessionId()),
                     camposCorreoApi(getSessionId()),
                     miPerfilCorreoApi(getSessionId()),
                     cuotaCorreoApi(getSessionId()),
+                    empresasImpagasApi(getSessionId()),
                 ]);
+                const dimp = await rimp.json().catch(() => ({}));
+                if (dimp.success) setImpagas(dimp.empresas || []);
                 const dc = await rc.json();
                 const dcampos = await rcampos.json();
                 const dperfil = await rperfil.json();
@@ -401,6 +431,9 @@ const EnvioCorreos = () => {
                     setFirmaImagen(dperfil.firmaImagen || null);
                     setPerfilBorrador({
                         correoRemitente: dperfil.correoRemitente || '',
+                        correoRespuesta: dperfil.correoRespuesta || '',
+                        copiaOculta: !!dperfil.copiaOculta,
+                        correoCopia: dperfil.correoCopia || '',
                         firmaTexto: dperfil.firmaTexto || '',
                         firmaImagen: dperfil.firmaImagen || null,
                     });
@@ -455,32 +488,36 @@ const EnvioCorreos = () => {
         const q = busqueda.trim().toLowerCase();
         return clientes.filter(c => {
             if (soloConCorreo && !tieneCorreo(c)) return false;
+            // Con la lista llena de elegidos, los demás estorban para repasar a
+            // quién le vas a escribir.
+            if (soloElegidos && !seleccion.includes(c.id)) return false;
             if (!q) return true;
             return String(c.razonSocial || '').toLowerCase().includes(q)
                 || String(c.correo || '').toLowerCase().includes(q)
                 || String(c.plan || '').toLowerCase().includes(q)
                 || String(c.rut || '').replace(/[.\-]/g, '').includes(q.replace(/[.\-]/g, ''));
         });
-    }, [clientes, busqueda, soloConCorreo]);
+    }, [clientes, busqueda, soloConCorreo, soloElegidos, seleccion]);
 
     const sinCorreo = clientes.filter(c => !tieneCorreo(c)).length;
     const alternar = (id) => setSeleccion(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
     const todosVisibles = lista.length > 0 && lista.every(c => seleccion.includes(c.id));
+
+    // Un Set y no `filasSel.includes(...)`: dentro del map sería recorrer la
+    // selección entera por cada fila dibujada.
+    const selSet = useMemo(() => new Set(filasSel), [filasSel]);
 
     // ---- lo mismo, para las filas de la planilla ----
     // Se busca en TODAS las columnas: uno se acuerda del RUT o del correo, no de
     // en qué columna estaba.
     const filasVisibles = useMemo(() => {
         const q = busqueda.trim().toLowerCase();
-        const idx = filas.map((_, i) => i);
+        let idx = filas.map((_, i) => i);
+        if (soloElegidos) idx = idx.filter(i => selSet.has(i));
         if (!q) return idx;
         return idx.filter(i => Object.values(filas[i] || {})
             .some(v => String(v ?? '').toLowerCase().includes(q)));
-    }, [filas, busqueda]);
-
-    // Un Set y no `filasSel.includes(...)`: dentro del map sería recorrer la
-    // selección entera por cada fila dibujada.
-    const selSet = useMemo(() => new Set(filasSel), [filasSel]);
+    }, [filas, busqueda, soloElegidos, selSet]);
     const alternarFila = (i) => setFilasSel(p => p.includes(i) ? p.filter(x => x !== i) : [...p, i]);
     const todasFilasVisibles = filasVisibles.length > 0 && filasVisibles.every(i => selSet.has(i));
     const filasConCorreo = useMemo(
@@ -561,7 +598,9 @@ const EnvioCorreos = () => {
         setProgreso(null);
         const cuerpoPeticion = {
             ...destinos, asunto, cuerpo, firma, firmaImagen, soloPrueba, plantillaId,
-            adjuntos, replyTo: replyTo.trim() || undefined,
+            adjuntos,
+            // El «responder a» sale del perfil, en el servidor: es de la persona,
+            // no de cada envío, y así no se puede olvidar.
             correoPrueba: soloPrueba ? (correoPrueba.trim() || undefined) : undefined,
         };
         try {
@@ -620,6 +659,13 @@ const EnvioCorreos = () => {
                     <Mail size={15} className="text-emerald-600" />
                 </div>
                 <span className="text-sm font-black text-slate-900 tracking-tight">Correo Masivo</span>
+                {/* Lo que reemplaza a la carpeta «Enviados» de Gmail, donde estos
+                    correos nunca van a aparecer porque no pasan por ahí. */}
+                <button onClick={() => setVerEnviados(true)}
+                    title="Qué se envió, a quién llegó y qué decía exactamente"
+                    className="ml-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-emerald-600 inline-flex items-center gap-1 border border-[#efe8dd] rounded-lg px-2 py-1">
+                    <History size={11} /> Enviados
+                </button>
             </div>
             {/* Los tres números que importan antes de apretar enviar. Se
                 muestran acá arriba porque son la respuesta a «¿a cuántos le
@@ -715,6 +761,31 @@ const EnvioCorreos = () => {
                             <button onClick={() => setSeleccion([])} className="text-[10px] text-slate-400 hover:text-slate-600">Limpiar</button>
                         )}
                     </div>
+
+                    {/* Con muchos elegidos, los demás estorban para repasar la
+                        lista. Se enciende solo pasando de 10; queda el botón
+                        porque si no, no habría cómo agregar al siguiente. */}
+                    {elegidos > 10 && (
+                        <button onClick={() => setSoloElegidos(v => !v)}
+                            className={`w-full text-[10px] font-black uppercase tracking-wider rounded-lg py-1.5 border transition-colors ${
+                                soloElegidos ? 'bg-emerald-600 border-emerald-500 text-white'
+                                             : 'bg-slate-50 border-[#efe8dd] text-slate-500 hover:border-emerald-500/60'}`}>
+                            {soloElegidos ? `Viendo solo los ${elegidos} elegidos · ver todos` : `Ver solo los ${elegidos} elegidos`}
+                        </button>
+                    )}
+                    {/* COBRANZA · marcar de una a quienes deben.
+                        El correo de factura impaga va a un puñado, no a la
+                        cartera entera, y buscarlos a mano en la lista es donde
+                        se cuela mandarle un cobro a alguien que ya pagó. */}
+                    {impagas.length > 0 && (
+                        <button
+                            onClick={() => setSeleccion(impagas.map(i => i.id))}
+                            title={`${impagas.length} empresas con facturas en PENDIENTE_PAGO`}
+                            className="w-full text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-500/10 border border-amber-500/40 rounded-lg py-1.5 hover:bg-amber-500/20 transition-colors">
+                            Elegir las {impagas.length} con factura impaga
+                        </button>
+                    )}
+
                     {/* Las que no tienen correo no se pueden mandar. Se esconden por
                         omisión pero se dice cuántas son: si no, uno cree que le
                         escribió a toda la cartera y quedaron 12 afuera. */}
@@ -729,7 +800,17 @@ const EnvioCorreos = () => {
 
                 <div className="flex-1 overflow-y-auto">
                     {lista.length === 0 ? (
-                        <p className="text-[11px] text-slate-400 italic text-center py-8">Ninguna empresa calza.</p>
+                        <div className="text-center py-8 px-4">
+                            <p className="text-[11px] text-slate-400 italic">Ninguna empresa calza.</p>
+                            {/* Sin esto uno busca a alguien, no aparece, y parece
+                                que no está en la cartera cuando solo está oculto. */}
+                            {soloElegidos && (
+                                <button onClick={() => setSoloElegidos(false)}
+                                    className="mt-1 text-[10px] font-black uppercase tracking-wider text-emerald-600 hover:text-emerald-700">
+                                    Estás viendo solo los elegidos · buscar en toda la cartera
+                                </button>
+                            )}
+                        </div>
                     ) : lista.map(c => {
                         const marcada = seleccion.includes(c.id);
                         const conCorreo = tieneCorreo(c);
@@ -830,6 +911,15 @@ const EnvioCorreos = () => {
                             )}
                         </div>
 
+                        {elegidos > 10 && (
+                            <button onClick={() => setSoloElegidos(v => !v)}
+                                className={`w-full text-[10px] font-black uppercase tracking-wider rounded-lg py-1.5 border transition-colors ${
+                                    soloElegidos ? 'bg-emerald-600 border-emerald-500 text-white'
+                                                 : 'bg-slate-50 border-[#efe8dd] text-slate-500 hover:border-emerald-500/60'}`}>
+                                {soloElegidos ? `Viendo solo las ${elegidos} elegidas · ver todas` : `Ver solo las ${elegidos} elegidas`}
+                            </button>
+                        )}
+
                         <p className="text-[9px] text-slate-400 flex items-center gap-1">
                             <Table2 size={10} />
                             {filas.length} {filas.length === 1 ? 'fila' : 'filas'} · {columnas.length} columnas ·{' '}
@@ -841,7 +931,15 @@ const EnvioCorreos = () => {
 
                     <div className="flex-1 overflow-y-auto">
                         {filasVisibles.length === 0 ? (
-                            <p className="text-[11px] text-slate-400 italic text-center py-8">Ninguna fila calza.</p>
+                            <div className="text-center py-8 px-4">
+                                <p className="text-[11px] text-slate-400 italic">Ninguna fila calza.</p>
+                                {soloElegidos && (
+                                    <button onClick={() => setSoloElegidos(false)}
+                                        className="mt-1 text-[10px] font-black uppercase tracking-wider text-emerald-600 hover:text-emerald-700">
+                                        Estás viendo solo las elegidas · buscar en toda la planilla
+                                    </button>
+                                )}
+                            </div>
                         ) : filasVisibles.map(i => {
                             const f = filas[i];
                             const correos = correosDeFila(f, colCorreo);
@@ -948,6 +1046,19 @@ const EnvioCorreos = () => {
                                 No configuraste el tuyo: sale desde el correo por omisión. Pulsa «Mi correo y firma».
                             </p>
                         )}
+                        {/* Lo más caro de no configurar: el cliente contesta y esa
+                            respuesta no llega a ninguna parte. */}
+                        {perfil?.correoRespuesta ? (
+                            <p className="text-[9px] text-slate-400 mt-1">
+                                Las respuestas te llegan a <b className="text-slate-600">{perfil.correoRespuesta}</b>
+                                {perfil.copiaOculta && <> · con <b className="text-slate-600">copia oculta</b> de cada envío</>}
+                            </p>
+                        ) : (
+                            <p className="text-[9px] text-red-600 mt-1">
+                                ⚠️ No configuraste a dónde te llegan las respuestas: si el cliente contesta,
+                                esa respuesta se pierde. Pulsa «Mi correo y firma».
+                            </p>
+                        )}
                     </div>
 
                     {editandoPerfil && (
@@ -969,6 +1080,75 @@ const EnvioCorreos = () => {
                                     Tiene que ser <b>@{perfil?.dominio || 'vsvconsultores.com'}</b>. Desde otro dominio el envío se rechaza.
                                 </span>
                             </label>
+
+                            {/* A DÓNDE CONTESTA EL CLIENTE.
+                                El correo sale desde @vsvconsultores.com porque es
+                                el dominio verificado, pero ESE BUZÓN VIVE EN EL
+                                HOSTING y no lo lee nadie. Sin esto, las respuestas
+                                caen ahí y se pierden: sin error y sin rebote. */}
+                            <label className="block">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                    Las respuestas me llegan a
+                                </span>
+                                <input value={perfilBorrador.correoRespuesta}
+                                    onChange={(e) => setPerfilBorrador(p => ({ ...p, correoRespuesta: e.target.value }))}
+                                    placeholder="tucorreo@gmail.com"
+                                    className={`${inp} mt-1 font-mono`} />
+                                <span className="text-[9px] text-slate-400 block mt-0.5">
+                                    Acá <b>sí</b> puede ser tu Gmail: es donde lees de verdad. Si lo dejas
+                                    vacío, el cliente le responde a la casilla del dominio, que está en el
+                                    servidor del hosting y <b>no la lee nadie</b>.
+                                </span>
+                            </label>
+
+                            {/* COPIA OCULTA. Para tener los correos también en la
+                                bandeja, no solo en la pantalla de Enviados.
+                                El costo va al lado y no en la letra chica: con un
+                                tope de ~100 diarios, duplicar el gasto decide si
+                                la campaña del mes entra o no. */}
+                            <label className="flex items-start gap-2 cursor-pointer">
+                                <input type="checkbox" checked={perfilBorrador.copiaOculta}
+                                    onChange={(e) => setPerfilBorrador(p => ({ ...p, copiaOculta: e.target.checked }))}
+                                    className="accent-emerald-500 mt-0.5" />
+                                <span className="min-w-0">
+                                    <span className="text-[10px] font-bold text-slate-700 block">
+                                        Mandarme copia oculta de cada correo
+                                    </span>
+                                    <span className="text-[9px] text-slate-400 block">
+                                        Te llega una copia a esa misma casilla, así te queda el registro
+                                        también en el correo. Va <b>oculta</b>: el cliente no la ve.
+                                        {' '}<b className="text-amber-700">
+                                            Ojo: cada copia gasta cuota — una campaña de {impagas.length || 38} pasa
+                                            a consumir {(impagas.length || 38) * 2} de {cuota?.limite ?? 100}.
+                                        </b>
+                                    </span>
+                                </span>
+                            </label>
+
+                            {perfilBorrador.copiaOculta && (
+                                <label className="block pl-6">
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                        Mandar la copia a
+                                    </span>
+                                    <input value={perfilBorrador.correoCopia}
+                                        onChange={(e) => setPerfilBorrador(p => ({ ...p, correoCopia: e.target.value }))}
+                                        placeholder={perfilBorrador.correoRespuesta || 'archivo@vsvconsultores.com'}
+                                        className={`${inp} mt-1 font-mono`} />
+                                    <span className="text-[9px] text-slate-400 block mt-0.5">
+                                        Vacío = va al mismo de arriba.
+                                    </span>
+                                    {/* El aviso que importa: una copia al dominio propio
+                                        NO llega a Gmail, porque el buzón de
+                                        vsvconsultores.com vive en el hosting. */}
+                                    {/vsvconsultores\.com$/i.test(perfilBorrador.correoCopia.trim()) && (
+                                        <span className="text-[9px] text-amber-700 block mt-1">
+                                            ⚠️ Esa casilla está en el servidor del hosting, no en Gmail: las copias
+                                            se van a acumular ahí. Para verlas en Gmail, esa dirección tiene que
+                                            reenviar, o pon acá tu Gmail.
+                                        </span>
+                                    )}
+                                </label>
+                            )}
                             <label className="block">
                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Mi firma</span>
                                 <textarea value={perfilBorrador.firmaTexto} rows={3}
@@ -1315,6 +1495,8 @@ const EnvioCorreos = () => {
                 )}
             </div>
         </div>
+
+        {verEnviados && <HistorialCorreosModal onClose={() => setVerEnviados(false)} />}
       </div>
     );
 };
