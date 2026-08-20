@@ -263,10 +263,23 @@ img, svg, video, canvas {
 @media (max-width: 640px) {
   /* 3 · Palabras muy largas —un correo, un RUT, una razón social sin
      espacios— estiraban su tarjeta hasta sacar la página de cuadro.
-     Que corten antes de desbordar. */
+     Que corten antes de desbordar.
+
+     ⚠️ SOLO `overflow-wrap`, NO `word-break`. Acá había además
+     `word-break: break-word`, y esa parte cualquier palabra por la mitad
+     aunque quepa de otro modo: los botones de los modales quedaron diciendo
+     «CANCELA R», «SIGUIENT E» y «ATRÁ S». `overflow-wrap` solo actúa cuando
+     la palabra de verdad no cabe, que es lo que se quería. */
   body {
     overflow-wrap: break-word;
-    word-break: break-word;
+  }
+
+  /* Y en los botones no se corta nunca: una etiqueta partida se lee como un
+     error de la aplicación. Si no cabe, que la fila se acomode (ver más
+     abajo el pie de los modales), no que se rompa la palabra. */
+  button, [role='button'] {
+    overflow-wrap: normal;
+    word-break: keep-all;
   }
 
   /* 4 · iOS hace zoom automático al tocar un campo cuya letra mide menos de

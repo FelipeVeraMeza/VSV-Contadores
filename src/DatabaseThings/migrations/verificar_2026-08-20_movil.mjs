@@ -15,13 +15,19 @@
  *      caja con scroll propio (una tabla ancha, por ejemplo) y solo marca lo
  *      que quedó verdaderamente inalcanzable.
  *
- * CÓMO SE USA — necesita la aplicación servida en el 4173:
- *     npm run build && npx vite preview --port 4173
+ * CÓMO SE USA — con el sistema andando como siempre (`npm run start:all`):
  *     node src/DatabaseThings/migrations/verificar_2026-08-20_movil.mjs
  *
- * NO levanta el backend (no toca WhatsApp), pero SÍ necesita que esté
- * corriendo en el 4000 para que las pantallas traigan datos: una tabla vacía
- * nunca desborda, así que medir sin datos da un falso aprobado.
+ * ⚠️ APUNTA AL 3000 A PROPÓSITO, y no es un detalle:
+ * el CORS del backend solo acepta los orígenes 3000, 5173 y Vercel
+ * (`src/config/security.js`). Si se mide contra un `vite preview` en otro
+ * puerto, TODAS las llamadas a la API quedan bloqueadas, las pantallas salen
+ * vacías… y el script aprueba igual, porque una tabla sin filas nunca
+ * desborda. Es un falso aprobado silencioso: pasó el 20-08-2026 y costó
+ * descubrirlo. Para usar otro puerto hay que agregarlo antes a `allowedOrigins`
+ * y pasarlo en `BASE_MOVIL`.
+ *
+ * No levanta nada por su cuenta (no toca WhatsApp): usa lo que ya esté corriendo.
  *
  * ⚠️ Crea una sesión de prueba propia en `sessions` —no reutiliza la de
  * nadie— y la BORRA al terminar, pase lo que pase.
@@ -34,7 +40,7 @@ import { pool } from '../../database/db.js';
 import puppeteer from 'puppeteer';
 import { randomUUID } from 'crypto';
 
-const BASE = 'http://localhost:4173';
+const BASE = process.env.BASE_MOVIL || 'http://localhost:3000';
 const SESSION_ID = randomUUID(); // session_id es uuid; se borra en el finally
 
 const PANTALLAS = [
@@ -45,7 +51,7 @@ const RUTAS = [
   '/contabilidad?sub=compras', '/contabilidad?sub=ventas',
   '/contabilidad?sub=recaudaciones', '/contabilidad?sub=centralizacion',
   '/contabilidad?sub=reportes',
-  '/CRM', '/CRM?vista=personas', '/tareas', '/facturacion', '/rrhh',
+  '/CRM?sub=list', '/CRM?sub=prospectos', '/tareas', '/facturacion', '/rrhh',
   '/bancos', '/admin', '/comunicaciones',
 ];
 

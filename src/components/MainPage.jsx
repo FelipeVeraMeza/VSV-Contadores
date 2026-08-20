@@ -217,7 +217,7 @@ function MainPage() {
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setSidebarOpen(false)}
-              className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+              className="fixed inset-0 z-[55] bg-black/40 lg:hidden"
               aria-hidden="true"
             />
           )}
@@ -230,7 +230,14 @@ function MainPage() {
               animate={{ x: 0, opacity: 1, width: rail ? 76 : 240 }}
               exit={{ x: -300, opacity: 0 }}
               transition={{ x: { type: 'tween', duration: 0.25 }, width: { type: 'tween', duration: 0.2 } }}
-              className="fixed lg:relative inset-y-0 left-0 z-50 h-full bg-white border-r border-[#efe8dd] flex flex-col overflow-hidden"
+              // ESCALA DE CAPAS del armazón — subir esto tiene una razón:
+              //   header 30 · fondo del menú 55 · MENÚ 60 · modales 100
+              // El menú estaba en 50, el mismo valor que usan varios elementos
+              // del contenido. Al empatar gana el que va después en el DOM —el
+              // contenido— así que los botones de la página se dibujaban encima
+              // del menú abierto. Con 60 el menú gana siempre, y los modales
+              // (100) siguen por encima de él, que es lo correcto.
+              className="fixed lg:relative inset-y-0 left-0 z-[60] h-full bg-white border-r border-[#efe8dd] flex flex-col overflow-hidden"
             >
               {/* Encabezado: logo + botón para colapsar el panel */}
               <div className={`flex items-center ${rail ? 'justify-center' : 'justify-between'} gap-2 h-[68px] px-4 border-b border-[#efe8dd] flex-shrink-0`}>

@@ -2,8 +2,8 @@
 
 **Última revisión:** 20 de agosto de 2026
 **Responsable del módulo:** Victor (según la tarea madre CONTABILIDAD)
-**Estado:** funcionando sobre datos reales · aislamiento por usuario **puesto el
-20-08-2026** · queda un cabo suelto entre organizaciones (ver 3.8)
+**Estado:** funcionando sobre datos reales · aislamiento por empresa **puesto el
+20-08-2026** · queda pendiente reasignar 1.172 comprobantes (ver 3.8)
 
 > Este documento no existía. Se escribió porque el módulo se estaba discutiendo
 > con una suposición equivocada —«a Victor le sale en blanco»— que no resistió
@@ -138,8 +138,8 @@ solo ve las empresas que tenga en `audita`
 Victor tiene 0 empresas en audita  →  el módulo debería estar vacío
 ```
 
-Estado real de las cuentas al 19-08-2026 — **los tres están en la misma
-organización**:
+Estado de las cuentas **el 19-08-2026**, que es lo que motivó todo esto. Los tres
+están en la misma organización:
 
 | Usuario | Rol | `ve_solo_empresas_asignadas` | Empresas en `audita` |
 |---|---|---|---|
@@ -149,6 +149,16 @@ organización**:
 
 La organización *VSV CONSULTORES* quedó vacía a propósito, sin borrar, para poder
 revertir el cambio.
+
+> ⚠️ **Esa tabla ya no describe el presente.** El 20-08 el negocio corrigió el
+> criterio: Victor es de la oficina y debe ver la cartera completa, así que se le
+> apagó la bandera (`2026-08-20_victor_ve_todas_las_empresas.sql`). Hoy los tres
+> ven lo mismo: 138 en el CRM y 99 en el selector.
+>
+> El recorte **no se deshizo**, cambió de destinatario: es para las cuentas de
+> FUERA de la organización. `veSoloAsignadas()` ya devuelve true para el rol
+> `Cliente` por sí sola, sin depender de la bandera, así que todos los porteros
+> de 3.7 siguen en pie y siguen aplicando a quien corresponde.
 
 ### 3.3 Lo que se midió el 19-08 · el módulo NO estaba en blanco
 
@@ -321,20 +331,55 @@ de más.
 
 **19 de 21 comprobaciones en verde.** Las dos rojas son la misma cosa:
 
-> **E2 y E3 · los 1.172 comprobantes sin dueño.** Un administrador de *otra*
-> organización sigue viéndolos en su consolidado, porque `comprobantes` no tiene
-> `organizacion_id` y esas filas tampoco tienen `empresa_id`: no pertenecen a
-> nadie. Se buscó de dónde deducir el dueño y **no lo hay**: esas 1.172 filas
-> tampoco tienen `usuario_id`, así que se cargaron a granel sin dejar rastro.
+> **E2 y E3 · los 1.172 comprobantes sin empresa.** Un administrador de *otra*
+> organización los ve en su consolidado, porque `comprobantes` no tiene
+> `organizacion_id` y esas filas tampoco tienen `empresa_id`.
 >
-> Arreglarlo de verdad es una migración: agregar `organizacion_id` a
-> `comprobantes` y decidir a mano de quién son esas filas. **Es una decisión del
-> negocio, no algo que se pueda deducir de los datos**, y por eso quedó sin
-> hacer en vez de resuelto a la suerte.
+> **CORREGIDO EL DIAGNÓSTICO (20-08-2026).** Acá decía que se habían «cargado a
+> granel sin dejar rastro» y que no había de dónde deducir el dueño. Las dos
+> cosas eran falsas: se había mirado `usuario_id` —que sí está en NULL— y no
+> `contabilizado_por_id`, que está completo. Al preguntar por la columna
+> correcta aparece todo:
 >
-> Hoy afecta solo a *VSV CONSULTORES*, que es una organización vacía y sin uso.
-> El día que entre un segundo cliente de verdad al sistema, hay que resolverlo
-> antes.
+> | | |
+> |---|---|
+> | Quién | **Victor**, los 1.172, sin excepción |
+> | Cuándo | **19-08-2026, entre las 18:51 y las 22:41** — una sola sesión |
+> | Qué | 1.048 ventas + 123 compras + 1 venta exenta (DTE 33 y 34) |
+> | Período contable | 02-01-2025 a 18-08-2026 (351 de 2025, 821 de 2026) |
+>
+> O sea: **no es un problema histórico ni una importación vieja.** Es el botón
+> «Contabilizar todo» usado en modo consolidado —sin empresa seleccionada— la
+> noche anterior a esta auditoría. Todos los asientos cayeron al montón global
+> en vez de a la empresa que les correspondía. Es exactamente el camino que
+> después se cerró para las cuentas recortadas (ver 3.7, «contabilizar sin
+> empresa seleccionada queda prohibido»), solo que Victor no estaba recortado
+> cuando los creó.
+>
+> **Y se pueden recuperar.** Cada comprobante guarda `clase`, `tipo_dte` y
+> `folio`, que es la llave del documento que lo originó — y ese documento sí
+> sabe de qué empresa es. Cruzándolos:
+>
+> | | |
+> |---|---|
+> | Se resuelven sin ambigüedad | **1.159 (98,9 %)** |
+> | Quedan ambiguos | **13** — mismo folio y tipo en dos empresas |
+> | Sin documento de origen | **0** |
+>
+> ⚠️ El cruce va por `clase + tipo_dte + folio`, **sin** el RUT. Agregar el RUT
+> lo empeora (126 sin correspondencia): el RUT del comprobante está normalizado
+> y el del documento no siempre, así que la comparación falla por formato, no
+> por contenido.
+>
+> **PENDIENTE, y no es parte de los cambios del 20-08.** Falta:
+>   1. Asignarle su `empresa_id` a los 1.159 que se pueden deducir.
+>   2. Revisar a mano los 13 ambiguos (son ventas DTE 33 al RUT 77938492-6).
+>   3. Recién entonces decidir si `comprobantes` necesita además su propio
+>      `organizacion_id`, o si con `empresa_id` bien puesto basta.
+>
+> No se hizo en el momento porque toca 1.159 asientos contables ya emitidos, con
+> su folio correlativo: es una corrección de datos contables, no un ajuste
+> técnico, y va aprobada y aparte.
 
 **Sobre la bandera de módulo por usuario:** `accounting.routes.js` importa
 `requireModulo` sin usarlo, pero eso **no** es un agujero: el candado está puesto

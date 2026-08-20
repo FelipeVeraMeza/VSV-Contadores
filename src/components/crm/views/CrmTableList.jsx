@@ -201,6 +201,51 @@ const CrmTableList = ({
                 title: vence ? `Vence el ${vence.toLocaleDateString('es-CL')}` : 'Factura emitida, pendiente de pago' };
     };
 
+    // ========================================================================
+    // Los datos que se muestran de un cliente, en un solo lugar.
+    //
+    // Existen DOS vistas de la misma lista: la tabla (escritorio) y las
+    // tarjetas (teléfono). Antes esto vivía dentro del `.map()` de la tabla;
+    // al agregar las tarjetas habría quedado escrito dos veces, y dos copias
+    // de la misma regla se separan a la primera corrección que se haga en una
+    // sola de ellas. Se calcula una vez y lo usan las dos.
+    // ========================================================================
+    const derivar = (client) => {
+        const razonSocial = client.razon_social || client.razonSocial || 'Sin Nombre';
+        const rut = client.rut_encrypted || client.rut || '';
+        const completitud = getCompletitud(client);
+        const faltantes = getFaltantes(client);
+        const tipoCliente = client.tipo_cliente || client.type || 'Empresa';
+        const plan = client.plan || client.plan_nombre || 'FREE';
+        const importante = client.nota_urgente || client.importante || '';
+
+        // Prioriza WhatsApp igual que la ficha (consistencia entre tabla y drawer)
+        const wsRaw = client.whatsapp || '';
+        const telRaw = client.telefono_corporativo || client.telefono || '';
+        const whatsapp = wsRaw.length > 5 ? wsRaw : (telRaw.length > 5 ? telRaw : '');
+        const correo = client.email_corporativo || client.correo || '';
+
+        const estadoFormulario = String(client.estado_f29 || client.estadoFormulario || 'PENDIENTE').trim().toUpperCase();
+        const neto = Number(client.honorarioNeto ?? client.honorario_neto ?? 0);
+
+        const isAlDiaF29 = estadoFormulario === 'DECLARADO' || estadoFormulario === 'NO DECLARAR';
+        const tieneImportante = importante && importante !== 'SIN_DATO';
+        const moroso = Number(client.deudaVencida) > 0 || Boolean(client.cobroVencido);
+
+        return {
+            razonSocial, rut, completitud, faltantes, tipoCliente, plan, importante,
+            whatsapp, correo, estadoFormulario, neto, isAlDiaF29, tieneImportante, moroso,
+            pSt: cobranzaStyle(client),   // deuda real, no el campo estático
+            fSt: f29Style(estadoFormulario),
+            cSt: cobroStyle(client),
+            // Semáforo lateral: rojo si debe o hay alerta, ámbar si F29 no al día, verde si todo ok
+            accent: (tieneImportante || moroso) ? 'bg-red-500' : (!isAlDiaF29 ? 'bg-amber-500' : 'bg-emerald-500'),
+            tituloFicha: getFaltantes(client).length
+                ? `Ficha ${completitud}% completa.\nFalta por registrar:\n· ${getFaltantes(client).join('\n· ')}`
+                : 'Ficha completa: no falta ningún dato',
+        };
+    };
+
     return (
         <div className="flex flex-col gap-3 lg:gap-4 h-full min-h-0 w-full">
 
@@ -285,8 +330,11 @@ const CrmTableList = ({
                     </button>
                 </div>
 
-                <div className="flex flex-1 gap-2 bg-white p-2 rounded-xl border border-[#efe8dd]">
-                    <div className="relative flex-1">
+                {/* `flex-wrap`: los tres controles no caben en una fila de 390px.
+                    Sin envolver, el último («Todos los Planes») quedaba cortado
+                    contra el borde derecho, a medio leer y sin poder abrirlo. */}
+                <div className="flex flex-wrap flex-1 gap-2 bg-white p-2 rounded-xl border border-[#efe8dd]">
+                    <div className="relative flex-1 min-w-[160px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                         <input
                             type="text"
@@ -297,13 +345,13 @@ const CrmTableList = ({
                             className="w-full bg-slate-50 border border-[#e5ddd0] rounded-lg pl-10 pr-4 py-2 text-xs text-slate-900 outline-none focus:border-[#199b4d] transition-colors placeholder:text-slate-400"
                         />
                     </div>
-                    <div className="relative shrink-0">
+                    <div className="relative shrink-0 max-w-full">
                         <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                         <select
                             value={typeFilter}
                             onChange={(e) => setTypeFilter(e.target.value)}
                             aria-label="Filtrar por tipo de cliente"
-                            className="h-full bg-slate-50 border border-[#e5ddd0] rounded-lg pl-9 pr-8 py-2 text-xs text-slate-900 outline-none focus:border-[#199b4d] appearance-none cursor-pointer"
+                            className="h-full bg-slate-50 border border-[#e5ddd0] rounded-lg pl-9 pr-8 py-2 text-xs text-slate-900 outline-none focus:border-[#199b4d] appearance-none cursor-pointer max-w-full"
                         >
                             <option value="Todos">Todos los Tipos</option>
                             <option value="Empresa">Empresas</option>
@@ -311,13 +359,13 @@ const CrmTableList = ({
                         </select>
                         <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={14} />
                     </div>
-                    <div className="relative shrink-0">
+                    <div className="relative shrink-0 max-w-full">
                         <Layers className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                         <select
                             value={planFilter}
                             onChange={(e) => setPlanFilter(e.target.value)}
                             aria-label="Filtrar por plan"
-                            className="h-full bg-slate-50 border border-[#e5ddd0] rounded-lg pl-9 pr-8 py-2 text-xs text-slate-900 outline-none focus:border-[#199b4d] appearance-none cursor-pointer"
+                            className="h-full bg-slate-50 border border-[#e5ddd0] rounded-lg pl-9 pr-8 py-2 text-xs text-slate-900 outline-none focus:border-[#199b4d] appearance-none cursor-pointer max-w-full"
                         >
                             <option value="Todos">Todos los Planes</option>
                             {planes.map(p => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
@@ -329,14 +377,14 @@ const CrmTableList = ({
                         usa: en la práctica no había forma de mirar la lista y ver de
                         quién es cada cliente. */}
                     {esAdminMaster && creadores.length > 1 && (
-                      <div className="relative shrink-0">
+                      <div className="relative shrink-0 max-w-full">
                           <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                           <select
                               value={creadorFilter}
                               onChange={(e) => setCreadorFilter(e.target.value)}
                               aria-label="Filtrar por quién lleva el cliente"
                               title="Filtrar por quién lleva el cliente"
-                              className="h-full bg-slate-50 border border-[#e5ddd0] rounded-lg pl-9 pr-8 py-2 text-xs text-slate-900 outline-none focus:border-purple-500 appearance-none cursor-pointer"
+                              className="h-full bg-slate-50 border border-[#e5ddd0] rounded-lg pl-9 pr-8 py-2 text-xs text-slate-900 outline-none focus:border-purple-500 appearance-none cursor-pointer max-w-full"
                           >
                               <option value="Todos">Todos los responsables</option>
                               {creadores.map(nombre => <option key={nombre} value={nombre}>{nombre}</option>)}
@@ -397,8 +445,21 @@ const CrmTableList = ({
                 </div>
             )}
 
-            {/* TABLA DE CLIENTES */}
-            <div className="flex-1 overflow-hidden rounded-2xl border border-[#efe8dd] bg-white shadow-sm flex flex-col">
+            {/* ================================================================
+                LISTA DE CLIENTES · dos vistas de los MISMOS datos
+                ----------------------------------------------------------------
+                La tabla mide 680px como mínimo. En un teléfono de 390px eso
+                obligaba a arrastrar de lado para leer cada cliente, y como el
+                contenedor lleva `scrollbar-hide` ni siquiera se veía que se
+                podía desplazar: la lista parecía rota, con dos columnas
+                separadas por un vacío.
+                Desde `lg` va la tabla; más abajo, una tarjeta por cliente.
+                Las dos leen de `derivar()`, así que no pueden decir cosas
+                distintas.
+                ================================================================ */}
+
+            {/* TABLA — desde 1024px */}
+            <div className="hidden lg:flex flex-1 overflow-hidden rounded-2xl border border-[#efe8dd] bg-white shadow-sm flex-col">
               <div className="overflow-auto flex-1 scrollbar-hide">
                 <table className="w-full min-w-[680px] text-left border-collapse">
                   <thead className="bg-slate-50 sticky top-0 z-10">
@@ -426,37 +487,11 @@ const CrmTableList = ({
                   </thead>
                   <tbody>
                     {sortedClients.map((client) => {
-                      const razonSocial = client.razon_social || client.razonSocial || 'Sin Nombre';
-                      const rut = client.rut_encrypted || client.rut || '';
-                      const completitud = getCompletitud(client);
-                      const faltantes = getFaltantes(client);
-                      const tipoCliente = client.tipo_cliente || client.type || 'Empresa';
-
-                      const plan = client.plan || client.plan_nombre || 'FREE';
-
-                      const importante = client.nota_urgente || client.importante || '';
-
-                      // Prioriza WhatsApp igual que la ficha (consistencia entre tabla y drawer)
-                      const wsRaw = client.whatsapp || '';
-                      const telRaw = client.telefono_corporativo || client.telefono || '';
-                      const whatsapp = wsRaw.length > 5 ? wsRaw : (telRaw.length > 5 ? telRaw : '');
-
-                      const correo = client.email_corporativo || client.correo || '';
-
-                      const estadoFormulario = String(client.estado_f29 || client.estadoFormulario || 'PENDIENTE').trim().toUpperCase();
-                      const neto = Number(client.honorarioNeto ?? client.honorario_neto ?? 0);
-
-                      const isAlDiaF29 = estadoFormulario === 'DECLARADO' || estadoFormulario === 'NO DECLARAR';
-                      const tieneImportante = importante && importante !== 'SIN_DATO';
-                      const pSt = cobranzaStyle(client);          // deuda real, no el campo estático
-                      const moroso = Number(client.deudaVencida) > 0 || Boolean(client.cobroVencido);
-                      const fSt = f29Style(estadoFormulario);
-                      const cSt = cobroStyle(client);
-
-                      // Semáforo lateral: rojo si debe o hay alerta, ámbar si F29 no al día, verde si todo ok
-                      const accent = (tieneImportante || moroso)
-                        ? 'bg-red-500'
-                        : (!isAlDiaF29 ? 'bg-amber-500' : 'bg-emerald-500');
+                      const {
+                        razonSocial, rut, completitud, tipoCliente, plan, importante,
+                        whatsapp, correo, estadoFormulario, neto,
+                        tieneImportante, pSt, fSt, cSt, accent, tituloFicha,
+                      } = derivar(client);
 
                       return (
                         <tr
@@ -478,10 +513,7 @@ const CrmTableList = ({
                               <div className="flex flex-col min-w-0">
                                  <span className="font-bold text-slate-900 text-xs uppercase tracking-tight truncate max-w-[220px]" title={razonSocial}>{razonSocial}</span>
                                  <span className="text-[10px] text-slate-500 font-mono tracking-wider">{rut}</span>
-                                 <div className="flex items-center gap-1.5 mt-1"
-                                      title={faltantes.length
-                                        ? `Ficha ${completitud}% completa.\nFalta por registrar:\n· ${faltantes.join('\n· ')}`
-                                        : 'Ficha completa: no falta ningún dato'}>
+                                 <div className="flex items-center gap-1.5 mt-1" title={tituloFicha}>
                                     <div className="h-1 w-16 bg-slate-200 rounded-full overflow-hidden">
                                        <div
                                           className={`h-full rounded-full ${completitud >= 80 ? 'bg-emerald-500' : completitud >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
@@ -592,6 +624,128 @@ const CrmTableList = ({
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            {/* TARJETAS — hasta 1024px (teléfono y tablet) */}
+            <div className="lg:hidden flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 pb-2">
+              {sortedClients.map((client) => {
+                const {
+                  razonSocial, rut, completitud, tipoCliente, plan, importante,
+                  whatsapp, correo, estadoFormulario, neto,
+                  tieneImportante, pSt, fSt, cSt, accent, tituloFicha,
+                } = derivar(client);
+                const elegido = selectedClientId === client.id || selectedIds.has(client.id);
+
+                return (
+                  <div
+                    key={client.id}
+                    onClick={() => onClientSelect(client)}
+                    className={`relative flex gap-3 rounded-2xl border bg-white p-3 pl-4 shadow-sm transition-colors ${
+                      elegido ? 'border-emerald-300 bg-emerald-50/60' : 'border-[#efe8dd]'}`}
+                  >
+                    {/* Semáforo: el mismo criterio que la columna izquierda de la tabla */}
+                    <span className={`absolute left-0 top-3 bottom-3 w-1 rounded-full ${accent}`} />
+
+                    {selectMode && (
+                      <input type="checkbox" checked={selectedIds.has(client.id)}
+                        onChange={(e) => toggleRow(client.id, e)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-4 h-4 mt-1 accent-[#199b4d] shrink-0" />
+                    )}
+
+                    <div className="flex-1 min-w-0 flex flex-col gap-2">
+                      {/* Nombre, RUT y monto */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-50 to-green-50 border border-[#efe8dd] flex items-center justify-center text-[#199b4d] shrink-0">
+                            {tipoCliente === 'Empresa' ? <Building2 size={15} /> : <User size={15} />}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 text-xs uppercase tracking-tight truncate" title={razonSocial}>{razonSocial}</p>
+                            <p className="text-[10px] text-slate-500 font-mono tracking-wider truncate">{rut}</p>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-slate-400 text-[8px] font-black uppercase tracking-widest">Neto</p>
+                          <p className={`font-mono font-bold text-sm ${neto > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+                            ${(isNaN(neto) ? 0 : neto).toLocaleString('es-CL')}
+                          </p>
+                        </div>
+                      </div>
+
+                      {tieneImportante && (
+                        <span className="flex items-center gap-1 text-[9px] font-black text-red-600 bg-red-50 px-2 py-1 rounded-md border border-red-200 uppercase">
+                          <AlertTriangle size={10} className="shrink-0" />
+                          <span className="truncate">{importante}</span>
+                        </span>
+                      )}
+
+                      {/* Plan y estados, todos juntos: en una tarjeta no hay columnas */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`inline-block px-2 py-0.5 rounded-md text-[9px] font-black uppercase border ${getPlanColor(plan)}`}>{plan}</span>
+                        <span className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${pSt.c}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${pSt.dot}`} /> {pSt.label}
+                        </span>
+                        <span className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${cSt.c}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${cSt.dot}`} /> {cSt.label}
+                        </span>
+                        <span className={`flex items-center gap-1.5 text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${fSt.c}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${fSt.dot}`} /> F29 {estadoFormulario}
+                        </span>
+                      </div>
+
+                      {/* Contacto: en teléfono estos dos son para TOCAR, no para leer */}
+                      {(whatsapp && whatsapp !== 'SIN_DATO' && whatsapp !== 'Sin Registro') || (correo && correo !== 'SIN_DATO') ? (
+                        <div className="flex items-center gap-3 flex-wrap">
+                          {whatsapp && whatsapp !== 'SIN_DATO' && whatsapp !== 'Sin Registro' && (
+                            <a href={`https://wa.me/${whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer"
+                               onClick={(e) => e.stopPropagation()}
+                               className="flex items-center gap-1.5 text-[10px] font-bold text-[#199b4d]">
+                              <MessageSquare size={12} className="shrink-0" /> {whatsapp}
+                            </a>
+                          )}
+                          {correo && correo !== 'SIN_DATO' && (
+                            <a href={`mailto:${correo}`} onClick={(e) => e.stopPropagation()}
+                               className="flex items-center gap-1 min-w-0 text-[10px] text-slate-500">
+                              <Mail size={11} className="shrink-0 text-slate-400" />
+                              <span className="truncate">{correo}</span>
+                            </a>
+                          )}
+                        </div>
+                      ) : null}
+
+                      {/* Completitud de la ficha */}
+                      <div className="flex items-center gap-1.5" title={tituloFicha}>
+                        <div className="h-1 flex-1 max-w-[120px] bg-slate-200 rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${completitud >= 80 ? 'bg-emerald-500' : completitud >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
+                               style={{ width: `${completitud}%` }} />
+                        </div>
+                        <span className="text-[8px] font-black text-slate-400 tabular-nums">{completitud}% ficha</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {sortedClients.length === 0 && (
+                <div className="flex flex-col items-center gap-3 p-10 text-center rounded-2xl border border-[#efe8dd] bg-white">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-[#efe8dd] flex items-center justify-center text-slate-400">
+                    <Users size={22} />
+                  </div>
+                  <p className="text-slate-500 text-sm">
+                    {searchTerm || statusFilter !== 'Todos' || typeFilter !== 'Todos' || planFilter !== 'Todos'
+                      ? 'Ningún cliente coincide con los filtros.'
+                      : vista === 'usuarios' ? 'Aún no hay empresas creadas por tus clientes.'
+                      : vista === 'baja' ? 'No tienes clientes dados de baja.'
+                      : 'Aún no tienes clientes activos.'}
+                  </p>
+                  {onCrear && vista === 'activos' && !searchTerm && (
+                    <button onClick={onCrear} className="bg-[#199b4d] hover:bg-[#147a3d] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                      + Crear el primer cliente
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
         </div>
     );

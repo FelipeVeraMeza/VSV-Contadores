@@ -369,7 +369,12 @@ const CRM = () => {
               <h1 className="text-xl md:text-2xl font-black text-[#1a1c1e] uppercase tracking-tighter">{TITULOS[activeTab] || 'CRM'}</h1>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 z-50">
+          {/* Sin `z-50`. Lo tenía y no servía para nada —no hay nada debajo que
+              tapar— pero empataba con el z-index del menú lateral, y al empatar
+              gana el que va después en el DOM: el contenido. Resultado, en
+              teléfono los botones «Importar» y «Crear cliente» se dibujaban
+              ENCIMA del menú abierto. */}
+          <div className="flex flex-wrap items-center gap-3">
               {activeTab === 'list' && (
                 <button
                     onClick={() => setShowImport(true)}

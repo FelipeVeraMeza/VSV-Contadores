@@ -558,27 +558,131 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   // ── Bot de contabilización (lote) ─────────────────────────────
   const [isContabilizando, setIsContabilizando] = useState(false);
   const [autoContabilizar, setAutoContabilizar] = useState(false);
+  // Cuántos van y de cuántos. Antes el botón solo decía «CONTABILIZANDO...»:
+  // con 100 documentos son varios minutos sin saber si avanza o se colgó.
+  const [progreso, setProgreso] = useState(null);   // { hechos, total }
+  // Los motivos de los que fallaron. Antes se contaban (`3 con error`) y se
+  // perdía el porqué, así que no había forma de arreglarlos sin ir uno por uno.
+  const erroresRef = React.useRef([]);
 
-  const contabilizarLote = async (docs, tipoMov) => {
-    let ok = 0, fail = 0, sinReferencia = 0;
-    for (const doc of docs) {
-      try {
-        // Las notas cuyo documento afectado no se puede determinar sin
-        // ambigüedad quedan fuera del lote: las asigna la persona en el modal.
-        let referencia = null;
-        if (esNota(doc.tipo_dte)) {
-          referencia = await sugerirReferencia(doc, tipoMov);
-          if (!referencia) { sinReferencia++; continue; }
-        }
-        const res = await fetchWithAuth('/accounting/comprobantes', user.sessionId, {
-          method: 'POST',
-          body: construirPayload(doc, tipoMov, calcLineasDefault(doc, tipoMov), referencia),
-        });
-        if (res.ok) ok++; else fail++;
-      } catch { fail++; }
+  // De a 4 en paralelo, no de a uno.
+  //
+  // El bucle anterior era `await` documento por documento: cada uno esperaba a
+  // que terminara el anterior, y con 100 documentos eso son 100 viajes en fila.
+  // 4 a la vez lo acorta a la cuarta parte sin castigar al servidor ni perder
+  // el orden del informe final. Más de 4 no ayuda: el cuello es la base.
+  const EN_PARALELO = 4;
+
+  const contabilizarUno = async (doc, tipoMov) => {
+    try {
+      // Las notas cuyo documento afectado no se puede determinar sin
+      // ambigüedad quedan fuera del lote: las asigna la persona en el modal.
+      let referencia = null;
+      if (esNota(doc.tipo_dte)) {
+        referencia = await sugerirReferencia(doc, tipoMov);
+        if (!referencia) return 'sinReferencia';
+      }
+      const res = await fetchWithAuth('/accounting/comprobantes', user.sessionId, {
+        method: 'POST',
+        body: construirPayload(doc, tipoMov, calcLineasDefault(doc, tipoMov), referencia),
+      });
+      if (res.ok) return 'ok';
+      // Se guarda el motivo que devuelve el servidor, no solo que falló.
+      const detalle = await res.json().catch(() => ({}));
+      erroresRef.current.push(`Folio ${doc.folio}: ${detalle?.message || detalle?.error || `HTTP ${res.status}`}`);
+      return 'fail';
+    } catch (e) {
+      erroresRef.current.push(`Folio ${doc.folio}: ${e.message}`);
+      return 'fail';
     }
-    return { ok, fail, sinReferencia };
   };
+
+  const contabilizarLote = async (docs, tipoMov, avance) => {
+    const cuenta = { ok: 0, fail: 0, sinReferencia: 0 };
+    for (let i = 0; i < docs.length; i += EN_PARALELO) {
+      const tanda = docs.slice(i, i + EN_PARALELO);
+      const salidas = await Promise.all(tanda.map(d => contabilizarUno(d, tipoMov)));
+      salidas.forEach(s => { cuenta[s]++; });
+      avance?.(tanda.length);
+    }
+    return cuenta;
+  };
+
+  // ── Panel de contabilización ──────────────────────────────────
+  // Antes el botón decía «CONTABILIZAR TODO» y disparaba de inmediato sobre el
+  // período que estuviera aplicado en la pantalla, con un `confirm()` del
+  // navegador como única barrera. «Todo» no decía todo de QUÉ, y para
+  // contabilizar otro mes había que salir a cambiar el filtro de arriba y
+  // volver. Ahora el botón dice «Contabilizar» y abre este panel, donde se
+  // elige el período y se ve cuántos documentos entran antes de confirmar.
+  const [panelContab, setPanelContab] = useState(false);
+  const [alcance, setAlcance] = useState('periodo');      // 'periodo' | 'mes' | 'todo'
+  const [mesContab, setMesContab] = useState(mes);
+  const [anioContab, setAnioContab] = useState(anio);
+
+  // Los documentos que entrarían según lo elegido. Se calcula sobre los datos
+  // en crudo, no sobre la lista ya filtrada en pantalla: el panel puede apuntar
+  // a un mes distinto del que se está viendo.
+  const docsDelAlcance = useMemo(() => {
+    const enMes = (d) => String(d.fecha_emision || '').startsWith(`${anioContab}-${mesContab}`);
+    const enPantalla = (d) => {
+      if (!d.fecha_emision) return false;
+      if (periodoAplicado.desde && periodoAplicado.hasta) {
+        const f = String(d.fecha_emision).slice(0, 10);
+        return f >= periodoAplicado.desde && f <= periodoAplicado.hasta;
+      }
+      return String(d.fecha_emision).startsWith(periodo);
+    };
+    const filtro = alcance === 'todo' ? () => true : alcance === 'mes' ? enMes : enPantalla;
+    return {
+      ventas: rawVentas.filter(d => filtro(d) && !comprobanteDe(d, 'ventas')),
+      compras: rawCompras.filter(d => filtro(d) && !comprobanteDe(d, 'compras')),
+    };
+  }, [alcance, mesContab, anioContab, rawVentas, rawCompras, comprobanteDe, periodoAplicado, periodo]);
+
+  const totalAlcance = docsDelAlcance.ventas.length + docsDelAlcance.compras.length;
+
+  // El rango de fechas REAL de lo que se va a contabilizar, en texto.
+  //
+  // Decir «AGOSTO / 2026» no basta: no dice desde qué día ni hasta cuál, y con
+  // «el período en pantalla» —que puede ser un rango libre— ni siquiera se
+  // sabe qué mes es. Quien va a contabilizar 87 documentos necesita ver la
+  // fecha de inicio y la de término antes de apretar.
+  const fmtDia = (iso) => {
+    if (!iso) return '—';
+    const [a, m, d] = String(iso).slice(0, 10).split('-');
+    return `${d}-${m}-${a}`;
+  };
+  const ultimoDiaDe = (anio, mes) => new Date(Number(anio), Number(mes), 0).getDate();
+
+  const rangoAlcance = useMemo(() => {
+    if (alcance === 'mes') {
+      const fin = ultimoDiaDe(anioContab, mesContab);
+      return {
+        desde: `${anioContab}-${mesContab}-01`,
+        hasta: `${anioContab}-${mesContab}-${String(fin).padStart(2, '0')}`,
+      };
+    }
+    if (alcance === 'periodo') {
+      if (periodoAplicado.desde && periodoAplicado.hasta) {
+        return { desde: periodoAplicado.desde, hasta: periodoAplicado.hasta };
+      }
+      const fin = ultimoDiaDe(periodoAplicado.anio, periodoAplicado.mes);
+      return {
+        desde: `${periodoAplicado.anio}-${periodoAplicado.mes}-01`,
+        hasta: `${periodoAplicado.anio}-${periodoAplicado.mes}-${String(fin).padStart(2, '0')}`,
+      };
+    }
+    // 'todo': no hay un rango elegido, así que se muestra el de los documentos
+    // que realmente entran. Si no hay ninguno, no hay rango que mostrar.
+    const fechas = [...docsDelAlcance.ventas, ...docsDelAlcance.compras]
+      .map(d => String(d.fecha_emision || '').slice(0, 10))
+      .filter(Boolean)
+      .sort();
+    return fechas.length
+      ? { desde: fechas[0], hasta: fechas[fechas.length - 1], deducido: true }
+      : { desde: null, hasta: null };
+  }, [alcance, mesContab, anioContab, periodoAplicado, docsDelAlcance]);
 
   // Sin parámetro `auto`: la confirmación es SIEMPRE obligatoria.
   //
@@ -587,18 +691,25 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   // parámetro en vez de solo dejar de pasarlo, para que nadie pueda reactivar el
   // atajo sin darse cuenta.
   const handleContabilizarTodo = async () => {
-    const ventasPend  = ventas.filter(d => !comprobanteDe(d, 'ventas'));
-    const comprasPend = compras.filter(d => !comprobanteDe(d, 'compras'));
+    const ventasPend  = docsDelAlcance.ventas;
+    const comprasPend = docsDelAlcance.compras;
     const total = ventasPend.length + comprasPend.length;
     if (total === 0) {
-      toast({ title: 'Todo contabilizado', description: 'No hay documentos pendientes en el período.' });
+      toast({ title: 'Todo contabilizado', description: 'No hay documentos pendientes en lo seleccionado.' });
       return;
     }
-    if (!confirm(`¿Contabilizar ${total} documento(s) pendiente(s) del período con su asiento sugerido?`)) return;
+    // El `confirm()` del navegador se reemplazó por el panel: ahí se ve el
+    // período elegido y el número de documentos ANTES de apretar. Confirmar a
+    // ciegas «¿contabilizar 87?» no es una confirmación, es un trámite.
+    setPanelContab(false);
     setIsContabilizando(true);
+    erroresRef.current = [];
+    let hechos = 0;
+    setProgreso({ hechos: 0, total });
+    const avanzar = (n) => { hechos += n; setProgreso({ hechos, total }); };
     try {
-      const r1 = await contabilizarLote(ventasPend, 'ventas');
-      const r2 = await contabilizarLote(comprasPend, 'compras');
+      const r1 = await contabilizarLote(ventasPend, 'ventas', avanzar);
+      const r2 = await contabilizarLote(comprasPend, 'compras', avanzar);
       const ok = r1.ok + r2.ok;
       const fail = r1.fail + r2.fail;
       const sinRef = r1.sinReferencia + r2.sinReferencia;
@@ -606,15 +717,28 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
       if (fail) notas.push(`${fail} con error`);
       if (sinRef) notas.push(`${sinRef} nota(s) esperan que indiques el documento afectado`);
       toast({
-        title: `✅ ${ok} contabilizado${ok !== 1 ? 's' : ''}`,
+        title: `✅ ${ok} contabilizado${ok !== 1 ? 's' : ''} de ${total}`,
         description: notas.length
           ? `${notas.join(' · ')}.`
           : 'Pendientes del período listos.',
       });
+      // Los motivos, aparte y con nombre y apellido. Un aviso que dice
+      // «3 con error» obliga a revisar 100 documentos a mano para dar con los 3.
+      if (erroresRef.current.length) {
+        const muestra = erroresRef.current.slice(0, 4).join('\n');
+        const resto = erroresRef.current.length - 4;
+        toast({
+          variant: 'destructive',
+          title: `No se pudieron contabilizar ${erroresRef.current.length}`,
+          description: resto > 0 ? `${muestra}\n…y ${resto} más.` : muestra,
+        });
+        console.warn('Documentos que no se contabilizaron:', erroresRef.current);
+      }
       cargarDatos();
       queryClient.invalidateQueries(['comprobantes', targetId]);
     } finally {
       setIsContabilizando(false);
+      setProgreso(null);
     }
   };
 
@@ -764,10 +888,12 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
             <Plus className="h-4 w-4 mr-2" />
             Nueva {activeTab === 'ventas' ? 'Venta' : activeTab === 'compras' ? 'Compra' : 'Honorario'}
           </Button>
-          <Button onClick={() => handleContabilizarTodo()} disabled={isContabilizando || !hayDatos}
+          <Button onClick={() => setPanelContab(v => !v)} disabled={isContabilizando || !hayDatos}
             className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 disabled:opacity-50 text-slate-900 font-black uppercase text-[10px] tracking-widest">
             {isContabilizando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bot className="h-4 w-4 mr-2" />}
-            {isContabilizando ? 'CONTABILIZANDO...' : 'CONTABILIZAR TODO'}
+            {isContabilizando
+              ? (progreso ? `CONTABILIZANDO ${progreso.hechos}/${progreso.total}` : 'CONTABILIZANDO...')
+              : 'CONTABILIZAR'}
           </Button>
           <Button onClick={() => setIsLibroModalOpen(true)} disabled={!hayDatos}
             className={`font-black uppercase text-[10px] tracking-widest transition-all ${
@@ -779,6 +905,130 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
           </Button>
         </div>
       </div>
+
+      {/* ¿QUÉ SE VA A CONTABILIZAR? · pantalla flotante
+          Antes esto era un `confirm()` del navegador que solo decía un número.
+          Contabilizar es irreversible en la práctica —deja asientos con folio
+          correlativo— así que la pantalla tiene que responder tres cosas ANTES
+          de apretar: desde qué día hasta qué día, cuántos documentos, y de qué
+          tipo. Un «AGOSTO / 2026» no responde la primera. */}
+      {panelContab && !isContabilizando && (
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+             onClick={() => setPanelContab(false)}>
+          <div className="w-full max-w-lg bg-white border border-[#efe8dd] rounded-2xl shadow-2xl flex flex-col max-h-[92vh]"
+               onClick={(e) => e.stopPropagation()}>
+
+            {/* Encabezado */}
+            <div className="p-5 border-b border-[#efe8dd] flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 flex items-center justify-center text-amber-600 shrink-0">
+                  <Bot size={20} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight">Contabilizar</h2>
+                  <p className="text-[10px] text-slate-400">Crea el asiento sugerido de cada documento pendiente</p>
+                </div>
+              </div>
+              <button onClick={() => setPanelContab(false)} aria-label="Cerrar"
+                      className="p-2 rounded-xl bg-slate-50 text-slate-500 hover:text-red-500 shrink-0">
+                <span className="text-sm">✕</span>
+              </button>
+            </div>
+
+            {/* Cuerpo */}
+            <div className="p-5 space-y-4 overflow-y-auto custom-scrollbar">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">1 · Qué período</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    ['periodo', 'El de la pantalla', 'Lo que estás viendo ahora'],
+                    ['mes',     'Un mes puntual',    'Eliges cuál abajo'],
+                    ['todo',    'Todo lo pendiente', 'Sin importar la fecha'],
+                  ].map(([id, titulo, ayuda]) => (
+                    <button key={id} onClick={() => setAlcance(id)}
+                      className={`text-left px-3 py-2.5 rounded-xl border transition-colors ${
+                        alcance === id
+                          ? 'bg-amber-50 border-amber-400 ring-1 ring-amber-300'
+                          : 'bg-white border-[#efe8dd] hover:border-amber-200'}`}>
+                      <span className={`block text-[11px] font-black uppercase tracking-wider ${alcance === id ? 'text-amber-700' : 'text-slate-600'}`}>{titulo}</span>
+                      <span className="block text-[9px] text-slate-400 leading-tight mt-0.5">{ayuda}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {alcance === 'mes' && (
+                <div className="flex items-center gap-2 bg-slate-50 border border-[#efe8dd] rounded-xl px-3 py-2">
+                  <CalendarDays className="h-4 w-4 text-amber-600 shrink-0" />
+                  <select value={mesContab} onChange={e => setMesContab(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer">
+                    {MESES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                  </select>
+                  <span className="text-slate-300">/</span>
+                  <select value={anioContab} onChange={e => setAnioContab(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none cursor-pointer">
+                    {ANIOS.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* EL RANGO, en letra grande: es el dato que faltaba */}
+              <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
+                <p className="text-[9px] font-black uppercase tracking-widest text-amber-700/70 mb-1">2 · Desde cuándo hasta cuándo</p>
+                {rangoAlcance.desde ? (
+                  <p className="text-sm font-black text-slate-900 tabular-nums">
+                    {fmtDia(rangoAlcance.desde)} <span className="text-amber-600 font-bold px-1">→</span> {fmtDia(rangoAlcance.hasta)}
+                  </p>
+                ) : (
+                  <p className="text-sm font-bold text-slate-400">No hay documentos pendientes</p>
+                )}
+                {rangoAlcance.deducido && (
+                  <p className="text-[9px] text-slate-500 mt-1 leading-tight">
+                    Es la fecha del documento pendiente más antiguo y la del más nuevo.
+                  </p>
+                )}
+              </div>
+
+              {/* Qué entra, desglosado */}
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">3 · Qué se va a contabilizar</p>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-xl border border-[#efe8dd] bg-white px-2 py-3">
+                    <p className="text-xl font-black text-emerald-700 tabular-nums">{docsDelAlcance.ventas.length}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Ventas</p>
+                  </div>
+                  <div className="rounded-xl border border-[#efe8dd] bg-white px-2 py-3">
+                    <p className="text-xl font-black text-red-600 tabular-nums">{docsDelAlcance.compras.length}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Compras</p>
+                  </div>
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 px-2 py-3">
+                    <p className="text-xl font-black text-slate-900 tabular-nums">{totalAlcance}</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-700/70">En total</p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
+                  Solo entran los que están <b>pendientes</b>: lo ya contabilizado no se toca ni se duplica.
+                  Las notas de crédito cuyo documento afectado no se pueda deducir quedan fuera y hay que
+                  asignarlas a mano.
+                </p>
+              </div>
+            </div>
+
+            {/* Pie */}
+            <div className="p-4 border-t border-[#efe8dd] flex flex-wrap items-center justify-end gap-2 bg-white">
+              <Button variant="ghost" onClick={() => setPanelContab(false)}
+                className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-50 hover:bg-slate-100 h-10 rounded-xl px-4 whitespace-nowrap shrink-0">
+                Cancelar
+              </Button>
+              <Button onClick={handleContabilizarTodo} disabled={totalAlcance === 0}
+                className="bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white text-[10px] font-black uppercase tracking-widest h-10 rounded-xl px-4 whitespace-nowrap shrink-0 flex-1 sm:flex-none">
+                <Bot className="h-4 w-4 mr-2" />
+                {totalAlcance === 0 ? 'Nada pendiente' : `Contabilizar ${totalAlcance}`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SUB-TABS (se ocultan cuando la navegación viene del menú de Contabilidad) */}
       {!ocultarTabs && (

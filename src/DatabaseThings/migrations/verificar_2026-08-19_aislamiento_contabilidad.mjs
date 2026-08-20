@@ -52,10 +52,30 @@ const cargarActores = async () => {
         veSoloEmpresasAsignadas: u.ve_solo_empresas_asignadas === true,
     });
 
-    // Quien empieza desde cero: la bandera puesta y ninguna empresa asignada.
-    const desdeCero = usuarios.find(u => u.ve_solo_empresas_asignadas === true);
     // Un administrador de planta, para contrastar que sí ve lo suyo.
     const dePlanta = usuarios.find(u => !u.ve_solo_empresas_asignadas && u.rol === 'Administrador');
+
+    // Quien empieza desde cero: la bandera puesta y ninguna empresa asignada.
+    //
+    // Si HOY no hay ningún usuario así —el 20-08-2026 se le quitó la bandera a
+    // Victor, porque es de la oficina y debe ver la cartera completa— igual hay
+    // que probar el recorte: sigue en el código y se le aplica a toda cuenta de
+    // fuera de la organización (el rol `Cliente`). Una prueba que deja de
+    // probar en silencio porque «no hay a quién» es peor que no tenerla: el
+    // resumen sale en verde y nadie se entera de que dejó de mirar.
+    //
+    // Así que se arma una sesión de mentira: la bandera encendida y un
+    // `usuarioId` que no existe, y por lo tanto no tiene ninguna fila en
+    // `audita`. Es exactamente el caso que interesa —recortado y sin empresas
+    // asignadas— y no toca la base.
+    const usuarioReal = usuarios.find(u => u.ve_solo_empresas_asignadas === true);
+    const desdeCero = usuarioReal || (dePlanta && {
+        id: '00000000-0000-0000-0000-0000000000ff',   // no existe: 0 filas en audita
+        nombre: '(simulado: cuenta recortada sin empresas)',
+        rol: 'Administrador',
+        organizacion_id: dePlanta.organizacion_id,
+        ve_solo_empresas_asignadas: true,
+    });
 
     // Una organización que no tenga ninguna empresa: sirve para probar el
     // aislamiento entre organizaciones sin inventar datos.

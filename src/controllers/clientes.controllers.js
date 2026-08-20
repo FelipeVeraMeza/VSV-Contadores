@@ -1321,8 +1321,23 @@ export const crearEmpresaCRM = async (req, res) => {
 
         await client.query('BEGIN');
 
-        // Detección de duplicado por RUT
-        const dup = await client.query('SELECT id, razon_social FROM empresa WHERE rut_hash = $1', [rutHash]);
+        // Detección de duplicado por RUT · SOLO dentro de la organización.
+        //
+        // Antes esta consulta miraba la tabla entera. El sistema es
+        // multi-organización, y que dos oficinas contables atiendan a la misma
+        // empresa es normal —un cliente puede cambiarse de contador o tener
+        // dos—, así que a la segunda oficina se le rechazaba un alta legítima.
+        // Y el mensaje era peor que el bloqueo: decía «Ya existe un cliente con
+        // ese RUT: <razón social>», nombrando una empresa de OTRA organización
+        // que quien lo leía no podía ver. Un dato ajeno filtrado en un error.
+        //
+        // La restricción de la base acompaña este cambio:
+        // 2026-08-20_rut_unico_por_organizacion.sql
+        const dup = await client.query(
+            `SELECT id, razon_social FROM empresa
+              WHERE rut_hash = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`,
+            [rutHash, req.user?.organizacionId || null]
+        );
         if (dup.rows.length > 0) {
             await client.query('ROLLBACK');
             return res.status(409).json({

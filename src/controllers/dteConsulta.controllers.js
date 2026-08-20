@@ -20,8 +20,18 @@ async function asegurarEmpresa(client, rut, nombre, organizacionId) {
     if (!rutLimpio || rutLimpio.length < 3) return null;
 
     const rutHash = generateHash(rutLimpio);
+    // La búsqueda va acotada a la organización.
+    //
+    // Sin el filtro, un documento de la organización B cuyo proveedor ya existía
+    // en la organización A devolvía el id de la empresa de A: la compra o venta
+    // quedaba colgando de una empresa que no es de esa organización. Un cruce
+    // silencioso, y de los difíciles de notar, porque el documento se guarda
+    // bien y solo aparece en el lugar equivocado.
     const { rows: [existe] } = await client.query(
-        `SELECT id FROM empresa WHERE rut_hash = $1 LIMIT 1`, [rutHash]
+        `SELECT id FROM empresa
+          WHERE rut_hash = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid
+          LIMIT 1`,
+        [rutHash, organizacionId || null]
     );
     if (existe) return existe.id;
 

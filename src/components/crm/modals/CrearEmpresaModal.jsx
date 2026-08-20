@@ -651,21 +651,16 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
                     )}
                 </div>
 
-                {/* Footer */}
-                <div className="p-4 border-t border-[#efe8dd] flex items-center gap-3 shrink-0 bg-white">
-                    {paso > 0 ? (
-                        <Button variant="ghost" onClick={() => setPaso(p => p - 1)}
-                            className="uppercase font-black text-[10px] tracking-widest text-slate-500 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 px-4">
-                            <ChevronLeft size={14} /> Atrás
-                        </Button>
-                    ) : (
-                        <Button variant="ghost" onClick={onClose}
-                            className="uppercase font-black text-[10px] tracking-widest text-slate-500 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 px-4">
-                            Cancelar
-                        </Button>
-                    )}
-
-                    <div className="flex-1 text-center">
+                {/* Footer
+                    Tres botones y el monto en una sola fila no caben en 390px:
+                    los botones se comprimían hasta partir sus etiquetas
+                    («CANCELA R», «SIGUIENT E»). Ahora la fila se envuelve, las
+                    etiquetas no se cortan nunca (`whitespace-nowrap`) y el monto
+                    se va a su propia línea arriba en teléfono, que es donde
+                    sobra el espacio. */}
+                <div className="p-3 sm:p-4 border-t border-[#efe8dd] flex flex-wrap items-center gap-2 sm:gap-3 shrink-0 bg-white">
+                    {/* El monto: línea completa en teléfono, al medio en escritorio */}
+                    <div className="order-first sm:order-none w-full sm:w-auto sm:flex-1 text-center">
                         {montoFinal > 0 && (
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest tabular-nums">
                                 {clp(montoFinal)} / mes
@@ -673,9 +668,21 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
                         )}
                     </div>
 
+                    {paso > 0 ? (
+                        <Button variant="ghost" onClick={() => setPaso(p => p - 1)}
+                            className="uppercase font-black text-[10px] tracking-widest text-slate-500 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 px-3 sm:px-4 whitespace-nowrap shrink-0">
+                            <ChevronLeft size={14} /> Atrás
+                        </Button>
+                    ) : (
+                        <Button variant="ghost" onClick={onClose}
+                            className="uppercase font-black text-[10px] tracking-widest text-slate-500 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 px-3 sm:px-4 whitespace-nowrap shrink-0">
+                            Cancelar
+                        </Button>
+                    )}
+
                     {paso < ULTIMO && (
                         <Button variant="ghost" onClick={() => setPaso(p => p + 1)}
-                            className="uppercase font-black text-[10px] tracking-widest text-slate-600 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 px-4">
+                            className="uppercase font-black text-[10px] tracking-widest text-slate-600 h-10 rounded-xl bg-slate-50 hover:bg-slate-100 px-3 sm:px-4 whitespace-nowrap shrink-0">
                             Siguiente <ChevronRight size={14} />
                         </Button>
                     )}
@@ -683,7 +690,7 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
                     <Button
                         onClick={handleSubmit}
                         disabled={!puedeGuardar}
-                        className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white uppercase font-black text-[10px] tracking-widest h-10 rounded-xl flex items-center justify-center gap-2 px-5"
+                        className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white uppercase font-black text-[10px] tracking-widest h-10 rounded-xl flex items-center justify-center gap-2 px-4 sm:px-5 whitespace-nowrap shrink-0 flex-1 sm:flex-none"
                     >
                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Crear Cliente
                     </Button>

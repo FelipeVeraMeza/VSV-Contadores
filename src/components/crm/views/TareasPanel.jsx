@@ -1252,6 +1252,20 @@ const TareasPanel = ({ modo = 'todas' }) => {
                             </button>
                         ))}
                     </div>
+                    {/* PROYECTO · el mismo filtro que la columna de la izquierda.
+                        Esa columna es `hidden md:flex`: en un teléfono no existe,
+                        así que ahí NO había forma de ver solo las tareas de un
+                        proyecto —«solo creación de empresas», por ejemplo—. Este
+                        selector aparece justamente donde la columna no está. */}
+                    <select
+                        value={proyectoSel}
+                        onChange={(e) => elegirProyecto(e.target.value)}
+                        aria-label="Filtrar por proyecto"
+                        className={`md:hidden px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider cursor-pointer max-w-[190px] ${proyectoSel ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-white border-[#efe8dd] text-slate-500'}`}>
+                        <option value="">Todos los proyectos</option>
+                        {proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                    </select>
+
                     {/* En el tablero las columnas ya separan por estado, así que
                         filtrar por estado además no tiene sentido. */}
                     {(vista === 'tablero'
