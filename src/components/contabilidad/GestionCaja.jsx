@@ -592,7 +592,7 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
 
             <div>
               <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">Medio de Pago</p>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {MEDIOS.map(med => {
                   const Icon = med.icon; const active = form.medio_pago === med.id;
                   return (
@@ -634,7 +634,7 @@ const GestionCaja = ({ empresaId, rango, tipo }) => {
                 {medioModal.titulo}
                 {medioModal.ids.length > 1 && <span className="text-slate-400"> · {medioModal.ids.length} movimientos</span>}
               </p>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                 {MEDIOS.map(med => {
                   const Icon = med.icon; const active = medioModal.actual === med.id;
                   return (

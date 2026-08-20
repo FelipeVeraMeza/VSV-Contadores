@@ -311,7 +311,7 @@ const NuevoMovimientoModal = ({ isOpen, setIsOpen, tipo, empresaId, onGuardado }
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1.5 block">Tipo Documento</label>
                 <select value={tipoDoc} onChange={e => setTipoDoc(e.target.value)}

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { empresasDeLaOrganizacion } from '../utils/scope.js';
+import { empresasDeLaOrganizacion, empresaPermitida, empresasVisibles, veSoloAsignadas } from '../utils/scope.js';
 // Nuevas herramientas de Node.js nativas para ejecutar el script
 import { exec } from 'child_process';
 import util from 'util';
@@ -13,11 +13,28 @@ const __dirname = path.dirname(__filename);
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPABASE_KEY);
 
+// =============================================================================
+// EL PORTERO — el mismo criterio que Contabilidad y Remuneraciones
+// -----------------------------------------------------------------------------
+// Estos endpoints tomaban `empresaId` del query y lo usaban tal cual: no
+// comprobaban ni que la empresa fuera de la organización de quien pregunta, ni
+// que la tuviera asignada. Con el id a mano se leía —y se escribía— la cartola
+// bancaria de cualquier empresa. El filtro por organización existía SOLO en la
+// vista global, no al elegir una empresa concreta.
+// =============================================================================
+const puedeVerEmpresa = async (req, empresaId) => {
+    if (!empresaId) return null;                 // vista global: se acota aparte
+    return (await empresaPermitida(req, empresaId)) ? null : 'No tienes acceso a los movimientos de esa empresa.';
+};
+const sinAcceso = (res, motivo) => res.status(403).json({ message: motivo });
+
 // 1. VER BANCOS CONECTADOS
 export const getConnectedBanks = async (req, res) => {
     try {
         const { empresaId } = req.query;
         if (!empresaId) return res.status(200).json([]);
+        const motivo = await puedeVerEmpresa(req, empresaId);
+        if (motivo) return sinAcceso(res, motivo);
 
         const { data } = await supabase
             .from('movimientos_bancarios')
@@ -42,14 +59,21 @@ export const getMovimientosBancarios = async (req, res) => {
         const empresaValida = empresaId && empresaId !== 'undefined' && empresaId !== 'null' && empresaId !== '' && empresaId !== 'ALL';
 
         if (empresaValida) {
-            // Hay empresa seleccionada: filtramos por ella (aplica a admin y cliente)
+            // Hay empresa seleccionada: filtramos por ella (aplica a admin y cliente).
+            // Antes se confiaba en el id recibido; ahora se comprueba primero.
+            const motivo = await puedeVerEmpresa(req, empresaId);
+            if (motivo) return sinAcceso(res, motivo);
             query.eq('empresa_id', empresaId);
         } else if (esAdmin) {
             // El ADMIN sin empresa seleccionada ve la Bóveda "global", pero global
             // significa TODAS SUS empresas, no todas las del sistema: antes esta rama
             // iba sin filtro y le mostraba también los movimientos bancarios de otras
             // organizaciones.
-            const idsDeMiOrganizacion = await empresasDeLaOrganizacion(req);
+            //
+            // Y para quien empieza desde cero, "sus empresas" son las que tenga
+            // asignadas, no las de toda la oficina.
+            const visibles = await empresasVisibles(req);
+            const idsDeMiOrganizacion = visibles ?? await empresasDeLaOrganizacion(req);
             if (idsDeMiOrganizacion.length === 0) {
                 // Organización sin empresas (un tenant nuevo): no hay nada que mostrar.
                 return res.status(200).json([]);
@@ -82,6 +106,13 @@ export const connectBank = async (req, res) => {
         // Limpiamos el ID para aceptar el Modo Global (Admin)
         if (empresaId === 'null' || empresaId === 'undefined' || empresaId === '') {
             empresaId = null;
+        }
+        // Este endpoint ESCRIBE movimientos bancarios. Sin la comprobación, con el
+        // id a mano se podía cargar una cartola en la cuenta de otra empresa.
+        const motivoConn = await puedeVerEmpresa(req, empresaId);
+        if (motivoConn) return sinAcceso(res, motivoConn);
+        if (!empresaId && veSoloAsignadas(req)) {
+            return sinAcceso(res, 'Selecciona una de tus empresas antes de conectar el banco.');
         }
 
         console.log(`\n🤖 [ORQUESTADOR] Preparando ejecución de script para: ${banco || 'BCI'}`);
@@ -213,6 +244,14 @@ export const uploadCartola = async (req, res) => {
 
         if (empresaId === 'null' || empresaId === 'undefined' || empresaId === '') {
             empresaId = null;
+        }
+
+        // Igual que al conectar el banco: esto ESCRIBE movimientos, así que la
+        // empresa se comprueba antes de tocar nada.
+        const motivoCartola = await puedeVerEmpresa(req, empresaId);
+        if (motivoCartola) return sinAcceso(res, motivoCartola);
+        if (!empresaId && veSoloAsignadas(req)) {
+            return sinAcceso(res, 'Selecciona una de tus empresas antes de subir la cartola.');
         }
 
         console.log("\n📥 [BACKEND] === RECIBIENDO PETICIÓN DE EXCEL ===");

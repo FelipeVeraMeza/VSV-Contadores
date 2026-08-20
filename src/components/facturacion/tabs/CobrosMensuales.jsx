@@ -748,7 +748,7 @@ const CobrosMensuales = () => {
                 <button onClick={() => setResultado(null)} className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
               </div>
 
-              <div className="px-6 py-4 grid grid-cols-3 gap-3 flex-shrink-0">
+              <div className="px-6 py-4 grid grid-cols-1 sm:grid-cols-3 gap-3 flex-shrink-0">
                 <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-4 py-3 text-center">
                   <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700">Emitidas</p>
                   <p className="text-2xl font-black text-emerald-600 tabular-nums">{resultado.exitos}</p>

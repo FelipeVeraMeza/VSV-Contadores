@@ -232,14 +232,77 @@
   text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .mobile-padding {
-    @apply px-4 py-2;
+/* ==========================================================================
+   TELÉFONO · red de seguridad
+   --------------------------------------------------------------------------
+   Acá abajo había dos clases (`.mobile-padding` y `.mobile-text`) que NO se
+   usaban en ningún archivo: no hacían nada. Se reemplazan por reglas que sí
+   atacan lo que se rompe de verdad en un teléfono.
+
+   La idea es que esto sea una RED, no la solución: cada pantalla debería
+   comportarse bien por su cuenta. Pero con más de cien componentes, una regla
+   global evita que una sola pantalla olvidada deje toda la aplicación con
+   scroll horizontal, que es el síntoma que más se nota.
+   ========================================================================== */
+
+/* 1 · Nada puede empujar la página a lo ancho.
+   Un solo elemento demasiado ancho hace que TODA la página se desplace de
+   lado, y el usuario lo siente como que "se ve mal" en general, sin poder
+   señalar qué. */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* 2 · Las imágenes nunca desbordan su contenedor. */
+img, svg, video, canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 640px) {
+  /* 3 · Palabras muy largas —un correo, un RUT, una razón social sin
+     espacios— estiraban su tarjeta hasta sacar la página de cuadro.
+     Que corten antes de desbordar. */
+  body {
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
-  
-  .mobile-text {
-    @apply text-sm;
+
+  /* 4 · iOS hace zoom automático al tocar un campo cuya letra mide menos de
+     16px, y después NO vuelve al zoom anterior: la página queda descuadrada
+     y hay que pellizcar para volver. Como el sistema usa texto de 11-12px en
+     casi todos los campos, esto pasaba en cada formulario.
+     Se sube solo el tamaño del TEXTO QUE SE ESCRIBE, no el de la interfaz. */
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* 5 · Las tablas anchas se desplazan DENTRO de su caja, con inercia,
+     en vez de arrastrar la página entera. */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* 6 · Botones alcanzables con el dedo.
+   `pointer: coarse` = se maneja con el dedo, no con un mouse. Así esta regla
+   NO toca el escritorio: allá los botones siguen exactamente igual.
+
+   Medido el 20-08-2026 en un iPhone SE: había 21 botones de menos de 32px de
+   alto, y tres de 14-15px ("Editar", "Pendientes", "Completadas" del CRM).
+   Son botones de solo texto, sin relleno vertical: con un mouse se aciertan,
+   con el dedo no — se toca al lado y parece que la aplicación no responde.
+
+   32px es un punto medio deliberado. La guía de Apple y Google pide 44px, pero
+   forzar 44 acá deformaría las filas de las tablas y las barras de filtros;
+   32 arregla lo impracticable sin romper lo que ya funciona. */
+@media (max-width: 640px) and (pointer: coarse) {
+  button:not([aria-hidden='true']),
+  [role='button'] {
+    min-height: 32px;
   }
 }
 

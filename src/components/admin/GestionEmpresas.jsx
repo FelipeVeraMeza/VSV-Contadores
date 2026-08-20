@@ -421,10 +421,12 @@
         </header>
 
         {/* 2. DOBLE COLUMNA */}
-        <main className="flex-1 flex overflow-hidden max-w-[1600px] w-full mx-auto px-6 pb-10 gap-8">
-          
+        {/* Mismo criterio que en Gestión de Usuarios: en teléfono las columnas
+            se apilan, porque lado a lado la derecha quedaba fuera de pantalla. */}
+        <main className="flex-1 flex flex-col lg:flex-row lg:overflow-hidden max-w-[1600px] w-full mx-auto px-3 sm:px-6 pb-10 gap-4 lg:gap-8">
+
           {/* COLUMNA IZQUIERDA: LISTADO DE EMPRESAS */}
-          <div className="w-full max-w-[420px] flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
+          <div className="w-full lg:max-w-[420px] flex flex-col gap-4 lg:overflow-y-auto custom-scrollbar lg:pr-2 flex-shrink-0">
             {initialLoading ? (
               <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-30">
                 <Loader2 className="h-10 w-10 animate-spin" />

@@ -1,12 +1,13 @@
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Building2, User, Edit, DollarSign, Briefcase, FileSpreadsheet, Key, Send, Save, Clock, AlertTriangle, CheckCircle2, Landmark, Receipt, Layers, Plus, Trash2, MessageSquare, Ticket, History, RotateCcw, Search, Flag, CalendarClock, Phone, Mail, Copy, Bell } from 'lucide-react';
+import { X, Building2, User, Edit, DollarSign, Briefcase, FileSpreadsheet, Key, Send, Save, Clock, AlertTriangle, CheckCircle2, Landmark, Receipt, Layers, Plus, Trash2, MessageSquare, Ticket, History, RotateCcw, Search, Flag, CalendarClock, Phone, Mail, Copy, Bell, PenLine, Loader2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { EditableField, SecureField, SelectField } from '../ui/CrmUI';
 import LogoUploader from '@/components/ui/LogoUploader';
-import { createNotaApi, editarNotaApi, eliminarNotaApi, cambiarPlanApi, addServicioApi, removeServicioApi, reactivarServicioApi, toggleTicketApi } from '@/services/crmService';
+import { PERIODICIDADES, etiquetaPeriodicidad, sumaAlMes } from '@/lib/periodicidades';
+import { createNotaApi, editarNotaApi, eliminarNotaApi, cambiarPlanApi, addServicioApi, removeServicioApi, editarServicioApi, reactivarServicioApi, toggleTicketApi } from '@/services/crmService';
 
 import { useAuth } from '@/hooks/useAuth';
 
@@ -306,6 +307,76 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
         }
     };
 
+    // LA FECHA LLEGA EN DOS FORMATOS DISTINTOS, y el input date solo acepta uno.
+    //
+    // El listado de clientes la devuelve ya formateada a la chilena
+    // ("05-09-2026", ver clientes.controllers.js), mientras que el endpoint de
+    // modificar la devuelve ISO ("2026-09-05"). Un `slice(0,10)` sobre la
+    // primera deja "05-09-2026", que el <input type="date"> rechaza en silencio:
+    // el campo aparece vacío y al guardar se borraría la fecha que había.
+    //
+    // Se aceptan los dos y se devuelve siempre aaaa-mm-dd. Sin `new Date()` de
+    // por medio, porque eso reintroduce el corrimiento por zona horaria.
+    const aFechaInput = (v) => {
+        if (!v) return '';
+        const s = String(v);
+        const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+        const cl = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+        if (cl) return `${cl[3]}-${cl[2].padStart(2, '0')}-${cl[1].padStart(2, '0')}`;
+        return '';
+    };
+
+    // Para mostrarla, siempre a la chilena, venga como venga.
+    const aFechaTexto = (v) => {
+        const iso = aFechaInput(v);
+        if (!iso) return '';
+        const [a, m, d] = iso.split('-');
+        return `${d}-${m}-${a}`;
+    };
+
+    // ---- Modificar un servicio ya contratado ----
+    // Antes esto no se podía: la fila solo tenía el tarrito de basura, así que
+    // corregir un precio obligaba a dar de baja y volver a agregar —lo que
+    // reinicia la fecha de inicio y pierde el historial—. La edición va en la
+    // propia fila y no en un modal: es un campo, no un formulario.
+    const [editandoServicio, setEditandoServicio] = useState(null);   // id del que se edita
+    const [servicioBorrador, setServicioBorrador] = useState({ precio: '', periodicidad: 'mensual', primera: '' });
+    const [guardandoServicio, setGuardandoServicio] = useState(false);
+
+    const abrirEdicionServicio = (s) => {
+        setEditandoServicio(s.id);
+        setServicioBorrador({
+            precio: s.precioPactado ? String(s.precioPactado) : '',
+            periodicidad: s.periodicidad || 'mensual',
+            primera: aFechaInput(s.primeraFacturacion),
+        });
+    };
+
+    const guardarServicio = async (servicio) => {
+        setGuardandoServicio(true);
+        try {
+            const response = await editarServicioApi(getSessionId(), servicio.id, {
+                precioPactado: servicioBorrador.precio,
+                periodicidad: servicioBorrador.periodicidad,
+                primeraFacturacion: servicioBorrador.primera || null,
+            });
+            const payload = await response.json();
+            if (!payload.success) throw new Error(payload.message);
+            setFormData(prev => ({
+                ...prev,
+                servicios: (prev.servicios || []).map(x => x.id === servicio.id ? { ...x, ...payload.servicio } : x),
+            }));
+            setEditandoServicio(null);
+            toast({ title: 'Servicio actualizado', description: servicio.nombre });
+            onRefresh?.();
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'No se pudo modificar', description: e.message });
+        } finally {
+            setGuardandoServicio(false);
+        }
+    };
+
     const handleRemoveServicio = async (servicio) => {
         if (!window.confirm(`¿Dar de baja el servicio "${servicio.nombre}"? Quedará suspendido (podrás reactivarlo después).`)) return;
         try {
@@ -424,7 +495,13 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
 
     // --- Honorarios: plan actual + servicios contratados ---
     const precioPlanActual = precioDePlan(plan);              // precio sugerido por tramo (referencia)
-    const totalServicios = serviciosActivos.reduce((acc, s) => acc + (Number(s.precioPactado) || 0), 0);
+    // Solo lo MENSUAL suma al honorario del mes. Antes se sumaban todos los
+    // servicios sin mirar la periodicidad, así que un trámite de una sola vez
+    // —o un servicio anual— inflaba el honorario del cliente TODOS los meses.
+    // El modal de crear cliente ya lo hacía bien; esta pantalla no.
+    const totalServicios = serviciosActivos
+        .filter(s => sumaAlMes(s.periodicidad))
+        .reduce((acc, s) => acc + (Number(s.precioPactado) || 0), 0);
     // El honorario REAL es el neto del Excel (lo que efectivamente paga), no el sugerido por tramo.
     const netoPlan = honorario;
     const totalHonorariosNeto = netoPlan + totalServicios;
@@ -580,7 +657,7 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                                     initial={{ opacity: 0, scale: 0.9 }}
                                     animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0, scale: 0.9 }}
-                                    onClick={() => navigate('/facturacion?sub=correos')}
+                                    onClick={() => navigate('/comunicaciones?sub=masivo')}
                                     title="Ver los correos que se le enviaron"
                                     className="hidden md:flex items-center gap-1.5 px-3 py-1.5 md:py-2 rounded-xl font-black uppercase tracking-widest text-[9px] md:text-[10px] bg-purple-500/20 text-purple-700 border border-purple-500/30 hover:bg-purple-600 hover:text-white transition-all shadow-lg"
                                 >
@@ -963,21 +1040,60 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Servicios Contratados</span>
                     <div className="flex flex-col gap-1.5 mt-2 mb-3">
                         {serviciosActivos.length > 0 ? serviciosActivos.map(s => (
+                            editandoServicio === s.id ? (
+                            <div key={s.id} className="bg-emerald-500/5 border border-emerald-500/40 rounded-lg px-2.5 py-2 space-y-2">
+                                <span className="text-[11px] font-bold text-slate-700 truncate block">{s.nombre}</span>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <input
+                                        value={servicioBorrador.precio}
+                                        onChange={(e) => setServicioBorrador(b => ({ ...b, precio: e.target.value }))}
+                                        placeholder="Precio"
+                                        className="w-24 bg-white border border-[#efe8dd] rounded px-2 py-1 text-[10px] outline-none focus:border-emerald-500" />
+                                    <select
+                                        value={servicioBorrador.periodicidad}
+                                        onChange={(e) => setServicioBorrador(b => ({ ...b, periodicidad: e.target.value }))}
+                                        className="bg-white border border-[#efe8dd] rounded px-2 py-1 text-[10px] outline-none focus:border-emerald-500 capitalize">
+                                        {PERIODICIDADES.map(p => <option key={p.valor} value={p.valor}>{p.label}</option>)}
+                                    </select>
+                                    <input
+                                        type="date"
+                                        value={servicioBorrador.primera}
+                                        onChange={(e) => setServicioBorrador(b => ({ ...b, primera: e.target.value }))}
+                                        title="Primera facturación"
+                                        className="bg-white border border-[#efe8dd] rounded px-2 py-1 text-[10px] outline-none focus:border-emerald-500" />
+                                </div>
+                                <div className="flex gap-1.5">
+                                    <button onClick={() => guardarServicio(s)} disabled={guardandoServicio}
+                                        className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 px-2.5 py-1 rounded-full transition-colors">
+                                        {guardandoServicio ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />} Guardar
+                                    </button>
+                                    <button onClick={() => setEditandoServicio(null)}
+                                        className="text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 px-2 py-1">
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                            ) : (
                             <div key={s.id} className="flex items-center justify-between gap-2 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5">
                                 <div className="flex flex-col min-w-0">
                                     <span className="text-[11px] font-bold text-slate-700 truncate">{s.nombre}</span>
                                     <span className="text-[8px] text-slate-400">
-                                        {s.periodicidad ? <span className="capitalize">{s.periodicidad}</span> : 'Mensual'}
-                                        {s.primeraFacturacion ? ` · 1ª fact. ${s.primeraFacturacion}` : (s.fechaInicio ? ` · desde ${s.fechaInicio}` : '')}
+                                        {etiquetaPeriodicidad(s.periodicidad)}
+                                        {s.primeraFacturacion ? ` · 1ª fact. ${aFechaTexto(s.primeraFacturacion)}` : (s.fechaInicio ? ` · desde ${s.fechaInicio}` : '')}
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                     {s.precioPactado ? <span className="text-[11px] font-black text-emerald-600">${Number(s.precioPactado).toLocaleString('es-CL')}</span> : <span className="text-[9px] text-slate-400 italic">sin precio</span>}
+                                    <button onClick={() => abrirEdicionServicio(s)} title="Modificar precio o periodicidad"
+                                        className="text-slate-400 hover:text-emerald-600 transition-colors">
+                                        <PenLine size={12} />
+                                    </button>
                                     <button onClick={() => handleRemoveServicio(s)} title="Dar de baja" className="text-slate-400 hover:text-red-500 transition-colors">
                                         <Trash2 size={12} />
                                     </button>
                                 </div>
                             </div>
+                            )
                         )) : (
                             <span className="text-[10px] text-slate-400 italic">Sin servicios contratados.</span>
                         )}
@@ -1041,8 +1157,8 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                                 title="Periodicidad de facturación"
                                 className="flex-1 min-w-[110px] bg-white border border-[#efe8dd] rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-indigo-500 cursor-pointer capitalize"
                             >
-                                {['mensual', 'bimensual', 'trimestral', 'cuatrimestral', 'semestral', 'anual'].map(p => (
-                                    <option key={p} value={p}>{p}</option>
+                                {PERIODICIDADES.map(p => (
+                                    <option key={p.valor} value={p.valor}>{p.label}</option>
                                 ))}
                             </select>
                             <input

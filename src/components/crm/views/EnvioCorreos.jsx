@@ -5,14 +5,14 @@
 //
 //     Hola {{empresa}}, su plan {{plan}} tiene un valor de {{valor_plan}}.
 //
-// Tres columnas, en el orden en que se trabaja:
+// Dos columnas, como un cliente de correo de verdad:
 //
-//   1. A QUIÉN     · se eligen las empresas
-//   2. QUÉ DICE    · remitente, asunto y texto, con los datos para insertar
-//   3. CÓMO QUEDA  · lo que recibiría cada una, ya reemplazado
+//   REDACTAR      · de, para, asunto, plantilla, texto con formato y adjuntos
+//   DESTINATARIOS · a quién se le manda, con buscador y casillas
 //
-// La tercera columna no es un adorno: los datos los resuelve el SERVIDOR con lo
-// que hay en la base hoy, así que es la única forma de ver el correo real antes
+// LA VISTA PREVIA NO ES UN ADORNO y por eso tiene su propio botón: los datos
+// los resuelve el SERVIDOR con lo que hay en la base HOY, así que es la única
+// forma de ver el correo real —con los datos de cada cliente ya puestos— antes
 // de mandarlo. Un envío a 200 clientes no se puede deshacer.
 // =====================================================================
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
@@ -21,12 +21,14 @@ import {
     Mail, Search, Send, Users, Eye, Loader2, AlertTriangle, CheckCircle2,
     X, ChevronLeft, ChevronRight, FlaskConical, Building2, Sparkles,
     LayoutTemplate, Save, Trash2, Check, PenLine, Users2, Lock,
-    Paperclip, Square, Link2, FileSpreadsheet, Upload, Table2, History,
+    Paperclip, Square, FileSpreadsheet, Upload, Table2, History,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import LogoUploader from '@/components/ui/LogoUploader';
 import HistorialCorreosModal from '@/components/crm/modals/HistorialCorreosModal';
+import EditorRico from '@/components/comunicaciones/EditorRico';
+import CuerpoCorreo, { aHtmlEditor } from '@/components/comunicaciones/CuerpoCorreo';
 import { getCrmDataApi } from '@/services/crmService';
 import {
     camposCorreoApi, previewCampanaApi, enviarCampanaApi, progresoCampanaApi,
@@ -43,6 +45,20 @@ const tieneCorreo = (c) => String(c.correo || '')
     .split(/[;,\s]+/).some(x => CORREO_VALIDO.test(x.trim()));
 
 const inp = 'w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-2 text-xs text-slate-900 outline-none focus:border-emerald-500';
+
+// ¿El cuerpo tiene texto de verdad?
+//
+// Con el editor de formato, un correo en blanco NO es una cadena vacía: es
+// «<p><br></p>», que tiene 12 caracteres. Con `.trim()` el botón de enviar se
+// habilitaba y se mandaba un correo vacío a la cartera entera. El servidor
+// hace esta misma comprobación —ahí está el candado— pero acá evita que el
+// botón mienta.
+const HTML_CORREO = /<(p|br|div|span|strong|b|em|i|u|s|a|ul|ol|li|h[1-3]|blockquote|table)\b[^>]*>/i;
+const conTexto = (v) => {
+    const s = String(v || '');
+    if (!HTML_CORREO.test(s)) return !!s.trim();
+    return !!s.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
+};
 
 // Iniciales para el recuadro de cada fila: «A&L SOLUCIONES Y SERVICIOS» → «AS».
 // Se saltan las palabras de relleno (Y, DE, SPA…) para que dos empresas del
@@ -177,8 +193,7 @@ const EnvioCorreos = () => {
     const [perfil, setPerfil] = useState(null);
     const [editandoPerfil, setEditandoPerfil] = useState(false);
     const [perfilBorrador, setPerfilBorrador] = useState({
-        correoRemitente: '', correoRespuesta: '', copiaOculta: false, correoCopia: '',
-        firmaTexto: '', firmaImagen: null,
+        correoRemitente: '', firmaTexto: '', firmaImagen: null,
     });
     const [guardandoPerfil, setGuardandoPerfil] = useState(false);
 
@@ -256,6 +271,11 @@ const EnvioCorreos = () => {
     // El registro de lo enviado. Vive acá porque los correos NO pasan por Gmail
     // —salen por Resend, por HTTPS— y en «Enviados» de Gmail no van a aparecer.
     const [verEnviados, setVerEnviados] = useState(false);
+    // La vista previa pasó de ser una tercera columna fija a abrirse por botón.
+    // La columna solo aparecía en pantallas anchas (`hidden xl:flex`), así que
+    // en un notebook la revisión previa —lo único que atrapa un «{{plan}}» sin
+    // reemplazar antes de mandarlo a 130 clientes— simplemente no existía.
+    const [previaAbierta, setPreviaAbierta] = useState(false);
     // Quiénes deben. Se carga al entrar para poder marcarlas de una: buscarlas a
     // mano entre 137 clientes es donde se cuela el «le cobré a uno que ya pagó».
     const [impagas, setImpagas] = useState([]);
@@ -313,7 +333,9 @@ const EnvioCorreos = () => {
     const usarPlantilla = (p) => {
         setPlantillaId(p.id);
         setAsunto(p.asunto || '');
-        setCuerpo(p.cuerpo || '');
+        // Las plantillas de antes del editor son texto plano: hay que convertirlas
+        // a párrafos o el editor las muestra como un solo bloque corrido.
+        setCuerpo(aHtmlEditor(p.cuerpo || ''));
         // La firma de la plantilla solo pisa la propia si trae una. Una plantilla
         // compartida por otra persona NO debería cambiarte la firma sin avisar.
         if (p.firma) setFirma(p.firma);
@@ -339,7 +361,7 @@ const EnvioCorreos = () => {
     };
 
     const guardarPlantilla = async () => {
-        if (!asunto.trim() || !cuerpo.trim()) {
+        if (!asunto.trim() || !conTexto(cuerpo)) {
             return toast({ variant: 'destructive', title: 'Falta el asunto o el texto' });
         }
         const actual = plantillas.find(p => p.id === plantillaId);
@@ -397,9 +419,11 @@ const EnvioCorreos = () => {
     };
 
     // Dónde estaba el cursor la última vez, para insertar el dato ahí y no
-    // siempre al final del texto.
+    // siempre al final del texto. El cuerpo ya no es un textarea sino el editor
+    // con formato, que expone su propio `insertar`: la posición del cursor
+    // dentro de HTML no se puede calcular con `selectionStart`.
     const refAsunto = useRef(null);
-    const refCuerpo = useRef(null);
+    const refEditor = useRef(null);
     const ultimoCampo = useRef('cuerpo');
 
     // ---- carga inicial ----
@@ -431,9 +455,6 @@ const EnvioCorreos = () => {
                     setFirmaImagen(dperfil.firmaImagen || null);
                     setPerfilBorrador({
                         correoRemitente: dperfil.correoRemitente || '',
-                        correoRespuesta: dperfil.correoRespuesta || '',
-                        copiaOculta: !!dperfil.copiaOculta,
-                        correoCopia: dperfil.correoCopia || '',
                         firmaTexto: dperfil.firmaTexto || '',
                         firmaImagen: dperfil.firmaImagen || null,
                     });
@@ -527,19 +548,20 @@ const EnvioCorreos = () => {
     // ---- insertar un dato en el punto del cursor ----
     const insertar = (marca) => {
         const texto = `{{${marca}}}`;
-        const cual = ultimoCampo.current;
-        const el = cual === 'asunto' ? refAsunto.current : refCuerpo.current;
-        const valor = cual === 'asunto' ? asunto : cuerpo;
-        const set = cual === 'asunto' ? setAsunto : setCuerpo;
-        const pos = el?.selectionStart ?? valor.length;
-        set(`${valor.slice(0, pos)}${texto}${valor.slice(pos)}`);
-        // Devolver el foco y dejar el cursor DESPUÉS de lo insertado, para
-        // poder seguir escribiendo sin volver a pulsar en el campo.
-        requestAnimationFrame(() => {
-            el?.focus();
-            const p = pos + texto.length;
-            el?.setSelectionRange?.(p, p);
-        });
+        if (ultimoCampo.current === 'asunto') {
+            const el = refAsunto.current;
+            const pos = el?.selectionStart ?? asunto.length;
+            setAsunto(`${asunto.slice(0, pos)}${texto}${asunto.slice(pos)}`);
+            // Devolver el foco y dejar el cursor DESPUÉS de lo insertado, para
+            // poder seguir escribiendo sin volver a pulsar en el campo.
+            requestAnimationFrame(() => {
+                el?.focus();
+                const p = pos + texto.length;
+                el?.setSelectionRange?.(p, p);
+            });
+            return;
+        }
+        refEditor.current?.insertar(texto);
     };
 
     // A quién se le manda, en la forma que espera el servidor. Es lo único que
@@ -553,7 +575,7 @@ const EnvioCorreos = () => {
 
     // ---- vista previa ----
     const verPrevia = useCallback(async () => {
-        if (!elegidos || !asunto.trim() || !cuerpo.trim()) return;
+        if (!elegidos || !asunto.trim() || !conTexto(cuerpo)) return;
         setCargandoPrevia(true);
         try {
             const r = await previewCampanaApi(getSessionId(), { ...destinos, asunto, cuerpo });
@@ -599,8 +621,6 @@ const EnvioCorreos = () => {
         const cuerpoPeticion = {
             ...destinos, asunto, cuerpo, firma, firmaImagen, soloPrueba, plantillaId,
             adjuntos,
-            // El «responder a» sale del perfil, en el servidor: es de la persona,
-            // no de cada envío, y así no se puede olvidar.
             correoPrueba: soloPrueba ? (correoPrueba.trim() || undefined) : undefined,
         };
         try {
@@ -632,7 +652,7 @@ const EnvioCorreos = () => {
         }
     };
 
-    const listo = elegidos > 0 && asunto.trim() && cuerpo.trim() && previa?.total > 0;
+    const listo = elegidos > 0 && asunto.trim() && conTexto(cuerpo) && previa?.total > 0;
     const actual = previa?.destinatarios?.[indicePrevia];
 
     // Los datos que se pueden insertar. Con una planilla abierta son SUS
@@ -665,6 +685,15 @@ const EnvioCorreos = () => {
                     title="Qué se envió, a quién llegó y qué decía exactamente"
                     className="ml-2 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-emerald-600 inline-flex items-center gap-1 border border-[#efe8dd] rounded-lg px-2 py-1">
                     <History size={11} /> Enviados
+                </button>
+                {/* El correo REAL de cada cliente, con sus datos ya puestos. Se
+                    habilita recién cuando hay a quién y qué mandar: antes de eso
+                    no hay nada que previsualizar. */}
+                <button onClick={() => { setIndicePrevia(0); setPreviaAbierta(true); }}
+                    disabled={!previa?.total}
+                    title="Ver el correo tal como le va a llegar a cada cliente"
+                    className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-emerald-600 disabled:opacity-40 disabled:hover:text-slate-500 inline-flex items-center gap-1 border border-[#efe8dd] rounded-lg px-2 py-1">
+                    {cargandoPrevia ? <Loader2 size={11} className="animate-spin" /> : <Eye size={11} />} Vista previa
                 </button>
             </div>
             {/* Los tres números que importan antes de apretar enviar. Se
@@ -719,8 +748,12 @@ const EnvioCorreos = () => {
 
         <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3">
 
-            {/* ═══ 1 · A QUIÉN ═══ */}
-            <div className="w-full lg:w-72 xl:w-80 shrink-0 flex flex-col bg-white border border-[#efe8dd] rounded-2xl overflow-hidden">
+            {/* ═══ DESTINATARIOS ═══
+                Va a la DERECHA con `order`, como en cualquier cliente de correo:
+                lo primero que se mira es lo que se escribe. Se usa `order` y no
+                se mueve el bloque para no arrastrar en la mudanza la lógica de
+                cartera/planilla, que es la más delicada de la pantalla. */}
+            <div className="w-full lg:w-72 xl:w-80 shrink-0 flex flex-col bg-white border border-[#efe8dd] rounded-2xl overflow-hidden lg:order-2">
                 <div className="px-3 py-2.5 border-b border-[#efe8dd]">
                     <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
                         <Users size={13} className="text-emerald-600" /> A quién
@@ -970,11 +1003,11 @@ const EnvioCorreos = () => {
                 )}
             </div>
 
-            {/* ═══ 2 · QUÉ DICE ═══ */}
-            <div className="flex-1 min-w-0 flex flex-col bg-white border border-[#efe8dd] rounded-2xl overflow-hidden">
+            {/* ═══ REDACTAR ═══ */}
+            <div className="flex-1 min-w-0 flex flex-col bg-white border border-[#efe8dd] rounded-2xl overflow-hidden lg:order-1">
                 <div className="px-3 py-2.5 border-b border-[#efe8dd]">
                     <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
-                        <Mail size={13} className="text-emerald-600" /> Qué dice
+                        <PenLine size={13} className="text-emerald-600" /> Redactar
                     </span>
                 </div>
 
@@ -1046,19 +1079,6 @@ const EnvioCorreos = () => {
                                 No configuraste el tuyo: sale desde el correo por omisión. Pulsa «Mi correo y firma».
                             </p>
                         )}
-                        {/* Lo más caro de no configurar: el cliente contesta y esa
-                            respuesta no llega a ninguna parte. */}
-                        {perfil?.correoRespuesta ? (
-                            <p className="text-[9px] text-slate-400 mt-1">
-                                Las respuestas te llegan a <b className="text-slate-600">{perfil.correoRespuesta}</b>
-                                {perfil.copiaOculta && <> · con <b className="text-slate-600">copia oculta</b> de cada envío</>}
-                            </p>
-                        ) : (
-                            <p className="text-[9px] text-red-600 mt-1">
-                                ⚠️ No configuraste a dónde te llegan las respuestas: si el cliente contesta,
-                                esa respuesta se pierde. Pulsa «Mi correo y firma».
-                            </p>
-                        )}
                     </div>
 
                     {editandoPerfil && (
@@ -1081,74 +1101,6 @@ const EnvioCorreos = () => {
                                 </span>
                             </label>
 
-                            {/* A DÓNDE CONTESTA EL CLIENTE.
-                                El correo sale desde @vsvconsultores.com porque es
-                                el dominio verificado, pero ESE BUZÓN VIVE EN EL
-                                HOSTING y no lo lee nadie. Sin esto, las respuestas
-                                caen ahí y se pierden: sin error y sin rebote. */}
-                            <label className="block">
-                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                    Las respuestas me llegan a
-                                </span>
-                                <input value={perfilBorrador.correoRespuesta}
-                                    onChange={(e) => setPerfilBorrador(p => ({ ...p, correoRespuesta: e.target.value }))}
-                                    placeholder="tucorreo@gmail.com"
-                                    className={`${inp} mt-1 font-mono`} />
-                                <span className="text-[9px] text-slate-400 block mt-0.5">
-                                    Acá <b>sí</b> puede ser tu Gmail: es donde lees de verdad. Si lo dejas
-                                    vacío, el cliente le responde a la casilla del dominio, que está en el
-                                    servidor del hosting y <b>no la lee nadie</b>.
-                                </span>
-                            </label>
-
-                            {/* COPIA OCULTA. Para tener los correos también en la
-                                bandeja, no solo en la pantalla de Enviados.
-                                El costo va al lado y no en la letra chica: con un
-                                tope de ~100 diarios, duplicar el gasto decide si
-                                la campaña del mes entra o no. */}
-                            <label className="flex items-start gap-2 cursor-pointer">
-                                <input type="checkbox" checked={perfilBorrador.copiaOculta}
-                                    onChange={(e) => setPerfilBorrador(p => ({ ...p, copiaOculta: e.target.checked }))}
-                                    className="accent-emerald-500 mt-0.5" />
-                                <span className="min-w-0">
-                                    <span className="text-[10px] font-bold text-slate-700 block">
-                                        Mandarme copia oculta de cada correo
-                                    </span>
-                                    <span className="text-[9px] text-slate-400 block">
-                                        Te llega una copia a esa misma casilla, así te queda el registro
-                                        también en el correo. Va <b>oculta</b>: el cliente no la ve.
-                                        {' '}<b className="text-amber-700">
-                                            Ojo: cada copia gasta cuota — una campaña de {impagas.length || 38} pasa
-                                            a consumir {(impagas.length || 38) * 2} de {cuota?.limite ?? 100}.
-                                        </b>
-                                    </span>
-                                </span>
-                            </label>
-
-                            {perfilBorrador.copiaOculta && (
-                                <label className="block pl-6">
-                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                        Mandar la copia a
-                                    </span>
-                                    <input value={perfilBorrador.correoCopia}
-                                        onChange={(e) => setPerfilBorrador(p => ({ ...p, correoCopia: e.target.value }))}
-                                        placeholder={perfilBorrador.correoRespuesta || 'archivo@vsvconsultores.com'}
-                                        className={`${inp} mt-1 font-mono`} />
-                                    <span className="text-[9px] text-slate-400 block mt-0.5">
-                                        Vacío = va al mismo de arriba.
-                                    </span>
-                                    {/* El aviso que importa: una copia al dominio propio
-                                        NO llega a Gmail, porque el buzón de
-                                        vsvconsultores.com vive en el hosting. */}
-                                    {/vsvconsultores\.com$/i.test(perfilBorrador.correoCopia.trim()) && (
-                                        <span className="text-[9px] text-amber-700 block mt-1">
-                                            ⚠️ Esa casilla está en el servidor del hosting, no en Gmail: las copias
-                                            se van a acumular ahí. Para verlas en Gmail, esa dirección tiene que
-                                            reenviar, o pon acá tu Gmail.
-                                        </span>
-                                    )}
-                                </label>
-                            )}
                             <label className="block">
                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Mi firma</span>
                                 <textarea value={perfilBorrador.firmaTexto} rows={3}
@@ -1191,13 +1143,16 @@ const EnvioCorreos = () => {
                             className={`${inp} mt-1`} />
                     </div>
 
-                    <div>
+                    <div onFocus={() => { ultimoCampo.current = 'cuerpo'; }}>
                         <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Texto del correo</span>
-                        <textarea ref={refCuerpo} value={cuerpo} onChange={(e) => setCuerpo(e.target.value)}
-                            onFocus={() => { ultimoCampo.current = 'cuerpo'; }}
-                            rows={10}
-                            placeholder={'Hola {{empresa}},\n\nLe recordamos que su plan {{plan}} tiene un valor de {{valor_plan}} mensuales.\n\nQuedamos atentos.'}
-                            className={`${inp} mt-1 resize-y leading-relaxed`} />
+                        <div className="mt-1">
+                            <EditorRico
+                                ref={refEditor}
+                                value={cuerpo}
+                                onChange={setCuerpo}
+                                placeholder={'Hola {{empresa}},\n\nLe recordamos que su plan {{plan}} tiene un valor de {{valor_plan}} mensuales.\n\nQuedamos atentos.'}
+                            />
+                        </div>
                     </div>
 
                     {/* ADJUNTOS. Se mandan los mismos a todos: el informe del mes,
@@ -1260,14 +1215,9 @@ const EnvioCorreos = () => {
                                 ? 'Cada uno se reemplaza por el valor de esa fila al enviar.'
                                 : 'Cada uno se reemplaza por el dato real de cada empresa al enviar.'}
                         </p>
-                        {/* Enlaces con texto. El cuerpo es texto plano a propósito
-                            —para que nadie pueda inyectar HTML— así que esta es la
-                            única forma de poner «haga clic aquí» en vez de pegar
-                            una URL de 90 caracteres. */}
-                        <p className="text-[9px] text-slate-400 mt-1 flex items-center gap-1">
-                            <Link2 size={10} /> Para un enlace:
-                            <code className="bg-white border border-[#efe8dd] rounded px-1">[texto](https://…)</code>
-                        </p>
+                        {/* Los enlaces ya no se escriben a mano con [texto](url):
+                            ese truco existía porque el cuerpo era texto plano. Ahora
+                            hay botón en la barra del editor. */}
                     </div>
 
                     <div>
@@ -1395,13 +1345,19 @@ const EnvioCorreos = () => {
                 </div>
             </div>
 
-            {/* ═══ 3 · CÓMO QUEDA ═══ */}
-            <div className="hidden xl:flex w-80 2xl:w-96 shrink-0 flex-col bg-white border border-[#efe8dd] rounded-2xl overflow-hidden">
+            {/* ═══ CÓMO QUEDA · el correo real de cada cliente ═══ */}
+            {previaAbierta && (
+            <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
+                 onClick={() => setPreviaAbierta(false)}>
+            <div className="bg-white w-full max-w-xl h-[85vh] rounded-2xl border border-[#efe8dd] shadow-2xl flex flex-col overflow-hidden"
+                 onClick={(e) => e.stopPropagation()}>
                 <div className="px-3 py-2.5 border-b border-[#efe8dd] flex items-center gap-1.5">
                     <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
                         <Eye size={13} className="text-emerald-600" /> Cómo queda
                     </span>
-                    {cargandoPrevia && <Loader2 size={11} className="animate-spin text-slate-400 ml-auto" />}
+                    {cargandoPrevia && <Loader2 size={11} className="animate-spin text-slate-400" />}
+                    <button onClick={() => setPreviaAbierta(false)}
+                        className="ml-auto text-slate-400 hover:text-red-500"><X size={16} /></button>
                 </div>
 
                 {!actual ? (
@@ -1435,7 +1391,9 @@ const EnvioCorreos = () => {
                                 </p>
                             </div>
                             <p className="text-xs font-black text-slate-900">{actual.asunto}</p>
-                            <p className="text-[11px] text-slate-700 whitespace-pre-wrap leading-relaxed">{actual.cuerpo}</p>
+                            {/* Con formato, tal como le va a llegar. El servidor ya
+                                lo saneó al armar la previa. */}
+                            <CuerpoCorreo texto={actual.cuerpo} className="text-[11px] text-slate-700 leading-relaxed" />
                             {(firma || firmaImagen) && (
                                 <div className="border-t border-[#efe8dd] pt-2 mt-2">
                                     {firmaImagen && <img src={firmaImagen} alt="" className="max-w-[140px] h-auto mb-1.5" />}
@@ -1494,6 +1452,8 @@ const EnvioCorreos = () => {
                     </div>
                 )}
             </div>
+            </div>
+            )}
         </div>
 
         {verEnviados && <HistorialCorreosModal onClose={() => setVerEnviados(false)} />}

@@ -26,9 +26,10 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
-import { crearEmpresaApi } from '@/services/crmService';
+import { crearEmpresaApi, representanteExistenteApi } from '@/services/crmService';
 import { getCatalogosApi } from '@/services/personaService';
 import { formatRut } from '@/lib/rut';
+import { PERIODICIDADES, sumaAlMes } from '@/lib/periodicidades';
 import LogoUploader from '@/components/ui/LogoUploader';
 
 const getSessionId = () => {
@@ -62,7 +63,15 @@ const Campo = ({ label, children, ayuda }) => (
     </label>
 );
 
-const inputCls = "bg-slate-50 border border-[#efe8dd] rounded-lg p-2.5 text-xs text-slate-900 outline-none focus:border-emerald-500 transition-colors placeholder:text-slate-400 w-full";
+// Estilo del campo SIN ancho: cada uno declara el suyo.
+//
+// Antes esto terminaba en `w-full` y los campos angostos se escribían como
+// `${inputCls} w-28`. No funcionaba: en Tailwind gana el utilitario que aparece
+// último en el CSS generado, no el último de la lista de clases, y `w-full` va
+// después de `w-28`. Resultado: el campo del precio ocupaba la fila entera y
+// aplastaba el nombre del plan, que quedaba invisible aunque el dato estuviera.
+const inputBase = "bg-slate-50 border border-[#efe8dd] rounded-lg p-2.5 text-xs text-slate-900 outline-none focus:border-emerald-500 transition-colors placeholder:text-slate-400";
+const inputCls = `${inputBase} w-full`;
 
 const PASOS = [
     { id: 0, label: 'La empresa', icono: Building2 },
@@ -119,6 +128,28 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
     // que sí bloquea es un RUT completo pero mal.
     const repsConError = reps.filter(r => r.rut.trim() && !validarRutDV(r.rut));
 
+    // ---- ¿Este RUT ya es representante de otra empresa? ----
+    // No bloquea nada: tener un representante en varias empresas es normal (hoy
+    // hay 9 casos así en la cartera). Lo que previene es el cruce de RUT con
+    // NOMBRES DISTINTOS, que ya ocurrió dos veces y es un problema silencioso:
+    // con el RUT equivocado el robot del SII no falla, entra a la cuenta que no
+    // era. Se avisa al terminar de escribir, que es cuando se puede mirar.
+    const [avisoRep, setAvisoRep] = useState({});   // índice de la fila -> aviso
+    const revisarRepetido = async (indice, rut) => {
+        if (!rut?.trim() || !validarRutDV(rut)) {
+            setAvisoRep(a => ({ ...a, [indice]: null }));
+            return;
+        }
+        try {
+            const r = await representanteExistenteApi(getSessionId(), rut);
+            const d = await r.json();
+            setAvisoRep(a => ({ ...a, [indice]: d?.empresas?.length ? d : null }));
+        } catch {
+            // Un aviso que falla no puede estorbar el alta del cliente.
+            setAvisoRep(a => ({ ...a, [indice]: null }));
+        }
+    };
+
     // ---- Planes ----
     const agregarPlan = (planId) => {
         if (!planId || planesSel.some(p => p.planId === planId)) return;
@@ -144,7 +175,7 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
     // (Inicio de Actividades, por ejemplo) no entran en el cobro del mes.
     const totalPlanes = planesSel.reduce((s, p) => s + (Number(p.precioPactado) || 0), 0);
     const totalServicios = serviciosSel
-        .filter(s => s.periodicidad === 'mensual')
+        .filter(s => sumaAlMes(s.periodicidad))
         .reduce((s, x) => s + (Number(x.precio) || 0), 0);
     const totalSugerido = totalPlanes + totalServicios;
     const montoFinal = form.precioMensual !== '' ? Number(form.precioMensual) || 0 : totalSugerido;
@@ -392,7 +423,10 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
                                                         className={`${inputCls} ${valido === false ? 'border-red-500/60' : valido === true ? 'border-emerald-500/50' : ''}`}
                                                         value={r.rut}
                                                         onChange={(e) => cambiar('rut', e.target.value)}
-                                                        onBlur={() => valido && cambiar('rut', formatRut(r.rut))}
+                                                        onBlur={() => {
+                                                            if (valido) cambiar('rut', formatRut(r.rut));
+                                                            revisarRepetido(i, r.rut);
+                                                        }}
                                                         placeholder="12.345.678-9" />
                                                     {valido === true && <CheckCircle2 size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-emerald-600" />}
                                                     {valido === false && <AlertTriangle size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-red-500" />}
@@ -402,6 +436,37 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
                                                 <input className={inputCls} value={r.telefono}
                                                     onChange={(e) => cambiar('telefono', e.target.value)} placeholder="Teléfono (opcional)" />
                                             </div>
+
+                                            {/* Aviso, no bloqueo: representar a varias empresas es
+                                                normal. Lo que importa es el caso de abajo, cuando el
+                                                mismo RUT figura con OTRO nombre. */}
+                                            {avisoRep[i] && (
+                                                <div className={`mt-2 rounded-lg border p-2 text-[10px] ${
+                                                    avisoRep[i].nombresDistintos
+                                                        ? 'bg-red-500/5 border-red-500/40 text-red-700'
+                                                        : 'bg-blue-500/5 border-blue-500/30 text-blue-800'}`}>
+                                                    <div className="flex gap-1.5">
+                                                        <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                                                        <div className="min-w-0">
+                                                            {avisoRep[i].nombresDistintos ? (
+                                                                <>
+                                                                    <b>Este RUT ya está cargado con OTRO nombre.</b> Figura como{' '}
+                                                                    {avisoRep[i].nombres.map(n => `«${n}»`).join(' y ')}.
+                                                                    Uno de los dos está mal, y con el RUT equivocado el robot del
+                                                                    SII entra a la cuenta que no es. Revísalo antes de guardar.
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    Ya es representante de{' '}
+                                                                    <b>{avisoRep[i].empresas.map(e => e.razonSocial).join(', ')}</b>.
+                                                                    Es normal; se avisa para que no quede cargado dos veces con
+                                                                    datos distintos.
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -436,7 +501,7 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
                                         <div key={p.planId} className="flex items-center gap-2 border border-[#efe8dd] rounded-lg px-3 py-2">
                                             <span className="text-[9px] font-black text-slate-300 w-4">{i === 0 ? '★' : i + 1}</span>
                                             <span className="text-xs font-bold text-slate-700 flex-1 truncate">{p.nombre}</span>
-                                            <input type="number" min="0" className={`${inputCls} w-28 text-right`} value={p.precioPactado}
+                                            <input type="number" min="0" className={`${inputBase} w-28 shrink-0 text-right`} value={p.precioPactado}
                                                 onChange={(e) => setPlanesSel(prev => prev.map(x => x.planId === p.planId ? { ...x, precioPactado: e.target.value } : x))}
                                                 placeholder="Precio" />
                                             <button onClick={() => quitarPlan(p.planId)} className="text-slate-300 hover:text-red-500"><Trash2 size={13} /></button>
@@ -466,13 +531,18 @@ const CrearEmpresaModal = ({ onClose, onCreated, planes = [], usuarios: usuarios
                                     {serviciosSel.map(s => (
                                         <div key={s.servicioId} className="flex items-center gap-2 border border-[#efe8dd] rounded-lg px-3 py-2">
                                             <span className="text-xs font-bold text-slate-700 flex-1 truncate">{s.nombre}</span>
-                                            <select className={`${inputCls} w-24 cursor-pointer`} value={s.periodicidad}
+                                            {/* Antes esta lista tenía solo tres opciones y una de ellas
+                                                guardaba «unica», un valor que el servidor NO conoce: al
+                                                crear el cliente se guardaba crudo y después el
+                                                desplegable de la ficha no lo reconocía. Ahora las tres
+                                                pantallas usan la misma lista. */}
+                                            <select className={`${inputBase} w-32 shrink-0 cursor-pointer`} value={s.periodicidad}
                                                 onChange={(e) => setServiciosSel(prev => prev.map(x => x.servicioId === s.servicioId ? { ...x, periodicidad: e.target.value } : x))}>
-                                                <option value="mensual">mensual</option>
-                                                <option value="anual">anual</option>
-                                                <option value="unica">una vez</option>
+                                                {PERIODICIDADES.map(p => (
+                                                    <option key={p.valor} value={p.valor}>{p.label}</option>
+                                                ))}
                                             </select>
-                                            <input type="number" min="0" className={`${inputCls} w-24 text-right`} value={s.precio}
+                                            <input type="number" min="0" className={`${inputBase} w-24 shrink-0 text-right`} value={s.precio}
                                                 onChange={(e) => setServiciosSel(prev => prev.map(x => x.servicioId === s.servicioId ? { ...x, precio: e.target.value } : x))}
                                                 placeholder="Precio" />
                                             <button onClick={() => quitarServicio(s.servicioId)} className="text-slate-300 hover:text-red-500"><Trash2 size={13} /></button>

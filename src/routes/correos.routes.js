@@ -9,6 +9,11 @@ import {
     detenerCampanaController, historialCampanas, detalleCampana, enviosDeEmpresa,
     listarBajas, quitarBaja, cuotaController, empresasConImpaga,
 } from '../controllers/correos.controllers.js';
+import {
+    listarBandeja, detalleCorreoRecibido, marcarCorreoRecibido,
+    sincronizarBandejaController, progresoBandeja, responderCorreoRecibido,
+    listarEnviados, detalleEnviado,
+} from '../controllers/bandeja.controllers.js';
 import { requireAdmin } from '../middleware/auth.js';
 import { envioMasivoLimiter } from '../config/security.js';
 
@@ -58,5 +63,28 @@ router.get('/plantillas', requireAdmin, listarPlantillasCorreo);
 router.post('/plantillas', requireAdmin, guardarPlantillaCorreo);
 router.put('/plantillas/:id', requireAdmin, guardarPlantillaCorreo);
 router.delete('/plantillas/:id', requireAdmin, eliminarPlantillaCorreo);
+
+// ---------------------------------------------------------------------------
+// BANDEJA DE ENTRADA · lo que contestan los clientes, leído por IMAP
+// ---------------------------------------------------------------------------
+// Cuelga de `/api/correos` para no partir los permisos: es el mismo módulo
+// —hablarle al cliente— y así hereda el `requireModulo('crm')` del montaje.
+// El `requireAdmin` va igual que el resto: la casilla es de la firma completa.
+//
+// OJO CON EL ORDEN: `/bandeja/progreso` tiene que ir ANTES que `/bandeja/:id`,
+// o Express tomaría «progreso» como si fuera un id y respondería 404.
+router.get('/bandeja', requireAdmin, listarBandeja);
+router.get('/bandeja/progreso', requireAdmin, progresoBandeja);
+router.post('/bandeja/sincronizar', requireAdmin, sincronizarBandejaController);
+router.get('/bandeja/:id', requireAdmin, detalleCorreoRecibido);
+router.patch('/bandeja/:id', requireAdmin, marcarCorreoRecibido);
+// Responder y reenviar. Sale por la misma vía y con el remitente de quien
+// contesta, para que la respuesta no quede fuera del sistema.
+router.post('/bandeja/:id/responder', requireAdmin, responderCorreoRecibido);
+
+// Enviados, en lista plana: una fila por correo en vez de agrupados por
+// campaña. La vista por campaña sigue en `/campanas`.
+router.get('/enviados', requireAdmin, listarEnviados);
+router.get('/enviados/:id', requireAdmin, detalleEnviado);
 
 export default router;

@@ -61,6 +61,17 @@ export const cambiarPlanApi = (sessionId, empresaId, planId, motivo = '') => {
   });
 };
 
+/**
+ * ¿El RUT ya es representante legal de otra empresa? Devuelve las empresas y,
+ * si el mismo RUT figura con nombres distintos, lo marca: eso es un error de
+ * carga y hace que el robot del SII entre a la cuenta equivocada.
+ */
+export const representanteExistenteApi = (sessionId, rut, excluirEmpresaId = null) => {
+  const p = new URLSearchParams({ rut });
+  if (excluirEmpresaId) p.set('excluirEmpresaId', excluirEmpresaId);
+  return fetchWithAuth(`/clientes/crm/representante-existente?${p}`, sessionId);
+};
+
 export const addServicioApi = (sessionId, empresaId, data) => {
   // data: { servicioId, precioPactado, periodicidad, primeraFacturacion }
   return fetchWithAuth(`/clientes/crm/${empresaId}/servicios`, sessionId, {
@@ -72,6 +83,17 @@ export const addServicioApi = (sessionId, empresaId, data) => {
 export const removeServicioApi = (sessionId, empresaServicioId) => {
   return fetchWithAuth(`/clientes/crm/servicios/${empresaServicioId}`, sessionId, {
     method: 'DELETE'
+  });
+};
+
+/**
+ * Modifica un servicio ya contratado: precio, periodicidad o 1ª facturación.
+ * Solo viaja lo que se quiere cambiar; lo que no se manda queda como estaba.
+ */
+export const editarServicioApi = (sessionId, empresaServicioId, data) => {
+  return fetchWithAuth(`/clientes/crm/servicios/${empresaServicioId}`, sessionId, {
+    method: 'PATCH',
+    body: data
   });
 };
 

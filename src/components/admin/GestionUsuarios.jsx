@@ -372,10 +372,14 @@ const GestionUsuarios = () => {
         </div>
       </header>
       {/* --- ÁREA DE DOBLE COLUMNA --- */}
-      <main className="flex-1 flex overflow-hidden max-w-[1600px] w-full lg:px-0 pb-10 gap-8">
-        
+      {/* En teléfono las dos columnas no caben lado a lado: se apilan.
+          `overflow-hidden` + fila fija dejaba la columna derecha fuera de la
+          pantalla, sin manera de llegar a ella. Apiladas, la página entera
+          hace scroll vertical, que es lo natural en un teléfono. */}
+      <main className="flex-1 flex flex-col lg:flex-row lg:overflow-hidden max-w-[1600px] w-full lg:px-0 pb-10 gap-4 lg:gap-8">
+
         {/* COLUMNA IZQUIERDA */}
-        <div className="w-full max-w-[420px] flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
+        <div className="w-full lg:max-w-[420px] flex flex-col gap-4 lg:overflow-y-auto custom-scrollbar lg:pr-2 flex-shrink-0">
           {initialLoading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-30">
               <Loader2 className="h-10 w-10 animate-spin" />

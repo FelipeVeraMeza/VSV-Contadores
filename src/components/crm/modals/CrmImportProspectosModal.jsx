@@ -263,7 +263,7 @@ const CrmImportProspectosModal = ({ onClose, onImported }) => {
 
                     {/* Contadores */}
                     {stats && !result && (
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-3 text-center">
                                 <div className="text-xl font-black text-emerald-600">{enRango.length}</div>
                                 <div className="text-[9px] uppercase tracking-widest text-slate-500 mt-0.5">A importar</div>

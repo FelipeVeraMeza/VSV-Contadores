@@ -12,6 +12,7 @@ const BajaCorreo = lazy(() => import('../components/publico/BajaCorreo.jsx'));
 const MainPage = lazy(() => import('../components/MainPage'));
 const Dashboard = lazy(() => import('../components/Dashboard'));
 const CRM = lazy(() => import('../components/CRM'));
+const Comunicaciones = lazy(() => import('../components/Comunicaciones'));
 const Facturacion = lazy(() => import('../components/Facturacion'));
 const Contabilidad = lazy(() => import('../components/Contabilidad'));
 const RecursosHumanos = lazy(() => import('../components/RecursosHumanos'));
@@ -90,6 +91,7 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/perfil" element={<ProfileEditor />} />
               <Route path="/CRM" element={<CRM />} />
+              <Route path="/comunicaciones" element={<Comunicaciones />} />
               <Route path="/tareas" element={<Tareas />} />
               <Route path="/contabilidad" element={<Contabilidad />} />
               <Route path="/rrhh" element={<RecursosHumanos />} />

@@ -12,11 +12,6 @@ import CrmErrorBoundary from './crm/CrmErrorBoundary';
 import CrmTableList from './crm/views/CrmTableList';
 import CrmAnalytics from './crm/modals/CrmAnalytics';
 import ClientDetailDrawer from './crm/modals/ClientDetailDrawer';
-import WhatsappPanel from './crm/views/WhatsappPanel';
-// La pestaña «Correo» era una maqueta con datos falsos (EmailPanel, sin backend).
-// Se reemplaza por el envío real; el archivo viejo queda por si se retoma la
-// idea de la bandeja de entrada, que es otro problema —recibir, no enviar—.
-import EnvioCorreos from './crm/views/EnvioCorreos';
 import InteraccionesPanel from './crm/views/InteraccionesPanel';
 import CrearClienteModal from './crm/modals/CrearClienteModal';
 import CrearEmpresaModal from './crm/modals/CrearEmpresaModal';
@@ -34,8 +29,6 @@ const TITULOS = {
   dashboard: 'Dashboard CRM',
   list: 'Clientes',
   prospectos: 'Prospectos',
-  whatsapp: 'WhatsApp',
-  correo: 'Correo',
   interacciones: 'Interacciones',
   analytics: 'Métricas',
 };
@@ -469,17 +462,12 @@ const CRM = () => {
           se redirige, para no dejarlo mirando una pantalla en blanco. */}
       {activeTab === 'tareas' && <Navigate to="/tareas" replace />}
 
-      {activeTab === 'whatsapp' && (
-        <div className="flex-1 min-h-0">
-          <WhatsappPanel />
-        </div>
-      )}
-
-      {activeTab === 'correo' && (
-        <div className="flex-1 min-h-0">
-          <EnvioCorreos />
-        </div>
-      )}
+      {/* Correo y WhatsApp se mudaron a Comunicaciones por la misma razón:
+          hablarle al cliente es su propio trabajo, y allá está junto al correo
+          masivo que antes vivía en el facturador. Los enlaces viejos siguen
+          funcionando —los hay en marcadores y en pantallas que navegan acá—. */}
+      {activeTab === 'whatsapp' && <Navigate to="/comunicaciones?sub=whatsapp" replace />}
+      {activeTab === 'correo'   && <Navigate to="/comunicaciones?sub=correo" replace />}
 
       {activeTab === 'interacciones' && (
         <div className="flex-1 min-h-0">

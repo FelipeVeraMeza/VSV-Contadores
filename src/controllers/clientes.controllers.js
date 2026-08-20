@@ -984,9 +984,66 @@ export const cambiarPlanCRM = async (req, res) => {
 };
 
 // =========================================================
+// ¿ESTE RUT YA ES REPRESENTANTE DE OTRA EMPRESA?
+// ---------------------------------------------------------
+// Cada empresa guarda su representante por separado: la misma persona en dos
+// empresas son dos fichas independientes, y nada avisa que son la misma. Si
+// cambia de teléfono hay que editar las dos.
+//
+// Peor todavía, así se colaron dos RUT con nombres cruzados —el mismo RUT
+// escrito para dos personas distintas—. Y con el RUT equivocado el robot del
+// SII entra mal, que es un problema silencioso: no falla, entra a la cuenta
+// que no era.
+//
+// Esto no impide nada: AVISA al cargar el RUT, que es el momento en que la
+// persona puede mirar y decidir. Bloquearlo sería un error, porque un
+// representante en varias empresas es perfectamente normal.
+//
+// Se compara por `rut_hash` y no descifrando: el hash existe justo para poder
+// buscar sin exponer el dato.
+export const representanteExistente = async (req, res) => {
+    try {
+        const rut = String(req.query.rut || '').trim();
+        if (!rut) return res.json({ success: true, empresas: [] });
+
+        const limpio = cleanRut(rut);
+        if (!limpio) return res.json({ success: true, empresas: [] });
+
+        const { rows } = await pool.query(
+            `SELECT DISTINCT e.id, e.razon_social, r.nombre AS nombre_representante
+               FROM empresa_representante r
+               JOIN empresa e ON e.id = r.empresa_id
+              WHERE r.rut_hash = $1
+                AND e.organizacion_id IS NOT DISTINCT FROM $2::uuid
+                AND ($3::uuid IS NULL OR e.id <> $3::uuid)
+              ORDER BY e.razon_social`,
+            [generateHash(limpio), req.user?.organizacionId || null, req.query.excluirEmpresaId || null]);
+
+        // Los nombres distintos para el mismo RUT son la señal de que algo se
+        // cargó mal; se devuelven para poder decirlo en pantalla.
+        const nombres = [...new Set(rows.map(r => (r.nombre_representante || '').trim()).filter(Boolean))];
+
+        return res.json({
+            success: true,
+            empresas: rows.map(r => ({ id: r.id, razonSocial: r.razon_social })),
+            nombres,
+            nombresDistintos: nombres.length > 1,
+        });
+    } catch (error) {
+        console.error('❌ Error revisando el representante:', error.message);
+        // Un aviso que falla no puede impedir dar de alta un cliente.
+        return res.json({ success: true, empresas: [] });
+    }
+};
+
+// =========================================================
 // SERVICIOS CONTRATADOS (agregar / quitar)
 // =========================================================
-const PERIODICIDADES = ['mensual', 'bimensual', 'trimestral', 'cuatrimestral', 'semestral', 'anual'];
+// «una_vez» es la que faltaba: los trámites que se cobran UNA sola vez (inicio
+// de actividades, constitución) no son mensuales ni anuales, y había que
+// elegirles una periodicidad falsa. La lista para las pantallas, con sus
+// etiquetas, vive en src/lib/periodicidades.js; acá solo se valida.
+const PERIODICIDADES = ['mensual', 'bimensual', 'trimestral', 'cuatrimestral', 'semestral', 'anual', 'una_vez'];
 
 export const addServicioCRM = async (req, res) => {
     try {
@@ -1046,6 +1103,102 @@ export const addServicioCRM = async (req, res) => {
     } catch (error) {
         console.error('❌ Error agregando servicio CRM:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo agregar el servicio.' });
+    }
+};
+
+// ----------------------------------------------------------------------------
+// MODIFICAR UN SERVICIO YA CONTRATADO
+// ----------------------------------------------------------------------------
+// Esto NO existía. Se podía agregar un servicio, darlo de baja y reactivarlo,
+// pero no corregirle el precio ni la periodicidad: la ficha solo mostraba el
+// tarrito de basura. Para subir un honorario había que dar de baja el servicio
+// y volver a agregarlo, lo que corta el historial —`fecha_inicio` se reinicia—
+// y encima choca con la comprobación de duplicados si no alcanzó a suspenderse.
+//
+// De ahí venía «AL MODIFICAR UN SERVICIO NO SE GUARDA»: no es que no guardara,
+// es que no había dónde.
+//
+// Se actualiza SOLO lo que venga en la petición. Mandar `precioPactado` vacío a
+// propósito tiene que poder dejar el precio en blanco, así que se distingue
+// «no lo mandó» de «lo mandó vacío» con `!== undefined`.
+export const actualizarServicioCRM = async (req, res) => {
+    try {
+        const { empresaServicioId } = req.params;
+        const { precioPactado, periodicidad, primeraFacturacion } = req.body || {};
+
+        const campos = [];
+        const args = [empresaServicioId, req.user?.organizacionId || null];
+
+        if (precioPactado !== undefined) {
+            // Mismo criterio que al agregar: el peso chileno no usa decimales y
+            // la pantalla manda "45.000" con punto de miles.
+            const soloDigitos = (precioPactado === null || String(precioPactado).trim() === '')
+                ? null
+                : parseInt(String(precioPactado).replace(/[^\d]/g, ''), 10);
+            args.push(Number.isNaN(soloDigitos) ? null : soloDigitos);
+            campos.push(`precio_pactado = $${args.length}`);
+        }
+        if (periodicidad !== undefined) {
+            if (!PERIODICIDADES.includes(periodicidad)) {
+                return res.status(400).json({ success: false, message: 'Periodicidad no válida.' });
+            }
+            args.push(periodicidad);
+            campos.push(`periodicidad = $${args.length}`);
+        }
+        if (primeraFacturacion !== undefined) {
+            args.push(primeraFacturacion || null);
+            campos.push(`primera_facturacion = $${args.length}`);
+        }
+        if (campos.length === 0) {
+            return res.status(400).json({ success: false, message: 'Nada que modificar.' });
+        }
+
+        // El id del servicio no dice de quién es: el candado de organización se
+        // pone subiendo hasta la empresa, igual que en dar de baja.
+        const { rows } = await pool.query(
+            `UPDATE empresa_servicio es
+                SET ${campos.join(', ')}, updated_at = NOW()
+               FROM empresa e
+              WHERE es.id = $1 AND e.id = es.empresa_id
+                AND e.organizacion_id IS NOT DISTINCT FROM $2::uuid
+              RETURNING es.id, es.precio_pactado, es.periodicidad,
+                        -- Se devuelve como TEXTO y no como fecha a proposito.
+                        -- La columna es un date sin hora; el driver lo convierte
+                        -- a un Date con la hora 00:00 de la zona del servidor, y
+                        -- al viajar como JSON se vuelve UTC. En Chile (UTC-4) y
+                        -- en Railway (UTC) sale bien, pero en cualquier zona por
+                        -- delante de UTC la medianoche local cae en el dia
+                        -- ANTERIOR y la pantalla mostraria un dia menos. En texto
+                        -- no hay zona horaria que corra nada.
+                        to_char(es.primera_facturacion, 'YYYY-MM-DD') AS primera_facturacion,
+                        es.estado, es.servicio_id`,
+            args);
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Servicio no encontrado.' });
+
+        const row = rows[0];
+        const { rows: nom } = await pool.query(
+            `SELECT nombre, categoria FROM servicio WHERE id = $1`, [row.servicio_id]);
+
+        await registrar(req, {
+            modulo: 'clientes', accion: 'editar', entidad: 'empresa_servicio', entidadId: row.id,
+            descripcion: `Modificó el servicio «${nom[0]?.nombre || row.servicio_id}»`,
+        });
+
+        return res.json({
+            success: true,
+            servicio: {
+                id: row.id,
+                nombre: nom[0]?.nombre || null,
+                categoria: nom[0]?.categoria || null,
+                estado: row.estado,
+                precioPactado: parseFloat(row.precio_pactado) || 0,
+                periodicidad: row.periodicidad || 'mensual',
+                primeraFacturacion: row.primera_facturacion || null,
+            },
+        });
+    } catch (error) {
+        console.error('❌ Error modificando servicio CRM:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo modificar el servicio.' });
     }
 };
 
@@ -1276,7 +1429,11 @@ export const crearEmpresaCRM = async (req, res) => {
                  VALUES ($1,$2,'Activo',$3,$4,NOW())`,
                 [empresaId, s.servicioId,
                  Number.isFinite(precio) && precio >= 0 ? precio : null,
-                 s.periodicidad || 'mensual']
+                 // Se valida igual que al agregar un servicio desde la ficha.
+                 // Acá NO se validaba, y la pantalla de alta mandaba «unica»
+                 // —un valor que no existe en la lista— así que quedaba guardado
+                 // crudo y después ningún desplegable lo reconocía.
+                 PERIODICIDADES.includes(s.periodicidad) ? s.periodicidad : 'mensual']
             );
         }
 

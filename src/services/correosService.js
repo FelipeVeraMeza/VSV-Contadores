@@ -82,3 +82,49 @@ export const guardarPlantillaCorreoApi = (sessionId, datos, id = null) =>
 
 export const eliminarPlantillaCorreoApi = (sessionId, id) =>
     fetchWithAuth(`/correos/plantillas/${id}`, sessionId, { method: 'DELETE' });
+
+// ---------------------------------------------------------------------
+// Bandeja de entrada · lo que contestan los clientes, leído por IMAP
+// ---------------------------------------------------------------------
+/** El listado. `filtro`: todos | no_leidos | destacados | clientes | archivados */
+export const bandejaApi = (sessionId, { q = '', filtro = 'todos', pagina = 0 } = {}) => {
+    const p = new URLSearchParams({ filtro, pagina: String(pagina) });
+    if (q) p.set('q', q);
+    return fetchWithAuth(`/correos/bandeja?${p}`, sessionId);
+};
+
+/** Abrir uno. Al abrirlo queda marcado como leído. */
+export const correoRecibidoApi = (sessionId, id) =>
+    fetchWithAuth(`/correos/bandeja/${id}`, sessionId);
+
+/** Destacar, archivar o volver a marcar como no leído. */
+export const marcarRecibidoApi = (sessionId, id, cambios) =>
+    fetchWithAuth(`/correos/bandeja/${id}`, sessionId, { method: 'PATCH', body: cambios });
+
+/** Busca lo nuevo en el servidor de correo. Responde al toque y sigue detrás. */
+export const sincronizarBandejaApi = (sessionId) =>
+    fetchWithAuth('/correos/bandeja/sincronizar', sessionId, { method: 'POST', body: {} });
+
+export const progresoBandejaApi = (sessionId) =>
+    fetchWithAuth('/correos/bandeja/progreso', sessionId);
+
+/**
+ * Responder o reenviar. Sale por la misma vía que todo lo demás y con el
+ * remitente de quien contesta. Con `reenviar: true` el destino lo pone quien
+ * escribe; sin él, va siempre a quien mandó el original.
+ */
+export const responderRecibidoApi = (sessionId, id, datos) =>
+    fetchWithAuth(`/correos/bandeja/${id}/responder`, sessionId, { method: 'POST', body: datos });
+
+// ---------------------------------------------------------------------
+// Enviados en lista plana · un correo por fila, no agrupados por campaña
+// ---------------------------------------------------------------------
+/** `filtro`: todos | fallidos | pruebas */
+export const enviadosApi = (sessionId, { q = '', filtro = 'todos', pagina = 0 } = {}) => {
+    const p = new URLSearchParams({ filtro, pagina: String(pagina) });
+    if (q) p.set('q', q);
+    return fetchWithAuth(`/correos/enviados?${p}`, sessionId);
+};
+
+export const enviadoApi = (sessionId, id) =>
+    fetchWithAuth(`/correos/enviados/${id}`, sessionId);

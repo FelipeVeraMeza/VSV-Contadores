@@ -3,9 +3,34 @@ import { pool } from '../database/db.js';
 // el interruptor "pago recibido" al contabilizar un documento, y ambas entradas
 // deben generar exactamente el mismo movimiento y el mismo asiento.
 import { crearAsientoCaja, borrarAsientoCaja } from '../utils/caja.js';
+import { empresaPermitida, empresasVisibles, veSoloAsignadas } from '../utils/scope.js';
 
 const normEmp = (empresaId) =>
   (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
+
+// Portero, igual que en Contabilidad: null si puede seguir, o el motivo.
+const puedeVerEmpresa = async (req, empId) => {
+  if (!empId) return null;                       // vista global: se acota aparte
+  return (await empresaPermitida(req, empId)) ? null : 'No tienes acceso a la caja de esa empresa.';
+};
+const sinAcceso = (res, motivo) => res.status(403).json({ ok: false, error: motivo });
+
+// Editar y eliminar reciben solo el id del movimiento. Antes se hacía el UPDATE
+// o el DELETE directo contra ese id, sin mirar de quién era: con el id a mano se
+// podía tocar la caja de otra organización. Ahora se lee primero el dueño.
+const movimientoFueraDeAlcance = async (req, id) => {
+  let m;
+  try { ({ rows: [m] } = await pool.query(
+    'SELECT empresa_id, organizacion_id FROM movimientos_caja WHERE id = $1', [id])); }
+  catch { return null; }                         // id inválido: lo resuelve el 404
+  if (!m) return null;
+  if ((m.organizacion_id || null) !== (req.user?.organizacionId || null)) {
+    return 'Ese movimiento no es de tu organización.';
+  }
+  if (m.empresa_id) return await puedeVerEmpresa(req, m.empresa_id);
+  // Movimiento sin empresa: es de la caja global de la firma.
+  return veSoloAsignadas(req) ? 'Ese movimiento no es de tus empresas.' : null;
+};
 
 // Registrar recaudación (cobro a cliente) o pago (a proveedor)
 export const crearMovimientoCaja = async (req, res) => {
@@ -15,6 +40,11 @@ export const crearMovimientoCaja = async (req, res) => {
 
   if (!tipo || !(Number(monto) > 0)) {
     return res.status(400).json({ ok: false, error: 'tipo y monto (> 0) son requeridos' });
+  }
+  const motivo = await puedeVerEmpresa(req, empId);
+  if (motivo) return sinAcceso(res, motivo);
+  if (!empId && veSoloAsignadas(req)) {
+    return sinAcceso(res, 'Selecciona una de tus empresas antes de registrar el movimiento.');
   }
 
   const medio = medio_pago || 'transferencia';
@@ -54,6 +84,11 @@ export const crearMovimientosCajaLote = async (req, res) => {
 
   if (!tipo || !Array.isArray(movimientos) || movimientos.length === 0) {
     return res.status(400).json({ ok: false, error: 'tipo y movimientos[] (no vacío) son requeridos' });
+  }
+  const motivo = await puedeVerEmpresa(req, empId);
+  if (motivo) return sinAcceso(res, motivo);
+  if (!empId && veSoloAsignadas(req)) {
+    return sinAcceso(res, 'Selecciona una de tus empresas antes de registrar los movimientos.');
   }
 
   const client = await pool.connect();
@@ -96,13 +131,28 @@ export const crearMovimientosCajaLote = async (req, res) => {
 export const listarMovimientosCaja = async (req, res) => {
   const { empresaId, tipo, desde, hasta } = req.query;
   const empId = normEmp(empresaId);
+  const motivo = await puedeVerEmpresa(req, empId);
+  if (motivo) return sinAcceso(res, motivo);
   const cond = [];
   const params = [];
   // Aislamiento por tenant. Sin esto, `empresa_id IS NULL` ("movimientos de la
   // propia firma") no distinguía de qué organización eran y una organización
   // nueva veía los de la firma anterior.
   cond.push(`organizacion_id IS NOT DISTINCT FROM $${params.push(req.user?.organizacionId || null)}::uuid`);
-  cond.push(empId === null ? 'empresa_id IS NULL' : `empresa_id = $${params.push(empId)}`);
+  if (empId !== null) {
+    cond.push(`empresa_id = $${params.push(empId)}`);
+  } else {
+    // Sin empresa elegida, la vista global es la caja de la firma
+    // (`empresa_id IS NULL`). Para quien solo ve lo asignado esa caja no es
+    // suya: se le muestra la de SUS empresas, y si no tiene ninguna, nada.
+    const visibles = await empresasVisibles(req);
+    if (visibles) {
+      if (!visibles.length) return res.json({ ok: true, movimientos: [] });
+      cond.push(`empresa_id = ANY($${params.push(visibles)}::uuid[])`);
+    } else {
+      cond.push('empresa_id IS NULL');
+    }
+  }
   if (tipo) cond.push(`tipo = $${params.push(tipo)}`);
   if (desde && hasta) cond.push(`fecha::date BETWEEN $${params.push(desde)} AND $${params.push(hasta)}`);
 
@@ -135,6 +185,8 @@ export const editarMovimientoCaja = async (req, res) => {
   if (campos.length === 0) {
     return res.status(400).json({ ok: false, error: 'No hay campos para actualizar.' });
   }
+  const motivo = await movimientoFueraDeAlcance(req, id);
+  if (motivo) return sinAcceso(res, motivo);
 
   // Cambios que afectan el asiento (medio de pago, monto o fecha)
   const regeneraAsiento = medio_pago !== undefined || monto !== undefined || fecha !== undefined;
@@ -175,6 +227,8 @@ export const editarMovimientoCaja = async (req, res) => {
 // Eliminar un movimiento y su asiento contable (deshacer pago/cobro)
 export const eliminarMovimientoCaja = async (req, res) => {
   const { id } = req.params;
+  const motivo = await movimientoFueraDeAlcance(req, id);
+  if (motivo) return sinAcceso(res, motivo);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

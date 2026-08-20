@@ -355,7 +355,7 @@ const ImportarProspectosModal = ({ onClose, onImportado }) => {
                             <p className="text-[11px] text-slate-500 mt-1">
                                 Están en tu cartera, listos para trabajar.
                             </p>
-                            <div className="grid grid-cols-3 gap-2 mt-5 text-left">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-5 text-left">
                                 <Dato n={resultado.creados} label="Creados" tono="text-emerald-600" />
                                 <Dato n={resultado.omitidos} label="Saltados" tono="text-slate-500" />
                                 <Dato n={resultado.fallidos} label="Con problema" tono="text-red-600" />

@@ -63,7 +63,11 @@ const GlobalCompanySelector = () => {
         <div className="relative">
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`flex items-center gap-2 bg-white border border-[#e5ddd0] text-slate-700 text-xs font-black uppercase px-4 py-2 rounded-xl hover:bg-slate-50 transition-all w-64 shadow-sm ${!selectedCompany ? 'border-dashed border-[#199b4d]' : ''}`}
+                // El ancho era fijo (w-64 = 256px). En un teléfono de 375px, sumado
+                // al botón de menú, la campana y el resto del encabezado, empujaba
+                // la barra fuera de la pantalla y dejaba TODA la aplicación con
+                // scroll horizontal. Ahora se encoge hasta 140px y crece si hay sitio.
+                className={`flex items-center gap-2 bg-white border border-[#e5ddd0] text-slate-700 text-xs font-black uppercase px-3 sm:px-4 py-2 rounded-xl hover:bg-slate-50 transition-all min-w-0 w-[140px] sm:w-56 lg:w-64 shadow-sm ${!selectedCompany ? 'border-dashed border-[#199b4d]' : ''}`}
             >
                 {selectedCompany
                     ? <Building2 size={14} className="text-[#199b4d]" />
@@ -75,7 +79,9 @@ const GlobalCompanySelector = () => {
             {isOpen && (
                 <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-                    <div className="absolute top-full right-0 mt-2 w-72 bg-white border border-[#e5ddd0] rounded-xl shadow-xl shadow-black/[0.08] p-2 z-50">
+                    {/* `w-72` fijo se salía por el borde en pantallas angostas.
+                        Con `max-w-[calc(100vw-2rem)]` nunca pasa del ancho visible. */}
+                    <div className="absolute top-full right-0 mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white border border-[#e5ddd0] rounded-xl shadow-xl shadow-black/[0.08] p-2 z-50">
                         <div className="p-2">
                             <input
                                 autoFocus

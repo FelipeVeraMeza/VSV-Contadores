@@ -13,22 +13,22 @@
 import { pool } from '../database/db.js';
 import { encrypt, decrypt, generateHash } from '../utils/crypto.js';
 import { cleanRut, formatRut } from '../lib/rut.js';
+import { empresaPermitida, empresasVisibles } from '../utils/scope.js';
 
 const esAdmin = (req) => req.user?.rol === 'Administrador';
 
-// Verifica que la empresa exista y pertenezca a la organización del usuario.
-// Devuelve la fila de empresa (id, organizacion_id) o null.
-const empresaPermitida = async (req, empresaId) => {
-  if (!empresaId) return null;
-  const { rows } = await pool.query(
-    'SELECT id, organizacion_id FROM empresa WHERE id = $1',
-    [empresaId]
-  );
-  const e = rows[0];
-  if (!e) return null;
-  if ((e.organizacion_id || null) !== (req.user?.organizacionId || null)) return null;
-  return e;
-};
+// Verifica que la empresa exista, pertenezca a la organización del usuario y —si
+// el usuario solo ve lo asignado— que la tenga en `audita`.
+//
+// Esta función vivía acá y comprobaba SOLO la organización. Como quien entra al
+// equipo desde cero está en la misma organización que todos, siempre pasaba: el
+// 19-08-2026 se midió que podía pedir los trabajadores y los indicadores de
+// sueldos de cualquier empresa de la oficina y el servidor respondía 200. Le
+// faltaba una condición, no una reescritura.
+//
+// Ahora vive en `utils/scope.js` y la comparten Contabilidad y Remuneraciones,
+// para que la regla no vuelva a existir en dos versiones distintas.
+// (El import está arriba, junto a los demás.)
 
 // Normaliza un valor contra una lista de opciones permitidas (o null).
 const enumOrNull = (val, permitidos) => {
@@ -431,12 +431,25 @@ export const listTrabajadores = async (req, res) => {
       const empresa = await empresaPermitida(req, empresaId);
       if (!empresa) return res.status(404).json({ message: 'Empresa no encontrada en tu organización' });
     }
-    const col = empresaId ? 't.empresa_id' : 't.organizacion_id';
-    const val = empresaId || orgId;
+    // Sin empresa elegida se lista toda la organización. Para quien solo ve lo
+    // asignado, eso serían los trabajadores de las 99 empresas de la oficina: se
+    // acota a las suyas, y si no tiene ninguna, la lista va vacía.
+    let cond, val;
+    if (empresaId) {
+      cond = 't.empresa_id = $1'; val = empresaId;
+    } else {
+      const visibles = await empresasVisibles(req);
+      if (visibles) {
+        if (!visibles.length) return res.status(200).json([]);
+        cond = 't.empresa_id = ANY($1::uuid[])'; val = visibles;
+      } else {
+        cond = 't.organizacion_id = $1'; val = orgId;
+      }
+    }
     const { rows } = await pool.query(
       `SELECT t.*, e.razon_social AS empresa_nombre
        FROM rem_trabajador t LEFT JOIN empresa e ON e.id = t.empresa_id
-       WHERE ${col} = $1
+       WHERE ${cond}
        ORDER BY t.estado_contrato ASC, t.created_at DESC
        LIMIT 1000`,
       [val]

@@ -1,10 +1,12 @@
 import { fetchWithAuth } from './apiClient';
 
-export const listarPersonasApi = (sessionId, { estado = '', q = '', ejecutivo = '' } = {}) => {
+/** `orden`: recientes (por omisión) | contacto | contacto_lejano | nombre | ultimo */
+export const listarPersonasApi = (sessionId, { estado = '', q = '', ejecutivo = '', orden = '' } = {}) => {
   const params = new URLSearchParams();
   if (estado) params.set('estado', estado);
   if (q) params.set('q', q);
   if (ejecutivo) params.set('ejecutivo', ejecutivo);
+  if (orden) params.set('orden', orden);
   const qs = params.toString();
   return fetchWithAuth(`/personas${qs ? `?${qs}` : ''}`, sessionId);
 };

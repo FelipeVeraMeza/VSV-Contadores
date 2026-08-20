@@ -690,7 +690,11 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     <div className="space-y-5">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+        {/* `flex-wrap`: en teléfono el selector de mes, el botón Buscar, el
+            buscador y los filtros no caben en una fila. Sin envolver, los
+            últimos quedaban FUERA de la pantalla y recortados — el filtro
+            «Todos» no se podía tocar. Medido en un iPhone SE: se salían 126px. */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1 min-w-0">
           {!rango?.desde && (
             <div className="flex items-center bg-slate-50 border border-[#efe8dd] rounded-xl px-1 py-1 flex-shrink-0">
               <div className="flex items-center pl-3 pr-1"><CalendarDays className="h-4 w-4 text-blue-600" /></div>
@@ -715,8 +719,10 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
             }`}>
             <Search className="h-4 w-4 mr-2" /> Buscar
           </Button>
-          {/* BUSCADOR unificado: folio + RUT + nombre */}
-          <div className="relative flex-1 max-w-xs">
+          {/* BUSCADOR unificado: folio + RUT + nombre.
+              `min-w-[180px]` para que al envolverse no quede un campo de dos
+              centímetros imposible de usar. */}
+          <div className="relative flex-1 min-w-[180px] max-w-xs">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
             <input type="text" value={busqueda} onChange={e => setBusqueda(e.target.value)}
               placeholder="Buscar por folio, RUT o nombre..."
@@ -1145,7 +1151,7 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                   <p className="text-[9px] font-black uppercase tracking-widest text-blue-700 mb-2 flex items-center gap-2">
                     <CalendarDays className="h-3.5 w-3.5" /> Tipo de Período
                   </p>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[{v:'diario',l:'Diario'},{v:'mensual',l:'Mensual'},{v:'trimestral',l:'Trimestral'},{v:'anual',l:'Anual'}].map(({v,l}) => (
                       <button key={v} onClick={() => setTipoPeriodoLibro(v)}
                         className={`py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${

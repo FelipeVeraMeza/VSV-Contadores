@@ -5,12 +5,13 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Calculator, Users, FileText,
   Landmark, ShieldCheck, FileBarChart, LogOut, Menu, X, Package,
-  ChevronDown, ShoppingCart, TrendingUp, Cloud, UserCheck,
+  ChevronDown, ShoppingCart, TrendingUp, UserCheck,
   Wallet, CreditCard, BookCopy, ArrowRightLeft,
   Building2, UserPlus, MessageCircle, Mail, Activity, PieChart, UserCircle,
   Clock, Settings, DollarSign, Book, Umbrella, Receipt, Coins, Stethoscope,
   CalendarDays, Download, Percent, HeartPulse, ListChecks, FileSpreadsheet,
-  BadgeCheck, Send, PanelLeftClose, PanelLeftOpen, Network, FolderOpen
+  BadgeCheck, Send, PanelLeftClose, PanelLeftOpen, Network, FolderOpen,
+  Megaphone, LayoutTemplate
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth.jsx';
@@ -36,7 +37,6 @@ function MainPage() {
   const subContabilidad = [
     { id: 'compras',        name: 'Compras',           icon: ShoppingCart },
     { id: 'ventas',         name: 'Ventas',            icon: TrendingUp },
-    { id: 'sii',            name: 'Conexión SII',      icon: Cloud },
     { id: 'honorarios',     name: 'Honorarios',        icon: UserCheck },
     { id: 'recaudaciones',  name: 'Recaudaciones',     icon: Wallet },
     { id: 'pagos',          name: 'Pagos',             icon: CreditCard },
@@ -45,30 +45,61 @@ function MainPage() {
     { id: 'reportes',       name: 'Reportes',          icon: FileBarChart },
   ];
 
+  // Varias secciones son de la firma completa y no de una empresa, así que se
+  // reservan al Administrador. Esconderlas del menú es cortesía —para que nadie
+  // haga clic y aterrice en otra pantalla sin explicación—; el candado de verdad
+  // está en el backend, que responde 403.
+  const esAdministrador = user?.rol === 'Administrador';
+
+  // El CRM es la CARTERA: quiénes son los clientes y cómo va la relación.
+  // Hablarles —correo, WhatsApp— se mudó a Comunicaciones, que es su propio
+  // trabajo y además junta lo que antes estaba partido entre el CRM y el
+  // facturador.
   const subCRM = [
     { id: 'dashboard',     name: 'Dashboard',     icon: LayoutDashboard },
     { id: 'list',          name: 'Clientes',      icon: Building2 },
     { id: 'prospectos',    name: 'Prospectos',    icon: UserPlus },
-    { id: 'whatsapp',      name: 'WhatsApp',      icon: MessageCircle },
-    { id: 'correo',        name: 'Correo',        icon: Mail },
     { id: 'interacciones', name: 'Interacciones', icon: Activity },
     { id: 'analytics',     name: 'Métricas',      icon: PieChart },
   ];
 
+  // Submódulos de Comunicaciones.
+  //
+  // "Correo Masivo" viene de Facturación y sigue siendo solo del Administrador:
+  // escribe a los clientes de toda la firma, no a los de una empresa. Mismo
+  // triple candado de siempre —se esconde del menú, la página rebota a quien
+  // entre por URL, y el backend responde 403—.
+  //
+  // Y pide DOS cosas, no una: ser Administrador y tener Facturación habilitada.
+  // La pantalla se mudó de módulo pero sus datos no: sigue leyendo /api/dte y
+  // /api/cobros, que exigen `requireModulo('facturacion')`. Mostrarla solo por
+  // la bandera de Comunicaciones dejaría a un administrador sin facturación
+  // mirando una pantalla que responde 403 en cada consulta.
+  const puedeVerFacturacion = user?.modulos?.puedeVerFacturacion !== false;
+  //
+  // «Recibidos» e «Historial» ya no son entradas del menú: pasaron a ser
+  // carpetas DENTRO de Correo, que es donde uno las busca en un cliente de
+  // correo. Tenerlas acá arriba obligaba a salir de la bandeja para ver lo
+  // enviado, cuando son la misma tarea.
+  const subComunicaciones = [
+    { id: 'correo',     name: 'Correo',        icon: Mail },
+    { id: 'whatsapp',   name: 'WhatsApp',      icon: MessageCircle },
+    { id: 'plantillas', name: 'Plantillas',    icon: LayoutTemplate },
+    ...(esAdministrador && puedeVerFacturacion ? [
+      { id: 'masivo',   name: 'Correo Masivo', icon: Send },
+    ] : []),
+  ];
+
   // Submódulos del menú de Facturación (soporte interno / SII).
   //
-  // "Cobro del Mes" y "Correo Masivo" son de la firma completa, no de una
-  // empresa: el backend los reserva al Administrador (403) y Facturacion.jsx
-  // rebota a quien no corresponde. Si además se muestran en el menú, el
-  // Cliente hace clic y aterriza en otra pantalla sin ninguna explicación:
-  // parece que la aplicación está rota. Se esconden en origen.
-  const esAdministrador = user?.rol === 'Administrador';
+  // "Correo Masivo" ya no está acá: se mudó a Comunicaciones, junto al resto de
+  // lo que se le manda al cliente. Emitir un documento y avisar de él son dos
+  // trabajos distintos.
   const subFacturacion = [
     { id: 'emision',    name: 'Emitir DTE',              icon: Send },
     { id: 'documentos', name: 'Historial de Documentos', icon: FileText },
     ...(esAdministrador ? [
       { id: 'cobros',   name: 'Cobro del Mes',           icon: Wallet },
-      { id: 'correos',  name: 'Correo Masivo',           icon: Mail },
     ] : []),
   ];
 
@@ -80,9 +111,9 @@ function MainPage() {
   // la opción es cortesía; el candado de verdad está en el servidor.
   const subTareas = [
     { id: 'inicio',    name: 'Inicio',     icon: LayoutDashboard },
-    { id: 'proyectos', name: 'Proyectos',  icon: FolderOpen },
-    { id: 'todas',     name: 'Tareas',     icon: ListChecks },
     { id: 'mias',      name: 'Mis tareas', icon: UserCircle },
+    { id: 'todas',     name: 'Tareas',     icon: ListChecks },
+    { id: 'proyectos', name: 'Proyectos',  icon: FolderOpen },
     ...(esAdministrador ? [
       { id: 'equipo',  name: 'Equipo',     icon: Users },
     ] : []),
@@ -96,6 +127,7 @@ function MainPage() {
   useEffect(() => {
     if (location.pathname.startsWith('/contabilidad')) setExpandedModule('contabilidad');
     else if (location.pathname.startsWith('/CRM')) setExpandedModule('CRM');
+    else if (location.pathname.startsWith('/comunicaciones')) setExpandedModule('comunicaciones');
     else if (location.pathname.startsWith('/rrhh')) setExpandedModule('rrhh');
     else if (location.pathname.startsWith('/facturacion')) setExpandedModule('facturacion');
     else if (location.pathname.startsWith('/tareas')) setExpandedModule('tareas');
@@ -129,6 +161,10 @@ function MainPage() {
   const modules = [
     { id: 'dashboard', path: '/dashboard', name: 'Dashboard', icon: LayoutDashboard, color: 'from-emerald-500 to-green-500' },
     { id: 'CRM', path: '/CRM', name: 'CRM', icon: Package, color: 'from-pink-500 to-rose-500', sub: subCRM },
+    // Todo lo que sale hacia el cliente, junto: antes el correo colgaba del CRM
+    // y el correo masivo del facturador, así que «¿qué le mandamos?» obligaba a
+    // mirar en dos módulos distintos.
+    { id: 'comunicaciones', path: '/comunicaciones', name: 'Comunicaciones', icon: Megaphone, color: 'from-sky-500 to-blue-600', sub: subComunicaciones },
     // Las tareas cruzan todos los módulos, no son "algo del CRM": van al mismo
     // nivel que Contabilidad o Facturación.
     { id: 'tareas', path: '/tareas', name: 'Tareas', icon: ListChecks, color: 'from-violet-500 to-purple-600', sub: subTareas },
@@ -149,6 +185,11 @@ function MainPage() {
     rrhh:           'puedeVerRrhh',
     operacionRenta: 'puedeVerOperacionRenta',
     CRM:            'puedeVerCrm',
+    // Comunicaciones no tiene bandera propia: se esconde con la del CRM porque
+    // el backend exige `requireModulo('crm')` en /api/correos. Con otra bandera,
+    // alguien vería el menú y se comería un 403 al entrar. Si algún día se
+    // separa, hay que cambiarlo acá Y en server.js a la vez.
+    comunicaciones: 'puedeVerCrm',
     admin:          'puedeVerAdmin',
   };
   const modulosVisibles = modules.filter((m) => {
@@ -165,6 +206,23 @@ function MainPage() {
       <Helmet><title>VSV Pro | Sistema Contable</title></Helmet>
       <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[#fdfcf9] via-[#f4eee3] to-[#eadfce] font-sans">
         
+        {/* Fondo oscuro detrás del menú en teléfono.
+            El menú se abre encima del contenido, pero antes no había forma de
+            cerrarlo tocando fuera: había que apuntarle a la X o elegir una
+            sección. En un teléfono eso se siente como que la aplicación se
+            quedó pegada. */}
+        <AnimatePresence>
+          {sidebarOpen && windowWidth < 1024 && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+              aria-hidden="true"
+            />
+          )}
+        </AnimatePresence>
+
         <AnimatePresence>
           {(sidebarOpen || windowWidth >= 1024) && (
             <motion.aside
@@ -253,25 +311,31 @@ function MainPage() {
         </AnimatePresence>
 
         <div className="flex-1 flex flex-col h-full overflow-hidden w-full">
-          {/* HEADER CON SELECTOR GLOBAL */}
-          <header className="bg-white border-b border-[#efe8dd] w-full z-30 px-6 py-4 flex items-center justify-between">
-            <div className="flex items-center space-x-4">
+          {/* HEADER CON SELECTOR GLOBAL
+              En teléfono todo esto no cabía en una fila: el encabezado se salía y
+              arrastraba a toda la aplicación con scroll horizontal. Ahora los tres
+              grupos pueden encogerse (`min-w-0`) y las separaciones son menores en
+              pantallas chicas. */}
+          <header className="bg-white border-b border-[#efe8dd] w-full z-30 px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-2 sm:gap-4">
+            <div className="flex items-center flex-shrink-0">
               <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="lg:hidden text-slate-700">
                 {sidebarOpen ? <X /> : <Menu />}
               </Button>
             </div>
-            
+
             {/* AQUÍ EL SELECTOR GLOBAL QUE CAMBIA LA EMPRESA EN TODO EL SISTEMA */}
-            <GlobalCompanySelector />
-            
-            <div className="flex items-center space-x-4">
+            <div className="min-w-0 flex-shrink">
+              <GlobalCompanySelector />
+            </div>
+
+            <div className="flex items-center gap-1 sm:gap-4 flex-shrink-0">
               <CampanaNotificaciones />
               <AvisoFacturacion />
               <div className="hidden md:block text-right mr-2">
                 <p className="text-[#1a1c1e] text-sm font-bold italic uppercase">{user?.nombre}</p>
                 <p className="text-[9px] font-black uppercase text-[#199b4d] tracking-widest">{user?.rol}</p>
               </div>
-              <Button variant="ghost" size="icon" onClick={logout} className="h-10 w-10 text-slate-400 hover:text-red-500"><LogOut /></Button>
+              <Button variant="ghost" size="icon" onClick={logout} className="h-9 w-9 sm:h-10 sm:w-10 text-slate-400 hover:text-red-500"><LogOut /></Button>
             </div>
           </header>
 

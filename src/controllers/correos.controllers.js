@@ -26,6 +26,9 @@ import { pool } from '../database/db.js';
 import { registrar } from '../utils/bitacora.js';
 import { enviarCorreo, correoConfigurado } from '../utils/mailer.js';
 import { decrypt } from '../utils/crypto.js';
+import {
+    esHtmlCorreo, sanitizarHtmlCorreo, cuerpoVacio, escaparValor,
+} from '../utils/htmlCorreo.js';
 import crypto from 'node:crypto';
 
 // ============================================================================
@@ -98,13 +101,8 @@ export const LIMITE_DIARIO = Math.max(1, parseInt(process.env.CORREOS_LIMITE_DIA
 // sin distinguir, uno ve 15 y no entiende de dónde salieron.
 export const cuotaDelDia = async (organizacionId) => {
     const { rows } = await pool.query(
-        // Un envío con copia oculta son DOS correos para el proveedor: el del
-        // cliente y el de la copia. Contarlo como uno haría que el contador
-        // mostrara la mitad del gasto real, que es justo cuando más importa.
-        `SELECT count(*) FILTER (WHERE NOT es_prueba)::int
-                  + count(*) FILTER (WHERE NOT es_prueba AND con_copia)::int AS reales,
-                count(*) FILTER (WHERE es_prueba)::int
-                  + count(*) FILTER (WHERE es_prueba AND con_copia)::int     AS pruebas
+        `SELECT count(*) FILTER (WHERE NOT es_prueba)::int AS reales,
+                count(*) FILTER (WHERE es_prueba)::int     AS pruebas
            FROM correo_envio
           WHERE estado = 'enviado'
             AND organizacion_id IS NOT DISTINCT FROM $1::uuid
@@ -202,11 +200,21 @@ export const camposDisponibles = (_req, res) =>
 // borrara, un error de tipeo pasaría desapercibido y el cliente recibiría una
 // frase incompleta sin que nadie se entere. Dejándola visible, salta en la
 // vista previa antes de mandar nada.
-const combinar = (texto, empresa) => {
+//
+// `comoHtml` NO es un detalle de presentación: es de seguridad. Con el cuerpo
+// en texto plano se escapaba todo junto al final, así que una razón social con
+// «&» o «<» quedaba a salvo sin hacer nada. Con el editor de formato el cuerpo
+// ya es HTML y no se puede escapar entero —se perdería el formato—, así que
+// cada valor se escapa al insertarse. Sin esto, un cliente llamado
+// «GÓMEZ & CÍA <SPA>» rompe el correo, y uno con nombre malicioso hace algo
+// peor. El asunto no lo necesita: nunca es HTML.
+const combinar = (texto, empresa, comoHtml = false) => {
     if (!texto) return '';
     return String(texto).replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (completo, marca) => {
         const campo = CAMPOS.find(c => c.marca === marca.toLowerCase());
-        return campo ? campo.valor(empresa) : completo;
+        if (!campo) return completo;
+        const valor = campo.valor(empresa);
+        return comoHtml ? escaparValor(valor) : valor;
     });
 };
 
@@ -331,11 +339,20 @@ export const desdePlanilla = (filas, columnaCorreo = null) => {
 
 // Reemplaza las marcas usando los datos de una fila de la planilla. Igual que
 // `combinar`, pero contra el diccionario de la fila en vez de contra la empresa.
-const combinarFila = (texto, datos) => String(texto || '')
+// El `comoHtml` va por lo mismo que en `combinar`, y acá pesa más: los valores
+// salen de un Excel que llenó una persona, no de la base.
+const combinarFila = (texto, datos, comoHtml = false) => String(texto || '')
     .replace(/\{\{\s*([a-z0-9_]+)\s*\}\}/gi, (completo, marca) => {
         const k = marca.toLowerCase();
-        return Object.hasOwn(datos, k) ? datos[k] : completo;
+        if (!Object.hasOwn(datos, k)) return completo;
+        return comoHtml ? escaparValor(datos[k]) : datos[k];
     });
+
+// El cuerpo entra sin revisar —viene de una petición— y sale limpio. Se hace
+// UNA vez, apenas llega: después ese mismo texto se guarda, se combina, se
+// muestra en la previa y se manda.
+const limpiarCuerpo = (cuerpo) =>
+    esHtmlCorreo(cuerpo) ? sanitizarHtmlCorreo(cuerpo) : String(cuerpo || '');
 
 // ============================================================================
 // EL REMITENTE Y LA FIRMA DE CADA PERSONA
@@ -354,17 +371,18 @@ const remitenteValido = (c) =>
 
 // De dónde sale el correo de quien está enviando. Si no configuró el suyo, se
 // usa el de la variable de entorno, que es como funcionaba hasta ahora.
-const perfilDe = async (usuarioId) => {
+// Se exporta porque la bandeja de entrada lo necesita para responder: la
+// respuesta tiene que salir con el mismo remitente que un envío de campaña.
+export const perfilDe = async (usuarioId) => {
     if (!usuarioId) return null;
     const { rows } = await pool.query(
-        `SELECT nombre, correo_remitente, correo_respuesta, copia_oculta, correo_copia,
-                firma_texto, firma_imagen
+        `SELECT nombre, correo_remitente, firma_texto, firma_imagen
            FROM usuario WHERE id = $1`,
         [usuarioId]);
     return rows[0] || null;
 };
 
-const armarRemitente = (perfil) => {
+export const armarRemitente = (perfil) => {
     if (perfil?.correo_remitente && remitenteValido(perfil.correo_remitente)) {
         // Con el nombre delante, para que el cliente vea quién le escribe y no
         // una dirección suelta.
@@ -383,14 +401,6 @@ export const miPerfilCorreo = async (req, res) => {
             success: true,
             nombre: p?.nombre || null,
             correoRemitente: p?.correo_remitente || null,
-            // A dónde le contesta el cliente. Sin esto la respuesta se pierde:
-            // va a la casilla del dominio, que vive en el hosting y nadie lee.
-            correoRespuesta: p?.correo_respuesta || null,
-            // Copia oculta de cada envío a esa misma casilla. Cuesta el doble de
-            // cuota, así que la pantalla lo dice al lado de la casilla.
-            copiaOculta: !!p?.copia_oculta,
-            // A dónde va esa copia. Vacío = a la misma casilla de las respuestas.
-            correoCopia: p?.correo_copia || null,
             firmaTexto: p?.firma_texto || null,
             firmaImagen: p?.firma_imagen || null,
             // Lo que se va a usar de verdad, ya resuelto: si no configuró el
@@ -406,8 +416,7 @@ export const miPerfilCorreo = async (req, res) => {
 
 export const guardarPerfilCorreo = async (req, res) => {
     try {
-        const { correoRemitente, correoRespuesta, copiaOculta, correoCopia,
-                firmaTexto, firmaImagen } = req.body || {};
+        const { correoRemitente, firmaTexto, firmaImagen } = req.body || {};
 
         const correo = String(correoRemitente || '').trim();
         if (correo && !remitenteValido(correo)) {
@@ -417,36 +426,16 @@ export const guardarPerfilCorreo = async (req, res) => {
             });
         }
 
-        // Acá NO se exige el dominio, al revés que arriba: la gracia del correo
-        // de respuesta es justamente que sea donde la persona lee de verdad,
-        // que suele ser un Gmail.
-        const respuesta = String(correoRespuesta || '').trim();
-        if (respuesta && !CORREO_VALIDO.test(respuesta)) {
-            return res.status(400).json({ success: false, message: 'El correo de respuesta no es una dirección válida.' });
-        }
-        const copia = String(correoCopia || '').trim();
-        if (copia && !CORREO_VALIDO.test(copia)) {
-            return res.status(400).json({ success: false, message: 'El correo para la copia no es una dirección válida.' });
-        }
-        // Sin destino no hay a dónde mandarla, y dejarla encendida «a la espera»
-        // haría creer que hay registro cuando no lo hay.
-        if (copiaOculta && !copia && !respuesta) {
-            return res.status(400).json({
-                success: false,
-                message: 'Para recibir copia oculta necesitas indicar a qué correo, acá o en «Las respuestas me llegan a».',
-            });
-        }
         if (firmaImagen && !imagenValida(firmaImagen)) {
             return res.status(400).json({ success: false, message: 'La imagen de la firma no es válida.' });
         }
 
         await pool.query(
             `UPDATE usuario
-                SET correo_remitente = $2, correo_respuesta = $3, copia_oculta = $4,
-                    correo_copia = $5, firma_texto = $6, firma_imagen = $7
+                SET correo_remitente = $2, firma_texto = $3, firma_imagen = $4
               WHERE id = $1`,
-            [req.user?.usuarioId, correo || null, respuesta || null, !!copiaOculta,
-             copia || null, firmaTexto?.trim() || null, firmaImagen || null]);
+            [req.user?.usuarioId, correo || null,
+             firmaTexto?.trim() || null, firmaImagen || null]);
 
         const p = await perfilDe(req.user?.usuarioId);
         await registrar(req, {
@@ -538,9 +527,25 @@ const enlaces = (htmlEscapado) =>
 // de KB y el cliente la muestra donde corresponde. Es la forma estándar.
 const CID_FIRMA = 'firma_vsv';
 
+// DOS FORMATOS CONVIVIENDO, A PROPÓSITO.
+//
+// Los cuerpos escritos con el editor llegan en HTML; los 139 envíos y las
+// plantillas de antes están en texto plano. Nada de eso se migró: se distingue
+// y cada uno se arma como corresponde, así un correo viejo se sigue viendo
+// igual que el día que salió.
+//
+// El saneo se repite acá aunque el cuerpo ya se haya limpiado al entrar. Es a
+// propósito: esta función es la ÚLTIMA puerta antes de que el HTML salga hacia
+// el cliente, y acá el cuerpo ya trae los datos del cliente insertados. Barato
+// y cierra el paso a lo que se haya guardado antes de que existiera el saneo.
+const cuerpoComoHtml = (cuerpo) => esHtmlCorreo(cuerpo)
+    ? sanitizarHtmlCorreo(cuerpo)
+    : enlaces(escapar(cuerpo)).split(/\n{2,}/)
+        .map(p => `<p style="margin:0 0 14px">${p.replace(/\n/g, '<br>')}</p>`).join('');
+
 const armarHtml = (cuerpo, firma, firmaImagen, urlBaja) => `
 <div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;font-size:14px;line-height:1.6;color:#1f2937;max-width:600px">
-  ${enlaces(escapar(cuerpo)).split(/\n{2,}/).map(p => `<p style="margin:0 0 14px">${p.replace(/\n/g, '<br>')}</p>`).join('')}
+  ${cuerpoComoHtml(cuerpo)}
   ${(firma || imagenValida(firmaImagen)) ? `
   <div style="margin-top:22px;padding-top:14px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:12px">
     ${/* El texto va ARRIBA de la imagen: «Saludos cordiales, Equipo Simple Pyme»
@@ -673,9 +678,14 @@ const urlBajaPara = (correo, org) => {
 // ----------------------------------------------------------------------------
 export const previewCampana = async (req, res) => {
     try {
-        const { empresaIds, asunto, cuerpo, filas, columnaCorreo } = req.body || {};
+        const { empresaIds, asunto, cuerpo: cuerpoCrudo, filas, columnaCorreo } = req.body || {};
         if (!asunto?.trim()) return res.status(400).json({ success: false, message: 'Falta el asunto.' });
-        if (!cuerpo?.trim()) return res.status(400).json({ success: false, message: 'Falta el texto del correo.' });
+        // `cuerpoVacio` y no `.trim()`: con el editor de formato, un cuerpo en
+        // blanco llega como «<p><br></p>», que tiene 12 caracteres y no dice
+        // nada. Con `.trim()` pasaba el filtro y se veía una previa vacía.
+        if (cuerpoVacio(cuerpoCrudo)) return res.status(400).json({ success: false, message: 'Falta el texto del correo.' });
+        const cuerpo = limpiarCuerpo(cuerpoCrudo);
+        const enHtml = esHtmlCorreo(cuerpo);
 
         // ---- Camino PLANILLA: los datos vienen del Excel, no del CRM ----
         if (Array.isArray(filas) && filas.length) {
@@ -708,7 +718,7 @@ export const previewCampana = async (req, res) => {
                 destinatarios.push({
                     id: `f${d.fila}`, razonSocial: d.etiqueta, correos: vivos,
                     asunto: combinarFila(asunto, d.datos),
-                    cuerpo: combinarFila(cuerpo, d.datos),
+                    cuerpo: combinarFila(cuerpo, d.datos, enHtml),
                     datosVacios: [],
                 });
             }
@@ -787,7 +797,7 @@ export const previewCampana = async (req, res) => {
                 razonSocial: e.razon_social,
                 correos,
                 asunto: combinar(asunto, e),
-                cuerpo: combinar(cuerpo, e),
+                cuerpo: combinar(cuerpo, e, enHtml),
                 datosVacios: flojos,
             });
         }
@@ -871,10 +881,16 @@ export const listarPlantillasCorreo = async (req, res) => {
 export const guardarPlantillaCorreo = async (req, res) => {
     try {
         const { id } = req.params;
-        const { nombre, descripcion, asunto, cuerpo, firma, firmaImagen, compartida, marcasExtra } = req.body || {};
+        const { nombre, descripcion, asunto, cuerpo: cuerpoCrudo, firma, firmaImagen,
+                compartida, marcasExtra } = req.body || {};
         if (!nombre?.trim())  return res.status(400).json({ success: false, message: 'Falta el nombre de la plantilla.' });
         if (!asunto?.trim())  return res.status(400).json({ success: false, message: 'Falta el asunto.' });
-        if (!cuerpo?.trim())  return res.status(400).json({ success: false, message: 'Falta el texto.' });
+        if (cuerpoVacio(cuerpoCrudo)) return res.status(400).json({ success: false, message: 'Falta el texto.' });
+
+        // Se guarda ya saneado: esta plantilla se va a mostrar en la pantalla de
+        // Plantillas y se va a cargar en el redactor, los dos con formato. Lo que
+        // queda en la base tiene que ser seguro de renderizar.
+        const cuerpo = limpiarCuerpo(cuerpoCrudo);
 
         // Una marca inventada guardada en la plantilla se repite en cada envío
         // que la use. Se corta acá, que es donde se escribe una sola vez.
@@ -1202,9 +1218,17 @@ export const quitarBaja = async (req, res) => {
 export const enviarCampana = async (req, res) => {
     try {
         const {
-            empresaIds, asunto, cuerpo, firma, firmaImagen, soloPrueba, plantillaId,
-            adjuntos, replyTo, correoPrueba, filas, columnaCorreo,
+            empresaIds, asunto, cuerpo: cuerpoCrudo, firma, firmaImagen, soloPrueba, plantillaId,
+            adjuntos, correoPrueba, filas, columnaCorreo,
         } = req.body || {};
+
+        // El cuerpo se limpia ACÁ, antes de todo lo demás: de aquí en adelante
+        // se guarda en `correo_campana`, se combina por destinatario, se guarda
+        // otra vez en `correo_envio` y se muestra en el historial. Sanearlo en
+        // un solo punto de entrada evita tener que acordarse en los otros
+        // cuatro.
+        const cuerpo = limpiarCuerpo(cuerpoCrudo);
+        const enHtml = esHtmlCorreo(cuerpo);
 
         // Quién manda y con qué firma. Si no vino firma en el cuerpo de la
         // petición, se usa la suya guardada: así no hay que reescribirla cada vez.
@@ -1213,25 +1237,10 @@ export const enviarCampana = async (req, res) => {
         const firmaFinal = firma !== undefined ? firma : (perfil?.firma_texto || '');
         const firmaImgFinal = firmaImagen !== undefined ? firmaImagen : (perfil?.firma_imagen || null);
 
-        // A DÓNDE CONTESTA EL CLIENTE.
-        // El correo sale desde @vsvconsultores.com porque es el dominio verificado
-        // y es lo que el cliente tiene que ver. Pero ese buzón vive en el hosting
-        // y nadie lo abre: sin `Reply-To`, las respuestas caían ahí y se perdían
-        // sin error ni rebote. Se toma el del perfil si la petición no trae otro.
-        const responderA = String(replyTo || '').trim() || perfil?.correo_respuesta || null;
-
-        // COPIA OCULTA a la casilla propia, para que quede el registro también en
-        // el correo. NO va en las pruebas: esas ya llegan a esa misma casilla, y
-        // mandarlas dos veces solo gasta cuota al pedo.
-        // El destino es `correo_copia` —la casilla de archivo— y si no hay,
-        // la de las respuestas, que es como funcionaba antes.
-        const destinoCopia = perfil?.correo_copia || perfil?.correo_respuesta || null;
-        const copiaA = (perfil?.copia_oculta && destinoCopia && !soloPrueba) ? destinoCopia : null;
-
         if (!correoConfigurado()) {
             return res.status(503).json({ success: false, message: 'Este servidor no tiene ninguna vía de correo configurada.' });
         }
-        if (!asunto?.trim() || !cuerpo?.trim()) {
+        if (!asunto?.trim() || cuerpoVacio(cuerpo)) {
             return res.status(400).json({ success: false, message: 'Falta el asunto o el texto.' });
         }
         if (estadoCampana.activo) {
@@ -1274,7 +1283,7 @@ export const enviarCampana = async (req, res) => {
                     razonSocial: d.etiqueta,
                     correos: d.correos.filter(c => !bajas.has(c.toLowerCase())),
                     asuntoFinal: combinarFila(asunto, d.datos),
-                    cuerpoFinal: combinarFila(cuerpo, d.datos),
+                    cuerpoFinal: combinarFila(cuerpo, d.datos, enHtml),
                 }))
                 .filter(d => d.correos.length > 0);
         } else {
@@ -1285,7 +1294,7 @@ export const enviarCampana = async (req, res) => {
                     razonSocial: e.razon_social,
                     correos: correosDe(e).filter(c => !bajas.has(c.toLowerCase())),
                     asuntoFinal: combinar(asunto, e),
-                    cuerpoFinal: combinar(cuerpo, e),
+                    cuerpoFinal: combinar(cuerpo, e, enHtml),
                 }))
                 .filter(e => e.correos.length > 0);
         }
@@ -1338,10 +1347,7 @@ export const enviarCampana = async (req, res) => {
         // sentido impedir trabajar por una suposición nuestra. Lo que sí se
         // evita es que se descubra a mitad de camino.
         const cuota = await cuotaDelDia(org);
-        // Con copia oculta cada destinatario son DOS correos para el proveedor.
-        // Si se contara de a uno, una campaña de 60 pasaría el filtro y se caería
-        // a la mitad, que es exactamente lo que este aviso existe para evitar.
-        const gasto = conCorreo.length * (copiaA ? 2 : 1);
+        const gasto = conCorreo.length;
         if (!soloPrueba && gasto > cuota.quedan && !req.body?.confirmarCuota) {
             return res.status(409).json({
                 success: false,
@@ -1349,7 +1355,6 @@ export const enviarCampana = async (req, res) => {
                 cuota,
                 message: `Hoy ya salieron ${cuota.enviados} de ${cuota.limite} correos, así que quedan ${cuota.quedan}. `
                        + `Esta campaña son ${conCorreo.length}`
-                       + (copiaA ? `, más ${conCorreo.length} de copia oculta: ${gasto} en total` : '')
                        + `: se pasaría por ${gasto - cuota.quedan}. `
                        + `Los que sobren los va a rechazar el proveedor.`,
             });
@@ -1385,11 +1390,11 @@ export const enviarCampana = async (req, res) => {
             const { rows: env } = await pool.query(
                 `INSERT INTO correo_envio
                     (campana_id, organizacion_id, empresa_id, razon_social, destinatario,
-                     asunto_final, cuerpo_final, es_prueba, con_copia)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+                     asunto_final, cuerpo_final, es_prueba)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
                 [campanaId, org, d.empresaId, d.razonSocial,
                  soloPrueba ? destinoPrueba : d.correos.join(', '),
-                 d.asuntoFinal.slice(0, 300), d.cuerpoFinal, !!soloPrueba, !!copiaA]);
+                 d.asuntoFinal.slice(0, 300), d.cuerpoFinal, !!soloPrueba]);
             d.envioId = env[0].id;
         }
 
@@ -1453,8 +1458,6 @@ export const enviarCampana = async (req, res) => {
                             // Sale desde la dirección de quien lo mandó, no desde una
                             // fija: si el cliente responde, le responde a esa persona.
                             from: remitente,
-                            ...(responderA ? { replyTo: responderA } : {}),
-                            ...(copiaA ? { bcc: copiaA } : {}),
                             to: destino,
                             // El texto ya viene resuelto de arriba, el MISMO que se
                             // guardó en `correo_envio`. Volver a combinarlo acá abría

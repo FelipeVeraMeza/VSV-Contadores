@@ -187,14 +187,31 @@ export const upsertComprobante = async (client, {
         accion = 'creado';
     }
 
+    // El código de la cuenta llega con tres nombres distintos según quién llame:
+    // `cuenta` (las pantallas), `numero_cuenta` (el registro manual) y
+    // `cuenta_codigo` (que es como sale al LEER un comprobante). Se aceptan los
+    // tres: al releer un asiento para reeditarlo, la forma que devuelve la
+    // lectura tiene que servir para escribir.
+    let insertadas = 0;
     for (const linea of lineas) {
-        const cuenta = linea.cuenta || linea.numero_cuenta;
+        const cuenta = linea.cuenta || linea.numero_cuenta || linea.cuenta_codigo;
         if (!cuenta) continue;
         await client.query(
             `INSERT INTO comprobantes_detalle (id, comprobante_id, cuenta_codigo, rut_asociado, debe, haber)
              VALUES (gen_random_uuid(), $1, $2, $3, $4, $5)`,
             [compId, cuenta, rutN, Number(linea.debe) || 0, Number(linea.haber) || 0]
         );
+        insertadas++;
+    }
+
+    // Un comprobante sin líneas es un asiento vacío: gasta un número correlativo
+    // y NO aparece en ninguna lista, porque todas cruzan con
+    // `comprobantes_detalle`. Antes, si las líneas venían con un nombre de campo
+    // que no era ninguno de los de arriba, se descartaban en silencio y la
+    // llamada respondía 200 con su número: el asiento se daba por guardado y no
+    // existía. Se prefiere fallar y que la transacción se deshaga.
+    if (insertadas === 0) {
+        throw new Error('El asiento no tiene ninguna línea con cuenta: no se guardó nada.');
     }
 
     return { id: compId, numero, accion };

@@ -101,7 +101,7 @@ const NuevaCuentaModal = ({ isOpen, setIsOpen, onGuardado, cuenta, empresaId }) 
                     {/* Tipo de cuenta */}
                     <div className="space-y-1.5">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-500">Tipo de Cuenta</label>
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {TIPOS_CUENTA.map(t => (
                                 <button key={t.value} type="button" onClick={() => setTipoCuenta(t.value)}
                                     className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${

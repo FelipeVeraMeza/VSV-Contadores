@@ -176,7 +176,7 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, rawVentas = [], rawCompr
                         <h4 className="text-xs font-black uppercase text-blue-700 mb-4 tracking-widest flex items-center gap-2">
                             <CalendarDays className="h-3.5 w-3.5" /> Tipo de Período
                         </h4>
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {TIPOS_PERIODO.map(tipo => (
                                 <button
                                     key={tipo.value}

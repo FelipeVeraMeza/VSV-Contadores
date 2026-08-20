@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { historialCampanasApi, detalleCampanaApi } from '@/services/correosService';
+import CuerpoCorreo from '@/components/comunicaciones/CuerpoCorreo';
 
 const getUser = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
 const getSessionId = () => getUser().sessionId;
@@ -58,7 +59,11 @@ const ESTADO_ENVIO = {
     pendiente: { texto: 'Pendiente',Icono: Clock,          clase: 'text-slate-400' },
 };
 
-const HistorialCorreosModal = ({ onClose }) => {
+// El contenido, sin la ventana encima. Se usa en DOS lugares:
+//   · dentro del modal, al redactar («¿esto ya lo mandé?»)
+//   · como página propia en Comunicaciones → Historial
+// Sin `onClose` no se dibuja la X: en una página no hay nada que cerrar.
+export const HistorialCorreos = ({ onClose = null }) => {
     const [campanas, setCampanas] = useState([]);
     const [cargando, setCargando] = useState(true);
 
@@ -124,10 +129,7 @@ const HistorialCorreosModal = ({ onClose }) => {
     }, [envios]);
 
     return (
-      <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
-           onClick={onClose}>
-        <div className="bg-[#faf7f2] w-full max-w-6xl h-[85vh] rounded-2xl border border-[#efe8dd] shadow-2xl flex flex-col overflow-hidden"
-             onClick={(e) => e.stopPropagation()}>
+        <div className="h-full min-h-0 flex flex-col overflow-hidden">
 
             {/* ── cabecera ── */}
             <div className="shrink-0 flex items-center gap-3 px-4 py-3 bg-white border-b border-[#efe8dd]">
@@ -145,7 +147,9 @@ const HistorialCorreosModal = ({ onClose }) => {
                         className="accent-emerald-500" />
                     Ver también las pruebas
                 </label>
-                <button onClick={onClose} className="text-slate-400 hover:text-red-500"><X size={18} /></button>
+                {onClose && (
+                    <button onClick={onClose} className="text-slate-400 hover:text-red-500"><X size={18} /></button>
+                )}
             </div>
 
             {cargando ? (
@@ -271,9 +275,11 @@ const HistorialCorreosModal = ({ onClose }) => {
                                                     Lo que recibió, tal cual
                                                 </p>
                                                 <p className="text-[11px] font-black text-slate-900 mb-2">{e.asuntoFinal}</p>
-                                                <p className="text-[11px] text-slate-700 whitespace-pre-wrap leading-relaxed">
-                                                    {e.cuerpoFinal || '(no se guardó el texto de este envío)'}
-                                                </p>
+                                                {/* Los envíos de antes del editor están en texto
+                                                    plano y los nuevos en HTML: el componente
+                                                    distingue y muestra cada uno como corresponde. */}
+                                                <CuerpoCorreo texto={e.cuerpoFinal}
+                                                    className="text-[11px] text-slate-700 leading-relaxed" />
                                             </div>
                                         </div>
                                     )}
@@ -285,8 +291,18 @@ const HistorialCorreosModal = ({ onClose }) => {
               </div>
             )}
         </div>
-      </div>
     );
 };
+
+// La ventana: el mismo contenido, flotando sobre la pantalla de redactar.
+const HistorialCorreosModal = ({ onClose }) => (
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4"
+         onClick={onClose}>
+        <div className="bg-[#faf7f2] w-full max-w-6xl h-[85vh] rounded-2xl border border-[#efe8dd] shadow-2xl flex flex-col overflow-hidden"
+             onClick={(e) => e.stopPropagation()}>
+            <HistorialCorreos onClose={onClose} />
+        </div>
+    </div>
+);
 
 export default HistorialCorreosModal;

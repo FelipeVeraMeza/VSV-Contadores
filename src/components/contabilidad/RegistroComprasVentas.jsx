@@ -250,7 +250,7 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
             </div>
             <span className="text-xs font-black bg-slate-100 px-2 py-1 rounded text-slate-700">{stats.compras.dtes} DTES</span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div><p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">NETO</p><p className="text-sm font-bold text-slate-600">{formatCLP(stats.compras.neto)}</p></div>
             <div><p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">IVA</p><p className="text-sm font-bold text-slate-600">{formatCLP(stats.compras.iva)}</p></div>
             <div className="text-right"><p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">TOTAL</p><p className="text-lg font-black text-slate-900">{formatCLP(stats.compras.total)}</p></div>
@@ -268,7 +268,7 @@ const RegistroComprasVentas = ({ empresaId: propEmpresaId, onGuardarSuperficial 
             </div>
             <span className="text-xs font-black bg-slate-100 px-2 py-1 rounded text-slate-700">{stats.ventas.dtes} DTES</span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <div><p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">NETO</p><p className="text-sm font-bold text-slate-600">{formatCLP(stats.ventas.neto)}</p></div>
             <div><p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">IVA</p><p className="text-sm font-bold text-slate-600">{formatCLP(stats.ventas.iva)}</p></div>
             <div className="text-right"><p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">TOTAL</p><p className="text-lg font-black text-slate-900">{formatCLP(stats.ventas.total)}</p></div>

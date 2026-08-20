@@ -85,7 +85,11 @@ const ConvertirClienteModal = ({ persona, onClose, onConverted }) => {
         >
             <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                className="w-full max-w-lg bg-white border border-[#efe8dd] rounded-2xl shadow-2xl flex flex-col"
+                // Sin `max-h` el modal crecía más que la pantalla del teléfono y los
+                // botones de abajo quedaban fuera, sin forma de llegar a ellos: se
+                // veía como que el sistema se colgó. Con el tope y el cuerpo con
+                // scroll propio, el encabezado y el pie quedan siempre a la vista.
+                className="w-full max-w-lg bg-white border border-[#efe8dd] rounded-2xl shadow-2xl flex flex-col max-h-[92vh]"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
@@ -104,8 +108,8 @@ const ConvertirClienteModal = ({ persona, onClose, onConverted }) => {
                     </button>
                 </div>
 
-                {/* Body */}
-                <div className="p-5 space-y-4">
+                {/* Body — con scroll propio, para que el pie no se salga de la pantalla */}
+                <div className="p-5 space-y-4 overflow-y-auto custom-scrollbar">
                     <div className="bg-white border border-[#efe8dd] rounded-xl p-3 flex items-center gap-3">
                         <Building2 size={16} className="text-slate-400 shrink-0" />
                         <p className="text-[11px] text-slate-500 leading-relaxed">

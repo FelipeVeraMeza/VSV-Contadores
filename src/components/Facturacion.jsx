@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Building2, Plus } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
@@ -13,7 +13,6 @@ import SIILoginModal from '@/components/facturacion/modals/SIILoginModal';
 import EmisionDTE from '@/components/facturacion/tabs/EmisionDTE';
 import DocumentosDTE from '@/components/facturacion/tabs/DocumentosDTE';
 import CobrosMensuales from '@/components/facturacion/tabs/CobrosMensuales';
-import CorreoMasivo from '@/components/facturacion/tabs/CorreoMasivo';
 
 import FacturaElectronicaModal from '@/components/facturacion/modals/dte/FacturaElectronicaModal';
 import ExentaElectronicaModal from '@/components/facturacion/modals/dte/ExentaElectronicaModal';
@@ -26,7 +25,6 @@ const TITULOS = {
   emision:    { title: 'Emitir DTE',              sub: 'Emisión de documentos tributarios electrónicos' },
   documentos: { title: 'Historial de Documentos', sub: 'Documentos emitidos y recibidos en el SII' },
   cobros:     { title: 'Cobro del Mes',           sub: 'Ciclo de cobro mensual a los clientes del CRM' },
-  correos:    { title: 'Correo Masivo',           sub: 'Registro de correos enviados y recordatorios de pago' },
 };
 
 const Facturacion = () => {
@@ -40,15 +38,20 @@ const Facturacion = () => {
 
   // La sub-página activa se controla desde el menú lateral (?sub=...).
   // El cobro del mes es solo para el administrador; si un cliente llega a esa
-  // URL, cae de vuelta a la emisión de DTE. El correo masivo va por la misma
-  // regla: manda correo a los clientes de la firma, no a los de una empresa.
+  // URL, cae de vuelta a la emisión de DTE.
   const [searchParams] = useSearchParams();
   let activeTab = searchParams.get('sub') || 'emision';
-  if ((activeTab === 'cobros' || activeTab === 'correos') && !isAdmin) activeTab = 'emision';
+  if (activeTab === 'cobros' && !isAdmin) activeTab = 'emision';
 
   const [isSIILoginModalOpen, setIsSIILoginModalOpen] = useState(false);
   const [isDocumentoModalOpen, setIsDocumentoModalOpen] = useState(false);
   const [tipoDocumentoSeleccionado, setTipoDocumentoSeleccionado] = useState(null);
+
+  // «Correo Masivo» se mudó a Comunicaciones, junto al resto de lo que se le
+  // manda al cliente. El enlace viejo llega a destino en vez de aterrizar en
+  // una pestaña que ya no existe. Va ANTES del candado de empresa: el correo
+  // masivo es de la firma completa y nunca necesitó una empresa elegida.
+  if (activeTab === 'correos') return <Navigate to="/comunicaciones?sub=masivo" replace />;
 
   // Sin empresa seleccionada hay DOS situaciones muy distintas, y antes las dos
   // mostraban el mismo mensaje: "selecciona una empresa en el menú superior".
@@ -149,7 +152,6 @@ const Facturacion = () => {
               )}
               {activeTab === 'documentos' && <DocumentosDTE />}
               {activeTab === 'cobros' && isAdmin && <CobrosMensuales />}
-              {activeTab === 'correos' && isAdmin && <CorreoMasivo />}
             </motion.div>
           </AnimatePresence>
         </div>

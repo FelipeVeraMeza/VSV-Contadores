@@ -2,6 +2,7 @@ import { pool } from "../database/db.js";
 import { encrypt, decrypt, generateHash } from "../utils/crypto.js";
 import { cleanRut } from "../lib/rut.js";
 import { registrar } from '../utils/bitacora.js';
+import { veSoloAsignadas } from '../utils/scope.js';
 
 export const getAssignedCompanies = async (req, res) => {
     try {
@@ -43,18 +44,25 @@ export const getAssignedCompanies = async (req, res) => {
 //   /personas/empresas-lista → cortada a 50
 // Por eso la empresa principal "no aparecía" en unos lados y sí en otros.
 //
-// Reglas: siempre acotado a la organización del usuario; el rol Cliente solo ve
-// las empresas que tiene asignadas en `audita`; la principal va primero.
+// Reglas: siempre acotado a la organización del usuario; quien solo ve lo
+// asignado (rol Cliente, o `ve_solo_empresas_asignadas`) ve únicamente lo que
+// tenga en `audita`; la principal va primero.
 // ============================================================================
 export const listCompaniesLista = async (req, res) => {
     try {
         const organizacionId = req.user?.organizacionId || null;
-        const esCliente = req.user?.rol === 'Cliente';
 
+        // Antes acá se miraba SOLO `rol === 'Cliente'`, y como quien entra al
+        // equipo desde cero es Administrador, se saltaba el recorte: el 19-08-2026
+        // se midió que este selector —fuente única de TODOS los selectores del
+        // sistema— le ofrecía las 99 empresas de la oficina a un usuario que no
+        // tenía ninguna asignada. La regla es por usuario, no por rol.
         const params = [organizacionId];
         let auditaJoin = '';
-        if (esCliente && req.user?.usuarioId) {
+        if (veSoloAsignadas(req) && req.user?.usuarioId) {
             params.push(req.user.usuarioId);
+            // JOIN (no LEFT JOIN) a propósito: recorta antes del WHERE, así la
+            // excepción de "la principal va siempre" tampoco se cuela.
             auditaJoin = ` JOIN audita a ON a.empresa_id = e.id AND a.usuario_id = $${params.length} `;
         }
 

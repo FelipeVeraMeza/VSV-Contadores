@@ -2,12 +2,33 @@ import { pool } from "../database/db.js";
 import * as XLSX from 'xlsx';
 import PDFDocument from 'pdfkit';
 import { decrypt } from '../utils/crypto.js';
-import { clienteSinEmpresa } from '../utils/scope.js';
+import { clienteSinEmpresa, empresaPermitida, empresasVisibles, empresaEsValida, veSoloAsignadas } from '../utils/scope.js';
 import { registrarMovimientoCaja } from '../utils/caja.js';
 import {
     upsertComprobante, construirGlosa, buscarDocumentosAfectables,
     normalizarClase, normalizarTipoDte, normalizarFolio, esNota, TIPO_DTE_LABEL,
 } from '../utils/comprobantes.js';
+
+// =============================================================================
+// EL PORTERO DE ESTE MÓDULO
+// -----------------------------------------------------------------------------
+// Hasta el 19-08-2026 los endpoints de acá tomaban `empresaId` del query y lo
+// usaban tal cual: no comprobaban ni que la empresa fuera de la organización de
+// quien preguntaba, ni que la tuviera asignada. Bastaba escribir el id en la
+// URL para leer la contabilidad de cualquier empresa.
+//
+// `puedeVerEmpresa` resuelve las dos cosas de una vez y devuelve el motivo del
+// rechazo, o null si puede seguir. Va al principio de CADA endpoint que reciba
+// una empresa concreta.
+// =============================================================================
+const puedeVerEmpresa = async (req, empresaId) => {
+    if (!empresaEsValida(empresaId)) return null;   // vista consolidada: se acota aparte
+    const empresa = await empresaPermitida(req, empresaId);
+    return empresa ? null : 'No tienes acceso a la contabilidad de esa empresa.';
+};
+
+// Respuesta única para el rechazo, para que todos los endpoints contesten igual.
+const sinAcceso = (res, motivo) => res.status(403).json({ ok: false, message: motivo });
 
 export const getAccountingMetrics = async (req, res) => {
     const { empresaId } = req.query;
@@ -35,29 +56,44 @@ export const getChartOfAccounts = async (req, res) => {
     const { empresaId } = req.query;
     // 🔒 Un cliente sin empresa no ve el plan global del búnker
     if (clienteSinEmpresa(req, empresaId)) return res.json({ plan: [] });
+    const motivo = await puedeVerEmpresa(req, empresaId);
+    if (motivo) return sinAcceso(res, motivo);
     try {
-        const usarEmpresa = empresaId && empresaId !== 'undefined' && empresaId !== 'ALL';
+        const usarEmpresa = empresaEsValida(empresaId);
         // Sin empresa seleccionada la consulta no llevaba filtro: devolvía el plan de
         // cuentas de TODAS las empresas del sistema, también las de otras
         // organizaciones. Ahora "global" se acota a las empresas de la organización
         // (más las cuentas base compartidas, empresa_id IS NULL).
-        const query = usarEmpresa
-            ? `SELECT id, codigo, descripcion, tipo_cuenta, grupo, normativa, clasificacion_contable, es_editable
-               FROM plan_cuentas
-               WHERE empresa_id = $1 OR empresa_id IS NULL
-               ORDER BY empresa_id NULLS LAST, codigo ASC`
-            : `SELECT id, codigo, descripcion, tipo_cuenta, grupo, normativa, clasificacion_contable, es_editable
-               FROM plan_cuentas
-               WHERE empresa_id IS NULL
-                  OR empresa_id IN (
-                        SELECT id FROM empresa
-                         WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid)
-               ORDER BY empresa_id NULLS LAST, codigo ASC`;
+        //
+        // Y para quien solo ve lo asignado, "global" se acota además a SUS
+        // empresas: las cuentas base compartidas quedan fuera porque no son suyas.
+        const visibles = usarEmpresa ? null : await empresasVisibles(req);
 
-        const { rows } = await pool.query(
-            query,
-            [usarEmpresa ? empresaId : (req.user?.organizacionId || null)]
-        );
+        let query, params;
+        if (usarEmpresa) {
+            query = `SELECT id, codigo, descripcion, tipo_cuenta, grupo, normativa, clasificacion_contable, es_editable
+                     FROM plan_cuentas
+                     WHERE empresa_id = $1 OR empresa_id IS NULL
+                     ORDER BY empresa_id NULLS LAST, codigo ASC`;
+            params = [empresaId];
+        } else if (visibles) {
+            query = `SELECT id, codigo, descripcion, tipo_cuenta, grupo, normativa, clasificacion_contable, es_editable
+                     FROM plan_cuentas
+                     WHERE empresa_id = ANY($1::uuid[])
+                     ORDER BY codigo ASC`;
+            params = [visibles];
+        } else {
+            query = `SELECT id, codigo, descripcion, tipo_cuenta, grupo, normativa, clasificacion_contable, es_editable
+                     FROM plan_cuentas
+                     WHERE empresa_id IS NULL
+                        OR empresa_id IN (
+                              SELECT id FROM empresa
+                               WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid)
+                     ORDER BY empresa_id NULLS LAST, codigo ASC`;
+            params = [req.user?.organizacionId || null];
+        }
+
+        const { rows } = await pool.query(query, params);
         res.json({ plan: rows });
     } catch (error) {
         console.error("❌ Error al obtener plan de cuentas:", error.message);
@@ -70,6 +106,8 @@ export const crearCuenta = async (req, res) => {
     if (!codigo || !descripcion || !tipo_cuenta) {
         return res.status(400).json({ message: "codigo, descripcion y tipo_cuenta son requeridos" });
     }
+    const motivo = await puedeVerEmpresa(req, empresaId);
+    if (motivo) return sinAcceso(res, motivo);
     try {
         const { rows: [exists] } = await pool.query(
             `SELECT id FROM plan_cuentas WHERE codigo = $1 AND (empresa_id = $2 OR empresa_id IS NULL)`,
@@ -89,10 +127,29 @@ export const crearCuenta = async (req, res) => {
     }
 };
 
+// Las cuentas se identifican por id, no por empresa, así que la comprobación va
+// contra la empresa DUEÑA de la cuenta. Sin esto, sabiendo el id se podía editar
+// o borrar una cuenta de cualquier empresa.
+const cuentaFueraDeAlcance = async (req, cuentaId) => {
+    let rows;
+    // Un id con formato inválido hace fallar la consulta; se trata como
+    // "no existe" y lo resuelve el 404 que ya tenía cada endpoint.
+    try { ({ rows } = await pool.query('SELECT empresa_id FROM plan_cuentas WHERE id = $1', [cuentaId])); }
+    catch { return null; }
+    if (!rows.length) return null;
+    const empresaId = rows[0].empresa_id;
+    if (!empresaId) {                                  // cuenta base compartida
+        return veSoloAsignadas(req) ? 'Esa cuenta no es de tus empresas.' : null;
+    }
+    return await puedeVerEmpresa(req, empresaId);
+};
+
 export const editarCuenta = async (req, res) => {
     const { id } = req.params;
     const { descripcion, tipo_cuenta, normativa, grupo } = req.body;
     if (!descripcion) return res.status(400).json({ message: "descripcion es requerida" });
+    const motivo = await cuentaFueraDeAlcance(req, id);
+    if (motivo) return sinAcceso(res, motivo);
     try {
         const { rows: [cuenta] } = await pool.query(
             `UPDATE plan_cuentas SET descripcion=$1, tipo_cuenta=COALESCE($2, tipo_cuenta), normativa=COALESCE($3, normativa), grupo=COALESCE($4, grupo)
@@ -109,6 +166,8 @@ export const editarCuenta = async (req, res) => {
 
 export const eliminarCuenta = async (req, res) => {
     const { id } = req.params;
+    const motivo = await cuentaFueraDeAlcance(req, id);
+    if (motivo) return sinAcceso(res, motivo);
     try {
         const { rowCount } = await pool.query(
             `DELETE FROM plan_cuentas WHERE id=$1 AND es_editable=true`,
@@ -124,6 +183,18 @@ export const eliminarCuenta = async (req, res) => {
 
 export const eliminarComprobante = async (req, res) => {
     const { id } = req.params;
+    // Igual que con las cuentas: el comprobante se pide por id, así que la
+    // comprobación va contra la empresa a la que pertenece.
+    let duenio;
+    try { ({ rows: [duenio] } = await pool.query('SELECT empresa_id FROM comprobantes WHERE id = $1', [id])); }
+    catch { return res.status(404).json({ message: 'Comprobante no encontrado' }); }
+    if (duenio?.empresa_id) {
+        const motivo = await puedeVerEmpresa(req, duenio.empresa_id);
+        if (motivo) return sinAcceso(res, motivo);
+    } else if (duenio && veSoloAsignadas(req)) {
+        // Comprobante sin empresa: es de la carga global de la firma, no suyo.
+        return sinAcceso(res, 'Ese comprobante no pertenece a tus empresas.');
+    }
     try {
         await pool.query(`DELETE FROM comprobantes_detalle WHERE comprobante_id = $1`, [id]);
         const { rowCount } = await pool.query(`DELETE FROM comprobantes WHERE id = $1`, [id]);
@@ -147,6 +218,14 @@ export const guardarComprobante = async (req, res) => {
     const empId = (empresaId === 'ALL' || empresaId === 'undefined') ? null : (empresaId || null);
     if (!lineas?.length) {
         return res.status(400).json({ message: "lineas son requeridas" });
+    }
+    const motivo = await puedeVerEmpresa(req, empId);
+    if (motivo) return sinAcceso(res, motivo);
+    // Guardar SIN empresa deja el comprobante en la carga global de la firma.
+    // Quien solo ve lo asignado tiene que elegir una de sus empresas: si no, su
+    // asiento caería en un montón que él mismo no puede volver a ver.
+    if (!empId && veSoloAsignadas(req)) {
+        return sinAcceso(res, 'Selecciona una de tus empresas antes de contabilizar.');
     }
     const totalDebe  = lineas.reduce((s, l) => s + (Number(l.debe)  || 0), 0);
     const totalHaber = lineas.reduce((s, l) => s + (Number(l.haber) || 0), 0);
@@ -237,6 +316,9 @@ export const getDocumentosAfectables = async (req, res) => {
     const empId = (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null')
         ? null : empresaId;
     if (clienteSinEmpresa(req, empresaId)) return res.json({ documentos: [] });
+    const motivo = await puedeVerEmpresa(req, empresaId);
+    if (motivo) return sinAcceso(res, motivo);
+    if (!empId && veSoloAsignadas(req)) return res.json({ documentos: [] });
     try {
         const documentos = await buscarDocumentosAfectables({ empresaId: empId, clase, rut, fecha });
         res.json({ documentos });
@@ -253,8 +335,15 @@ export const getDocumentosAfectables = async (req, res) => {
 // Antes el consolidado era `empresa_id IS NULL`, o sea "sin empresa", no "todas":
 // un comprobante contabilizado con una empresa seleccionada desaparecía de la
 // vista consolidada, del Libro Diario y del Balance.
-const condicionEmpresaComprobante = (empId, organizacionId) => {
+//
+// `visibles` es el recorte por usuario: null = sin recorte (se filtra solo por
+// organización, como siempre); un arreglo = solo esas empresas, y un arreglo
+// VACÍO significa "no ve nada" — que es justamente el caso de quien entra al
+// equipo desde cero. Los comprobantes sin empresa (los que cargó la firma en
+// modo global) NO son suyos, así que quedan fuera de su consolidado.
+const condicionEmpresaComprobante = (empId, organizacionId, visibles = null) => {
     if (empId) return { sql: 'c.empresa_id = $1', params: [empId] };
+    if (visibles) return { sql: 'c.empresa_id = ANY($1::uuid[])', params: [visibles] };
     return {
         sql: `(c.empresa_id IS NULL OR c.empresa_id IN (
                   SELECT id FROM empresa WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid))`,
@@ -266,9 +355,13 @@ export const getComprobantes = async (req, res) => {
     const { empresaId } = req.query;
     // 🔒 Un cliente sin empresa no ve los comprobantes globales del búnker
     if (clienteSinEmpresa(req, empresaId)) return res.json({ comprobantes: [] });
+    const motivo = await puedeVerEmpresa(req, empresaId);
+    if (motivo) return sinAcceso(res, motivo);
     const empId = (!empresaId || empresaId === 'undefined' || empresaId === 'ALL' || empresaId === 'null')
         ? null : empresaId;
-    const { sql: empCond, params: empParams } = condicionEmpresaComprobante(empId, req.user?.organizacionId);
+    const { sql: empCond, params: empParams } = condicionEmpresaComprobante(
+        empId, req.user?.organizacionId, empId ? null : await empresasVisibles(req)
+    );
     try {
         const { rows } = await pool.query(
             `SELECT c.id, c.numero_comprobante, c.fecha, c.tipo, c.glosa, c.estado, c.created_at,
@@ -300,8 +393,8 @@ export const getComprobantes = async (req, res) => {
 //   1 = Activo · 2/3 = Pasivo+Patrimonio · 4 = Gasto · 5 = Ingreso
 // ========================================================
 // Calcula el balance (8 columnas) desde los comprobantes. Reutilizable por JSON y PDF.
-const calcularBalanceData = async (empId, { mes, anio, desde, hasta } = {}, organizacionId = null) => {
-    const { sql: empCond, params } = condicionEmpresaComprobante(empId, organizacionId);
+const calcularBalanceData = async (empId, { mes, anio, desde, hasta } = {}, organizacionId = null, visibles = null) => {
+    const { sql: empCond, params } = condicionEmpresaComprobante(empId, organizacionId, visibles);
     let fechaCond = '';
     if (desde && hasta) {
         fechaCond = `AND c.fecha::date BETWEEN $${params.length + 1} AND $${params.length + 2}`;
@@ -366,10 +459,15 @@ export const getBalance = async (req, res) => {
             estadoResultados: { ingresos: [], gastos: [], totalIngresos: 0, totalGastos: 0, utilidad: 0, margen: '0' }
         });
     }
+    const motivo = await puedeVerEmpresa(req, empresaId);
+    if (motivo) return sinAcceso(res, motivo);
     const empId = (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
 
     try {
-        const { cuentas, tot, utilidad, cuadrado } = await calcularBalanceData(empId, { mes, anio, desde, hasta }, req.user?.organizacionId);
+        const { cuentas, tot, utilidad, cuadrado } = await calcularBalanceData(
+            empId, { mes, anio, desde, hasta }, req.user?.organizacionId,
+            empId ? null : await empresasVisibles(req)
+        );
 
         res.json({
             ok: true,
@@ -408,10 +506,15 @@ export const getBalancePdf = async (req, res) => {
     if (clienteSinEmpresa(req, empresaId)) {
         return res.status(403).json({ message: "Selecciona una empresa para generar el balance." });
     }
+    const motivoPdf = await puedeVerEmpresa(req, empresaId);
+    if (motivoPdf) return sinAcceso(res, motivoPdf);
     const empId = (!empresaId || empresaId === 'ALL' || empresaId === 'undefined' || empresaId === 'null') ? null : empresaId;
 
     try {
-        const { cuentas: cuentasData, utilidad } = await calcularBalanceData(empId, { mes, anio, desde, hasta }, req.user?.organizacionId);
+        const { cuentas: cuentasData, utilidad } = await calcularBalanceData(
+            empId, { mes, anio, desde, hasta }, req.user?.organizacionId,
+            empId ? null : await empresasVisibles(req)
+        );
 
         // Datos de la empresa para el encabezado
         let empresa = { nombre: 'BÓVEDA GLOBAL — VSV CONTADORES', rut: '', direccion: '', representante: '', representanteRut: '' };

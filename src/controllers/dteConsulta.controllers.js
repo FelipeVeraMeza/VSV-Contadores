@@ -5,6 +5,7 @@ import {
     upsertComprobante, eliminarComprobanteDeDocumento, construirGlosa,
     normalizarClase, normalizarRut, normalizarFolio, tipoLibro, esNota, TIPO_DTE_LABEL,
 } from '../utils/comprobantes.js';
+import { empresaPermitida, empresasVisibles, veSoloAsignadas } from '../utils/scope.js';
 
 /**
  * Si el RUT no existe en `empresa`, lo crea como empresa nueva.
@@ -83,17 +84,28 @@ const tablaDocumentos = (esVenta, libroFirma) => esVenta
 // Regla: el Administrador ve el consolidado de su organización; un Cliente o
 // Consultor debe pedir una empresa concreta Y tenerla asignada en `audita`.
 // Devuelve null si puede seguir, o el motivo del rechazo.
+//
+// ⚠️ CORREGIDO EL 19-08-2026. Esta función abría con
+// `if (rol === 'Administrador') return null;`, y como quien entra al equipo
+// empezando desde cero TIENE que ser Administrador para trabajar, la exención
+// se comía la regla: se midió que veía las compras y ventas de las 99 empresas
+// de la oficina. El recorte es por usuario (`ve_solo_empresas_asignadas`), no
+// por rol, y ahora lo resuelve `empresaPermitida` en un solo lugar para todo el
+// sistema.
+//
+// Para el consolidado NO se rechaza: se acota más abajo a las empresas que la
+// persona sí puede ver. Rechazarlo daría un error en pantalla cada vez que
+// alguien abre el módulo, cuando lo correcto es que vea su propia lista (que
+// puede estar vacía).
 // ============================================================================
 const rechazoDeAlcance = async (req, empId) => {
-    if (req.user?.rol === 'Administrador') return null;
-
-    if (!empId) return 'Debes seleccionar una empresa para ver sus documentos.';
-
-    const { rows } = await pool.query(
-        'SELECT 1 FROM audita WHERE usuario_id = $1 AND empresa_id = $2 LIMIT 1',
-        [req.user?.usuarioId, empId]
-    );
-    return rows.length ? null : 'No tienes acceso a los documentos de esa empresa.';
+    if (empId) {
+        const empresa = await empresaPermitida(req, empId);
+        return empresa ? null : 'No tienes acceso a los documentos de esa empresa.';
+    }
+    // Consolidado
+    if (req.user?.rol === 'Administrador' || veSoloAsignadas(req)) return null;
+    return 'Debes seleccionar una empresa para ver sus documentos.';
 };
 
 // ========================================================
@@ -386,8 +398,23 @@ export const consultarHistorialBunkerController = async (req, res) => {
 
         const libro = await libroDe(empId);
 
+        // Recorte por usuario para el consolidado: quien solo ve lo asignado
+        // no ve el libro de la firma, solo el de SUS empresas.
+        const visibles = libro === 'consolidado' ? await empresasVisibles(req) : null;
+
         let query, values;
-        if (libro === 'consolidado') {
+        if (libro === 'consolidado' && visibles) {
+            if (!visibles.length) return res.json({ ok: true, documentos: [] });
+            values = [visibles];
+            query = `
+                SELECT d.id, d.empresa_id, d.folio, d.tipo_dte, d.monto_neto, d.monto_iva, d.monto_total,
+                       d.fecha_emision, d.url_pdf, d.rut_cliente,
+                       d.razon_social_cliente AS razon_social
+                FROM documentos_emitidos_empresa d
+                WHERE d.empresa_id = ANY($1::uuid[])
+                ORDER BY d.fecha_emision DESC;
+            `;
+        } else if (libro === 'consolidado') {
             // TODAS: las ventas de la firma más las de cada empresa administrada.
             values = [organizacionId];
             query = `
@@ -460,8 +487,21 @@ export const consultarComprasBunkerController = async (req, res) => {
 
         const libro = await libroDe(empId);
 
+        // Mismo recorte que en ventas: sin el libro de la firma.
+        const visibles = libro === 'consolidado' ? await empresasVisibles(req) : null;
+
         let query, values;
-        if (libro === 'consolidado') {
+        if (libro === 'consolidado' && visibles) {
+            if (!visibles.length) return res.json({ ok: true, documentos: [] });
+            values = [visibles];
+            query = `
+                SELECT d.id, d.empresa_id, d.rut_proveedor, d.razon_social_proveedor, d.tipo_dte, d.folio,
+                       d.monto_neto, d.monto_iva, d.monto_total, d.fecha_emision, d.url_pdf
+                FROM documentos_recibidos_empresa d
+                WHERE d.empresa_id = ANY($1::uuid[])
+                ORDER BY d.fecha_emision DESC;
+            `;
+        } else if (libro === 'consolidado') {
             // TODAS: las compras de la firma más las de cada empresa administrada.
             values = [organizacionId];
             query = `

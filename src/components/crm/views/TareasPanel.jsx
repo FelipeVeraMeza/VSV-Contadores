@@ -987,6 +987,11 @@ const TareasPanel = ({ modo = 'todas' }) => {
         // con el filtro en "Activas". El archivo es una vista aparte y se respeta.
         if (necesitaTodos(v) && filtroEstado !== 'archivadas') setFiltroEstado('todas');
     };
+    // Traer también las subtareas sueltas en la lista. Apagado por omisión —una
+    // subtarea se ve dentro de su madre— pero es la forma de volver a encontrar
+    // una que se reabrió y quedó fuera de «Finalizadas».
+    const [conSubtareas, setConSubtareas] = useState(false);
+
     // Agrupar la lista. '' = una sola lista corrida, como estaba.
     const [agrupar, setAgrupar] = useState('');
     const [total, setTotal] = useState(0);
@@ -1052,8 +1057,17 @@ const TareasPanel = ({ modo = 'todas' }) => {
         // «Finalizadas» tampoco salía, así que lo que uno cerraba se esfumaba y
         // no había dónde revisar lo hecho. Ahí sí se muestran sueltas, con el
         // nombre de su tarea madre al lado para saber de dónde salieron.
+        //
+        // Y hay un tercer caso, que era un agujero: REABRIR una subtarea
+        // finalizada la hacía desaparecer de todas partes. Estaba en
+        // «Finalizadas» —la única lista que las muestra sueltas—, se marcaba
+        // como activa, dejaba de calzar con ese filtro y ya no había dónde
+        // entrar en ella: la lista normal las esconde por `soloRaiz`. Quedaba
+        // viva pero inalcanzable salvo entrando a su tarea madre o al árbol.
+        // Por eso el interruptor «Con subtareas», que las trae en cualquier
+        // filtro cuando uno las anda buscando.
         const esArbol = vista === 'arbol';
-        const verSubtareas = esArbol || filtroEstado === 'completada';
+        const verSubtareas = esArbol || filtroEstado === 'completada' || conSubtareas;
         const o = {
             ambito: modo,
             limite: String(esArbol ? POR_PAGINA_ARBOL : POR_PAGINA),
@@ -1068,7 +1082,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
         if (filtroResponsable) o.responsableId = filtroResponsable;
         if (busqAplicada) o.q = busqAplicada;
         return o;
-    }, [vista, modo, proyectoSel, filtroEstado, filtroPrioridad, filtroResponsable, busqAplicada]);
+    }, [vista, modo, proyectoSel, filtroEstado, filtroPrioridad, filtroResponsable, busqAplicada, conSubtareas]);
 
     const cargar = useCallback(async () => {
         setLoading(true);
@@ -1249,6 +1263,20 @@ const TareasPanel = ({ modo = 'todas' }) => {
                             {label}
                         </button>
                     ))}
+                    {/* CON SUBTAREAS.
+                        La lista muestra solo las tareas madre: una subtarea se ve
+                        dentro de la suya. El problema aparecía al REABRIR una
+                        subtarea finalizada — dejaba de estar en «Finalizadas», que
+                        es la única lista que las muestra sueltas, y no quedaba
+                        forma de entrar en ella. Con esto se encuentran siempre.
+                        En el árbol no se ofrece porque ahí ya salen todas. */}
+                    {vista !== 'arbol' && (
+                        <button onClick={() => setConSubtareas(v => !v)}
+                            title="Mostrar también las subtareas sueltas, con el nombre de su tarea madre"
+                            className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider ${conSubtareas ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-white border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
+                            Con subtareas
+                        </button>
+                    )}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     {/* Agrupar solo aplica a la lista: el tablero ya está agrupado

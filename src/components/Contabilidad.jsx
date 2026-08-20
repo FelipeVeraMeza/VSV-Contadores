@@ -11,7 +11,7 @@ import ReportesHub from '@/components/contabilidad/ReportesHub';
 import GestionCaja from '@/components/contabilidad/GestionCaja';
 
 const TITULOS = {
-  compras: 'Compras', ventas: 'Ventas', sii: 'Conexión SII', honorarios: 'Honorarios',
+  compras: 'Compras', ventas: 'Ventas', honorarios: 'Honorarios',
   recaudaciones: 'Recaudaciones', pagos: 'Pagos', centralizacion: 'Centralización',
   traspaso: 'Traspaso Apertura', reportes: 'Reportes',
 };
@@ -111,7 +111,6 @@ const Contabilidad = () => {
       case 'pagos':         return <GestionCaja empresaId={empresaId} rango={rango} tipo="pago" />;
       case 'centralizacion':return <AsientosContables empresaId={empresaId} rango={rango} />;
       case 'reportes':      return <ReportesHub empresaId={empresaId} rango={rango} />;
-      case 'sii':           return <EnConstruccion titulo="Conexión SII" />;
       case 'traspaso':      return <EnConstruccion titulo="Traspaso Apertura" />;
       default:              return <MovimientosContables empresaId={empresaId} tipoInicial="compras" ocultarTabs rango={rango} />;
     }

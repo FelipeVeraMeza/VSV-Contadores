@@ -301,9 +301,31 @@ export const crearPersona = async (req, res) => {
 // ============================================================
 // LISTAR PERSONAS
 // ============================================================
+// CÓMO SE ORDENA LA LISTA
+//
+// Por omisión salía siempre lo más nuevo primero, y con 128 prospectos que ya
+// tienen fecha de próximo contacto cargada eso no responde la pregunta del
+// vendedor, que es «¿a quién llamo hoy?». Ordenar por esa fecha convierte la
+// lista en la agenda del día.
+//
+// El orden va en un DICCIONARIO y no se concatena lo que llegue en la URL:
+// `ORDER BY` no admite parámetros, así que meter texto de la petición ahí
+// directamente sería una inyección de SQL de manual. Lo que no esté en esta
+// lista cae al orden por omisión.
+//
+// NULLS LAST en el orden por contacto: un prospecto sin fecha no es urgente,
+// es que nadie la puso. Arriba estorbaría justo a quien vino a ver qué toca hoy.
+const ORDEN_PERSONAS = {
+    recientes: 'p.created_at DESC',
+    contacto:  'p.proximo_contacto ASC NULLS LAST, p.created_at DESC',
+    contacto_lejano: 'p.proximo_contacto DESC NULLS LAST, p.created_at DESC',
+    nombre:    'LOWER(p.nombre) ASC, LOWER(COALESCE(p.apellidos, \'\')) ASC',
+    ultimo:    'p.fecha_ultimo_contacto DESC NULLS LAST',
+};
+
 export const listarPersonas = async (req, res) => {
     try {
-        const { estado, q, ejecutivo } = req.query;
+        const { estado, q, ejecutivo, orden } = req.query;
         const organizacionId = req.user?.organizacionId || null;
         const where = ['p.activo'];
         const params = [];
@@ -341,7 +363,7 @@ export const listarPersonas = async (req, res) => {
              LEFT JOIN usuario u ON u.id = p.ejecutivo_id
              WHERE ${where.join(' AND ')}
              GROUP BY p.id, u.nombre
-             ORDER BY p.created_at DESC`,
+             ORDER BY ${ORDEN_PERSONAS[orden] || ORDEN_PERSONAS.recientes}`,
             params
         );
 
@@ -474,31 +496,45 @@ export const actualizarPersona = async (req, res) => {
         const rutEncrypted = rut?.trim() ? encrypt(cleanRut(rut)) : null;
         const rutHash = rut?.trim() ? generateHash(cleanRut(rut)) : null;
 
-        await client.query(
-            `UPDATE persona SET
-                nombre = COALESCE($1, nombre),
-                segundo_nombre = $2,
-                apellidos = $3,
-                fecha_nacimiento = $4,
-                rut_encrypted = COALESCE($5, rut_encrypted),
-                rut_hash = COALESCE($6, rut_hash),
-                rubro = $7, direccion = $8, comuna = $9, region = $10,
-                observaciones = $11, ejecutivo_id = $12,
-                proximo_contacto = $14,
-                consentimiento_contacto = COALESCE($15, consentimiento_contacto),
-                necesidad = $16, estado_comercial = $17, accion_siguiente = $18,
-                updated_at = NOW()
-             WHERE id = $13`,
-            [
-                nombre?.trim() || null, segundoNombre?.trim() || null, apellidos?.trim() || null,
-                fechaNacimiento || null, rutEncrypted, rutHash,
-                rubro?.trim() || null, direccion?.trim() || null, comuna?.trim() || null, region?.trim() || null,
-                observaciones?.trim() || null, ejecutivoId || null, id,
-                proximoContacto || null,
-                (consentimiento === undefined ? null : !!consentimiento),
-                necesidad?.trim() || null, estadoComercial?.trim() || null, accionSiguiente?.trim() || null
-            ]
-        );
+        // ACTUALIZACIÓN PARCIAL: solo se escriben los campos que VIENEN.
+        //
+        // Antes esta consulta escribía TODAS las columnas de corrido, así que una
+        // petición con un solo campo —corregir «qué necesita» desde la lista, por
+        // ejemplo— dejaba en NULL apellidos, rubro, dirección, comuna, región,
+        // observaciones, ejecutivo, próximo contacto y estado comercial. Con la
+        // ficha completa no se notaba porque siempre mandaba todo; en cuanto algo
+        // manda un campo suelto, borra el resto del prospecto sin avisar.
+        //
+        // Se distingue «no lo mandó» de «lo mandó vacío»: mandar un campo en
+        // blanco a propósito TIENE que poder borrarlo.
+        const sets = [];
+        const vals = [];
+        const poner = (columna, valor) => { vals.push(valor); sets.push(`${columna} = $${vals.length}`); };
+        const texto = (v) => (v === null ? null : (String(v).trim() || null));
+
+        if (nombre !== undefined && nombre?.trim()) poner('nombre', nombre.trim());
+        if (segundoNombre !== undefined)  poner('segundo_nombre', texto(segundoNombre));
+        if (apellidos !== undefined)      poner('apellidos', texto(apellidos));
+        if (fechaNacimiento !== undefined) poner('fecha_nacimiento', fechaNacimiento || null);
+        if (rutEncrypted) { poner('rut_encrypted', rutEncrypted); poner('rut_hash', rutHash); }
+        if (rubro !== undefined)          poner('rubro', texto(rubro));
+        if (direccion !== undefined)      poner('direccion', texto(direccion));
+        if (comuna !== undefined)         poner('comuna', texto(comuna));
+        if (region !== undefined)         poner('region', texto(region));
+        if (observaciones !== undefined)  poner('observaciones', texto(observaciones));
+        if (ejecutivoId !== undefined)    poner('ejecutivo_id', ejecutivoId || null);
+        if (proximoContacto !== undefined) poner('proximo_contacto', proximoContacto || null);
+        if (consentimiento !== undefined) poner('consentimiento_contacto', !!consentimiento);
+        if (necesidad !== undefined)      poner('necesidad', texto(necesidad));
+        if (estadoComercial !== undefined) poner('estado_comercial', texto(estadoComercial));
+        if (accionSiguiente !== undefined) poner('accion_siguiente', texto(accionSiguiente));
+
+        if (sets.length > 0) {
+            vals.push(id);
+            await client.query(
+                `UPDATE persona SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${vals.length}`,
+                vals);
+        }
 
         // Reemplazar teléfonos / correos si vienen
         if (Array.isArray(telefonos)) {
