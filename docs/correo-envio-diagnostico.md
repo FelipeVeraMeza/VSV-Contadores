@@ -405,6 +405,51 @@ quien envía → `RESEND_FROM` → la dirección de siempre.
 
 ---
 
+## 7quinquies. El tope diario y la ventana equivocada *(17-ago-2026)*
+
+**Confirmado en el panel de Resend:** plan **Free**, **100 correos al día**, 3.000 al
+mes. El valor por omisión de `CORREOS_LIMITE_DIARIO` (100) era el correcto.
+
+**El día se pasó del tope: 148 de 100.** Y el contador del sistema decía 88.
+
+### La causa
+
+`cuotaDelDia` cortaba el día en **hora de Chile**; Resend lo corta en **UTC**.
+
+El 16-ago salieron 48 correos después de las 20:00 de Chile. Para nosotros eran
+del 16; para Resend, del 17. El contador mostraba «88 de 100, quedan 12» cuando
+el proveedor ya iba en 148 y estaba rechazando.
+
+El razonamiento original —«un envío de las 21:00 de un martes tiene que contar
+para el martes»— es correcto para un humano y equivocado para este contador: no
+existe para informar un día del calendario, existe para **predecir cuándo el
+proveedor va a rechazar**. Contando en otra ventana que la de quien aplica el
+tope, no predice nada.
+
+### El arreglo
+
+El corte pasa a UTC, y la pantalla dice a qué hora local se reinicia
+(**20:00 en Chile**, 21:00 en horario de verano). Verificado contra los datos
+reales: el contador pasó de 88 a **136**, que es lo que Resend cuenta para ese
+mismo día.
+
+> **Al leer el contador:** lo que se manda después de las 20:00 cuenta contra la
+> cuota del día siguiente. No es un error de la pantalla, es cómo cobra Resend.
+
+### Lo que todavía no vemos
+
+Quedan ~12 correos de diferencia entre nuestro registro (136) y Resend (148).
+Salen por vías que **no escriben en `correo_envio`**: el facturador y los scripts
+sueltos. Mientras eso siga así, el contador siempre va a quedar corto y con un
+tope de 100 esa ceguera puede cortar una campaña a la mitad.
+
+La forma de cerrarlo es guardar el id que devuelve Resend en
+`correo_envio.proveedor_id` —hoy **0 de 139**— y de paso poder preguntarle al
+proveedor si cada correo fue **entregado o rebotó**, en vez de solo saber que se
+lo entregamos sin error. Va junto con los webhooks de rebote (RF-CO-67).
+
+---
+
 ## 8. Notas sueltas
 
 - **Correo de pruebas:** `felipe.veram2001@gmail.com`. Siempre enviar ahí antes de escribirle

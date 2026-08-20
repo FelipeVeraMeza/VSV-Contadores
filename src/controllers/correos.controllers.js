@@ -90,8 +90,21 @@ const huellaDe = (asunto, cuerpo, ids) =>
 // desde un contador aparte que habría que acordarse de mantener.
 export const LIMITE_DIARIO = Math.max(1, parseInt(process.env.CORREOS_LIMITE_DIARIO, 10) || 100);
 
-// El día se corta en la zona horaria de Chile, no en UTC: un envío de las 21:00
-// de un martes tiene que contar para el martes, no para el miércoles.
+// EL DÍA SE CORTA EN UTC, QUE ES COMO LO CORTA EL PROVEEDOR.
+//
+// Estaba en hora de Chile con el argumento de que un envío de las 21:00 de un
+// martes «tiene que contar para el martes». Suena razonable y era un error: este
+// contador no existe para informar un día del calendario, existe para PREDECIR
+// cuándo Resend va a empezar a rechazar. Si cuenta en otra ventana que la de
+// quien aplica el tope, no predice nada.
+//
+// Lo que costó descubrirlo: el 16-ago salieron 48 correos después de las 20:00
+// de Chile. Para nosotros eran del 16; para Resend, del 17. El contador mostraba
+// 88 de 100 —«quedan 12»— cuando Resend ya iba en 148 y estaba rechazando.
+//
+// Ojo al leerlo: el contador se reinicia a MEDIANOCHE UTC, que en Chile son las
+// 20:00 (21:00 en horario de verano). Un envío de las 21:00 aparece contra la
+// cuota del día siguiente, y así es como lo va a cobrar el proveedor.
 // Las PRUEBAS cuentan. Salen por el mismo proveedor y gastan el mismo tope; no
 // contarlas hacía que el contador mintiera justo cuando más se usa —ajustando
 // un texto se hacen 10 pruebas seguidas— y con un tope de ~100 esos 10 deciden
@@ -101,13 +114,18 @@ export const LIMITE_DIARIO = Math.max(1, parseInt(process.env.CORREOS_LIMITE_DIA
 // sin distinguir, uno ve 15 y no entiende de dónde salieron.
 export const cuotaDelDia = async (organizacionId) => {
     const { rows } = await pool.query(
-        `SELECT count(*) FILTER (WHERE NOT es_prueba)::int AS reales,
-                count(*) FILTER (WHERE es_prueba)::int     AS pruebas
+        // Un envío con copia oculta son DOS correos para el proveedor: el del
+        // cliente y el de la copia. Contarlo como uno mostraría la mitad del
+        // gasto real, que es justo cuando más importa.
+        `SELECT count(*) FILTER (WHERE NOT es_prueba)::int
+                  + count(*) FILTER (WHERE NOT es_prueba AND con_copia)::int AS reales,
+                count(*) FILTER (WHERE es_prueba)::int
+                  + count(*) FILTER (WHERE es_prueba AND con_copia)::int     AS pruebas
            FROM correo_envio
           WHERE estado = 'enviado'
             AND organizacion_id IS NOT DISTINCT FROM $1::uuid
-            AND (enviado_at AT TIME ZONE 'America/Santiago')::date
-              = (now()  AT TIME ZONE 'America/Santiago')::date`,
+            AND (enviado_at AT TIME ZONE 'UTC')::date
+              = (now()  AT TIME ZONE 'UTC')::date`,
         [organizacionId || null]);
     const reales  = rows[0]?.reales  ?? 0;
     const pruebas = rows[0]?.pruebas ?? 0;
@@ -118,6 +136,12 @@ export const cuotaDelDia = async (organizacionId) => {
         reales,
         pruebas,
         quedan: Math.max(0, LIMITE_DIARIO - enviados),
+        // A qué hora local vuelve a cero, para que no haya que saberse que el
+        // corte es en UTC. Se calcula en vez de fijarlo: en horario de verano
+        // Chile cambia de UTC-4 a UTC-3 y la hora del reinicio se corre.
+        reinicia: new Date(Date.UTC(
+            new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1))
+            .toLocaleTimeString('es-CL', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit' }),
     };
 };
 
@@ -376,7 +400,8 @@ const remitenteValido = (c) =>
 export const perfilDe = async (usuarioId) => {
     if (!usuarioId) return null;
     const { rows } = await pool.query(
-        `SELECT nombre, correo_remitente, firma_texto, firma_imagen
+        `SELECT nombre, correo_remitente, correo_respuesta, copia_oculta, correo_copia,
+                firma_texto, firma_imagen
            FROM usuario WHERE id = $1`,
         [usuarioId]);
     return rows[0] || null;
@@ -401,6 +426,13 @@ export const miPerfilCorreo = async (req, res) => {
             success: true,
             nombre: p?.nombre || null,
             correoRemitente: p?.correo_remitente || null,
+            // A dónde le contesta el cliente. Sin esto la respuesta se pierde:
+            // va a la casilla del dominio, que vive en el hosting y nadie lee.
+            correoRespuesta: p?.correo_respuesta || null,
+            // Copia oculta de cada envío, para tener el registro también en el
+            // correo. Cuesta el doble de cuota, así que la pantalla lo advierte.
+            copiaOculta: !!p?.copia_oculta,
+            correoCopia: p?.correo_copia || null,
             firmaTexto: p?.firma_texto || null,
             firmaImagen: p?.firma_imagen || null,
             // Lo que se va a usar de verdad, ya resuelto: si no configuró el
@@ -416,7 +448,8 @@ export const miPerfilCorreo = async (req, res) => {
 
 export const guardarPerfilCorreo = async (req, res) => {
     try {
-        const { correoRemitente, firmaTexto, firmaImagen } = req.body || {};
+        const { correoRemitente, correoRespuesta, copiaOculta, correoCopia,
+                firmaTexto, firmaImagen } = req.body || {};
 
         const correo = String(correoRemitente || '').trim();
         if (correo && !remitenteValido(correo)) {
@@ -426,16 +459,38 @@ export const guardarPerfilCorreo = async (req, res) => {
             });
         }
 
+        // Acá NO se exige el dominio, al revés que arriba: la gracia del correo
+        // de respuesta es justamente que sea donde la persona lee de verdad,
+        // que suele ser un Gmail. El buzón de @vsvconsultores.com vive en el
+        // hosting y no lo abre nadie.
+        const respuesta = String(correoRespuesta || '').trim();
+        if (respuesta && !CORREO_VALIDO.test(respuesta)) {
+            return res.status(400).json({ success: false, message: 'El correo de respuesta no es una dirección válida.' });
+        }
+        const copia = String(correoCopia || '').trim();
+        if (copia && !CORREO_VALIDO.test(copia)) {
+            return res.status(400).json({ success: false, message: 'El correo para la copia no es una dirección válida.' });
+        }
+        // Sin destino no hay a dónde mandarla, y dejarla encendida «a la espera»
+        // haría creer que hay registro cuando no lo hay.
+        if (copiaOculta && !copia && !respuesta) {
+            return res.status(400).json({
+                success: false,
+                message: 'Para recibir copia oculta necesitas indicar a qué correo, acá o en «Las respuestas me llegan a».',
+            });
+        }
+
         if (firmaImagen && !imagenValida(firmaImagen)) {
             return res.status(400).json({ success: false, message: 'La imagen de la firma no es válida.' });
         }
 
         await pool.query(
             `UPDATE usuario
-                SET correo_remitente = $2, firma_texto = $3, firma_imagen = $4
+                SET correo_remitente = $2, correo_respuesta = $3, copia_oculta = $4,
+                    correo_copia = $5, firma_texto = $6, firma_imagen = $7
               WHERE id = $1`,
-            [req.user?.usuarioId, correo || null,
-             firmaTexto?.trim() || null, firmaImagen || null]);
+            [req.user?.usuarioId, correo || null, respuesta || null, !!copiaOculta,
+             copia || null, firmaTexto?.trim() || null, firmaImagen || null]);
 
         const p = await perfilDe(req.user?.usuarioId);
         await registrar(req, {
@@ -1237,6 +1292,19 @@ export const enviarCampana = async (req, res) => {
         const firmaFinal = firma !== undefined ? firma : (perfil?.firma_texto || '');
         const firmaImgFinal = firmaImagen !== undefined ? firmaImagen : (perfil?.firma_imagen || null);
 
+        // A DÓNDE CONTESTA EL CLIENTE.
+        // El correo sale desde @vsvconsultores.com porque es el dominio verificado
+        // y es lo que el cliente tiene que ver. Pero ese buzón vive en el hosting
+        // y nadie lo abre: sin `Reply-To`, las respuestas caían ahí y se perdían
+        // sin error ni rebote.
+        const responderA = perfil?.correo_respuesta || null;
+
+        // COPIA OCULTA a la casilla de archivo, para que el envío quede también
+        // en el correo y no solo en la pantalla de Enviados. NO va en las
+        // pruebas: esas ya llegan a esa misma casilla y solo gastarían cuota.
+        const destinoCopia = perfil?.correo_copia || perfil?.correo_respuesta || null;
+        const copiaA = (perfil?.copia_oculta && destinoCopia && !soloPrueba) ? destinoCopia : null;
+
         if (!correoConfigurado()) {
             return res.status(503).json({ success: false, message: 'Este servidor no tiene ninguna vía de correo configurada.' });
         }
@@ -1390,11 +1458,11 @@ export const enviarCampana = async (req, res) => {
             const { rows: env } = await pool.query(
                 `INSERT INTO correo_envio
                     (campana_id, organizacion_id, empresa_id, razon_social, destinatario,
-                     asunto_final, cuerpo_final, es_prueba)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+                     asunto_final, cuerpo_final, es_prueba, con_copia)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
                 [campanaId, org, d.empresaId, d.razonSocial,
                  soloPrueba ? destinoPrueba : d.correos.join(', '),
-                 d.asuntoFinal.slice(0, 300), d.cuerpoFinal, !!soloPrueba]);
+                 d.asuntoFinal.slice(0, 300), d.cuerpoFinal, !!soloPrueba, !!copiaA]);
             d.envioId = env[0].id;
         }
 
@@ -1458,6 +1526,10 @@ export const enviarCampana = async (req, res) => {
                             // Sale desde la dirección de quien lo mandó, no desde una
                             // fija: si el cliente responde, le responde a esa persona.
                             from: remitente,
+                            // Sin esto la respuesta del cliente va al buzón del
+                            // hosting, que no lee nadie.
+                            ...(responderA ? { replyTo: responderA } : {}),
+                            ...(copiaA ? { bcc: copiaA } : {}),
                             to: destino,
                             // El texto ya viene resuelto de arriba, el MISMO que se
                             // guardó en `correo_envio`. Volver a combinarlo acá abría

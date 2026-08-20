@@ -193,7 +193,8 @@ const EnvioCorreos = () => {
     const [perfil, setPerfil] = useState(null);
     const [editandoPerfil, setEditandoPerfil] = useState(false);
     const [perfilBorrador, setPerfilBorrador] = useState({
-        correoRemitente: '', firmaTexto: '', firmaImagen: null,
+        correoRemitente: '', correoRespuesta: '', copiaOculta: false, correoCopia: '',
+        firmaTexto: '', firmaImagen: null,
     });
     const [guardandoPerfil, setGuardandoPerfil] = useState(false);
 
@@ -455,6 +456,9 @@ const EnvioCorreos = () => {
                     setFirmaImagen(dperfil.firmaImagen || null);
                     setPerfilBorrador({
                         correoRemitente: dperfil.correoRemitente || '',
+                        correoRespuesta: dperfil.correoRespuesta || '',
+                        copiaOculta: !!dperfil.copiaOculta,
+                        correoCopia: dperfil.correoCopia || '',
                         firmaTexto: dperfil.firmaTexto || '',
                         firmaImagen: dperfil.firmaImagen || null,
                     });
@@ -730,17 +734,23 @@ const EnvioCorreos = () => {
                         cuota.quedan === 0        ? 'text-red-700 bg-red-500/10 border-red-500/30'
                       : cuota.quedan < (previa?.total ?? 0) ? 'text-amber-700 bg-amber-500/10 border-amber-500/40'
                       : 'text-slate-500 bg-slate-50 border-[#efe8dd]'}`}
-                        title={`Hoy salieron ${cuota.enviados} de ${cuota.limite}`
+                        title={`Salieron ${cuota.enviados} de ${cuota.limite}`
                             + (cuota.pruebas ? ` (${cuota.reales} reales + ${cuota.pruebas} de prueba)` : '')
-                            + `. Las pruebas gastan cuota igual, porque salen por el mismo proveedor.`
-                            + ` El tope se ajusta con CORREOS_LIMITE_DIARIO según el plan contratado.`}>
-                        Hoy {cuota.enviados}/{cuota.limite}
+                            + `. Las pruebas y las copias ocultas gastan cuota igual, porque salen por el mismo proveedor.`
+                            + (cuota.reinicia ? `\n\nOJO: el contador es el del proveedor, que corta a medianoche UTC`
+                                + ` — o sea a las ${cuota.reinicia} de Chile, no a las 00:00.`
+                                + ` Lo que mandes después de esa hora cuenta para el día siguiente.` : '')
+                            + `\n\nEl tope se ajusta con CORREOS_LIMITE_DIARIO según el plan contratado.`}>
+                        {cuota.enviados}/{cuota.limite}
                         {cuota.pruebas > 0 && (
                             <span className="ml-1 opacity-60 font-normal normal-case">
                                 ({cuota.pruebas} {cuota.pruebas === 1 ? 'prueba' : 'pruebas'})
                             </span>
                         )}
-                        <span className="ml-1 opacity-70">· quedan {cuota.quedan}</span>
+                        <span className="ml-1 opacity-70">
+                            · quedan {cuota.quedan}
+                            {cuota.reinicia && cuota.quedan === 0 && ` · vuelve a las ${cuota.reinicia}`}
+                        </span>
                     </span>
                 )}
             </div>
@@ -1100,6 +1110,68 @@ const EnvioCorreos = () => {
                                     Tiene que ser <b>@{perfil?.dominio || 'vsvconsultores.com'}</b>. Desde otro dominio el envío se rechaza.
                                 </span>
                             </label>
+
+                            {/* A DÓNDE CONTESTA EL CLIENTE.
+                                El correo sale desde @vsvconsultores.com porque es el
+                                dominio verificado, pero ESE BUZÓN VIVE EN EL HOSTING y
+                                no lo lee nadie. Sin esto, las respuestas caen ahí y se
+                                pierden: sin error y sin rebote. */}
+                            <label className="block">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                    Las respuestas me llegan a
+                                </span>
+                                <input value={perfilBorrador.correoRespuesta}
+                                    onChange={(e) => setPerfilBorrador(p => ({ ...p, correoRespuesta: e.target.value }))}
+                                    placeholder="tucorreo@gmail.com"
+                                    className={`${inp} mt-1 font-mono`} />
+                                <span className="text-[9px] text-slate-400 block mt-0.5">
+                                    Acá <b>sí</b> puede ser tu Gmail: es donde lees de verdad. Si lo dejas
+                                    vacío, el cliente le responde a la casilla del dominio, que está en el
+                                    servidor del hosting y <b>no la lee nadie</b>.
+                                </span>
+                            </label>
+
+                            {/* COPIA OCULTA. El costo va al lado y no en la letra
+                                chica: con un tope de ~100 diarios, duplicar el gasto
+                                decide si la campaña del mes entra o no. */}
+                            <label className="flex items-start gap-2 cursor-pointer">
+                                <input type="checkbox" checked={perfilBorrador.copiaOculta}
+                                    onChange={(e) => setPerfilBorrador(p => ({ ...p, copiaOculta: e.target.checked }))}
+                                    className="accent-emerald-500 mt-0.5" />
+                                <span className="min-w-0">
+                                    <span className="text-[10px] font-bold text-slate-700 block">
+                                        Mandarme copia oculta de cada correo
+                                    </span>
+                                    <span className="text-[9px] text-slate-400 block">
+                                        Te llega una copia y así te queda el registro también en el correo.
+                                        Va <b>oculta</b>: el cliente no la ve.
+                                        {' '}<b className="text-amber-700">
+                                            Ojo: cada copia gasta cuota — una campaña de 38 pasa a consumir 76
+                                            de {cuota?.limite ?? 100}.
+                                        </b>
+                                    </span>
+                                </span>
+                            </label>
+
+                            {perfilBorrador.copiaOculta && (
+                                <label className="block pl-6">
+                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                        Mandar la copia a
+                                    </span>
+                                    <input value={perfilBorrador.correoCopia}
+                                        onChange={(e) => setPerfilBorrador(p => ({ ...p, correoCopia: e.target.value }))}
+                                        placeholder={perfilBorrador.correoRespuesta || 'archivo@vsvconsultores.com'}
+                                        className={`${inp} mt-1 font-mono`} />
+                                    <span className="text-[9px] text-slate-400 block mt-0.5">Vacío = va al mismo de arriba.</span>
+                                    {/vsvconsultores\.com$/i.test(perfilBorrador.correoCopia.trim()) && (
+                                        <span className="text-[9px] text-amber-700 block mt-1">
+                                            ⚠️ Esa casilla está en el servidor del hosting, no en Gmail: las copias
+                                            se van a acumular ahí. Para verlas en Gmail, esa dirección tiene que
+                                            reenviar, o pon acá tu Gmail.
+                                        </span>
+                                    )}
+                                </label>
+                            )}
 
                             <label className="block">
                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Mi firma</span>
