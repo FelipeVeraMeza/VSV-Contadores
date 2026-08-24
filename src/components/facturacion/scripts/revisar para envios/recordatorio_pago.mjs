@@ -14,6 +14,10 @@
 import 'dotenv/config';
 import { pool } from '../../../../database/db.js';
 import { enviarConReintentos } from './mensajes_facturador_masivo.mjs';
+// Para que estos recordatorios aparezcan en Comunicaciones → Enviados. Antes
+// solo quedaban en la bitácora, y la pantalla de Enviados lee `correo_envio`:
+// se mandaban 40 y en pantalla no se veía ninguno.
+import { abrirRegistroTanda, anotarEnvio, cerrarRegistroTanda } from '../../../../utils/registroEnvio.js';
 import { registrar } from '../../../../utils/bitacora.js';
 import { abrirProceso, latir, cerrarProceso } from '../../../../utils/procesoEnCurso.js';
 
@@ -258,6 +262,15 @@ export async function enviarRecordatoriosPago({ periodo = null, fechaLimite = nu
 
     // Espejo en la base: si el servidor se reinicia a media corrida, la pantalla
     // puede seguir mostrando dónde quedó en vez de verse quieta.
+    // La tanda, para que quede en Enviados junto al resto de lo que se manda.
+    const tandaId = await abrirRegistroTanda({
+        organizacionId: usuario?.organizacionId || null,
+        usuarioId: usuario?.usuarioId || null,
+        asunto: `Recordatorio de pago${periodo ? ` · ${periodo}` : ''}`,
+        remitente: process.env.RESEND_FROM || 'Simple Pyme',
+        total: destinatarios.length,
+    });
+
     const procesoId = await abrirProceso({
         tipo: 'recordatorio_pago', usuario, total: destinatarios.length,
         detalle: { periodo: destinatarios[0]?.periodo || periodo, deuda, fechaLimite: tope },
@@ -308,6 +321,15 @@ export async function enviarRecordatoriosPago({ periodo = null, fechaLimite = nu
                 descripcion: `Recordatorio de pago a ${dest.razonSocial} (${dest.correo})`,
                 detalle: { folio: dest.folio, correo: dest.correo, monto: dest.monto, periodo: dest.periodo, fechaLimite: tope },
             });
+            await anotarEnvio(tandaId, {
+                organizacionId: usuario?.organizacionId || null,
+                empresaId: dest.empresaId || null,
+                razonSocial: dest.razonSocial,
+                destinatario: dest.correo,
+                asunto: mailOptions.subject,
+                cuerpo: mailOptions.html,
+                estado: 'enviado',
+            });
         } catch (e) {
             estadoRecordatorio.fallidos++;
             console.log(`   ❌ Falló ${dest.correo}: ${e.message}`);
@@ -318,6 +340,16 @@ export async function enviarRecordatoriosPago({ periodo = null, fechaLimite = nu
                 descripcion: `Falló el recordatorio a ${dest.razonSocial} (${dest.correo})`,
                 resultado: 'error', detalle: { folio: dest.folio, correo: dest.correo, error: e.message },
             });
+            // Los que fallan también se anotan: en Enviados se ven en rojo con
+            // el motivo, que es lo que permite reintentar solo esos.
+            await anotarEnvio(tandaId, {
+                organizacionId: usuario?.organizacionId || null,
+                empresaId: dest.empresaId || null,
+                razonSocial: dest.razonSocial,
+                destinatario: dest.correo,
+                asunto: mailOptions.subject,
+                estado: 'fallido', motivo: e.message,
+            });
         }
 
         // Pausa corta para no saturar el envío (mismo criterio que el facturador).
@@ -326,6 +358,10 @@ export async function enviarRecordatoriosPago({ periodo = null, fechaLimite = nu
 
     estadoRecordatorio.activo = false;
     estadoRecordatorio.finalizado = true;
+
+    await cerrarRegistroTanda(tandaId, {
+        enviados: estadoRecordatorio.enviados, fallidos: estadoRecordatorio.fallidos,
+    });
 
     await cerrarProceso(procesoId, {
         estado: estadoRecordatorio.fallidos ? 'finalizado' : 'finalizado',

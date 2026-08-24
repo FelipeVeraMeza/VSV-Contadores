@@ -709,13 +709,18 @@ const borrarAdjuntos = async (rutas) => {
 // que salen de una planilla no tienen empresa —`empresa_id` va en NULL— y un
 // `WHERE empresa_id = NULL` no calza con nada, así que esos envíos se habrían
 // quedado en 'pendiente' para siempre aunque hubieran salido bien.
-const marcarEnvio = async (envioId, estado, motivo) => {
+// `proveedorId` es el id que devuelve Resend. Guardarlo es lo que después
+// permite preguntarle si el correo fue ENTREGADO o rebotó: sin él, lo único que
+// sabemos es que se lo entregamos al proveedor sin error.
+const marcarEnvio = async (envioId, estado, motivo, proveedorId = null) => {
     try {
         await pool.query(
             `UPDATE correo_envio
-                SET estado = $2, motivo = $3, enviado_at = now(), intentos = intentos + 1
+                SET estado = $2, motivo = $3, enviado_at = now(), intentos = intentos + 1,
+                    proveedor_id = COALESCE($4, proveedor_id)
               WHERE id = $1`,
-            [envioId, estado, motivo ? String(motivo).slice(0, 500) : null]);
+            [envioId, estado, motivo ? String(motivo).slice(0, 500) : null,
+             proveedorId ? String(proveedorId).slice(0, 120) : null]);
     } catch (e) {
         console.error(`⚠️ [CAMPAÑA] No se pudo registrar el envío: ${e.message}`);
     }
@@ -1521,8 +1526,10 @@ export const enviarCampana = async (req, res) => {
                     estadoCampana.empresaActual = d.razonSocial;
 
                     const destino = soloPrueba ? destinoPrueba : d.correos.join(', ');
-                    try {
-                        await enviarCorreo({
+                    // Se guarda en una variable en vez de pasarlo en línea: el
+                    // proveedor anota SOBRE este objeto el id del correo, y hay
+                    // que poder leerlo después para registrarlo.
+                    const opciones = {
                             // Sale desde la dirección de quien lo mandó, no desde una
                             // fija: si el cliente responde, le responde a esa persona.
                             from: remitente,
@@ -1542,9 +1549,11 @@ export const enviarCampana = async (req, res) => {
                                 soloPrueba ? null : urlBajaPara(d.correos[0], org)
                             ),
                             ...(paraEnviar.length ? { attachments: paraEnviar } : {}),
-                        });
+                    };
+                    try {
+                        await enviarCorreo(opciones);
                         estadoCampana.enviados++;
-                        await marcarEnvio(d.envioId, 'enviado', null);
+                        await marcarEnvio(d.envioId, 'enviado', null, opciones.proveedorId);
                     } catch (err) {
                         estadoCampana.fallidos++;
                         estadoCampana.errores.push({ razonSocial: d.razonSocial, error: err.message });

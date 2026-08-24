@@ -422,6 +422,20 @@ async function enviarPorResend(mailOptions) {
         const txt = await res.text().catch(() => '');
         throw new Error(`Resend API ${res.status}: ${txt}`);
     }
+
+    // EL ID QUE DEVUELVE EL PROVEEDOR.
+    // Se anota SOBRE el `mailOptions` que llegó, en vez de cambiar lo que
+    // devuelve la función: `enviarConReintentos` responde `true` y hay una
+    // decena de llamadores que lo tratan como booleano. Quien quiera el id lo
+    // lee del objeto que ya tiene en la mano.
+    //
+    // Sirve para preguntarle después a Resend si el correo fue ENTREGADO o
+    // rebotó. Sin guardarlo, lo único que sabemos es que se lo entregamos al
+    // proveedor sin error, que no es lo mismo que haya llegado.
+    try {
+        const data = await res.json();
+        mailOptions.proveedorId = data?.id || null;
+    } catch { mailOptions.proveedorId = null; }
     return true;
 }
 
