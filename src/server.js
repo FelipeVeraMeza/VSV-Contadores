@@ -390,18 +390,44 @@ const ensureSchema = async () => {
   }
 };
 
+// ============================================================================
+// ARRANQUE BLINDADO
+// ----------------------------------------------------------------------------
+// Al levantarse, el servidor dispara tres trabajos pesados: verificar el
+// esquema, reconectar las sesiones de WhatsApp y cerrar campañas de correo que
+// quedaron a medias. Ninguno es indispensable para atender peticiones.
+//
+// El problema: más abajo hay un `process.on('unhandledRejection')` que apaga el
+// proceso entero. Si cualquiera de estos tres falla —y en el servidor de
+// producción el entorno NO es el mismo que en el computador de uno: puede
+// faltar Chrome para WhatsApp, o la base puede tardar—, el servidor se cae
+// apenas parte y la página entera queda con "Búnker inaccesible", aunque el
+// login y todo lo demás estuvieran perfectos.
+//
+// Acá cada trabajo se ejecuta aislado: si se cae, se anota y el servidor sigue
+// atendiendo. Un WhatsApp que no reconecta es un problema de WhatsApp, no una
+// razón para dejar a la oficina sin sistema.
+const alArrancar = (nombre, fn) => {
+  try {
+    Promise.resolve(fn()).catch((e) =>
+      console.error(`⚠️  [arranque] ${nombre} falló, el servidor sigue en pie:`, e?.message || e));
+  } catch (e) {
+    console.error(`⚠️  [arranque] ${nombre} falló, el servidor sigue en pie:`, e?.message || e);
+  }
+};
+
 const server = app.listen(PORT, () => {
   console.log(`✅ Servidor corriendo en el puerto ${PORT}`);
-  ensureSchema();
+  alArrancar('verificar esquema', ensureSchema);
   // Vuelve a levantar las sesiones de WhatsApp ya vinculadas (las credenciales
   // viven en la BD). Las que nunca se escanearon esperan al botón "Conectar".
-  reconectarSesionesGuardadas();
+  alArrancar('reconectar WhatsApp', reconectarSesionesGuardadas);
 
   // Si el servidor se cayó (o se desplegó) a mitad de un envío masivo, la
   // campaña quedó en 'enviando' en la base aunque en memoria ya no hay nada
   // corriendo. Se cierran acá para que el registro no mienta y para saber a
   // quiénes NO les llegó.
-  cerrarCampanasZombi();
+  alArrancar('cerrar campañas a medias', cerrarCampanasZombi);
 });
 
 // --- Cierre Seguro ---
