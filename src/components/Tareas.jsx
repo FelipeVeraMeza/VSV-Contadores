@@ -32,6 +32,7 @@ import TareasPanel from '@/components/crm/views/TareasPanel';
 import ProyectosPanel from '@/components/tareas/ProyectosPanel';
 import InicioPanel from '@/components/tareas/InicioPanel';
 import ImportarTareasModal from '@/components/tareas/ImportarTareasModal';
+import ReunionesPanel from '@/components/reuniones/ReunionesPanel';
 
 const SECCIONES = {
   inicio:    { titulo: 'Inicio',     bajada: 'Tu resumen del día: lo que vence, lo que va atrasado y lo que cerraste' },
@@ -39,6 +40,11 @@ const SECCIONES = {
   todas:     { titulo: 'Tareas',     bajada: 'Todas las tareas en las que participas' },
   mias:      { titulo: 'Mis tareas', bajada: 'Solo lo que tienes asignado o donde colaboras' },
   equipo:    { titulo: 'Equipo',     bajada: 'Todas las tareas de la organización' },
+  // Las reuniones viven acá y no en el CRM porque una reunión es trabajo que
+  // entra, igual que un ticket: se convoca por algo que hay que resolver, y
+  // termina en acuerdos que son tareas. El video lo sirve Jitsi; el sistema
+  // guarda con quién, de qué cliente y qué se acordó.
+  reuniones: { titulo: 'Reuniones',  bajada: 'Videollamadas del equipo y con clientes, con lo que se acordó en cada una' },
 };
 
 // Segundo candado de "Equipo": el menú ya la esconde, pero la URL sigue
@@ -71,6 +77,7 @@ const Tareas = () => {
     switch (sub) {
       case 'inicio':    return <InicioPanel modo="todas" />;
       case 'proyectos': return <ProyectosPanel />;
+      case 'reuniones': return <ReunionesPanel />;
       case 'equipo':    return esAdmin ? <TareasPanel modo="equipo" /> : <SinPermiso />;
       case 'mias':      return <TareasPanel modo="mias" />;
       default:          return <TareasPanel modo="todas" />;

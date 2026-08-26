@@ -20,7 +20,7 @@ import {
     ChevronRight, ChevronDown, Circle, CircleDot, Eye, CheckCircle2, X,
     User, Calendar, FolderOpen,
 } from 'lucide-react';
-import { PRIO_BARRA } from '@/components/tareas/estilos';
+import { PRIO_BARRA, soyColaborador } from '@/components/tareas/estilos';
 
 const ESTADO = {
     pendiente:   { label: 'Activa',     icon: Circle,       c: 'text-blue-600' },
@@ -111,8 +111,19 @@ const Fila = ({ t, nivel, hijosDe, colapsados, alternar, selId, onAbrir, onCompl
                     <Icono size={11} /> {meta.label}
                 </span>
 
+                {/* El responsable, y la marca de COLABORAS cuando el responsable
+                    es otro: sin ella, en «Mis tareas» la fila parece ajena. */}
                 <span className="shrink-0 hidden md:flex items-center gap-1 w-24 text-[10px] text-slate-500 truncate">
                     {t.responsableNombre && <><User size={10} className="text-slate-400 shrink-0" />{nombreCorto(t.responsableNombre)}</>}
+                </span>
+
+                <span className="shrink-0 hidden md:block w-16">
+                    {soyColaborador(t) && (
+                        <span title="Colaboras en esta tarea"
+                            className="text-[8px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1 py-0.5">
+                            colaboras
+                        </span>
+                    )}
                 </span>
 
                 <span className={`shrink-0 hidden md:flex items-center gap-1 w-16 text-[10px] font-bold ${

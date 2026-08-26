@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
     Plus, Search, Loader2, X, Trash2, Check, Clock, Folder, FolderPlus,
@@ -6,7 +6,7 @@ import {
     Flag, User, Users, Calendar, Send, Paperclip, Download, Eye, Archive, ArchiveRestore,
     List, Kanban, LayoutTemplate, Network, SlidersHorizontal,
 } from 'lucide-react';
-import { PRIO, PRIO_BARRA, ESTADO_PUNTO, iniciales } from '@/components/tareas/estilos';
+import { PRIO, PRIO_BARRA, ESTADO_PUNTO, iniciales, soyColaborador } from '@/components/tareas/estilos';
 import TableroTareas from '@/components/tareas/TableroTareas';
 import ArbolTareas from '@/components/tareas/ArbolTareas';
 import { usePlantillas, SelectorPlantillas, PlantillasModal } from '@/components/tareas/PlantillasTarea';
@@ -144,18 +144,32 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
                 title: 'Tarea creada',
                 description: d.subtareas ? `Con ${d.subtareas} subtareas de «${plantilla.nombre}».` : undefined,
             });
-            onCreated(); onClose();
+            // Se devuelve el id para que la pantalla la abra enseguida: recién
+            // creada es cuando se le agregan los archivos, la descripción larga
+            // o las subtareas. Antes había que buscarla en la lista.
+            onCreated(d.tarea?.id || null); onClose();
         } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
         finally { setSaving(false); }
     };
     return (
+        // EL BOTÓN DE CREAR NO PUEDE QUEDAR DENTRO DEL SCROLL.
+        //
+        // Antes todo —título, campos, colaboradores y el botón— vivía en un solo
+        // bloque con scroll. Eligiendo una plantilla con 18 subtareas el
+        // formulario crece, el botón se va al fondo del todo y en un portátil
+        // desaparece de la pantalla: el 20-08 hubo que bajar el zoom del
+        // navegador para poder crear la tarea.
+        //
+        // Ahora son tres piezas: encabezado fijo, campos con scroll propio, y el
+        // botón en un pie que no se mueve. Crezca lo que crezca el formulario, el
+        // botón está siempre a la vista.
         <div className="fixed inset-0 z-[120] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-            <div className="w-full max-w-lg bg-white rounded-2xl border border-[#efe8dd] shadow-2xl p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-4">
+            <div className="w-full max-w-lg bg-white rounded-2xl border border-[#efe8dd] shadow-2xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
                     <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Nueva tarea</h3>
                     <button onClick={onClose} className="text-slate-400 hover:text-red-500"><X size={18} /></button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-3 px-5 pb-1 flex-1 min-h-0 overflow-y-auto">
                     {/* Las plantillas van primero: la decisión "¿esto ya lo tengo
                         guardado?" se toma antes de escribir nada. */}
                     <SelectorPlantillas plantillas={plantillas} elegida={plantilla}
@@ -219,6 +233,9 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
                             </div>
                         </div>
                     )}
+                </div>
+                {/* El pie: fuera del scroll, siempre visible. */}
+                <div className="px-5 py-4 shrink-0 border-t border-[#efe8dd] rounded-b-2xl">
                     <button onClick={guardar} disabled={saving} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg h-10 text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                         {plantilla && plantilla.pasos.length > 0
@@ -387,10 +404,30 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
     // RF-07 y RF-12: los campos se pueden corregir después de crear. Antes solo
     // se fijaban al crear la tarea y ya no había forma de cambiarlos, y las
     // subtareas nacían solo con título.
-    const guardarCampo = async (campo, valor) => {
+    const guardarCampo = async (campo, valor, extra = {}) => {
         setData(p => ({ ...p, [campo]: valor }));
-        try { await actualizarTareaApi(getSessionId(), tareaId, { [campo]: valor }); onChanged(); }
+        try { await actualizarTareaApi(getSessionId(), tareaId, { [campo]: valor, ...extra }); onChanged(); }
         catch { toast({ variant: 'destructive', title: 'No se pudo guardar' }); cargar(); }
+    };
+
+    // CAMBIAR EL RESPONSABLE DE UNA TAREA CON SUBTAREAS.
+    //
+    // Pasarle la tarea a otro y dejarle las subtareas al anterior parte el
+    // trabajo en dos: en «Mis tareas» del nuevo dueño no aparece ninguna de las
+    // partes. Pasó con las 225 de «Tareas Victor» (26-08-2026).
+    //
+    // Se PREGUNTA en vez de hacerlo solo: hay madres con cada hija en manos
+    // distintas a propósito, y arrasarlas sin avisar sería peor.
+    const cambiarResponsable = async (valor) => {
+        const conSub = data.subtareasTotal || 0;
+        const cascadaResponsable = valor && conSub > 0
+            ? window.confirm(
+                `Esta tarea tiene ${conSub} subtarea${conSub === 1 ? '' : 's'}.\n\n` +
+                `Aceptar: se las pasa también a esta persona.\n` +
+                `Cancelar: solo cambia esta tarea y las subtareas quedan como están.`)
+            : false;
+        await guardarCampo('responsableId', valor, cascadaResponsable ? { cascadaResponsable: true } : {});
+        if (cascadaResponsable) { cargar(); toast({ title: `Se traspasaron también las ${conSub} subtareas` }); }
     };
 
     const cambiarEstado = async (estado) => {
@@ -641,7 +678,28 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                             ← Volver a la tarea principal
                         </button>
                     )}
-                    <h3 className="text-sm font-black text-slate-900">{data.titulo}</h3>
+                    {/* EL NOMBRE SE EDITA ACÁ MISMO.
+                        Era el único campo de la tarea que no se podía corregir
+                        después de crearla: responsable, prioridad, entrega y
+                        descripción sí, el nombre no. Un título mal escrito —o
+                        el de una plantilla, que se repite— quedaba para siempre.
+                        Se guarda al salir del campo o con Enter, igual que la
+                        descripción. Vacío no se acepta: se devuelve el anterior,
+                        porque una tarea sin nombre no se distingue de otra en la
+                        lista. */}
+                    <input
+                        key={data.id}
+                        defaultValue={data.titulo || ''}
+                        title="Editar el nombre de la tarea"
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                        onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            if (!v) { e.target.value = data.titulo || ''; return; }
+                            if (v !== (data.titulo || '')) guardarCampo('titulo', v);
+                        }}
+                        className="w-full text-sm font-black text-slate-900 bg-transparent rounded px-1 -mx-1 outline-none
+                                   border border-transparent hover:border-[#efe8dd] focus:border-emerald-500 focus:bg-white"
+                    />
                     {data.proyectoNombre && <span className="text-[10px] font-bold" style={{ color: data.proyectoColor || '#199b4d' }}>● {data.proyectoNombre}</span>}
                 </div>
                 {/* Guardar como plantilla se ofrece acá y no al crear, porque
@@ -678,7 +736,7 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                         <span className="text-[9px] text-slate-400 uppercase block mb-0.5">Responsable</span>
                         <select
                             value={data.responsableId || ''}
-                            onChange={(e) => guardarCampo('responsableId', e.target.value || null)}
+                            onChange={(e) => cambiarResponsable(e.target.value || null)}
                             className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-2 py-1 text-xs text-slate-700 outline-none focus:border-emerald-500 cursor-pointer"
                         >
                             <option value="">— Sin responsable —</option>
@@ -1200,6 +1258,11 @@ const TareasPanel = ({ modo = 'todas' }) => {
         return o;
     }, [vista, modo, proyectoSel, filtroEstado, filtroPrioridad, filtroResponsable, busqAplicada, conSubtareas]);
 
+    // Cuántas filas hay cargadas ahora mismo. Va en un ref y no en el estado a
+    // propósito: si `refrescar` dependiera de `tareas.length`, cambiaría en cada
+    // carga y el efecto que lo dispara se llamaría solo, en bucle.
+    const cargadas = useRef(0);
+
     const cargar = useCallback(async () => {
         setLoading(true);
         try {
@@ -1208,11 +1271,40 @@ const TareasPanel = ({ modo = 'todas' }) => {
                 listarProyectosApi(getSessionId()),
             ]);
             const t = await tRes.json(); const p = await pRes.json();
-            if (t.success) { setTareas(t.tareas || []); setTotal(t.total || 0); setHayMas(!!t.hayMas); }
+            if (t.success) {
+                setTareas(t.tareas || []); setTotal(t.total || 0); setHayMas(!!t.hayMas);
+                cargadas.current = (t.tareas || []).length;
+            }
             if (p.success) setProyectos(p.proyectos || []);
         } catch { /* la lista queda como estaba */ } finally { setLoading(false); }
     }, [filtros]);
     useEffect(() => { cargar(); }, [cargar]);
+
+    // ------------------------------------------------------------------
+    // REFRESCAR DESPUÉS DE TOCAR UNA TAREA · sin devolver la pantalla al inicio
+    // ------------------------------------------------------------------
+    // Cambiar el estado de una tarea llamaba a `cargar()`, y eso hacía DOS cosas
+    // que no se pedían: encendía el spinner —que reemplaza la lista entera, así
+    // que se pierde dónde estabas mirando— y volvía a pedir la PRIMERA página,
+    // tirando a la basura todo lo que hubieras traído con «Ver más». Con 200
+    // tareas, cerrar una te mandaba de vuelta al principio. Reportado el 25-08.
+    //
+    // Acá se pide de nuevo lo mismo que ya estaba cargado, en silencio: el
+    // servidor sigue siendo el único que filtra y ordena —no se toca la lista a
+    // mano en el navegador, que es como se desincronizan el contador y las
+    // filas— pero la pantalla no parpadea ni se mueve.
+    const refrescar = useCallback(async () => {
+        try {
+            const o = filtros(0);
+            o.limite = String(Math.min(Math.max(cargadas.current, POR_PAGINA), 500));
+            const r = await listarTareasApi(getSessionId(), o);
+            const d = await r.json();
+            if (d.success) {
+                setTareas(d.tareas || []); setTotal(d.total || 0); setHayMas(!!d.hayMas);
+                cargadas.current = (d.tareas || []).length;
+            }
+        } catch { /* se queda con lo que ya tenía */ }
+    }, [filtros]);
 
     // "Ver más" pide la página siguiente y la agrega al final, sin recargar lo
     // que la persona ya está mirando.
@@ -1222,7 +1314,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
             const r = await listarTareasApi(getSessionId(), filtros(tareas.length));
             const d = await r.json();
             if (d.success) {
-                setTareas(prev => [...prev, ...(d.tareas || [])]);
+                setTareas(prev => { const todas = [...prev, ...(d.tareas || [])]; cargadas.current = todas.length; return todas; });
                 setTotal(d.total || 0);
                 setHayMas(!!d.hayMas);
             }
@@ -1303,23 +1395,23 @@ const TareasPanel = ({ modo = 'todas' }) => {
     }, [lista, agrupar]);
 
     // Mover una tarjeta de columna en el tablero. Se pinta al tiro y se manda
-    // después; si el servidor rechaza, `cargar()` deja la pantalla como la base.
+    // después; si el servidor rechaza, `refrescar()` deja la pantalla como la base.
     const moverEstado = async (t, estado) => {
         setTareas(prev => prev.map(x => x.id === t.id ? { ...x, estado } : x));
         try {
             const r = await actualizarTareaApi(getSessionId(), t.id, { estado });
             const d = await r.json(); if (!d.success) throw new Error(d.message);
-            cargar();
+            refrescar();
         } catch (e) {
             toast({ variant: 'destructive', title: 'No se pudo mover', description: e.message });
-            cargar();
+            refrescar();
         }
     };
 
     const completar = async (t, e) => {
         e.stopPropagation();
         setTareas(prev => prev.map(x => x.id === t.id ? { ...x, estado: 'completada' } : x));
-        try { await completarTareaApi(getSessionId(), t.id); cargar(); } catch { cargar(); }
+        try { await completarTareaApi(getSessionId(), t.id); refrescar(); } catch { refrescar(); }
     };
     const eliminar = async (t, e) => {
         e.stopPropagation();
@@ -1328,7 +1420,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
         )) return;
         setTareas(prev => prev.filter(x => x.id !== t.id));
         if (selId === t.id) setSelId(null);
-        try { await eliminarTareaApi(getSessionId(), t.id); cargar(); } catch { cargar(); }
+        try { await eliminarTareaApi(getSessionId(), t.id); refrescar(); } catch { refrescar(); }
     };
 
     // Archivar y desarchivar (RF-TA-17). La tarea desaparece de la lista actual
@@ -1347,8 +1439,8 @@ const TareasPanel = ({ modo = 'todas' }) => {
                     ? 'Volvió a la lista con el estado que tenía.'
                     : `Está en el filtro "Archivadas"${d.subtareas ? ` junto a sus ${d.subtareas} subtareas` : ''}.`,
             });
-            cargar();
-        } catch (err) { toast({ variant: 'destructive', title: 'Error', description: err.message }); cargar(); }
+            refrescar();
+        } catch (err) { toast({ variant: 'destructive', title: 'Error', description: err.message }); refrescar(); }
     };
     // Acá empezó el problema de los duplicados: sin candado, dos Enter seguidos
     // creaban dos proyectos iguales. La base ahora también lo impide.
@@ -1642,7 +1734,12 @@ const TareasPanel = ({ modo = 'todas' }) => {
                                         ) : <span className="text-slate-300 text-[11px]">—</span>}
                                     </span>}
 
-                                    {/* 4 · Responsable — solo si aporta */}
+                                    {/* 4 · Responsable — solo si aporta.
+                                        Con la marca de COLABORAS al lado: en «Mis
+                                        tareas» entra lo asignado y también donde
+                                        uno colabora, pero la fila solo mostraba al
+                                        responsable. Viendo el nombre de otro, la
+                                        tarea parecía colada (bug del 26-08). */}
                                     {verResp && <span className="hidden md:flex items-center gap-1.5 min-w-0">
                                         {t.responsableNombre ? (
                                             <>
@@ -1652,6 +1749,12 @@ const TareasPanel = ({ modo = 'todas' }) => {
                                                 <span className="text-[11px] text-slate-600 truncate">{t.responsableNombre}</span>
                                             </>
                                         ) : <span className="text-slate-300 text-[11px]">—</span>}
+                                        {soyColaborador(t) && (
+                                            <span title="Colaboras en esta tarea"
+                                                className="shrink-0 text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1 py-0.5">
+                                                colaboras
+                                            </span>
+                                        )}
                                     </span>}
 
                                     {/* 5 · Vence */}
@@ -1693,10 +1796,12 @@ const TareasPanel = ({ modo = 'todas' }) => {
                 </div>
 
                 {/* Detalle */}
-                {selId && <DetalleTarea tareaId={selId} onClose={cerrarDetalle} onChanged={cargar} usuarios={usuarios} onAbrir={setSelId} />}
+                {selId && <DetalleTarea tareaId={selId} onClose={cerrarDetalle} onChanged={refrescar} usuarios={usuarios} onAbrir={setSelId} />}
             </div>
 
-            {crear && <CrearTareaModal onClose={cerrarCrear} onCreated={cargar} proyectos={proyectos} usuarios={usuarios} proyectoActual={proyectoSel} />}
+            {crear && <CrearTareaModal onClose={cerrarCrear}
+                onCreated={(id) => { cargar(); if (id) setSelId(id); }}
+                proyectos={proyectos} usuarios={usuarios} proyectoActual={proyectoSel} />}
         </div>
     );
 };

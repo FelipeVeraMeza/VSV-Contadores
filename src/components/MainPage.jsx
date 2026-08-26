@@ -11,7 +11,7 @@ import {
   Clock, Settings, DollarSign, Book, Umbrella, Receipt, Coins, Stethoscope,
   CalendarDays, Download, Percent, HeartPulse, ListChecks, FileSpreadsheet,
   BadgeCheck, Send, PanelLeftClose, PanelLeftOpen, Network, FolderOpen,
-  Megaphone, LayoutTemplate, Ticket as TicketIcon
+  Megaphone, LayoutTemplate, Ticket as TicketIcon, Video
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth.jsx';
@@ -120,6 +120,7 @@ function MainPage() {
     { id: 'mias',      name: 'Mis tareas', icon: UserCircle },
     { id: 'todas',     name: 'Tareas',     icon: ListChecks },
     { id: 'proyectos', name: 'Proyectos',  icon: FolderOpen },
+    { id: 'reuniones', name: 'Reuniones',  icon: Video },
     ...(esAdministrador ? [
       { id: 'equipo',  name: 'Equipo',     icon: Users },
     ] : []),

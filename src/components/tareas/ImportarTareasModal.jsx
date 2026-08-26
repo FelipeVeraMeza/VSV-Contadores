@@ -686,6 +686,17 @@ const juntarDescripcion = (row) => {
                                 <span className="block text-[10px] text-slate-400 mt-1">
                                     Si la planilla trae columna «Responsable», lo que diga cada fila manda sobre esto.
                                 </span>
+                                {/* DEJARLO EN «SIN ASIGNAR» NO ES NEUTRO, y ahí está la trampa:
+                                    el servidor pone de responsable a quien importa. El 26-08-2026
+                                    entraron así 225 tareas de Victor a nombre del administrador,
+                                    y Victor no vio ninguna —una tarea se ve si es tuya, y no eran
+                                    suyas—. El aviso dice lo que va a pasar ANTES de que pase. */}
+                                {!responsableLote && importables.length > 0 && (
+                                    <span className="block text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 mt-1.5">
+                                        Sin elegir a nadie, las {importables.length} tareas quedan <b>a tu nombre</b> y
+                                        solo tú las verás. Si son de otra persona, elígela acá.
+                                    </span>
+                                )}
                             </label>
                         </div>
                     )}

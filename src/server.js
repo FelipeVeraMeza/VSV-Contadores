@@ -1,3 +1,7 @@
+// PRIMERO DE TODO: la zona horaria del proceso. Va antes que cualquier otro
+// import porque fija cómo se escribe cada fecha que salga del backend.
+import './config/zonaHoraria.js';
+
 // Core
 import cron from 'node-cron';
 import 'dotenv/config';
@@ -27,6 +31,7 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import clientesRoutes from './routes/clientes.routes.js';
 import personasRoutes from './routes/personas.routes.js';
 import crmRoutes from './routes/crm.routes.js';
+import reunionesRoutes from './routes/reuniones.routes.js';
 import dteRoutes from "./routes/dte.routes.js";
 import accountingRoutes from './routes/accounting.routes.js';
 import rrhhRoutes from './routes/rrhh.routes.js';
@@ -96,6 +101,11 @@ app.use('/api/crm', (req, _res, next) => {
     next();
 });
 app.use('/api/crm', apiLimiter, requireSession, requireModulo('crm'), crmRoutes);
+
+// Reuniones. Sin recorte por modulo, igual que los tickets: a una reunion se
+// entra a una hora fija y quedarse afuera por un permiso mal puesto no tiene
+// arreglo en el momento. El video no pasa por aca, solo el contexto.
+app.use('/api/reuniones', apiLimiter, requireSession, reunionesRoutes);
 
 // ============================================================================
 // 🔐 RECORTE DE MÓDULOS POR USUARIO

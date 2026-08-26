@@ -52,3 +52,18 @@ export const ESTADO_PUNTO = {
 // 140 px se corta antes de llegar al apellido, que es justo lo que distingue.
 export const iniciales = (n) =>
     String(n || '?').trim().split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase();
+
+// ¿Estoy de colaborador en esta tarea, sin ser su responsable?
+//
+// Lo preguntan la lista y el árbol para marcar la fila. En «Mis tareas» entra
+// lo asignado Y aquello donde uno colabora —lo dice el subtítulo de la
+// pantalla—, pero la fila solo mostraba al responsable: viendo el nombre de
+// otra persona, la tarea parecía colada. Reportado el 26-08-2026 con captura,
+// sobre «SISTEMA DE TAREAS» y «DASHBOARD».
+const yoId = () => { try { return JSON.parse(localStorage.getItem('user') || '{}').id; } catch { return null; } };
+
+export const soyColaborador = (t) => {
+    const yo = yoId();
+    if (!yo || t?.responsableId === yo) return false;
+    return (t?.colaboradores || []).some(c => c.id === yo);
+};

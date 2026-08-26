@@ -24,21 +24,37 @@ const seguro = async (fn) => {
 // ----------------------------------------------------------------------------
 // Solo estos tipos mandan correo; el resto se queda solo dentro del sistema.
 // Se puede apagar del todo con AVISOS_EMAIL=off sin tocar el código.
-const TIPOS_CON_CORREO = new Set(['tarea_asignada', 'tarea_comentada', 'agregado_a_proyecto']);
+// QUÉ SALE POR CORREO Y QUÉ NO. Todo aviso aparece en la campana; solo estos
+// tipos, además, van al correo. La regla es "¿se lo perdería si no abre el
+// sistema hoy?": una reunión agendada para el jueves sí; que alguien acabe de
+// entrar a una sala, no —para cuando lea el correo la llamada terminó—.
+//
+// Por eso de reuniones solo está `reunion_agendada`. Una sala abierta al tiro,
+// sumar a alguien a una llamada en curso o avisar que empezó son cosas del
+// momento: van por la campana, que llega en vivo. Mandar un correo por cada una
+// es como se arruina una bandeja de entrada.
+const TIPOS_CON_CORREO = new Set([
+    'tarea_asignada', 'tarea_comentada', 'agregado_a_proyecto',
+    'reunion_agendada',
+]);
+
+// De qué módulo es el aviso, para que el correo no diga "Tareas" cuando habla
+// de una reunión.
+const SECCION_POR_TIPO = (tipo) => (String(tipo || '').startsWith('reunion') ? 'Reuniones' : 'Tareas');
 
 const escapar = (s) => String(s || '').replace(/[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const plantillaCorreo = ({ titulo, descripcion }) => `
+const plantillaCorreo = ({ titulo, descripcion, seccion = 'Tareas' }) => `
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#0f172a">
     <div style="background:#199b4d;color:#fff;padding:18px 24px;border-radius:12px 12px 0 0">
-      <h2 style="margin:0;font-size:16px;letter-spacing:.5px">VSV · Tareas</h2>
+      <h2 style="margin:0;font-size:16px;letter-spacing:.5px">VSV · ${escapar(seccion)}</h2>
     </div>
     <div style="border:1px solid #e5ddd0;border-top:none;border-radius:0 0 12px 12px;padding:24px">
       <p style="font-size:15px;font-weight:bold;margin:0 0 8px">${escapar(titulo)}</p>
       ${descripcion ? `<p style="font-size:13px;color:#475569;margin:0 0 16px;white-space:pre-wrap">${escapar(descripcion)}</p>` : ''}
       <p style="font-size:12px;color:#94a3b8;margin:16px 0 0">
-        Entra a la plataforma, sección <b>Tareas</b>, para verlo y responder.
+        Entra a la plataforma, sección <b>${escapar(seccion)}</b>, para verlo y responder.
       </p>
     </div>
     <p style="font-size:11px;color:#cbd5e1;text-align:center;margin:12px 0">
@@ -62,7 +78,10 @@ const avisarPorCorreo = async (usuarioId, { tipo, titulo, descripcion }) => {
         try { correo = decrypt(enc); } catch { return; }
         if (!correo || !correo.includes('@')) return;
 
-        await enviarCorreo({ to: correo.trim(), subject: titulo, html: plantillaCorreo({ titulo, descripcion }) });
+        await enviarCorreo({
+            to: correo.trim(), subject: titulo,
+            html: plantillaCorreo({ titulo, descripcion, seccion: SECCION_POR_TIPO(tipo) }),
+        });
     } catch (err) {
         console.warn(`⚠️  No se pudo enviar el correo de aviso a ${usuarioId}: ${err.message}`);
     }

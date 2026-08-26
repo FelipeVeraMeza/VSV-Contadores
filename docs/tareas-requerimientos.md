@@ -1,10 +1,15 @@
 # Módulo de Tareas · Requerimientos
 
-**Última revisión:** 14 de agosto de 2026
+**Última revisión:** 26 de agosto de 2026
 **Estado:** en construcción por fases (ver el final del documento)
 
-> **Lo último (14-ago-2026):** nueve pedidos del equipo resueltos y una vista
-> nueva de árbol. Todo eso está en la **sección 10**, al final, junto con lo que
+> **Lo último (26-ago-2026):** el caso «Tareas Victor» — 225 tareas importadas
+> que su dueño no veía. De ahí salió el **tercer camino de visibilidad** (si ves
+> la madre, ves sus subtareas), la herencia del responsable y el traspaso en
+> cascada. Está en la **sección 13**, al final.
+>
+> **Antes (14-ago-2026):** nueve pedidos del equipo resueltos y una vista
+> nueva de árbol, en la **sección 10**, junto con lo que
 > quedó bloqueado esperando respuestas. Lo de acá arriba es la especificación
 > original de julio y sigue valiendo.
 
@@ -257,9 +262,11 @@ aparecía en las tareas.
 | Rol `integrante` | Ve y trabaja, no reparte accesos |
 | `tarea.visibilidad` | `proyecto` (por defecto) o `privada` |
 
-**Una tarea se ve por exactamente dos caminos:** estar metido en ella
-—responsable, creador o colaborador, que manda siempre— o ser integrante de su
-proyecto y que la tarea no sea privada.
+**Una tarea se ve por exactamente tres caminos:** estar metido en ella
+—responsable, creador o colaborador, que manda siempre—, ser integrante de su
+proyecto y que la tarea no sea privada, o **ver su tarea madre** (desde el
+26-ago-2026, ver §13). Una subtarea es un pedazo de la tarea de arriba: quien ve
+la madre ve de qué se compone, salvo que la subtarea esté marcada como privada.
 
 **Por qué los integrantes dejaron de deducirse.** Mientras la lista era
 informativa, deducirla era cómodo. Desde que decide quién ve qué es un permiso, y
@@ -280,7 +287,9 @@ le daría acceso al proyecto entero sin que nadie lo decidiera.
 subtareas; antes el tope era uno. Dos alcanza para desglosar sin que la pantalla
 se vuelva un árbol ilegible, y el tercero lo rechaza el servidor con un mensaje
 claro. Además **toda subtarea hereda el proyecto de su tarea principal**: antes
-quedaban «sin proyecto» y con el modelo nuevo no las habría visto nadie.
+quedaban «sin proyecto» y con el modelo nuevo no las habría visto nadie. Desde el
+26-ago hereda también el **responsable** cuando no se le pasa uno propio (§13):
+caía en «quien la crea», que al importar es siempre el administrador.
 
 ---
 
@@ -564,3 +573,53 @@ Pendiente al cierre del 14-ago:
 vencimiento**, así que nada puede aparecer atrasado y los contadores de Inicio
 —que son lo primero que se ve— quedan casi siempre en cero. Es el dato más flojo
 del módulo hoy, y ninguna funcionalidad lo arregla: hay que cargar las fechas.
+
+---
+
+## 13. Trabajo del 26-ago-2026 · el caso «Tareas Victor»
+
+**El síntoma:** se importaron 225 tareas para Victor colgando de una madre
+llamada «Tareas Victor», y **él no veía ninguna**. Veía la madre —figuraba como
+su responsable— con el contador diciendo 225 y el árbol mostrando una rama pelada.
+
+**Lo que había pasado, en orden:**
+
+1. La importación corrió con **«Responsable de todas» en *Sin asignar***. El
+   servidor rellena ese hueco con quien está creando, así que las 225 hijas
+   quedaron a nombre del **administrador que importó**.
+2. La madre se creó igual, y **después** se le puso Victor a mano. Cambiar el
+   responsable de una tarea **no bajaba a sus subtareas**, así que la madre decía
+   una cosa y las 225 hijas otra.
+3. La madre no tenía proyecto, así que las hijas tampoco (no hay nada que
+   heredar). Sin proyecto no hay integrantes, y sin ser responsable, creador ni
+   colaborador **no quedaba ningún camino** para que Victor las viera.
+
+Medido contra la base antes de tocar nada: de 387 tareas vivas, Victor veía
+**156**; ninguna de las 225.
+
+**Los tres arreglos, uno por cada eslabón:**
+
+| Dónde | Qué cambia |
+|---|---|
+| `crm.controllers.js` · `puedeVerTarea` | Tercer camino de visibilidad: **si ves la madre, ves sus subtareas**. Dos saltos hacia arriba (madre y abuela), que es el tope del modelo. Lo `privado` sigue mandando: una subtarea marcada así no se ve por este camino. |
+| `crm.controllers.js` · `crearTarea` | La subtarea **hereda el responsable de su madre** si no le pasan uno. Antes caía en «quien la crea». |
+| `crm.controllers.js` · `actualizarTarea` + `TareasPanel.jsx` | Cambiar el responsable de una tarea con subtareas **pregunta si traspasarlas también** (`cascadaResponsable`). No se hace solo: hay madres con cada hija en manos distintas a propósito. |
+
+Y en el importador, un aviso antes de que pase: dejando «Sin asignar», dice
+cuántas tareas van a quedar a nombre de quien importa y que solo él las verá.
+
+**Datos:** las 225 subtareas se reasignaron a Victor. `creado_por` se dejó como
+estaba —el administrador que las cargó las sigue viendo—, así que hoy las ven
+esos dos y nadie más. Victor pasó de ver 156 tareas a **381**.
+
+**Por qué el tercer camino y no solo arreglar los datos.** La migración del
+05-ago ya había visto la mitad del problema y la tapó heredando el proyecto. Pero
+cuando la madre **no tiene proyecto** no hay nada que heredar y el agujero
+vuelve. Heredar la visibilidad lo cierra por el lado correcto: no importa cómo
+esté armada la madre.
+
+> ⚠️ **Lo que este arreglo NO cambia:** las subtareas siguen sin aparecer sueltas
+> en la lista diaria (`soloRaiz`). Se ven dentro de su madre, en la vista Árbol,
+> en «Finalizadas» o con el interruptor «Con subtareas». Es a propósito —200
+> tareas importadas dejarían la lista inservible— pero es la primera pregunta que
+> hace quien importa un lote y no lo encuentra.

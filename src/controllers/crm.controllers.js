@@ -54,7 +54,7 @@ const AMBITOS = ['todas', 'mias', 'equipo'];
 //    los usuarios del proyecto pueden ver todas las tareas, a no ser que quien
 //    cree la tarea lo configure de otra forma.»
 //
-// De ahí salen exactamente dos caminos para ver una tarea:
+// De ahí salen exactamente tres caminos para ver una tarea:
 //
 //   1. ESTAR METIDO EN ELLA — responsable, quien la creó, o colaborador.
 //      Esto manda siempre, incluso si la tarea es privada.
@@ -62,17 +62,57 @@ const AMBITOS = ['todas', 'mias', 'equipo'];
 //   2. SER INTEGRANTE DE SU PROYECTO, y que la tarea no esté marcada como
 //      privada. Ese "salvo que la configure de otra forma" es `visibilidad`.
 //
+//   3. VER SU TAREA MADRE. Una subtarea es un pedazo de la tarea de arriba, no
+//      una tarea aparte: si veo la madre, veo de qué se compone.
+//
 // Ser Administrador ya NO alcanza. Antes veía todos los proyectos de la
 // organización; ahora ve los suyos, como todos. El aislamiento por organización
 // sigue por encima de esto: son dos candados distintos, no uno.
+//
 // ---------------------------------------------------------------------------
-const puedeVerTarea = (i) => `(
-        t.responsable_id = $${i}
-     OR t.creado_por = $${i}
-     OR EXISTS (SELECT 1 FROM tarea_colaborador tc WHERE tc.tarea_id = t.id AND tc.usuario_id = $${i})
-     OR (t.visibilidad = 'proyecto' AND t.proyecto_id IS NOT NULL
+// POR QUÉ EL CAMINO 3 · el caso «Tareas Victor» (26-08-2026)
+//
+// Se importaron 225 tareas desde el perfil master colgando de una madre
+// asignada a Victor, sin proyecto. Las hijas quedaron con el responsable de
+// quien importó, y sin proyecto no había integrantes que valieran: Victor veía
+// la madre —es su responsable— con las 225 hijas invisibles. La cuenta decía
+// "0/225" y el árbol le mostraba una rama pelada.
+//
+// La migración 2026-08-05_subtarea_hereda_proyecto.sql ya había visto la mitad
+// del problema y la tapó heredando el proyecto. Pero cuando la madre NO tiene
+// proyecto no hay nada que heredar, y el agujero vuelve. Heredar la VISIBILIDAD
+// lo cierra por el lado correcto: no importa cómo esté armada la madre, quien
+// la ve ve sus partes.
+//
+// Sigue respetándose lo privado: una subtarea marcada `privada` no se ve por
+// este camino, solo por el 1. Eso es exactamente "a no ser que quien cree la
+// tarea lo configure de otra forma".
+// ---------------------------------------------------------------------------
+
+// Lo que hace visible una tarea POR SÍ SOLA, sin mirar de quién cuelga.
+// Recibe el alias para poder preguntar lo mismo por la madre y por la abuela.
+const visibleDirecto = (a, i) => `(
+        ${a}.responsable_id = $${i}
+     OR ${a}.creado_por = $${i}
+     OR EXISTS (SELECT 1 FROM tarea_colaborador tc WHERE tc.tarea_id = ${a}.id AND tc.usuario_id = $${i})
+     OR (${a}.visibilidad = 'proyecto' AND ${a}.proyecto_id IS NOT NULL
          AND EXISTS (SELECT 1 FROM proyecto_integrante pi
-                      WHERE pi.proyecto_id = t.proyecto_id AND pi.usuario_id = $${i}))
+                      WHERE pi.proyecto_id = ${a}.proyecto_id AND pi.usuario_id = $${i}))
+    )`;
+
+// Dos saltos hacia arriba y no más: el modelo permite hasta dos niveles de
+// subtareas (lo corta `crearTarea`), así que con madre y abuela está cubierto
+// todo el árbol. Se escribe anidado y no con un WITH RECURSIVE porque esto se
+// incrusta como un trozo de WHERE dentro de consultas que ya existen.
+const puedeVerTarea = (i) => `(
+    ${visibleDirecto('t', i)}
+ OR (t.visibilidad = 'proyecto' AND t.parent_id IS NOT NULL
+     AND EXISTS (SELECT 1 FROM tarea madre WHERE madre.id = t.parent_id AND (
+            ${visibleDirecto('madre', i)}
+         OR (madre.visibilidad = 'proyecto' AND madre.parent_id IS NOT NULL
+             AND EXISTS (SELECT 1 FROM tarea abuela WHERE abuela.id = madre.parent_id
+                          AND ${visibleDirecto('abuela', i)}))
+        )))
     )`;
 
 const condicionAmbito = (ambito, indiceUsuario) => {
@@ -296,13 +336,25 @@ export const crearTarea = async (req, res) => {
         // del equipo; sin lo segundo, la pantalla se vuelve ilegible.
         let proyectoFinal = proyectoId || null;
         let padreFinal = parentId || null;
+        // Sin madre o sin nada que heredar, el responsable sale de lo de siempre:
+        // lo que venga en el pedido y, si no viene, quien la está creando.
+        let responsableHeredado = null;
         if (padreFinal) {
             const { rows: padre } = await pool.query(
-                `SELECT proyecto_id, parent_id FROM tarea WHERE id = $1
+                `SELECT proyecto_id, parent_id, responsable_id FROM tarea WHERE id = $1
                   AND organizacion_id IS NOT DISTINCT FROM $2::uuid`,
                 [padreFinal, req.user?.organizacionId || null]);
             if (!padre.length) return res.status(404).json({ success: false, message: 'La tarea principal no existe.' });
             proyectoFinal = padre[0].proyecto_id || proyectoFinal;
+            // EL RESPONSABLE TAMBIÉN SE HEREDA, y por la misma razón que el
+            // proyecto. Una subtarea sin responsable propio caía en «quien la
+            // crea», que al importar es siempre el administrador: así se
+            // cargaron 225 tareas de Victor a nombre del master y él no las vio
+            // (26-08-2026). Colgar algo de una tarea ajena y quedarte tú con el
+            // trabajo no es lo que nadie espera.
+            //
+            // Solo cubre el hueco: si el pedido trae `responsableId`, ese manda.
+            responsableHeredado = padre[0].responsable_id || null;
             if (padre[0].parent_id) {
                 const { rows: abuelo } = await pool.query(`SELECT parent_id FROM tarea WHERE id = $1`, [padre[0].parent_id]);
                 if (abuelo[0]?.parent_id) {
@@ -326,7 +378,7 @@ export const crearTarea = async (req, res) => {
                 TIPOS.includes(tipo) ? tipo : 'tarea',
                 PRIORIDADES.includes(prioridad) ? prioridad : 'media',
                 ESTADOS.includes(estado) ? estado : 'pendiente',
-                responsableId || req.user?.usuarioId || null,
+                responsableId || responsableHeredado || req.user?.usuarioId || null,
                 venceAt || null,
                 origen === 'ia' ? 'ia' : 'manual',
                 req.user?.usuarioId || null,
@@ -375,7 +427,7 @@ export const actualizarTarea = async (req, res) => {
         const antes = chk.rows[0];
 
         const { titulo, descripcion, tipo, prioridad, estado, responsableId, venceAt, proyectoId,
-                colaboradores, visibilidad } = req.body;
+                colaboradores, visibilidad, cascadaResponsable } = req.body;
         const completedAt = estado === 'completada' ? 'NOW()' : (estado ? 'NULL' : 'completed_at');
         // La descripción necesita poder BORRARSE, no solo cambiarse: con COALESCE
         // nunca se podía dejar en blanco. Vale para tareas y subtareas por igual.
@@ -405,6 +457,31 @@ export const actualizarTarea = async (req, res) => {
         );
         if (Array.isArray(colaboradores)) await setColaboradores(id, colaboradores);
 
+        // ------------------------------------------------------------------
+        // PASARLE LA TAREA A OTRO INCLUYE SUS PARTES · `cascadaResponsable`
+        // ------------------------------------------------------------------
+        // Cambiar el responsable de una tarea con 225 subtareas y que las 225
+        // sigan siendo de otro deja el trabajo partido en dos: la madre dice
+        // una cosa y las hijas otra, y el nuevo dueño no las ve en «Mis tareas».
+        // Reasignarlas a mano no es una opción a esa escala.
+        //
+        // No se hace solo: la pantalla PREGUNTA y manda esta bandera. Un cambio
+        // silencioso en cascada sería peor —hay madres con cada hija en manos
+        // distintas a propósito—.
+        //
+        // Alcance: dos niveles, que es el tope del modelo.
+        let subtareasReasignadas = 0;
+        if (cascadaResponsable && responsableId) {
+            const { rowCount } = await pool.query(
+                `UPDATE tarea SET responsable_id = $1
+                  WHERE organizacion_id IS NOT DISTINCT FROM $3::uuid
+                    AND responsable_id IS DISTINCT FROM $1
+                    AND (parent_id = $2
+                         OR parent_id IN (SELECT id FROM tarea WHERE parent_id = $2))`,
+                [responsableId, id, org]);
+            subtareasReasignadas = rowCount || 0;
+        }
+
         const actualizada = await tareaCompleta(id);
         // Solo se avisa si el responsable CAMBIÓ. Si no, cada vez que alguien
         // corrige una fecha le llegaría un aviso a la misma persona.
@@ -412,12 +489,15 @@ export const actualizarTarea = async (req, res) => {
             await notificar({
                 para: responsableId, actor: req.user, tipo: 'tarea_asignada',
                 titulo: `${req.user?.nombre || 'Alguien'} te pasó: ${actualizada.titulo}`,
-                descripcion: actualizada.proyectoNombre ? `En el proyecto ${actualizada.proyectoNombre}` : null,
+                // Con cascada el aviso lo dice: no es una tarea, es un paquete.
+                descripcion: subtareasReasignadas
+                    ? `Con sus ${subtareasReasignadas} subtareas`
+                    : (actualizada.proyectoNombre ? `En el proyecto ${actualizada.proyectoNombre}` : null),
                 entidad: 'tarea', entidadId: id,
             });
         }
 
-        return res.json({ success: true, tarea: actualizada });
+        return res.json({ success: true, tarea: actualizada, subtareasReasignadas });
     } catch (error) {
         console.error('❌ Error actualizando tarea:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo actualizar la tarea.' });
