@@ -221,11 +221,23 @@ export const guardarComprobante = async (req, res) => {
     }
     const motivo = await puedeVerEmpresa(req, empId);
     if (motivo) return sinAcceso(res, motivo);
-    // Guardar SIN empresa deja el comprobante en la carga global de la firma.
-    // Quien solo ve lo asignado tiene que elegir una de sus empresas: si no, su
-    // asiento caería en un montón que él mismo no puede volver a ver.
-    if (!empId && veSoloAsignadas(req)) {
-        return sinAcceso(res, 'Selecciona una de tus empresas antes de contabilizar.');
+
+    // UN ASIENTO SIN EMPRESA NO SE GUARDA. Nunca, para nadie.
+    //
+    // Antes esto solo frenaba a quien ve únicamente sus empresas asignadas; el
+    // resto podía contabilizar con «Todas las empresas» puesto en el selector y
+    // el asiento quedaba con `empresa_id` en NULL: sin dueño, invisible al
+    // elegir cualquier empresa y visible solo en el consolidado. El 25-08-2026
+    // había 29 comprobantes así, y no era un caso de laboratorio — es lo que
+    // pasa cuando uno abre el módulo, se olvida de mirar el selector y
+    // contabiliza el mes de otro cliente.
+    //
+    // Peor todavía: sin empresa no hay forma de saber a qué libro pertenece el
+    // asiento, así que tampoco se puede arreglar después sin adivinar.
+    if (!empId) {
+        return res.status(400).json({
+            message: 'Elige una empresa antes de contabilizar. Un asiento sin empresa queda sin dueño y no se puede corregir después.',
+        });
     }
     const totalDebe  = lineas.reduce((s, l) => s + (Number(l.debe)  || 0), 0);
     const totalHaber = lineas.reduce((s, l) => s + (Number(l.haber) || 0), 0);

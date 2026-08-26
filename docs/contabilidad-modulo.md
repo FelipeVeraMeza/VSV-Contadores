@@ -1,9 +1,15 @@
 # Módulo de Contabilidad · Estado y aislamiento
 
-**Última revisión:** 20 de agosto de 2026
+**Última revisión:** 25 de agosto de 2026
 **Responsable del módulo:** Victor (según la tarea madre CONTABILIDAD)
 **Estado:** funcionando sobre datos reales · aislamiento por empresa **puesto el
-20-08-2026** · queda pendiente reasignar 1.172 comprobantes (ver 3.8)
+20-08-2026** · comprobantes **reiniciados a cero el 25-08-2026** (ver 3.9)
+
+> ⚠️ **Las cifras de la sección 3 son del 19 y 20 de agosto y ya no describen el
+> presente.** Se dejan como están porque son el registro de qué se midió y por
+> qué se cambió lo que se cambió; para el estado de hoy, ir a la **sección 3.9**.
+> Lo que sigue valiendo entero es el diagnóstico: las causas, los cinco arreglos
+> y la forma del portero.
 
 > Este documento no existía. Se escribió porque el módulo se estaba discutiendo
 > con una suposición equivocada —«a Victor le sale en blanco»— que no resistió
@@ -405,6 +411,66 @@ por organización en el listado, pero:
 
 Los cuatro quedaron cerrados con el mismo portero de 3.7, más
 `movimientoFueraDeAlcance()` para los dos que solo reciben un id.
+
+---
+
+### 3.9 Estado al 25-08-2026 · se partió de cero
+
+Lo de 3.8 **ya no está pendiente**: los 1.172 comprobantes sin empresa no se
+reasignaron, se borraron junto con todo lo demás. El equipo decidió rehacer la
+contabilización completa con el flujo nuevo.
+
+| | Antes (20-08) | Ahora (25-08) |
+|---|---|---|
+| `comprobantes` | 1.291 | **0** |
+| `comprobantes_detalle` | 3.871 | **0** |
+| Comprobantes sin `empresa_id` | 29 | **0** |
+| `documentos_emitidos` | 1.181 | **1.181** — intactos |
+| `documentos_recibidos` | 42 | **42** — intactos |
+| `documentos_emitidos_empresa` | 3 | **0** |
+| `documentos_recibidos_empresa` | 86 | **0** |
+
+**Los documentos no se tocaron**: las 1.223 facturas de la firma volvieron a
+quedar como *Pendientes* y se contabilizan de nuevo. Las empresas administradas
+(A&L SOLUCIONES, AMIL SPA y el resto) quedaron vacías del todo, a la espera de
+una extracción nueva del SII.
+
+Hay respaldo completo en `src/DatabaseThings/respaldos/` — filas enteras, se
+pueden reinsertar. **Esa carpeta está en `.gitignore`**: son datos reales de
+clientes.
+
+> **Cuidado con el correlativo.** `numero_comprobante` vuelve a empezar en 1.
+> Cualquier número que se haya comunicado fuera del sistema ya no calza.
+
+**Se cerró la puerta que los creó.** Contabilizar sin empresa era posible para
+los administradores y de ahí salieron los 29 sin dueño. Ahora hay triple
+candado, como en Tareas:
+
+| Capa | Dónde |
+|---|---|
+| La pantalla no abre sin empresa | `Contabilidad.jsx` — vale también para el Administrador |
+| El asiento se rechaza (400) | `accounting.controllers.js` · `guardarComprobante` |
+| El movimiento manual también (400) | `dteConsulta.controllers.js` · `crearMovimiento` |
+
+Eso quita la vista consolidada de Contabilidad. Es a propósito: sumar todas las
+empresas es una pregunta de reportes, no de un módulo donde cada botón escribe
+asientos.
+
+### 3.10 Cuentas imputables · 25-08-2026
+
+El plan es un árbol y solo las hojas reciben movimientos. `plan_cuentas` ya lo
+decía en `tipo_cuenta` y **ningún desplegable lo miraba**:
+
+| `tipo_cuenta` | Cuántas | ¿Se imputa? |
+|---|---|---|
+| `SUBCUENTA` | 197 | sí |
+| `MAYOR` · `SUBGRUPO` · `GRUPO` | **92** | no — son títulos |
+
+Ofrecer `1 ACTIVOS` o `1104 DEUDORES POR VENTAS` no falla: el asiento se guarda
+igual y deja el saldo colgado de una cuenta madre, descuadrando el Balance sin
+aviso. `soloImputables()` vive en `src/lib/documento.js` y se aplica en los
+**seis** desplegables (fila de Movimientos, revisión previa, y los modales de
+Asiento, Nuevo Asiento, Nuevo Movimiento y Generador de Libro Diario).
 
 ---
 

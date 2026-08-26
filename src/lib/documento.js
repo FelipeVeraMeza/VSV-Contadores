@@ -79,6 +79,36 @@ export const claveDeDocumento = (doc, clase) =>
             : campo(doc, 'rut_cliente', 'rutCliente')
     );
 
+// ---------------------------------------------------------------------------
+// SOLO LAS CUENTAS DONDE SE PUEDE IMPUTAR
+// ---------------------------------------------------------------------------
+// El plan de cuentas es un árbol y solo las hojas reciben movimientos. La tabla
+// `plan_cuentas` lo dice en `tipo_cuenta`; medido sobre el plan real:
+//
+//   GRUPO (4) · SUBGRUPO (17) · MAYOR (71)  →  títulos. NO se imputan
+//   SUBCUENTA (197)                          →  hojas.  Sí
+//
+// Todos los desplegables de cuentas ofrecían las 289, o sea que un tercio de
+// las opciones eran títulos como «1 ACTIVOS» o «1104 DEUDORES POR VENTAS».
+// Elegir uno NO falla —el asiento se guarda igual— pero deja el saldo colgado
+// de una cuenta madre y desordena el Balance sin que nada lo advierta.
+//
+// Vive acá y no en una pantalla porque son cuatro los lugares que ofrecen
+// cuentas: la fila de Movimientos, la revisión previa, el modal del asiento y
+// los dos de alta manual. Con una copia por pantalla, la próxima que se agregue
+// vuelve a ofrecer los títulos.
+//
+// Si un plan viejo no trajera `tipo_cuenta`, se cae al guion, que en este plan
+// distingue exactamente lo mismo: lo llevan las 197 hojas y ninguno de los 92
+// títulos.
+export const esCuentaImputable = (c) => {
+    const tipo = String(c?.tipo_cuenta || '').toUpperCase();
+    if (tipo) return tipo === 'SUBCUENTA';
+    return String(c?.codigo || '').includes('-');
+};
+
+export const soloImputables = (plan) => (plan || []).filter(esCuentaImputable);
+
 export const CUENTAS = {
     CLIENTES: '1104-01', VENTAS: '5101-01', IVA_DEBITO: '2108-02',
     GASTOS: '4201-08', IVA_CREDITO: '1108-02', PROVEEDORES: '2116-01',

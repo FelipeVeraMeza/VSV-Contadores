@@ -11,7 +11,20 @@ const ToastViewport = React.forwardRef(({ className, ...props }, ref) => (
         ref={ref}
         className={cn(
             // Cambiamos la posición a top-0 y la centramos con left-[50%] y -translate-x-[50%]
-            'fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:top-0 sm:left-[50%] sm:-translate-x-[50%] sm:flex-col md:max-w-[420px]',
+            //
+            // ⚠️ `pointer-events-none` NO es opcional, y faltaba.
+            //
+            // Esta caja está SIEMPRE puesta, haya avisos o no: es `fixed top-0`
+            // con `p-4`, así que aunque esté vacía ocupa ~32 px de alto y hasta
+            // 420 px de ancho, centrada arriba. Sin esta línea se come los clics
+            // de esa zona, y como está en `z-[100]` —la capa de los modales—
+            // gana por ir después en el DOM: el encabezado y la X de cualquier
+            // modal quedan debajo de una caja invisible.
+            //
+            // Que el aviso en sí sea pulsable se resuelve donde corresponde: el
+            // `Toast` ya trae `pointer-events-auto` (ver `toastVariants`), que es
+            // justamente la mitad que suponía esta línea existiendo.
+            'pointer-events-none fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:top-0 sm:left-[50%] sm:-translate-x-[50%] sm:flex-col md:max-w-[420px]',
             className,
         )}
         {...props}

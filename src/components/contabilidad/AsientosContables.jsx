@@ -26,7 +26,13 @@ const MESES = [
   { v:'05',l:'Mayo' },{ v:'06',l:'Junio' },{ v:'07',l:'Julio' },{ v:'08',l:'Agosto' },
   { v:'09',l:'Septiembre' },{ v:'10',l:'Octubre' },{ v:'11',l:'Noviembre' },{ v:'12',l:'Diciembre' },
 ];
-const ANIOS = ['2024','2025','2026','2027'];
+// Los anios del selector se calculan, no se escriben. La lista fija
+// ['2024'...'2027'] deja de ofrecer el anio en curso apenas llega 2028, y el
+// sintoma es de los que nadie relaciona con esto: "no me deja elegir el anio".
+const ANIOS = (() => {
+  const y = new Date().getFullYear();
+  return Array.from({ length: 4 }, (_, i) => String(y - 2 + i));
+})();
 const ITEMS_PER_PAGE = 15;
 
 const AsientosContables = ({ empresaId, mes: mesProp, anio: anioProp, setMes: setMesProp, setAnio: setAnioProp, rango }) => {

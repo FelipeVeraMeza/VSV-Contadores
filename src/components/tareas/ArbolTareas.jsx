@@ -20,6 +20,7 @@ import {
     ChevronRight, ChevronDown, Circle, CircleDot, Eye, CheckCircle2, X,
     User, Calendar, FolderOpen,
 } from 'lucide-react';
+import { PRIO_BARRA } from '@/components/tareas/estilos';
 
 const ESTADO = {
     pendiente:   { label: 'Activa',     icon: Circle,       c: 'text-blue-600' },
@@ -32,11 +33,6 @@ const ESTADO = {
 // La prioridad «media» no se pinta: es la de casi todas (26 de 39 abiertas) y
 // marcarlas todas hace que ninguna destaque, que es lo contrario de para lo que
 // sirve una prioridad.
-const PRIO = {
-    critica: 'text-red-700 bg-red-600/15 border-red-600/40',
-    alta:    'text-orange-600 bg-orange-500/10 border-orange-500/30',
-    baja:    'text-slate-500 bg-slate-500/10 border-slate-400/30',
-};
 
 const fechaCorta = (d) => d
     ? new Date(d).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
@@ -73,6 +69,12 @@ const Fila = ({ t, nivel, hijosDe, colapsados, alternar, selId, onAbrir, onCompl
                 // escritas en el archivo: `pl-${n*18}` no existiría en el CSS.
                 style={{ paddingLeft: 12 + nivel * 22 }}
             >
+                {/* La prioridad, misma barra que en la lista. Va pegada al
+                    contenido y no al borde de la pantalla: en un árbol la
+                    sangría ya significa algo —el nivel— y una barra al borde
+                    se leería como parte de esa jerarquía. */}
+                <span className={`w-[3px] h-4 rounded-full shrink-0 ${PRIO_BARRA[t.prioridad] || PRIO_BARRA.media}`}
+                      title={`Prioridad ${t.prioridad || 'media'}`} />
                 {/* Desplegar. Ocupa su lugar aunque no haya hijos, para que los
                     títulos de un mismo nivel queden alineados entre sí. */}
                 {hijos.length > 0 ? (
@@ -102,13 +104,6 @@ const Fila = ({ t, nivel, hijosDe, colapsados, alternar, selId, onAbrir, onCompl
                 {hijos.length > 0 && (
                     <span className="shrink-0 text-[9px] font-black text-slate-400 tabular-nums">
                         {hijos.filter(h => h.estado === 'completada').length}/{hijos.length}
-                    </span>
-                )}
-
-                {/* ---- Lo que se ve al lado ---- */}
-                {t.prioridad && PRIO[t.prioridad] && (
-                    <span className={`shrink-0 text-[8px] font-black px-1.5 py-0.5 rounded border uppercase ${PRIO[t.prioridad]}`}>
-                        {t.prioridad === 'critica' ? 'crítica' : t.prioridad}
                     </span>
                 )}
 

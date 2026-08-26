@@ -254,6 +254,34 @@ html, body {
   overflow-x: hidden;
 }
 
+/* 1bis · UN OVERLAY A PANTALLA COMPLETA NO HEREDA MÁRGENES.
+   ==========================================================================
+   `space-y-5` de Tailwind no separa a los hijos entre sí con un hueco: le
+   pone `margin-top: 1.25rem` a TODOS menos al primero.
+
+       .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: 1.25rem }
+
+   Cuando el modal de una pantalla se escribe como un hijo más de ese
+   contenedor —que es lo natural, se pone al final del JSX— su overlay
+   `fixed inset-0` recibe esos 20 px de margen superior. Y `inset-0` sí los
+   respeta: en vez de tapar la pantalla entera, queda 20 px más abajo.
+
+   El síntoma es una FRANJA CLARA cruzando el borde superior de la pantalla,
+   con el fondo del `body` (#fbfaf7) asomando por encima del velo oscuro. Se
+   ve como un error de dibujo del navegador y cuesta relacionarlo con el
+   modal, porque el overlay dice `inset-0` y uno da por hecho que cubre todo.
+   Encontrado el 25-08-2026 en el panel de Contabilizar, y latente en
+   cualquier otra pantalla con la misma forma.
+
+   Se corrige acá y no en cada componente: son más de veinte pantallas con
+   modales y la próxima que se escriba volvería a tropezar. La regla es tan
+   estrecha como se puede —solo hijos DIRECTOS de un `space-y-*`, y solo si
+   son `fixed inset-0`— así que no toca ningún margen legítimo.
+   ========================================================================== */
+[class*="space-y-"] > .fixed.inset-0 {
+  margin-top: 0 !important;
+}
+
 /* 2 · Las imágenes nunca desbordan su contenedor. */
 img, svg, video, canvas {
   max-width: 100%;

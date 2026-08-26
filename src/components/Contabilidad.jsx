@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
-import { Loader2, Hammer, CalendarRange } from 'lucide-react';
+import { Hammer, Building2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 import MovimientosContables from '@/components/contabilidad/MovimientosContables';
@@ -9,6 +9,7 @@ import AsientosContables from '@/components/contabilidad/AsientosContables';
 import ConciliacionBancaria from '@/components/contabilidad/ConciliacionBancaria';
 import ReportesHub from '@/components/contabilidad/ReportesHub';
 import GestionCaja from '@/components/contabilidad/GestionCaja';
+import CampoFecha from '@/components/ui/CampoFecha';
 
 const TITULOS = {
   compras: 'Compras', ventas: 'Ventas', honorarios: 'Honorarios',
@@ -41,26 +42,20 @@ const SelectorRango = ({ rango, setRango }) => {
   ];
   const activo = (p) => rango.desde === p.desde && rango.hasta === p.hasta;
 
-  const Campo = ({ label, value, min, max, onChange }) => (
-    <label className="group relative flex flex-col cursor-pointer">
-      <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-blue-600 transition-colors mb-0.5">{label}</span>
-      <input type="date" value={value} min={min} max={max} onChange={onChange}
-        className="bg-transparent text-slate-700 text-[13px] font-bold focus:outline-none cursor-pointer [color-scheme:light] w-[120px] tracking-tight" />
-    </label>
-  );
-
   return (
     <div className="flex flex-col xl:flex-row xl:items-center gap-2.5 bg-white border border-[#efe8dd] rounded-2xl p-2.5 shadow-sm">
-      {/* Campos desde / hasta */}
-      <div className="flex items-center gap-3 bg-slate-50 rounded-xl pl-3 pr-4 py-2 border border-[#efe8dd]">
-        <div className="p-1.5 bg-blue-500/15 rounded-lg">
-          <CalendarRange className="h-4 w-4 text-blue-600" />
-        </div>
-        <Campo label="Desde" value={rango.desde} max={rango.hasta} onChange={e => setRango(r => ({ ...r, desde: e.target.value }))} />
+      {/* Campos desde / hasta. Cada uno se puede TECLEAR o elegir del calendario
+          con su ícono. El calendario decorativo que iba antes acá a la izquierda
+          se quitó: con dos íconos de calendario que ahora sí hacen algo, un
+          tercero que no hace nada solo confunde dónde hay que apretar. */}
+      <div className="flex items-center gap-3 bg-slate-50 rounded-xl px-3 py-2 border border-[#efe8dd]">
+        <CampoFecha label="Desde" value={rango.desde} max={rango.hasta}
+          onChange={iso => setRango(r => ({ ...r, desde: iso }))} />
         <div className="flex items-center self-stretch">
           <div className="h-7 w-px bg-slate-100" />
         </div>
-        <Campo label="Hasta" value={rango.hasta} min={rango.desde} onChange={e => setRango(r => ({ ...r, hasta: e.target.value }))} />
+        <CampoFecha label="Hasta" value={rango.hasta} min={rango.desde}
+          onChange={iso => setRango(r => ({ ...r, hasta: iso }))} />
       </div>
 
       {/* Presets como chips */}
@@ -81,8 +76,7 @@ const SelectorRango = ({ rango, setRango }) => {
 };
 
 const Contabilidad = () => {
-  const { selectedCompany, user } = useAuth();
-  const isAdmin = user?.rol === 'Administrador';
+  const { selectedCompany } = useAuth();
   const empresaId = selectedCompany?.id;
   const [searchParams] = useSearchParams();
   const sub = searchParams.get('sub') || 'compras';
@@ -90,13 +84,31 @@ const Contabilidad = () => {
   // Rango de fechas GLOBAL — compartido por todos los submódulos
   const [rango, setRango] = useState({ desde: '2025-01-01', hasta: hoy() });
 
-  if (!empresaId && !isAdmin) {
+  // CONTABILIDAD EXIGE UNA EMPRESA. Sin excepciones, tampoco para el Administrador.
+  //
+  // Antes el consolidado «Todas las empresas» estaba permitido para los
+  // administradores, y era una trampa: se abría el módulo, el selector quedaba
+  // en «Todas», y lo que se contabilizaba caía con `empresa_id` en NULL —sin
+  // dueño, invisible al elegir cualquier empresa— o peor, se contabilizaba el
+  // mes de un cliente creyendo que era el de otro. El 25-08-2026 había 29
+  // asientos así.
+  //
+  // Ver la suma de todas las empresas es una pregunta legítima, pero es una
+  // pregunta de REPORTES, no de un módulo donde cada botón escribe asientos.
+  if (!empresaId) {
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] text-center">
-        <Loader2 className="h-12 w-12 text-blue-500 animate-spin mb-4" />
-        <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tighter italic">Bóveda Global de Contabilidad</h2>
-        <p className="text-slate-500 text-sm mt-2 font-bold uppercase tracking-widest">
-          Selecciona una entidad en el CRM para acceder a sus registros contables.
+      <div className="flex flex-col items-center justify-center h-[70vh] text-center px-6">
+        <div className="bg-amber-500/10 p-5 rounded-full mb-5 border border-amber-500/20">
+          <Building2 className="h-10 w-10 text-amber-600" />
+        </div>
+        <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Elige una empresa</h2>
+        <p className="text-slate-500 text-sm mt-3 max-w-md leading-relaxed">
+          Contabilidad trabaja sobre <b>una</b> empresa a la vez. Usa el selector del encabezado,
+          arriba, para elegir con cuál vas a trabajar.
+        </p>
+        <p className="text-slate-400 text-xs mt-4 max-w-md leading-relaxed">
+          No se puede contabilizar con «Todas las empresas»: el asiento quedaría sin dueño y
+          después no hay forma de saber a qué libro pertenecía.
         </p>
       </div>
     );
@@ -124,11 +136,10 @@ const Contabilidad = () => {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 mb-1 tracking-tight">{TITULOS[sub] || 'Contabilidad'}</h1>
+          {/* De qué empresa es lo que estás viendo. Acá ya no hay caso «todas»:
+              sin empresa la pantalla ni siquiera llega a este punto. */}
           <p className="text-slate-500 text-sm font-medium uppercase tracking-wider">
-            {/* Sin empresa seleccionada la vista es el consolidado de TODAS las empresas.
-                Antes decía "VOLLAIRE & OLIVOS SIMPLE PYME LTDA", que era falso: mostraba
-                las compras y ventas de todas las empresas bajo el nombre de una sola. */}
-            {selectedCompany?.razon_social || selectedCompany?.razonSocial || 'Todas las empresas (consolidado)'}
+            {selectedCompany?.razon_social || selectedCompany?.razonSocial}
           </p>
         </div>
         {usaRango && <SelectorRango rango={rango} setRango={setRango} />}

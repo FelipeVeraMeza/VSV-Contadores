@@ -8,3 +8,7 @@ whatsapp_auth
 # Respaldos del .env: contienen secretos, nunca deben commitearse
 .env.backup-*
 .env.*.backup
+
+# Respaldos de la base: contienen datos reales de clientes (RUT, razón social,
+# montos). Se generan al borrar o migrar en masa y NUNCA deben commitearse.
+src/DatabaseThings/respaldos/

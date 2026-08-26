@@ -37,16 +37,26 @@ const getUser = () => { try { return JSON.parse(localStorage.getItem('user') || 
 const getSessionId = () => getUser().sessionId;
 
 // `filtro` es lo que entiende el backend; null = no es una carpeta de la bandeja.
+//
+// ENVIADOS VA PRIMERO. En una oficina contable el correo es sobre todo salida
+// —avisos de F29, cobros, documentos que se mandan al cliente— así que «¿qué le
+// mandamos?» se pregunta mucho más seguido que «¿qué llegó?». Además Enviados
+// lee de `correo_campana`/`correo_envio`, que es registro propio del sistema y
+// siempre está; Recibidos depende de IMAP y de que la tabla `correo_recibido`
+// exista, así que abrir ahí es abrir en la carpeta más frágil.
 const CARPETAS = [
+    { id: 'enviados',   nombre: 'Enviados',    icono: Send,      filtro: null },
     { id: 'recibidos',  nombre: 'Recibidos',   icono: Inbox,     filtro: 'todos' },
     { id: 'destacados', nombre: 'Destacados',  icono: Star,      filtro: 'destacados' },
     { id: 'clientes',   nombre: 'De clientes', icono: Building2, filtro: 'clientes' },
-    { id: 'enviados',   nombre: 'Enviados',    icono: Send,      filtro: null },
     { id: 'archivados', nombre: 'Archivados',  icono: Archive,   filtro: 'archivados' },
 ];
 
 const ClienteCorreo = () => {
-    const [carpeta, setCarpeta] = useState('recibidos');
+    // Se abre en Enviados, la primera de la lista. Si la lista dijera «Enviados»
+    // arriba y la pantalla mostrara Recibidos, se leería como que el menú y el
+    // contenido no se hablan.
+    const [carpeta, setCarpeta] = useState('enviados');
     const [redactando, setRedactando] = useState(false);
     const [sinLeer, setSinLeer] = useState(0);
     const [cuota, setCuota] = useState(null);

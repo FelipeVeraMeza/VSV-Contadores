@@ -22,7 +22,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
     Plus, Loader2, X, Trash2, Search, FolderOpen, Users, Calendar,
-    Pencil, AlertTriangle, ListChecks, CheckCircle2,
+    Pencil, AlertTriangle, ListChecks, CheckCircle2, LayoutGrid, List,
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import {
@@ -341,6 +341,151 @@ const TarjetaProyecto = ({ p, puedeAdministrar, onEditar, onEliminar, onAbrirTar
 };
 
 // ---------------------------------------------------------------
+// LISTADO · la misma información de la tarjeta, en filas
+// ---------------------------------------------------------------
+// La grilla de tarjetas responde «cómo va cada proyecto» de un vistazo, pero
+// con más de una docena obliga a barrer la pantalla en zigzag para comparar dos
+// avances o encontrar cuál vence primero. Una tabla pone los mismos datos en
+// columnas alineadas, que es lo que uno quiere cuando la pregunta es
+// «¿cuál está más atrasado?» y no «¿cómo va este?».
+//
+// NO son dos fuentes de datos: dibuja exactamente `lista`, ya filtrada y
+// buscada. Si pidiera lo suyo, los contadores de una vista y otra dejarían de
+// calzar — la misma lección del tablero de tareas.
+const FilaProyecto = ({ p, puedeAdministrar, onEditar, onEliminar, onAbrirTareas, onIntegrantes }) => {
+    const estado = ESTADOS[p.estado] || ESTADOS.activo;
+    const color = p.color || '#199b4d';
+    const vencido = p.fechaTermino && new Date(p.fechaTermino) < new Date() && p.estado === 'activo';
+
+    return (
+        <tr className="border-b border-[#f5f0e8] hover:bg-slate-50/70 transition-colors group">
+            {/* Proyecto */}
+            <td className="px-3 py-2.5 min-w-[13rem]">
+                <div className="flex items-start gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: color }} />
+                    <div className="min-w-0">
+                        <button onClick={() => onAbrirTareas(p)}
+                            className="text-left text-xs font-black text-slate-900 hover:text-emerald-600 truncate block max-w-[16rem]">
+                            {p.nombre}
+                        </button>
+                        {p.descripcion && (
+                            <p className="text-[10px] text-slate-400 truncate max-w-[16rem]">{p.descripcion}</p>
+                        )}
+                    </div>
+                </div>
+            </td>
+
+            {/* Estado */}
+            <td className="px-3 py-2.5">
+                <span className={`text-[9px] font-black px-2 py-0.5 rounded border uppercase tracking-wider whitespace-nowrap ${estado.c}`}>
+                    {estado.label}
+                </span>
+            </td>
+
+            {/* Responsable */}
+            <td className="px-3 py-2.5">
+                <span className="text-[11px] text-slate-600 font-bold truncate block max-w-[9rem]">
+                    {p.responsableNombre || <span className="text-slate-300 italic font-normal">Sin responsable</span>}
+                </span>
+            </td>
+
+            {/* Avance: la barra además del número, porque comparar 62% con 58%
+                de un vistazo es más fácil con dos barras que con dos cifras. */}
+            <td className="px-3 py-2.5 min-w-[7rem]">
+                <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-16 bg-slate-100 rounded-full overflow-hidden shrink-0">
+                        <div className="h-full rounded-full" style={{ width: `${p.avance}%`, backgroundColor: color }} />
+                    </div>
+                    <span className="text-[11px] font-black text-slate-700 tabular-nums">{p.avance}%</span>
+                </div>
+            </td>
+
+            {/* Tareas */}
+            <td className="px-3 py-2.5">
+                <div className="flex items-center gap-2 text-[10px] whitespace-nowrap">
+                    <span className="text-slate-500 tabular-nums">{p.tareasTotal}</span>
+                    <span className="text-emerald-600 font-bold tabular-nums">{p.tareasHechas} ✓</span>
+                    <span className="text-slate-400 tabular-nums">{p.tareasPendientes} pend.</span>
+                    {p.tareasAtrasadas > 0 && (
+                        <span className="text-red-600 font-bold tabular-nums flex items-center gap-0.5">
+                            <AlertTriangle size={10} /> {p.tareasAtrasadas}
+                        </span>
+                    )}
+                </div>
+            </td>
+
+            {/* Fechas */}
+            <td className="px-3 py-2.5">
+                {(p.fechaInicio || p.fechaTermino) ? (
+                    <span className={`text-[10px] whitespace-nowrap ${vencido ? 'text-red-600 font-bold' : 'text-slate-500'}`}>
+                        {fechaCorta(p.fechaInicio) || '—'} → {fechaCorta(p.fechaTermino) || '—'}
+                    </span>
+                ) : <span className="text-[10px] text-slate-300 italic">Sin fechas</span>}
+            </td>
+
+            {/* Integrantes */}
+            <td className="px-3 py-2.5">
+                <button onClick={() => onIntegrantes(p)}
+                    title={`${(p.integrantes || []).map(i => i.nombre).join(', ')}\n\nPulsa para administrar quién ve este proyecto`}
+                    className="flex items-center -space-x-1.5 hover:opacity-80 transition-opacity">
+                    {(p.integrantes || []).slice(0, 3).map(i => (
+                        <span key={i.id}
+                            className={`w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[7px] font-black ${i.rol === 'responsable' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                            {iniciales(i.nombre)}
+                        </span>
+                    ))}
+                    {(p.integrantes || []).length > 3 && (
+                        <span className="w-5 h-5 rounded-full bg-slate-800 border-2 border-white flex items-center justify-center text-[7px] font-black text-white">
+                            +{p.integrantes.length - 3}
+                        </span>
+                    )}
+                    {(p.integrantes || []).length === 0 && (
+                        <span className="text-[10px] text-slate-300 italic flex items-center gap-1"><Users size={10} /> —</span>
+                    )}
+                </button>
+            </td>
+
+            {/* Acciones. A diferencia de la tarjeta NO se esconden con
+                `opacity-0`: en una tabla el mouse pasa por muchas filas y los
+                botones que aparecen y desaparecen se vuelven un blanco móvil.
+                (Misma corrección que se le hizo al lápiz de las plantillas.) */}
+            <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                {puedeAdministrar ? (
+                    <div className="inline-flex items-center gap-2">
+                        <button onClick={() => onEditar(p)} title="Editar"
+                            className="text-slate-400 hover:text-emerald-600"><Pencil size={13} /></button>
+                        <button onClick={() => onEliminar(p)} title="Eliminar"
+                            className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={13} /></button>
+                    </div>
+                ) : <span className="text-slate-200">—</span>}
+            </td>
+        </tr>
+    );
+};
+
+const ListaProyectos = ({ lista, ...props }) => (
+    // La tabla se desborda a lo ancho en pantallas chicas: el scroll horizontal
+    // va ACÁ ADENTRO. Si lo tomara el cuerpo de la página se movería el menú
+    // junto con la tabla.
+    <div className="overflow-x-auto border border-[#efe8dd] rounded-2xl bg-white">
+        <table className="w-full border-collapse">
+            <thead className="bg-slate-50 sticky top-0 z-10">
+                <tr className="text-left">
+                    {['Proyecto', 'Estado', 'Responsable', 'Avance', 'Tareas', 'Fechas', 'Integrantes', ''].map((h, i) => (
+                        <th key={i} className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap border-b border-[#efe8dd]">
+                            {h}
+                        </th>
+                    ))}
+                </tr>
+            </thead>
+            <tbody>
+                {lista.map(p => <FilaProyecto key={p.id} p={p} {...props} />)}
+            </tbody>
+        </table>
+    </div>
+);
+
+// ---------------------------------------------------------------
 // Panel
 // ---------------------------------------------------------------
 const ProyectosPanel = () => {
@@ -357,6 +502,18 @@ const ProyectosPanel = () => {
     const [filtroEstado, setFiltroEstado] = useState('vigentes'); // vigentes | todos | <estado>
     const [modal, setModal] = useState(null); // null | {} | proyecto
     const [integrantesDe, setIntegrantesDe] = useState(null); // proyecto cuyo acceso se administra
+
+    // Tarjetas o listado. Se recuerda entre visitas, igual que la vista de
+    // tareas: cada persona tiende a quedarse con una y volver a elegirla cada
+    // vez que entra es una molestia diaria.
+    const [vista, setVista] = useState(() => {
+        try { return localStorage.getItem('proyectosVista') === 'lista' ? 'lista' : 'tarjetas'; }
+        catch { return 'tarjetas'; }
+    });
+    const cambiarVista = (v) => {
+        setVista(v);
+        try { localStorage.setItem('proyectosVista', v); } catch { /* modo incógnito: se pierde al salir, no rompe */ }
+    };
 
     const cargar = useCallback(async () => {
         setLoading(true);
@@ -426,6 +583,17 @@ const ProyectosPanel = () => {
                     ))}
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Tarjetas / Listado */}
+                    <div className="flex items-center bg-white border border-[#efe8dd] rounded-lg p-0.5">
+                        {[['tarjetas', LayoutGrid, 'Tarjetas'], ['lista', List, 'Listado']].map(([id, Icono, label]) => (
+                            <button key={id} onClick={() => cambiarVista(id)} title={label}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-colors ${
+                                    vista === id ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-700'}`}>
+                                <Icono size={13} />
+                                <span className="hidden sm:inline">{label}</span>
+                            </button>
+                        ))}
+                    </div>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                         <input value={busq} onChange={(e) => setBusq(e.target.value)} placeholder="Buscar proyecto..."
@@ -451,6 +619,11 @@ const ProyectosPanel = () => {
                             ? <>Todavía no hay proyectos. {puedeAdministrar ? <>Usa <span className="text-emerald-600 font-bold">+ Proyecto</span>.</> : 'Un administrador puede crearlos.'}</>
                             : 'Ningún proyecto calza con la búsqueda.'}
                     </div>
+                ) : vista === 'lista' ? (
+                    <ListaProyectos lista={lista}
+                        puedeAdministrar={puedeAdministrar}
+                        onEditar={setModal} onEliminar={eliminar} onAbrirTareas={abrirTareas}
+                        onIntegrantes={setIntegrantesDe} />
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                         {lista.map(p => (

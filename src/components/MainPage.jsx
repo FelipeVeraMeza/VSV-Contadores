@@ -11,7 +11,7 @@ import {
   Clock, Settings, DollarSign, Book, Umbrella, Receipt, Coins, Stethoscope,
   CalendarDays, Download, Percent, HeartPulse, ListChecks, FileSpreadsheet,
   BadgeCheck, Send, PanelLeftClose, PanelLeftOpen, Network, FolderOpen,
-  Megaphone, LayoutTemplate
+  Megaphone, LayoutTemplate, Ticket as TicketIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth.jsx';
@@ -103,7 +103,13 @@ function MainPage() {
     ] : []),
   ];
 
-  // Submódulos del menú de Tareas.
+  // Submódulos del menú de Tickets.
+  //
+  // El módulo se llama TICKETS y adentro conserva la sección "Tareas": un ticket
+  // es la unidad de trabajo que entra —el pedido— y las tareas son lo que hay
+  // que hacer para cerrarlo. La ruta sigue siendo `/tareas` a propósito: las
+  // notificaciones guardadas y los enlaces del CRM apuntan ahí, y cambiarla
+  // rompería los avisos ya emitidos sin que nadie gane nada.
   //
   // "Equipo" muestra las tareas de TODA la organización y es solo para
   // Administradores. Mismo triple candado que Facturación: se esconde del menú,
@@ -165,9 +171,10 @@ function MainPage() {
     // y el correo masivo del facturador, así que «¿qué le mandamos?» obligaba a
     // mirar en dos módulos distintos.
     { id: 'comunicaciones', path: '/comunicaciones', name: 'Comunicaciones', icon: Megaphone, color: 'from-sky-500 to-blue-600', sub: subComunicaciones },
-    // Las tareas cruzan todos los módulos, no son "algo del CRM": van al mismo
-    // nivel que Contabilidad o Facturación.
-    { id: 'tareas', path: '/tareas', name: 'Tareas', icon: ListChecks, color: 'from-violet-500 to-purple-600', sub: subTareas },
+    // Los tickets cruzan todos los módulos, no son "algo del CRM": van al mismo
+    // nivel que Contabilidad o Facturación. El id y la ruta siguen diciendo
+    // `tareas` porque así se guardaron las notificaciones y los enlaces.
+    { id: 'tareas', path: '/tareas', name: 'Tickets', icon: TicketIcon, color: 'from-violet-500 to-purple-600', sub: subTareas },
     { id: 'contabilidad', path: '/contabilidad', name: 'Contabilidad', icon: Calculator, color: 'from-green-500 to-emerald-500', sub: subContabilidad },
     { id: 'rrhh', path: '/rrhh', name: 'Recursos Humanos', icon: Users, color: 'from-purple-500 to-violet-500', sub: subRRHH },
     { id: 'facturacion', path: '/facturacion', name: 'Facturación SII', icon: FileText, color: 'from-orange-500 to-red-500', sub: subFacturacion },
@@ -178,7 +185,7 @@ function MainPage() {
   ];
 
   // Qué módulos tiene habilitados este usuario. `user.modulos` viene del login.
-  // Dashboard, Bancos, Tareas y Mi Perfil no se recortan: son transversales.
+  // Dashboard, Bancos, Tickets y Mi Perfil no se recortan: son transversales.
   const BANDERA_POR_MODULO = {
     contabilidad:   'puedeVerContabilidad',
     facturacion:    'puedeVerFacturacion',

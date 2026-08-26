@@ -11,7 +11,13 @@ const MESES = [
   { value: '09', label: 'Septiembre' }, { value: '10', label: 'Octubre' },
   { value: '11', label: 'Noviembre' }, { value: '12', label: 'Diciembre' }
 ];
-const ANIOS = ['2023', '2024', '2025', '2026', '2027'];
+// Los anios del selector se calculan, no se escriben. La lista fija
+// ['2024'...'2027'] deja de ofrecer el anio en curso apenas llega 2028, y el
+// sintoma es de los que nadie relaciona con esto: "no me deja elegir el anio".
+const ANIOS = (() => {
+  const y = new Date().getFullYear();
+  return Array.from({ length: 5 }, (_, i) => String(y - 3 + i));
+})();
 
 const SyncSIIModal = ({ isOpen, setIsOpen, onSync, isSyncing, empresaNombre }) => {
   const now = new Date();

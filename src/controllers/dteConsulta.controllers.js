@@ -156,6 +156,17 @@ export const crearMovimientoManual = async (req, res) => {
     const fecha_emision = fecha ? new Date(fecha) : new Date();
     const empId = (!empresa_id || empresa_id === 'ALL' || empresa_id === 'null') ? null : empresa_id;
 
+    // El otro camino que escribe asientos: el movimiento cargado a mano. Mismo
+    // candado que `guardarComprobante` — sin empresa no se registra. Cerrar solo
+    // uno de los dos dejaría la puerta de al lado abierta, que es como se
+    // llegó a tener 29 comprobantes sin dueño.
+    if (!empId) {
+        return res.status(400).json({
+            ok: false,
+            error: 'Elige una empresa antes de registrar el movimiento. Sin empresa el asiento queda sin dueño.',
+        });
+    }
+
     const client = await pool.connect();
     try {
         await client.query('BEGIN');

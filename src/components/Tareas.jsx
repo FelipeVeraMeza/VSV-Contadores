@@ -1,10 +1,16 @@
 // =====================================================================
-// ✅ TAREAS — módulo propio, al mismo nivel que CRM o Contabilidad
+// 🎫 TICKETS — módulo propio, al mismo nivel que CRM o Contabilidad
 // ---------------------------------------------------------------------
 // Antes vivía como una pestaña dentro del CRM (`/CRM?sub=tareas`), lo que
-// obligaba a entrar al CRM para ver el trabajo del equipo. Pero las tareas no
-// son "algo del CRM": cruzan todos los módulos —contabilidad, remuneraciones,
-// facturación— y son la vista diaria de cada persona.
+// obligaba a entrar al CRM para ver el trabajo del equipo. Pero el trabajo no
+// es "algo del CRM": cruza todos los módulos —contabilidad, remuneraciones,
+// facturación— y es la vista diaria de cada persona.
+//
+// EL MÓDULO SE LLAMA TICKETS Y ADENTRO VAN LAS TAREAS. Un ticket es el pedido
+// que entra; las tareas son lo que hay que hacer para cerrarlo. Es un cambio de
+// vocabulario, no de modelo: la ruta sigue siendo `/tareas` y la tabla sigue
+// siendo `tarea`, porque las notificaciones ya emitidas y los enlaces del CRM
+// apuntan ahí. Renombrar la URL rompería avisos viejos sin que nadie gane nada.
 //
 // CINCO SECCIONES (`?sub=`), igual que Contabilidad o Facturación:
 //
@@ -17,14 +23,15 @@
 // Las tres últimas son el mismo panel con un alcance distinto: la sección ya
 // decide qué se ve, así que el panel no vuelve a preguntarlo.
 // =====================================================================
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
-import { ShieldAlert } from 'lucide-react';
+import { ShieldAlert, Ticket, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth.jsx';
 import TareasPanel from '@/components/crm/views/TareasPanel';
 import ProyectosPanel from '@/components/tareas/ProyectosPanel';
 import InicioPanel from '@/components/tareas/InicioPanel';
+import ImportarTareasModal from '@/components/tareas/ImportarTareasModal';
 
 const SECCIONES = {
   inicio:    { titulo: 'Inicio',     bajada: 'Tu resumen del día: lo que vence, lo que va atrasado y lo que cerraste' },
@@ -50,6 +57,11 @@ const Tareas = () => {
   const { user } = useAuth();
   const esAdmin = user?.rol === 'Administrador';
   const [searchParams] = useSearchParams();
+  const [importando, setImportando] = useState(false);
+  // Cada panel se trae sus propias tareas al montarse. Subir el contador cambia
+  // la `key` del panel, que lo remonta y lo hace releer: si no, se importan
+  // treinta tareas y la lista de atrás sigue mostrando las de antes.
+  const [recarga, setRecarga] = useState(0);
 
   const pedida = searchParams.get('sub') || 'todas';
   const sub = SECCIONES[pedida] ? pedida : 'todas';
@@ -66,17 +78,43 @@ const Tareas = () => {
   };
 
   return (
-    <div className="h-full flex flex-col gap-6 relative">
+    <div className="h-full flex flex-col gap-3 relative">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
-        <div>
-          <h1 className="text-xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter">{meta.titulo}</h1>
-          <p className="text-slate-500 text-xs mt-1 font-bold tracking-widest uppercase">{meta.bajada}</p>
+        {/* UNA LÍNEA, NO TRES.
+            Antes eran tres renglones —«TICKETS», el título en mayúsculas
+            enormes, y la bajada también en mayúsculas— que juntos se comían
+            unos 90 px de alto en TODAS las pantallas del módulo, todos los
+            días, para decir algo que el menú lateral ya dice y que se lee una
+            sola vez. Ahora es una línea, y la bajada pasa a `title`: sigue
+            estando para quien la necesite, sin ocupar sitio.
+            El módulo se sigue nombrando —el menú dice «Tickets» y la pantalla
+            debe reconocerse— pero al lado del título, no encima. */}
+        <div className="flex items-baseline gap-2.5 min-w-0" title={meta.bajada}>
+          <h1 className="text-lg md:text-xl font-black text-slate-900 tracking-tight truncate">{meta.titulo}</h1>
+          <span className="hidden sm:flex items-center gap-1 text-[10px] font-semibold text-violet-600 shrink-0">
+            <Ticket size={11} /> Tickets
+          </span>
         </div>
+
+        {/* SOLO EN «TAREAS».
+            Estaba en el encabezado del módulo, así que aparecía también en
+            Inicio —que es un resumen del día, no un lugar donde se carga
+            nada— y en Proyectos, donde importar TAREAS no significa nada y se
+            leía como si fuera a importar proyectos. Un botón que no
+            corresponde a la pantalla obliga a preguntarse qué hace ahí. */}
+        {sub === 'todas' && (
+          <button
+            onClick={() => setImportando(true)}
+            className="flex items-center gap-2 bg-white border border-[#efe8dd] hover:border-violet-400 hover:text-violet-700 text-slate-600 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-colors shrink-0"
+          >
+            <FileSpreadsheet size={14} /> Importar Excel
+          </button>
+        )}
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col bg-white backdrop-blur-xl rounded-3xl border border-[#efe8dd] shadow-2xl overflow-hidden">
         <motion.div
-          key={sub}
+          key={`${sub}-${recarga}`}
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.2 }}
@@ -85,6 +123,13 @@ const Tareas = () => {
           {renderSub()}
         </motion.div>
       </div>
+
+      {importando && (
+        <ImportarTareasModal
+          onClose={() => setImportando(false)}
+          onImportado={() => setRecarga(n => n + 1)}
+        />
+      )}
     </div>
   );
 };

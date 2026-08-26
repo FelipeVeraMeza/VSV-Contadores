@@ -11,6 +11,7 @@ import { fetchWithAuth } from '@/services/apiClient';
 import {
   TIPO_DTE_LABEL as TIPO_DTE_MAP, generarLineasAsiento, construirGlosa,
   calcularMontos, esNota, esNotaCredito,
+    soloImputables,
 } from '@/lib/documento';
 import { cleanRut } from '@/lib/rut';
 import { API_BASE_URL } from '../../../../config.js';
@@ -462,8 +463,8 @@ const AsientoDocumentoModal = ({ isOpen, setIsOpen, documento, empresaId, onGuar
                         <SelectTrigger className="bg-white border-[#efe8dd] text-xs text-slate-900 h-8 w-full">
                           <SelectValue placeholder="Seleccionar..." />
                         </SelectTrigger>
-                        <SelectContent className="bg-white border-[#efe8dd] text-slate-700 max-h-[220px] overflow-y-auto z-50">
-                          {plan.map(cta => (
+                        <SelectContent className="bg-white border-[#efe8dd] text-slate-700 max-h-[220px] overflow-y-auto">
+                          {soloImputables(plan).map(cta => (
                             <SelectItem key={cta.codigo} value={cta.codigo} className="text-xs">
                               {cta.codigo} — {cta.descripcion}
                             </SelectItem>

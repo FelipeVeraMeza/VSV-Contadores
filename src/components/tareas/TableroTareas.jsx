@@ -18,13 +18,8 @@ import {
     Circle, CircleDot, Eye, CheckCircle2, X,
     User, ListChecks, MessageSquare, Calendar,
 } from 'lucide-react';
+import { PRIO_BARRA } from '@/components/tareas/estilos';
 
-const PRIO = {
-    critica: 'text-red-700 bg-red-600/15 border-red-600/40',
-    alta: 'text-orange-600 bg-orange-500/10 border-orange-500/30',
-    media: 'text-amber-600 bg-amber-500/10 border-amber-500/30',
-    baja: 'text-slate-500 bg-slate-500/10 border-slate-400/30',
-};
 
 // El borde de arriba es lo que distingue una columna de otra a distancia.
 const COLUMNAS = [
@@ -45,9 +40,15 @@ const Tarjeta = ({ t, seleccionada, onAbrir, onArrastrar }) => {
             draggable
             onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onArrastrar(t); }}
             onClick={() => onAbrir(t.id)}
-            className={`bg-white border rounded-xl p-2.5 cursor-pointer transition-colors active:cursor-grabbing
+            className={`relative bg-white border rounded-xl p-2.5 pl-3.5 cursor-pointer transition-colors active:cursor-grabbing overflow-hidden
                 ${seleccionada ? 'border-emerald-500 ring-1 ring-emerald-500/30' : 'border-[#efe8dd] hover:border-emerald-500/50'}`}
         >
+            {/* En una TARJETA la prioridad va como franja del borde izquierdo,
+                que es la convención de Jira y Trello: la columna de tarjetas se
+                recorre de arriba abajo y la franja se lee sin entrar en cada
+                una. Una pastilla dentro de la tarjeta obliga a leerla. */}
+            <span className={`absolute left-0 top-0 bottom-0 w-1 ${PRIO_BARRA[t.prioridad] || PRIO_BARRA.media}`}
+                  title={`Prioridad ${t.prioridad || 'media'}`} />
             <p className={`text-[11px] font-bold leading-snug ${hecha ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
                 {t.titulo}
             </p>
@@ -59,11 +60,6 @@ const Tarjeta = ({ t, seleccionada, onAbrir, onArrastrar }) => {
             )}
 
             <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                {t.prioridad && t.prioridad !== 'media' && (
-                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase ${PRIO[t.prioridad]}`}>
-                        {t.prioridad === 'critica' ? 'crítica' : t.prioridad}
-                    </span>
-                )}
                 {t.venceAt && (
                     <span className={`text-[9px] font-bold flex items-center gap-0.5 ${vencida ? 'text-red-600' : 'text-slate-500'}`}>
                         <Calendar size={9} /> {fechaCorta(t.venceAt)}

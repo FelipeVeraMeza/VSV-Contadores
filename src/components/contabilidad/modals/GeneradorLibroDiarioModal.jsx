@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { getChartOfAccountsApi } from '@/services/accountingService';
 import { toast } from '@/components/ui/use-toast';
+import { soloImputables } from '@/lib/documento';
 
 const CUENTAS_LABELS = {
     CLIENTES: 'Cuenta Clientes',
@@ -225,7 +226,7 @@ const GeneradorLibroDiarioModal = ({ isOpen, setIsOpen, rawVentas = [], rawCompr
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent className="bg-white border-[#efe8dd] text-slate-700 max-h-[300px] overflow-y-auto">
-                                                {plan.map(cta => (
+                                                {soloImputables(plan).map(cta => (
                                                     <SelectItem key={cta.codigo} value={cta.codigo} className="text-xs">
                                                         {cta.codigo} - {cta.descripcion}
                                                     </SelectItem>

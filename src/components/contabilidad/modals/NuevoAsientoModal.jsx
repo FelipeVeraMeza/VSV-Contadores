@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { fetchWithAuth } from '@/services/apiClient';
+import { soloImputables } from '@/lib/documento';
 
 const TIPOS = [
   { value: 'ingreso',  label: 'Ingreso',  color: 'text-emerald-600', bg: 'bg-emerald-500/10 border-emerald-500/30' },
@@ -169,8 +170,8 @@ const NuevoAsientoModal = ({ isOpen, setIsOpen, empresaId, onGuardadoExitoso }) 
                         : <span className="text-slate-400">Seleccionar cuenta...</span>}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent className="bg-white border-[#efe8dd] text-slate-700 max-h-[260px] overflow-y-auto z-50">
-                    {plan.map(c => (
+                  <SelectContent className="bg-white border-[#efe8dd] text-slate-700 max-h-[260px] overflow-y-auto">
+                    {soloImputables(plan).map(c => (
                       <SelectItem key={c.codigo} value={c.codigo} className="text-xs">
                         <span className="font-mono text-blue-600">{c.codigo}</span>
                         <span className="ml-2 text-slate-600">{c.descripcion}</span>

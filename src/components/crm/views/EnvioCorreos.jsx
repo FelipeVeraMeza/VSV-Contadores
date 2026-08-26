@@ -21,12 +21,13 @@ import {
     Mail, Search, Send, Users, Eye, Loader2, AlertTriangle, CheckCircle2,
     X, ChevronLeft, ChevronRight, FlaskConical, Building2, Sparkles,
     LayoutTemplate, Save, Trash2, Check, PenLine, Users2, Lock,
-    Paperclip, Square, FileSpreadsheet, Upload, Table2, History,
+    Paperclip, Square, FileSpreadsheet, Upload, Table2, History, Settings2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import LogoUploader from '@/components/ui/LogoUploader';
 import HistorialCorreosModal from '@/components/crm/modals/HistorialCorreosModal';
+import PlantillasCorreo from '@/components/comunicaciones/PlantillasCorreo';
 import EditorRico from '@/components/comunicaciones/EditorRico';
 import CuerpoCorreo, { aHtmlEditor } from '@/components/comunicaciones/CuerpoCorreo';
 import { getCrmDataApi } from '@/services/crmService';
@@ -320,6 +321,10 @@ const EnvioCorreos = () => {
     // una copia cada vez que se corrige una coma.
     const [plantillas, setPlantillas] = useState([]);
     const [plantillaId, setPlantillaId] = useState(null);
+    // El administrador de plantillas, abierto encima del correo que se está
+    // escribiendo. Es la MISMA pantalla de Comunicaciones › Plantillas, no una
+    // segunda versión: dos editores de lo mismo se van separando con el tiempo.
+    const [personalizando, setPersonalizando] = useState(false);
     const [guardando, setGuardando] = useState(false);
 
     const cargarPlantillas = useCallback(async () => {
@@ -1028,6 +1033,20 @@ const EnvioCorreos = () => {
                         <div className="flex items-center justify-between mb-1">
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
                                 <LayoutTemplate size={11} /> Plantillas
+                                {/* PERSONALIZAR SIN SALIRSE DEL CORREO.
+                                    Acá las plantillas solo se USAN: se pulsa una y
+                                    carga su texto. Para corregirle una coma, cambiar
+                                    el asunto o compartirla con el equipo había que
+                                    abandonar el correo a medio escribir e irse a
+                                    Comunicaciones › Plantillas. Este ícono abre esa
+                                    misma pantalla encima, y al cerrarla las pastillas
+                                    de acá se recargan con lo que se haya cambiado. */}
+                                <button onClick={() => setPersonalizando(true)}
+                                    title="Personalizar plantillas: editar el texto, el asunto y con quién se comparten"
+                                    aria-label="Personalizar plantillas"
+                                    className="ml-0.5 text-slate-300 hover:text-emerald-600 transition-colors">
+                                    <Settings2 size={12} />
+                                </button>
                             </span>
                             <button onClick={guardarPlantilla} disabled={guardando || !asunto.trim() || !cuerpo.trim()}
                                 title="Guardar lo que escribiste para reusarlo"
@@ -1529,6 +1548,38 @@ const EnvioCorreos = () => {
         </div>
 
         {verEnviados && <HistorialCorreosModal onClose={() => setVerEnviados(false)} />}
+
+        {/* ═══ PERSONALIZAR PLANTILLAS ═══
+            Se cierra recargando la lista: si no, uno renombra una plantilla,
+            vuelve al correo y sigue viendo el nombre viejo en las pastillas. */}
+        {personalizando && (
+            <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6"
+                 onClick={() => { setPersonalizando(false); cargarPlantillas(); }}>
+                <div className="w-full max-w-6xl h-[85vh] bg-[#fdfcf9] border border-[#efe8dd] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+                     onClick={(e) => e.stopPropagation()}>
+                    <div className="px-4 py-3 border-b border-[#efe8dd] bg-white flex items-center justify-between gap-3 shrink-0">
+                        <div className="min-w-0">
+                            <h2 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                                <Settings2 size={15} className="text-emerald-600" /> Personalizar plantillas
+                            </h2>
+                            <p className="text-[10px] text-slate-400">
+                                Lo que cambies acá queda guardado y aparece en el selector al cerrar
+                            </p>
+                        </div>
+                        <button onClick={() => { setPersonalizando(false); cargarPlantillas(); }}
+                                aria-label="Cerrar"
+                                className="p-2 rounded-xl bg-slate-50 text-slate-500 hover:text-red-500 shrink-0">
+                            <X size={15} />
+                        </button>
+                    </div>
+                    {/* PlantillasCorreo se dibuja con `h-full`, así que necesita un
+                        padre con altura: de ahí el h-[85vh] de arriba. */}
+                    <div className="flex-1 min-h-0 p-3">
+                        <PlantillasCorreo />
+                    </div>
+                </div>
+            </div>
+        )}
       </div>
     );
 };

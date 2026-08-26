@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { fetchWithAuth } from '@/services/apiClient';
 import { API_BASE_URL } from '../../../../config.js';
+import { soloImputables } from '@/lib/documento';
 
 const TIPOS_DOCUMENTO = [
   { value: '33', label: 'Factura Electrónica' },
@@ -369,8 +370,8 @@ const NuevoMovimientoModal = ({ isOpen, setIsOpen, tipo, empresaId, onGuardado }
                         : <span className="text-slate-400">Seleccionar cuenta...</span>}
                     </SelectValue>
                   </SelectTrigger>
-                  <SelectContent className="bg-white border-[#efe8dd] text-slate-700 max-h-[260px] overflow-y-auto z-50">
-                    {plan.map(c => (
+                  <SelectContent className="bg-white border-[#efe8dd] text-slate-700 max-h-[260px] overflow-y-auto">
+                    {soloImputables(plan).map(c => (
                       <SelectItem key={c.codigo} value={c.codigo} className="text-xs">
                         <span className="font-mono text-blue-600">{c.codigo}</span>
                         <span className="ml-2 text-slate-600">{c.descripcion}</span>

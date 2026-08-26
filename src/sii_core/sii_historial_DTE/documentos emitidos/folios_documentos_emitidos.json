@@ -4843,5 +4843,2057 @@
         "montoIva": 9500
       }
     }
+  },
+  {
+    "rutReceptor": "76837993-9",
+    "razonSocial": "ASESORIA FINANCIERA E INMOBILIARIA SUHOUSE SPA",
+    "documento": "Factura Electronica",
+    "folio": "1373",
+    "fecha": "2026-08-24",
+    "montoTotal": 267750,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "76837993-9",
+        "receptorNombre": "ASESORIA FINANCIERA E INMOBILIARIA SUHOUSE SPA",
+        "montoNeto": 225000,
+        "montoIva": 42750
+      }
+    }
+  },
+  {
+    "rutReceptor": "78494067-5",
+    "razonSocial": "FARÍAS Y HERRERA ODONTOLOGÍA LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1372",
+    "fecha": "2026-08-21",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78494067-5",
+        "receptorNombre": "FARÍAS Y HERRERA ODONTOLOGÍA LIMITADA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78481935-3",
+    "razonSocial": "SUSANA CHAMORRO MARTINEZ TRANSPORTES E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "1371",
+    "fecha": "2026-08-18",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78481935-3",
+        "receptorNombre": "SUSANA CHAMORRO MARTINEZ TRANSPORTES E.I.R.L.",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "77975503-7",
+    "razonSocial": "WENDI ARTEAGA SERVICIOS E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "1370",
+    "fecha": "2026-08-12",
+    "montoTotal": 83300,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77975503-7",
+        "receptorNombre": "WENDI ARTEAGA SERVICIOS E.I.R.L.",
+        "montoNeto": 70000,
+        "montoIva": 13300
+      }
+    }
+  },
+  {
+    "rutReceptor": "78271993-9",
+    "razonSocial": "MGC INVERSIÓNES SPA",
+    "documento": "Nota de Credito Electronica",
+    "folio": "123",
+    "fecha": "2026-08-11",
+    "montoTotal": 71400,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78271993-9",
+        "receptorNombre": "MGC INVERSIÓNES SPA",
+        "montoNeto": 60000,
+        "montoIva": 11400
+      }
+    }
+  },
+  {
+    "rutReceptor": "78068412-7",
+    "razonSocial": "CALDERÓN GESTIÓN INMOBILIARIA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1369",
+    "fecha": "2026-08-11",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78068412-7",
+        "receptorNombre": "CALDERÓN GESTIÓN INMOBILIARIA SPA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "77464081-9",
+    "razonSocial": "BOSQUE Y TIERRA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1368",
+    "fecha": "2026-08-11",
+    "montoTotal": 325265,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77464081-9",
+        "receptorNombre": "BOSQUE Y TIERRA SPA",
+        "montoNeto": 273332,
+        "montoIva": 51933
+      }
+    }
+  },
+  {
+    "rutReceptor": "78068412-7",
+    "razonSocial": "CALDERÓN GESTIÓN INMOBILIARIA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1367",
+    "fecha": "2026-08-06",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78068412-7",
+        "receptorNombre": "CALDERÓN GESTIÓN INMOBILIARIA SPA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78394454-5",
+    "razonSocial": "PARTY CARS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1366",
+    "fecha": "2026-08-04",
+    "montoTotal": 178500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78394454-5",
+        "receptorNombre": "PARTY CARS SPA",
+        "montoNeto": 150000,
+        "montoIva": 28500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78339342-5",
+    "razonSocial": "CASA RITUAL SPA",
+    "documento": "Factura Electronica",
+    "folio": "1365",
+    "fecha": "2026-08-04",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78339342-5",
+        "receptorNombre": "CASA RITUAL SPA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78418049-2",
+    "razonSocial": "VIMAGU TRUCKS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1364",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78418049-2",
+        "receptorNombre": "VIMAGU TRUCKS SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78071957-5",
+    "razonSocial": "VISIÓN ARTE CONSTRUCTORA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1363",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78071957-5",
+        "receptorNombre": "VISIÓN ARTE CONSTRUCTORA SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77937684-2",
+    "razonSocial": "VISIÓN 400 SPA",
+    "documento": "Factura Electronica",
+    "folio": "1362",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77937684-2",
+        "receptorNombre": "VISIÓN 400 SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78300694-4",
+    "razonSocial": "TREPAVERDE SPA",
+    "documento": "Factura Electronica",
+    "folio": "1361",
+    "fecha": "2026-07-28",
+    "montoTotal": 72000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78300694-4",
+        "receptorNombre": "TREPAVERDE SPA",
+        "montoNeto": 60504,
+        "montoIva": 11496
+      }
+    }
+  },
+  {
+    "rutReceptor": "78203384-0",
+    "razonSocial": "TRANSPORTES Y SERVICIOS YERSIN CARRASQUEL SPA",
+    "documento": "Factura Electronica",
+    "folio": "1360",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78203384-0",
+        "receptorNombre": "TRANSPORTES Y SERVICIOS YERSIN CARRASQUEL SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77951107-3",
+    "razonSocial": "TRANSPORTES MJM SPA",
+    "documento": "Factura Electronica",
+    "folio": "1358",
+    "fecha": "2026-07-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77951107-3",
+        "receptorNombre": "TRANSPORTES MJM SPA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "77994026-8",
+    "razonSocial": "TELEX SPA",
+    "documento": "Factura Electronica",
+    "folio": "1357",
+    "fecha": "2026-07-28",
+    "montoTotal": 119000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77994026-8",
+        "receptorNombre": "TELEX SPA",
+        "montoNeto": 100000,
+        "montoIva": 19000
+      }
+    }
+  },
+  {
+    "rutReceptor": "78165722-0",
+    "razonSocial": "SVETLANA HIGIENE Y LIMPIEZA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1355",
+    "fecha": "2026-07-28",
+    "montoTotal": 72000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78165722-0",
+        "receptorNombre": "SVETLANA HIGIENE Y LIMPIEZA SPA",
+        "montoNeto": 60504,
+        "montoIva": 11496
+      }
+    }
+  },
+  {
+    "rutReceptor": "78109295-9",
+    "razonSocial": "SOLUCIONES GASTRONOMICAS RK SPA",
+    "documento": "Factura Electronica",
+    "folio": "1353",
+    "fecha": "2026-07-28",
+    "montoTotal": 72000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78109295-9",
+        "receptorNombre": "SOLUCIONES GASTRONOMICAS RK SPA",
+        "montoNeto": 60504,
+        "montoIva": 11496
+      }
+    }
+  },
+  {
+    "rutReceptor": "78184026-2",
+    "razonSocial": "SERVICIOS Y MAQUINARIAS INDUSTRIALES SPA",
+    "documento": "Factura Electronica",
+    "folio": "1352",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78184026-2",
+        "receptorNombre": "SERVICIOS Y MAQUINARIAS INDUSTRIALES SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78134009-K",
+    "razonSocial": "SERVICIOS PROFESIONALES DE ASESORÍA COMERCIAL ISIDORA TORRES E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "1351",
+    "fecha": "2026-07-28",
+    "montoTotal": 95200,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78134009-K",
+        "receptorNombre": "SERVICIOS PROFESIONALES DE ASESORÍA COMERCIAL ISIDORA TORRES E.I.R.L.",
+        "montoNeto": 80000,
+        "montoIva": 15200
+      }
+    }
+  },
+  {
+    "rutReceptor": "77901312-K",
+    "razonSocial": "SERVICIOS DE SALUD REICHEL LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1350",
+    "fecha": "2026-07-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77901312-K",
+        "receptorNombre": "SERVICIOS DE SALUD REICHEL LIMITADA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78198808-1",
+    "razonSocial": "SARAOS SYSTEMS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1349",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78198808-1",
+        "receptorNombre": "SARAOS SYSTEMS SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "76916588-6",
+    "razonSocial": "SANHUEZA MANZO SPA",
+    "documento": "Factura Electronica",
+    "folio": "1347",
+    "fecha": "2026-07-28",
+    "montoTotal": 47600,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "76916588-6",
+        "receptorNombre": "SANHUEZA MANZO SPA",
+        "montoNeto": 40000,
+        "montoIva": 7600
+      }
+    }
+  },
+  {
+    "rutReceptor": "77847561-8",
+    "razonSocial": "SALUD & RENDIMIENTO SPA",
+    "documento": "Factura Electronica",
+    "folio": "1346",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77847561-8",
+        "receptorNombre": "SALUD & RENDIMIENTO SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78000714-1",
+    "razonSocial": "ROCKPERO SPA",
+    "documento": "Factura Electronica",
+    "folio": "1345",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78000714-1",
+        "receptorNombre": "ROCKPERO SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78209313-4",
+    "razonSocial": "R&R COMIDA RÁPIDA ROGER PAREDES E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "1343",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78209313-4",
+        "receptorNombre": "R&R COMIDA RÁPIDA ROGER PAREDES E.I.R.L.",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77807269-6",
+    "razonSocial": "PROHOME SPA",
+    "documento": "Factura Electronica",
+    "folio": "1341",
+    "fecha": "2026-07-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77807269-6",
+        "receptorNombre": "PROHOME SPA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78384658-6",
+    "razonSocial": "PIPAZ SERVICE SPA",
+    "documento": "Factura Electronica",
+    "folio": "1340",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78384658-6",
+        "receptorNombre": "PIPAZ SERVICE SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78394454-5",
+    "razonSocial": "PARTY CARS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1338",
+    "fecha": "2026-07-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78394454-5",
+        "receptorNombre": "PARTY CARS SPA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78064752-3",
+    "razonSocial": "P Y P INGENIEROS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1336",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78064752-3",
+        "receptorNombre": "P Y P INGENIEROS SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "77862673-K",
+    "razonSocial": "P & R - FIJACIÓN-SUJECIÓN SPA",
+    "documento": "Factura Electronica",
+    "folio": "1335",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77862673-K",
+        "receptorNombre": "P & R - FIJACIÓN-SUJECIÓN SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78142901-5",
+    "razonSocial": "NUTRICIÓN ÁLVARO FARFÁN DIAZ SPA",
+    "documento": "Factura Electronica",
+    "folio": "1334",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78142901-5",
+        "receptorNombre": "NUTRICIÓN ÁLVARO FARFÁN DIAZ SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77839119-8",
+    "razonSocial": "NEW MEDIA PRODUCTION SPA",
+    "documento": "Factura Electronica",
+    "folio": "1333",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77839119-8",
+        "receptorNombre": "NEW MEDIA PRODUCTION SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78064268-8",
+    "razonSocial": "NATY RUZ COSMETICS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1332",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78064268-8",
+        "receptorNombre": "NATY RUZ COSMETICS SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77944164-4",
+    "razonSocial": "MR. PASTA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1331",
+    "fecha": "2026-07-28",
+    "montoTotal": 214200,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77944164-4",
+        "receptorNombre": "MR. PASTA SPA",
+        "montoNeto": 180000,
+        "montoIva": 34200
+      }
+    }
+  },
+  {
+    "rutReceptor": "76587522-6",
+    "razonSocial": "MODOESPACIAL SPA",
+    "documento": "Factura Electronica",
+    "folio": "1329",
+    "fecha": "2026-07-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "76587522-6",
+        "receptorNombre": "MODOESPACIAL SPA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78262268-4",
+    "razonSocial": "MIARTE SPA",
+    "documento": "Factura Electronica",
+    "folio": "1328",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78262268-4",
+        "receptorNombre": "MIARTE SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78271993-9",
+    "razonSocial": "MGC INVERSIÓNES SPA",
+    "documento": "Factura Electronica",
+    "folio": "1327",
+    "fecha": "2026-07-28",
+    "montoTotal": 71400,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78271993-9",
+        "receptorNombre": "MGC INVERSIÓNES SPA",
+        "montoNeto": 60000,
+        "montoIva": 11400
+      }
+    }
+  },
+  {
+    "rutReceptor": "77871935-5",
+    "razonSocial": "MCB CONSULTORES SPA",
+    "documento": "Factura Electronica",
+    "folio": "1326",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77871935-5",
+        "receptorNombre": "MCB CONSULTORES SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78419568-6",
+    "razonSocial": "MAJU MINING SAFETY SPA",
+    "documento": "Factura Electronica",
+    "folio": "1324",
+    "fecha": "2026-07-28",
+    "montoTotal": 72000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78419568-6",
+        "receptorNombre": "MAJU MINING SAFETY SPA",
+        "montoNeto": 60504,
+        "montoIva": 11496
+      }
+    }
+  },
+  {
+    "rutReceptor": "77837991-0",
+    "razonSocial": "MAESTRANZA CVM SPA",
+    "documento": "Factura Electronica",
+    "folio": "1323",
+    "fecha": "2026-07-28",
+    "montoTotal": 119000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77837991-0",
+        "receptorNombre": "MAESTRANZA CVM SPA",
+        "montoNeto": 100000,
+        "montoIva": 19000
+      }
+    }
+  },
+  {
+    "rutReceptor": "78271922-K",
+    "razonSocial": "M.A.V.A CONSTRUCCIONES SPA",
+    "documento": "Factura Electronica",
+    "folio": "1321",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78271922-K",
+        "receptorNombre": "M.A.V.A CONSTRUCCIONES SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78093448-4",
+    "razonSocial": "LORETO VARGAS MINIMARKET E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "1320",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78093448-4",
+        "receptorNombre": "LORETO VARGAS MINIMARKET E.I.R.L.",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78119754-8",
+    "razonSocial": "KEOA GROUP SPA",
+    "documento": "Factura Electronica",
+    "folio": "1318",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78119754-8",
+        "receptorNombre": "KEOA GROUP SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "77937906-K",
+    "razonSocial": "KALA MARÍA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1317",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77937906-K",
+        "receptorNombre": "KALA MARÍA SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78155728-5",
+    "razonSocial": "JOSÉ MARTINEZ CONSTRUCCIONES E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "1316",
+    "fecha": "2026-07-28",
+    "montoTotal": 72000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78155728-5",
+        "receptorNombre": "JOSÉ MARTINEZ CONSTRUCCIONES E.I.R.L.",
+        "montoNeto": 60504,
+        "montoIva": 11496
+      }
+    }
+  },
+  {
+    "rutReceptor": "78020281-5",
+    "razonSocial": "JLT MAQUINARIA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1315",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78020281-5",
+        "receptorNombre": "JLT MAQUINARIA SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78056692-2",
+    "razonSocial": "JL MONTERO SPA",
+    "documento": "Factura Electronica",
+    "folio": "1313",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78056692-2",
+        "receptorNombre": "JL MONTERO SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78221287-7",
+    "razonSocial": "FAY INVERSIONES INMOBILIARIAS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1312",
+    "fecha": "2026-07-28",
+    "montoTotal": 142800,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78221287-7",
+        "receptorNombre": "FAY INVERSIONES INMOBILIARIAS SPA",
+        "montoNeto": 120000,
+        "montoIva": 22800
+      }
+    }
+  },
+  {
+    "rutReceptor": "77336372-2",
+    "razonSocial": "INVERSIONES MUNDO CANINO SPA",
+    "documento": "Factura Electronica",
+    "folio": "1310",
+    "fecha": "2026-07-28",
+    "montoTotal": 107100,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77336372-2",
+        "receptorNombre": "INVERSIONES MUNDO CANINO SPA",
+        "montoNeto": 90000,
+        "montoIva": 17100
+      }
+    }
+  },
+  {
+    "rutReceptor": "77955178-4",
+    "razonSocial": "INVERSIONES AYE SPA",
+    "documento": "Factura Electronica",
+    "folio": "1309",
+    "fecha": "2026-07-28",
+    "montoTotal": 72000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77955178-4",
+        "receptorNombre": "INVERSIONES AYE SPA",
+        "montoNeto": 60504,
+        "montoIva": 11496
+      }
+    }
+  },
+  {
+    "rutReceptor": "78434722-2",
+    "razonSocial": "INGENIERÍA CODIGOCERO SPA",
+    "documento": "Factura Electronica",
+    "folio": "1308",
+    "fecha": "2026-07-28",
+    "montoTotal": 71995,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78434722-2",
+        "receptorNombre": "INGENIERÍA CODIGOCERO SPA",
+        "montoNeto": 60500,
+        "montoIva": 11495
+      }
+    }
+  },
+  {
+    "rutReceptor": "78305639-9",
+    "razonSocial": "ILUMINA VENTANAS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1307",
+    "fecha": "2026-07-28",
+    "montoTotal": 72000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78305639-9",
+        "receptorNombre": "ILUMINA VENTANAS SPA",
+        "montoNeto": 60504,
+        "montoIva": 11496
+      }
+    }
+  },
+  {
+    "rutReceptor": "19087425-7",
+    "razonSocial": "IGNACIO MARCELO TORRES MENDEZ",
+    "documento": "Factura Electronica",
+    "folio": "1306",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "19087425-7",
+        "receptorNombre": "IGNACIO MARCELO TORRES MENDEZ",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78074297-6",
+    "razonSocial": "HR INSIGHT CONSULTING SPA",
+    "documento": "Factura Electronica",
+    "folio": "1305",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78074297-6",
+        "receptorNombre": "HR INSIGHT CONSULTING SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "77139803-0",
+    "razonSocial": "HI-GREEN-TECH SPA",
+    "documento": "Factura Electronica",
+    "folio": "1304",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77139803-0",
+        "receptorNombre": "HI-GREEN-TECH SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "77992106-9",
+    "razonSocial": "H&S EQUIPOS Y HERRAMIENTAS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1303",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77992106-9",
+        "receptorNombre": "H&S EQUIPOS Y HERRAMIENTAS SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78076436-8",
+    "razonSocial": "GRUPO CONSTRUCTOR G&D SPA",
+    "documento": "Factura Electronica",
+    "folio": "1302",
+    "fecha": "2026-07-28",
+    "montoTotal": 470050,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78076436-8",
+        "receptorNombre": "GRUPO CONSTRUCTOR G&D SPA",
+        "montoNeto": 395000,
+        "montoIva": 75050
+      }
+    }
+  },
+  {
+    "rutReceptor": "77493132-5",
+    "razonSocial": "GOK PRODUCCIONES LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1300",
+    "fecha": "2026-07-28",
+    "montoTotal": 30000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77493132-5",
+        "receptorNombre": "GOK PRODUCCIONES LIMITADA",
+        "montoNeto": 25210,
+        "montoIva": 4790
+      }
+    }
+  },
+  {
+    "rutReceptor": "78217204-2",
+    "razonSocial": "GOMEZ & UNDURRAGA ACCESORIOS LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1299",
+    "fecha": "2026-07-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78217204-2",
+        "receptorNombre": "GOMEZ & UNDURRAGA ACCESORIOS LIMITADA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78458308-2",
+    "razonSocial": "GLOBALINK ENVIOS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1298",
+    "fecha": "2026-07-28",
+    "montoTotal": 71995,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78458308-2",
+        "receptorNombre": "GLOBALINK ENVIOS SPA",
+        "montoNeto": 60500,
+        "montoIva": 11495
+      }
+    }
+  },
+  {
+    "rutReceptor": "78226429-K",
+    "razonSocial": "GERARDO LAGOS PUBLICIDAD E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "1297",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78226429-K",
+        "receptorNombre": "GERARDO LAGOS PUBLICIDAD E.I.R.L.",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "65191713-1",
+    "razonSocial": "FUNDACION GATO DÖLZ",
+    "documento": "Factura Electronica",
+    "folio": "1296",
+    "fecha": "2026-07-28",
+    "montoTotal": 30000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "65191713-1",
+        "receptorNombre": "FUNDACION GATO DÖLZ",
+        "montoNeto": 25210,
+        "montoIva": 4790
+      }
+    }
+  },
+  {
+    "rutReceptor": "78123097-9",
+    "razonSocial": "GATICA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1295",
+    "fecha": "2026-07-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78123097-9",
+        "receptorNombre": "GATICA SPA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78044219-0",
+    "razonSocial": "GAC INGENIERIA ELECTRICA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1293",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78044219-0",
+        "receptorNombre": "GAC INGENIERIA ELECTRICA SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "13737254-1",
+    "razonSocial": "FRANCIS PAOLA ANDRADE MONGE",
+    "documento": "Factura Electronica",
+    "folio": "1292",
+    "fecha": "2026-07-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "13737254-1",
+        "receptorNombre": "FRANCIS PAOLA ANDRADE MONGE",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78370168-5",
+    "razonSocial": "FIAMMA COGNITIVA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1291",
+    "fecha": "2026-07-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78370168-5",
+        "receptorNombre": "FIAMMA COGNITIVA SPA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "77891881-1",
+    "razonSocial": "FERNANDO FERRUZOLA CONSTRUCCIONES SPA",
+    "documento": "Factura Electronica",
+    "folio": "1289",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77891881-1",
+        "receptorNombre": "FERNANDO FERRUZOLA CONSTRUCCIONES SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78446463-6",
+    "razonSocial": "FERLU TALLER CREATIVO SPA",
+    "documento": "Factura Electronica",
+    "folio": "1287",
+    "fecha": "2026-07-28",
+    "montoTotal": 71995,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78446463-6",
+        "receptorNombre": "FERLU TALLER CREATIVO SPA",
+        "montoNeto": 60500,
+        "montoIva": 11495
+      }
+    }
+  },
+  {
+    "rutReceptor": "77782757-K",
+    "razonSocial": "EXOVET LABORATORIO LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1286",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77782757-K",
+        "receptorNombre": "EXOVET LABORATORIO LIMITADA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78097527-K",
+    "razonSocial": "EVANO SPA",
+    "documento": "Factura Electronica",
+    "folio": "1284",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78097527-K",
+        "receptorNombre": "EVANO SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "76832793-9",
+    "razonSocial": "ESTUDIO CREATIVO ALTAVOZ LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1283",
+    "fecha": "2026-07-28",
+    "montoTotal": 178500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "76832793-9",
+        "receptorNombre": "ESTUDIO CREATIVO ALTAVOZ LIMITADA",
+        "montoNeto": 150000,
+        "montoIva": 28500
+      }
+    }
+  },
+  {
+    "rutReceptor": "77877135-7",
+    "razonSocial": "ESMEC SPA",
+    "documento": "Factura Electronica",
+    "folio": "1282",
+    "fecha": "2026-07-28",
+    "montoTotal": 47600,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77877135-7",
+        "receptorNombre": "ESMEC SPA",
+        "montoNeto": 40000,
+        "montoIva": 7600
+      }
+    }
+  },
+  {
+    "rutReceptor": "77849617-8",
+    "razonSocial": "EMPRESA S&J SPA",
+    "documento": "Factura Electronica",
+    "folio": "1280",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77849617-8",
+        "receptorNombre": "EMPRESA S&J SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78116703-7",
+    "razonSocial": "FÁBRICA DE EMPANADAS LA PERLA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1279",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78116703-7",
+        "receptorNombre": "FÁBRICA DE EMPANADAS LA PERLA SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77835246-K",
+    "razonSocial": "ELECTROPROYECT LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1278",
+    "fecha": "2026-07-28",
+    "montoTotal": 119000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77835246-K",
+        "receptorNombre": "ELECTROPROYECT LIMITADA",
+        "montoNeto": 100000,
+        "montoIva": 19000
+      }
+    }
+  },
+  {
+    "rutReceptor": "77756574-5",
+    "razonSocial": "ECYCLING SPA",
+    "documento": "Factura Electronica",
+    "folio": "1276",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77756574-5",
+        "receptorNombre": "ECYCLING SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77756586-9",
+    "razonSocial": "DISEÑO E IMPRESIÓN SKINPACK SPA",
+    "documento": "Factura Electronica",
+    "folio": "1274",
+    "fecha": "2026-07-28",
+    "montoTotal": 47600,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77756586-9",
+        "receptorNombre": "DISEÑO E IMPRESIÓN SKINPACK SPA",
+        "montoNeto": 40000,
+        "montoIva": 7600
+      }
+    }
+  },
+  {
+    "rutReceptor": "77904639-7",
+    "razonSocial": "CONSTRUCCIONES Y REMODELACIONES S.V. SPA",
+    "documento": "Factura Electronica",
+    "folio": "1273",
+    "fecha": "2026-07-28",
+    "montoTotal": 47600,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77904639-7",
+        "receptorNombre": "CONSTRUCCIONES Y REMODELACIONES S.V. SPA",
+        "montoNeto": 40000,
+        "montoIva": 7600
+      }
+    }
+  },
+  {
+    "rutReceptor": "78169825-3",
+    "razonSocial": "CONGELADOS Y GOURMET B&B SPA",
+    "documento": "Factura Electronica",
+    "folio": "1272",
+    "fecha": "2026-07-28",
+    "montoTotal": 72000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78169825-3",
+        "receptorNombre": "CONGELADOS Y GOURMET B&B SPA",
+        "montoNeto": 60504,
+        "montoIva": 11496
+      }
+    }
+  },
+  {
+    "rutReceptor": "77854265-K",
+    "razonSocial": "COMPAÑÍA DE SOLUCIONES SERVICIOS Y ARQUITECTURA TECNOLÓGICA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1270",
+    "fecha": "2026-07-28",
+    "montoTotal": 83300,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77854265-K",
+        "receptorNombre": "COMPAÑÍA DE SOLUCIONES SERVICIOS Y ARQUITECTURA TECNOLÓGICA SPA",
+        "montoNeto": 70000,
+        "montoIva": 13300
+      }
+    }
+  },
+  {
+    "rutReceptor": "77149046-8",
+    "razonSocial": "COMERCIALIZADORA TORRES ASEO KEEN LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1269",
+    "fecha": "2026-07-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77149046-8",
+        "receptorNombre": "COMERCIALIZADORA TORRES ASEO KEEN LIMITADA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "77852939-4",
+    "razonSocial": "COMERCIALIZADORA ROVIRA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1268",
+    "fecha": "2026-07-28",
+    "montoTotal": 416500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77852939-4",
+        "receptorNombre": "COMERCIALIZADORA ROVIRA SPA",
+        "montoNeto": 350000,
+        "montoIva": 66500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78209664-8",
+    "razonSocial": "COMERCIALIZADORA HUMERES URIBE LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1266",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78209664-8",
+        "receptorNombre": "COMERCIALIZADORA HUMERES URIBE LIMITADA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78285107-1",
+    "razonSocial": "COMERCIALIZADORA AM MARQUEZ SPA",
+    "documento": "Factura Electronica",
+    "folio": "1265",
+    "fecha": "2026-07-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78285107-1",
+        "receptorNombre": "COMERCIALIZADORA AM MARQUEZ SPA",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "77758342-5",
+    "razonSocial": "COMERCIALIZADORA A&R LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1263",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77758342-5",
+        "receptorNombre": "COMERCIALIZADORA A&R LIMITADA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77852913-0",
+    "razonSocial": "COMERCIAL OFTATO SPA",
+    "documento": "Factura Electronica",
+    "folio": "1261",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77852913-0",
+        "receptorNombre": "COMERCIAL OFTATO SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "78418797-7",
+    "razonSocial": "COMERCIAL C&H SPA",
+    "documento": "Factura Electronica",
+    "folio": "1260",
+    "fecha": "2026-07-28",
+    "montoTotal": 72000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78418797-7",
+        "receptorNombre": "COMERCIAL C&H SPA",
+        "montoNeto": 60504,
+        "montoIva": 11496
+      }
+    }
+  },
+  {
+    "rutReceptor": "77938492-6",
+    "razonSocial": "CLIMATIZACION Y MONTAJES VIDELA & TORO SPA",
+    "documento": "Factura Electronica",
+    "folio": "1259",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77938492-6",
+        "receptorNombre": "CLIMATIZACION Y MONTAJES VIDELA & TORO SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77886719-2",
+    "razonSocial": "CIVIL PRO SPA",
+    "documento": "Factura Electronica",
+    "folio": "1258",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77886719-2",
+        "receptorNombre": "CIVIL PRO SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78228538-6",
+    "razonSocial": "CARVAJAL Y ANACONA KINESIOLOGIA LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1257",
+    "fecha": "2026-07-28",
+    "montoTotal": 83300,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78228538-6",
+        "receptorNombre": "CARVAJAL Y ANACONA KINESIOLOGIA LIMITADA",
+        "montoNeto": 70000,
+        "montoIva": 13300
+      }
+    }
+  },
+  {
+    "rutReceptor": "77787781-K",
+    "razonSocial": "CAREGIVER SPA",
+    "documento": "Factura Electronica",
+    "folio": "1255",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77787781-K",
+        "receptorNombre": "CAREGIVER SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "77902854-2",
+    "razonSocial": "BZF CAMBIOS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1254",
+    "fecha": "2026-07-28",
+    "montoTotal": 71400,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77902854-2",
+        "receptorNombre": "BZF CAMBIOS SPA",
+        "montoNeto": 60000,
+        "montoIva": 11400
+      }
+    }
+  },
+  {
+    "rutReceptor": "78248387-0",
+    "razonSocial": "AYV INVERSIONES SPA",
+    "documento": "Factura Electronica",
+    "folio": "1253",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78248387-0",
+        "receptorNombre": "AYV INVERSIONES SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "65198387-8",
+    "razonSocial": "ASOCIACIÓN SEMBRANDO UN SUEÑO",
+    "documento": "Factura Electronica",
+    "folio": "1251",
+    "fecha": "2026-07-28",
+    "montoTotal": 119000,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "65198387-8",
+        "receptorNombre": "ASOCIACIÓN SEMBRANDO UN SUEÑO",
+        "montoNeto": 100000,
+        "montoIva": 19000
+      }
+    }
+  },
+  {
+    "rutReceptor": "78016722-K",
+    "razonSocial": "APRENDIZAJE ACTIVO SPA",
+    "documento": "Factura Electronica",
+    "folio": "1250",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78016722-K",
+        "receptorNombre": "APRENDIZAJE ACTIVO SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78229656-6",
+    "razonSocial": "ANITA MARÍA VEAS VILLAGRA ASESORÍAS E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "1249",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78229656-6",
+        "receptorNombre": "ANITA MARÍA VEAS VILLAGRA ASESORÍAS E.I.R.L.",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "78473616-4",
+    "razonSocial": "ANGHELLS CHACIN FOTOGRAFIA E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "1247",
+    "fecha": "2026-07-28",
+    "montoTotal": 59500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78473616-4",
+        "receptorNombre": "ANGHELLS CHACIN FOTOGRAFIA E.I.R.L.",
+        "montoNeto": 50000,
+        "montoIva": 9500
+      }
+    }
+  },
+  {
+    "rutReceptor": "77941998-3",
+    "razonSocial": "ANDRES IVAN LEIVA LURASCHI, TATUAJES E.I.R.L.",
+    "documento": "Factura Electronica",
+    "folio": "1245",
+    "fecha": "2026-07-28",
+    "montoTotal": 47600,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77941998-3",
+        "receptorNombre": "ANDRES IVAN LEIVA LURASCHI, TATUAJES E.I.R.L.",
+        "montoNeto": 40000,
+        "montoIva": 7600
+      }
+    }
+  },
+  {
+    "rutReceptor": "78137171-8",
+    "razonSocial": "AMIL SPA",
+    "documento": "Factura Electronica",
+    "folio": "1244",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78137171-8",
+        "receptorNombre": "AMIL SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77087108-5",
+    "razonSocial": "AGUSTO LE GLACE SPA",
+    "documento": "Factura Electronica",
+    "folio": "1242",
+    "fecha": "2026-07-28",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77087108-5",
+        "receptorNombre": "AGUSTO LE GLACE SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77984639-3",
+    "razonSocial": "A&L SOLUCIONES Y SERVICIOS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1241",
+    "fecha": "2026-07-28",
+    "montoTotal": 11900,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77984639-3",
+        "receptorNombre": "A&L SOLUCIONES Y SERVICIOS SPA",
+        "montoNeto": 10000,
+        "montoIva": 1900
+      }
+    }
+  },
+  {
+    "rutReceptor": "76832793-9",
+    "razonSocial": "ESTUDIO CREATIVO ALTAVOZ LIMITADA",
+    "documento": "Factura Electronica",
+    "folio": "1240",
+    "fecha": "2026-07-15",
+    "montoTotal": 178500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "76832793-9",
+        "receptorNombre": "ESTUDIO CREATIVO ALTAVOZ LIMITADA",
+        "montoNeto": 150000,
+        "montoIva": 28500
+      }
+    }
+  },
+  {
+    "rutReceptor": "77464081-9",
+    "razonSocial": "BOSQUE Y TIERRA SPA",
+    "documento": "Factura Electronica",
+    "folio": "1239",
+    "fecha": "2026-07-15",
+    "montoTotal": 325265,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77464081-9",
+        "receptorNombre": "BOSQUE Y TIERRA SPA",
+        "montoNeto": 273332,
+        "montoIva": 51933
+      }
+    }
+  },
+  {
+    "rutReceptor": "76441225-7",
+    "razonSocial": "IMPRESORA Y COMERCIAL SKINPACK LIMITADA",
+    "documento": "Nota de Credito Electronica",
+    "folio": "122",
+    "fecha": "2026-07-13",
+    "montoTotal": 178500,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "76441225-7",
+        "receptorNombre": "IMPRESORA Y COMERCIAL SKINPACK LIMITADA",
+        "montoNeto": 150000,
+        "montoIva": 28500
+      }
+    }
+  },
+  {
+    "rutReceptor": "78418049-2",
+    "razonSocial": "VIMAGU TRUCKS SPA",
+    "documento": "Factura Electronica",
+    "folio": "1238",
+    "fecha": "2026-07-10",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "78418049-2",
+        "receptorNombre": "VIMAGU TRUCKS SPA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
+  },
+  {
+    "rutReceptor": "77911337-K",
+    "razonSocial": "SOCIEDAD COMERCIAL ERICES Y TRESKOW LIMITADA",
+    "documento": "Nota de Credito Electronica",
+    "folio": "121",
+    "fecha": "2026-07-06",
+    "montoTotal": 35700,
+    "estado": "Documento Emitido",
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "emisorRut": "78.306.207-0",
+        "receptorRut": "77911337-K",
+        "receptorNombre": "SOCIEDAD COMERCIAL ERICES Y TRESKOW LIMITADA",
+        "montoNeto": 30000,
+        "montoIva": 5700
+      }
+    }
   }
 ]

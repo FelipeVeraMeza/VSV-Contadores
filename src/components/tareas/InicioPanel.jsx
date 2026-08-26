@@ -18,18 +18,13 @@ import {
     Loader2, AlertTriangle, Clock, CheckCircle2, ListChecks, Flame,
     Plus, FolderPlus, CalendarDays, User, ArrowRight, Circle,
 } from 'lucide-react';
+import { PRIO_BARRA } from '@/components/tareas/estilos';
 import { resumenInicioApi, completarTareaApi } from '@/services/crmService';
 import { toast } from '@/components/ui/use-toast';
 
 const getUser = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
 const getSessionId = () => getUser().sessionId;
 
-const PRIO = {
-    critica: 'text-red-700 bg-red-600/15 border-red-600/40',
-    alta: 'text-orange-600 bg-orange-500/10 border-orange-500/30',
-    media: 'text-amber-600 bg-amber-500/10 border-amber-500/30',
-    baja: 'text-slate-500 bg-slate-500/10 border-slate-400/30',
-};
 
 // "hace 3 días" / "en 2 días" dice más que una fecha cuando lo que importa es
 // cuánto falta o cuánto se pasó.
@@ -68,6 +63,9 @@ const FilaTarea = ({ t, atrasada, onAbrir, onCompletar, cerrando }) => {
             title="Abrir la tarea"
             className="flex items-center gap-2.5 px-3 py-2 border-b border-[#f5f0e8] last:border-0 cursor-pointer hover:bg-slate-50 transition-colors"
         >
+            {/* La prioridad, misma barra que en la lista y el árbol. */}
+            <span className={`w-[3px] h-4 rounded-full shrink-0 ${PRIO_BARRA[t.prioridad] || PRIO_BARRA.media}`}
+                  title={`Prioridad ${t.prioridad || 'media'}`} />
             {/* El botón NO propaga el clic: si lo hiciera, finalizar abriría
                 además el detalle de la tarea recién cerrada. */}
             {hecha ? (
@@ -98,9 +96,6 @@ const FilaTarea = ({ t, atrasada, onAbrir, onCompletar, cerrando }) => {
                     )}
                 </div>
             </div>
-            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 ${PRIO[t.prioridad] || PRIO.media}`}>
-                {t.prioridad}
-            </span>
             <span className={`text-[10px] font-bold shrink-0 w-20 text-right ${atrasada ? 'text-red-600' : 'text-slate-500'}`}>
                 {cuandoTexto(hecha ? t.completedAt : t.venceAt)}
             </span>

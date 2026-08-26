@@ -4,8 +4,9 @@ import {
     Plus, Search, Loader2, X, Trash2, Check, Clock, Folder, FolderPlus,
     MessageSquare, ListChecks, ChevronRight, Circle, CircleDot, CheckCircle2,
     Flag, User, Users, Calendar, Send, Paperclip, Download, Eye, Archive, ArchiveRestore,
-    List, Kanban, LayoutTemplate, Network
+    List, Kanban, LayoutTemplate, Network, SlidersHorizontal,
 } from 'lucide-react';
+import { PRIO, PRIO_BARRA, ESTADO_PUNTO, iniciales } from '@/components/tareas/estilos';
 import TableroTareas from '@/components/tareas/TableroTareas';
 import ArbolTareas from '@/components/tareas/ArbolTareas';
 import { usePlantillas, SelectorPlantillas, PlantillasModal } from '@/components/tareas/PlantillasTarea';
@@ -26,13 +27,26 @@ const getSessionId = () => getUser().sessionId;
 // las restricciones CHECK de la base. Si acá aparece uno que la base no acepta,
 // el guardado revienta; si falta uno que la base sí acepta, la fila se dibuja
 // sin color ni etiqueta.
-const PRIO = {
-    critica: 'text-red-700 bg-red-600/15 border-red-600/40',
-    alta: 'text-orange-600 bg-orange-500/10 border-orange-500/30',
-    media: 'text-amber-600 bg-amber-500/10 border-amber-500/30',
-    baja: 'text-slate-500 bg-slate-500/10 border-slate-400/30',
-};
+
+// LA PRIORIDAD, COMO BARRA EN EL MARGEN.
+//
+// Antes era una pastilla con borde en medio de la fila. De pastilla se lee una
+// por una; de barra en el borde izquierdo se lee la columna entera de un
+// vistazo vertical, que es como uno pregunta «¿que hay urgente?». Ademas
+// devuelve 74 px de ancho al titulo, que es lo que uno si necesita leer.
+
+// EL ESTADO, COMO PUNTO DE COLOR.
+//
+// «ACTIVA» en mayusculas y negrita, repetido diez veces, compite con el titulo
+// —que es lo unico que uno lee de verdad—. Un punto dice lo mismo sin gritar.
+
+// Iniciales para el circulito del responsable. Es como se distingue a una
+// persona de un vistazo en Asana, Jira, Linear y GitHub: «VV» se reconoce sin
+// leer, «VICTOR IGNACIO VOLLAIRE SILVA» hay que leerlo entero.
 const PRIORIDADES = ['baja', 'media', 'alta', 'critica'];
+
+// Los desplegables del panel de filtros, todos iguales.
+const SEL = 'bg-[#f6f3ee] border border-transparent rounded-md px-2 py-1 text-[12px] text-slate-600 outline-none focus:border-emerald-500 cursor-pointer';
 const ESTADO_META = {
     pendiente: { label: 'Activa', icon: Circle, c: 'text-blue-600' },
     en_proceso: { label: 'En proceso', icon: CircleDot, c: 'text-amber-600' },
@@ -746,7 +760,7 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                     vuelva un árbol ilegible; el tercero lo rechaza el servidor. */}
                 {data.puedeTenerSubtareas !== false && (
                 <div>
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5 mb-2"><ListChecks size={13} /> Subtareas ({subs.filter(s => s.estado === 'completada').length}/{subs.length})</span>
+                    <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5 mb-2"><ListChecks size={13} /> Subtareas ({subs.filter(s => s.estado === 'completada').length}/{subs.length})</span>
                     {/* Cada subtarea muestra lo mismo que se ve de una tarea en la
                         lista: quién responde, para cuándo, con qué prioridad y si
                         trae cosas dentro. Antes solo se veía el título, así que
@@ -757,6 +771,16 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                             const hecha = s.estado === 'completada';
                             return (
                             <div key={s.id} className="flex items-start gap-2 group rounded-lg px-1.5 py-1 hover:bg-slate-50">
+                                {/* La prioridad, MISMA barra que en la lista y no una
+                                    pastilla al otro extremo de la fila. Con 225
+                                    subtareas colgando de una sola tarea, esa columna
+                                    de pastillas rojas «CRÍTICA» era lo primero que se
+                                    veía del panel, por encima de los títulos. Acá se
+                                    lee igual de rápido recorriendo el borde, y no
+                                    compite con nada. */}
+                                <span className={`w-[3px] self-stretch min-h-[16px] rounded-full shrink-0 ${
+                                    hecha ? 'bg-transparent' : (PRIO_BARRA[s.prioridad] || PRIO_BARRA.media)}`}
+                                    title={`Prioridad ${s.prioridad || 'media'}`} />
                                 <button onClick={() => toggleSub(s)} className="shrink-0 mt-0.5" title={hecha ? 'Reabrir' : 'Finalizar'}>
                                     {hecha ? <CheckCircle2 size={15} className="text-emerald-500" /> : <Circle size={15} className="text-slate-300 hover:text-emerald-500" />}
                                 </button>
@@ -796,11 +820,6 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                                         </div>
                                     )}
                                 </div>
-                                {!hecha && s.prioridad && s.prioridad !== 'media' && (
-                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 mt-0.5 ${PRIO[s.prioridad]}`}>
-                                        {s.prioridad === 'critica' ? 'crítica' : s.prioridad}
-                                    </span>
-                                )}
                                 <button onClick={() => delSub(s)} title="Eliminar la subtarea" className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0 mt-0.5"><Trash2 size={12} /></button>
                             </div>
                             );
@@ -935,6 +954,88 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
 // traía un interruptor Mías/Equipo adentro; ahora la sección ya decidió el
 // alcance y volver a preguntarlo dentro solo confunde (y permitía quedar en
 // "Equipo" dentro de "Mis tareas").
+// ============================================================================
+// LA REJILLA DE LA LISTA · una sola definicion para el encabezado y las filas
+// ----------------------------------------------------------------------------
+// Antes cada fila era un `flex` de dos lineas y nada quedaba alineado entre una
+// fila y la siguiente, asi que la lista no se podia recorrer con la mirada.
+// Ahora es una tabla: columnas fijas y una fila por tarea.
+//
+// COLUMNAS QUE SE COLAPSAN SOLAS
+// Si TODAS las filas visibles tienen el mismo proyecto —o el mismo
+// responsable— esa columna no informa nada: repite el mismo texto hacia abajo
+// gastando 148 px de ancho que el titulo si necesita. Cuando pasa, la columna
+// se quita y el valor se muestra UNA vez encima de la lista.
+//
+// Por eso hay cuatro plantillas y no una. No se pueden armar al vuelo con
+// `grid-cols-[${n}px]`: Tailwind solo compila las clases que ve escritas en el
+// archivo, asi que una clase construida en tiempo de ejecucion no existiria en
+// el CSS. (Es la misma trampa que ya esta anotada en ArbolTareas con la
+// sangria.) Escritas a mano, las cuatro existen.
+//
+//   base  · terminar · titulo ................ acciones
+//   md    · + responsable + vence
+//   lg    · + estado
+//   xl    · + proyecto
+// ============================================================================
+const REJILLAS = {
+    // con proyecto · con responsable
+    'PR': [
+        'grid-cols-[34px_minmax(0,1fr)_46px]',
+        'md:grid-cols-[34px_minmax(0,1fr)_140px_78px_46px]',
+        'lg:grid-cols-[34px_minmax(0,1fr)_140px_78px_100px_46px]',
+        'xl:grid-cols-[34px_minmax(0,1fr)_148px_140px_78px_100px_46px]',
+    ],
+    // sin proyecto · con responsable
+    'R': [
+        'grid-cols-[34px_minmax(0,1fr)_46px]',
+        'md:grid-cols-[34px_minmax(0,1fr)_140px_78px_46px]',
+        'lg:grid-cols-[34px_minmax(0,1fr)_140px_78px_100px_46px]',
+        'xl:grid-cols-[34px_minmax(0,1fr)_140px_78px_100px_46px]',
+    ],
+    // con proyecto · sin responsable
+    'P': [
+        'grid-cols-[34px_minmax(0,1fr)_46px]',
+        'md:grid-cols-[34px_minmax(0,1fr)_78px_46px]',
+        'lg:grid-cols-[34px_minmax(0,1fr)_78px_100px_46px]',
+        'xl:grid-cols-[34px_minmax(0,1fr)_148px_78px_100px_46px]',
+    ],
+    // sin proyecto · sin responsable
+    '': [
+        'grid-cols-[34px_minmax(0,1fr)_46px]',
+        'md:grid-cols-[34px_minmax(0,1fr)_78px_46px]',
+        'lg:grid-cols-[34px_minmax(0,1fr)_78px_100px_46px]',
+        'xl:grid-cols-[34px_minmax(0,1fr)_78px_100px_46px]',
+    ],
+};
+const rejilla = (verProy, verResp) =>
+    ['grid items-center gap-x-3', ...REJILLAS[(verProy ? 'P' : '') + (verResp ? 'R' : '')]].join(' ');
+
+// Un valor que se repite en TODAS las filas no es informacion, es ruido.
+// Devuelve ese valor cuando todas coinciden; null cuando hay variedad (o
+// cuando hay una sola fila, donde colapsar no ahorra nada y solo confunde).
+const valorUnico = (lista, campo) => {
+    if (lista.length < 2) return null;
+    const primero = lista[0]?.[campo];
+    if (!primero) return null;
+    return lista.every(t => t[campo] === primero) ? primero : null;
+};
+
+const EncabezadoLista = ({ verProy, verResp }) => {
+    const th = 'text-[10px] font-semibold uppercase tracking-wider text-slate-400';
+    return (
+        <div className={`${rejilla(verProy, verResp)} px-4 py-2 border-b border-[#efe8dd] bg-[#fbf9f6] sticky top-0 z-20`}>
+            <span />
+            <span className={th}>Tarea</span>
+            {verProy && <span className={`hidden xl:block ${th}`}>Proyecto</span>}
+            {verResp && <span className={`hidden md:block ${th}`}>Responsable</span>}
+            <span className={`hidden md:block ${th}`}>Vence</span>
+            <span className={`hidden lg:block ${th}`}>Estado</span>
+            <span />
+        </div>
+    );
+};
+
 const TareasPanel = ({ modo = 'todas' }) => {
     const [searchParams, setSearchParams] = useSearchParams();
     const [tareas, setTareas] = useState([]);
@@ -991,6 +1092,21 @@ const TareasPanel = ({ modo = 'todas' }) => {
     // subtarea se ve dentro de su madre— pero es la forma de volver a encontrar
     // una que se reabrió y quedó fuera de «Finalizadas».
     const [conSubtareas, setConSubtareas] = useState(false);
+
+    // El panel de filtros arranca cerrado: son seis controles que casi siempre
+    // estan en su valor por omision, y tenerlos siempre a la vista costaba dos
+    // filas de pantalla todos los dias por algo que se toca una vez por semana.
+    const [panelFiltros, setPanelFiltros] = useState(false);
+
+    // La columna de proyectos, ahora opcional y recordada. Ocupaba 180 px fijos
+    // para tres lineas; el filtro por proyecto vive en el panel de filtros, y
+    // administrarlos se hace en la seccion Proyectos, que es su lugar.
+    const [verProyectos, setVerProyectos] = useState(() => {
+        try { return localStorage.getItem('tareasVerProyectos') === '1'; } catch { return false; }
+    });
+    React.useEffect(() => {
+        try { localStorage.setItem('tareasVerProyectos', verProyectos ? '1' : '0'); } catch { /* incognito */ }
+    }, [verProyectos]);
 
     // Agrupar la lista. '' = una sola lista corrida, como estaba.
     const [agrupar, setAgrupar] = useState('');
@@ -1119,6 +1235,16 @@ const TareasPanel = ({ modo = 'todas' }) => {
     };
     const hayFiltros = !!(busqAplicada || filtroPrioridad || filtroResponsable || proyectoSel || filtroEstado !== 'activas');
 
+    // Cuantos filtros hay puestos, para el numerito del boton. Sin esto,
+    // esconder los filtros los haria invisibles: alguien deja el responsable
+    // filtrado, cierra el panel, y al dia siguiente cree que faltan tareas.
+    // El buscador no cuenta: se ve escrito en su propia caja.
+    const filtrosPuestos = [
+        filtroPrioridad, filtroResponsable, proyectoSel,
+        filtroEstado !== 'activas' ? filtroEstado : '',
+        conSubtareas ? 'sub' : '', agrupar,
+    ].filter(Boolean).length;
+
     // Usuarios de la organización (responsable / colaboradores)
     useEffect(() => {
         (async () => {
@@ -1130,6 +1256,16 @@ const TareasPanel = ({ modo = 'todas' }) => {
     // muestra. Dejar un segundo filtro en el navegador solo servía para que los
     // dos se desincronizaran y el contador no calzara con la lista.
     const lista = tareas;
+
+    // Las columnas que no informan nada porque todas las filas dicen lo mismo.
+    // Se recalculan con la lista: al filtrar por un proyecto, esa columna pasa a
+    // repetirse y se colapsa sola, que es justo cuando sobra.
+    const proyectoComun = valorUnico(lista, 'proyectoNombre');
+    const responsableComun = valorUnico(lista, 'responsableNombre');
+    const verProy = !proyectoComun;
+    const verResp = !responsableComun;
+    const REJ = rejilla(verProy, verResp);
+
 
     // AGRUPAR · parte la misma lista en bloques con encabezado.
     // Se agrupa sobre lo que ya está en pantalla, no sobre el total: con la
@@ -1239,94 +1375,107 @@ const TareasPanel = ({ modo = 'todas' }) => {
 
     return (
         <div className="flex-1 min-h-0 flex flex-col gap-3 h-full">
-            {/* Toolbar */}
-            <div className="flex items-center justify-between flex-wrap gap-2 flex-shrink-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                    {/* Lista o tablero. Es lo primero de la barra porque cambia
-                        todo lo que viene después. */}
-                    <div className="flex bg-white border border-[#efe8dd] rounded-lg p-0.5">
-                        {[['lista', 'Lista', List], ['tablero', 'Tablero', Kanban], ['arbol', 'Árbol', Network]].map(([v, label, Icono]) => (
-                            <button key={v} onClick={() => cambiarVista(v)} title={`Ver como ${label.toLowerCase()}`}
-                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider transition-colors ${vista === v ? 'bg-slate-900 text-white' : 'text-slate-500 hover:text-slate-900'}`}>
-                                <Icono size={12} /> {label}
-                            </button>
-                        ))}
-                    </div>
-                    {/* PROYECTO · el mismo filtro que la columna de la izquierda.
-                        Esa columna es `hidden md:flex`: en un teléfono no existe,
-                        así que ahí NO había forma de ver solo las tareas de un
-                        proyecto —«solo creación de empresas», por ejemplo—. Este
-                        selector aparece justamente donde la columna no está. */}
-                    <select
-                        value={proyectoSel}
-                        onChange={(e) => elegirProyecto(e.target.value)}
-                        aria-label="Filtrar por proyecto"
-                        className={`md:hidden px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider cursor-pointer max-w-[190px] ${proyectoSel ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-white border-[#efe8dd] text-slate-500'}`}>
-                        <option value="">Todos los proyectos</option>
-                        {proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-                    </select>
+            {/* ═══ BARRA ÚNICA ═══
+                Antes eran dos grupos que se repartían el ancho y, al no caber,
+                se envolvían en dos y tres filas de pastillas negras en
+                mayúsculas: unos 140 px de adornos antes de la primera tarea.
+                Ahora: vista, un botón de filtros que dice cuántos hay puestos,
+                el buscador y crear. El resto se despliega solo si se pide. */}
+            <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+                {/* Vista. Control segmentado, no tres botones sueltos. */}
+                <div className="flex bg-[#f6f3ee] rounded-lg p-0.5">
+                    {[['lista', 'Lista', List], ['tablero', 'Tablero', Kanban], ['arbol', 'Árbol', Network]].map(([v, label, Icono]) => (
+                        <button key={v} onClick={() => cambiarVista(v)} title={`Ver como ${label.toLowerCase()}`}
+                            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-semibold transition-colors ${
+                                vista === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+                            <Icono size={12} /> {label}
+                        </button>
+                    ))}
+                </div>
 
-                    {/* En el tablero las columnas ya separan por estado, así que
-                        filtrar por estado además no tiene sentido. */}
+                {/* Filtros, con el número de los que están puestos. Es lo que
+                    permite tenerlos guardados sin perder de vista que existen. */}
+                <button onClick={() => setPanelFiltros(v => !v)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] font-semibold transition-colors ${
+                        panelFiltros || filtrosPuestos ? 'border-emerald-500/60 text-emerald-700 bg-emerald-50' : 'border-[#efe8dd] text-slate-600 bg-white hover:border-slate-300'}`}>
+                    <SlidersHorizontal size={13} /> Filtros
+                    {filtrosPuestos > 0 && (
+                        <span className="bg-emerald-600 text-white rounded-full text-[10px] font-bold px-1.5 leading-4">{filtrosPuestos}</span>
+                    )}
+                </button>
+
+                <div className="flex-1" />
+
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                    <input value={busq} onChange={(e) => setBusq(e.target.value)}
+                        placeholder="Buscar…"
+                        className="w-44 lg:w-56 bg-white border border-[#efe8dd] rounded-lg pl-9 pr-3 py-1.5 text-[12px] outline-none focus:border-emerald-500" />
+                </div>
+                <button onClick={() => setCrear(true)}
+                    className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 py-1.5 text-[12px] font-semibold">
+                    <Plus size={14} /> Tarea
+                </button>
+            </div>
+
+            {/* ═══ LOS FILTROS, DESPLEGADOS ═══ */}
+            {panelFiltros && (
+                <div className="flex items-center gap-2 flex-wrap flex-shrink-0 bg-white border border-[#efe8dd] rounded-xl px-3 py-2.5">
                     {(vista === 'tablero'
                         ? [['todas', 'Vivas'], ['archivadas', 'Archivadas']]
                         : [['activas', 'Activas'], ['completada', 'Finalizadas'], ['todas', 'Todas'], ['archivadas', 'Archivadas']]
                     ).map(([f, label]) => (
                         <button key={f} onClick={() => setFiltroEstado(f)}
-                            className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider ${filtroEstado === f ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-white border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
+                            className={`px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors ${
+                                filtroEstado === f ? 'bg-emerald-600 text-white' : 'bg-[#f6f3ee] text-slate-600 hover:text-slate-900'}`}>
                             {label}
                         </button>
                     ))}
-                    {/* CON SUBTAREAS.
-                        La lista muestra solo las tareas madre: una subtarea se ve
-                        dentro de la suya. El problema aparecía al REABRIR una
-                        subtarea finalizada — dejaba de estar en «Finalizadas», que
-                        es la única lista que las muestra sueltas, y no quedaba
-                        forma de entrar en ella. Con esto se encuentran siempre.
-                        En el árbol no se ofrece porque ahí ya salen todas. */}
-                    {vista !== 'arbol' && (
-                        <button onClick={() => setConSubtareas(v => !v)}
-                            title="Mostrar también las subtareas sueltas, con el nombre de su tarea madre"
-                            className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider ${conSubtareas ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-white border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
-                            Con subtareas
-                        </button>
-                    )}
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                    {/* Agrupar solo aplica a la lista: el tablero ya está agrupado
-                        por estado y agrupar dos veces no se puede dibujar. */}
+
+                    <span className="w-px h-5 bg-[#efe8dd]" />
+
+                    <select value={proyectoSel} onChange={(e) => elegirProyecto(e.target.value)} aria-label="Filtrar por proyecto"
+                        className={SEL}>
+                        <option value="">Todos los proyectos</option>
+                        {proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                    </select>
+                    <select value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)} title="Filtrar por prioridad"
+                        className={`${SEL} capitalize`}>
+                        <option value="">Toda prioridad</option>
+                        {PRIORIDADES.map(p => <option key={p} value={p}>{p === 'critica' ? 'crítica' : p}</option>)}
+                    </select>
+                    <select value={filtroResponsable} onChange={(e) => setFiltroResponsable(e.target.value)} title="Filtrar por responsable"
+                        className={`${SEL} max-w-[10rem]`}>
+                        <option value="">Todo responsable</option>
+                        {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
+                    </select>
                     {vista === 'lista' && (
-                        <select value={agrupar} onChange={(e) => setAgrupar(e.target.value)}
-                            title="Agrupar la lista"
-                            className="bg-white border border-[#efe8dd] rounded-lg px-2 py-2 text-[11px] text-slate-600 outline-none focus:border-emerald-500 cursor-pointer">
+                        <select value={agrupar} onChange={(e) => setAgrupar(e.target.value)} title="Agrupar la lista" className={SEL}>
                             <option value="">Sin agrupar</option>
                             <option value="proyecto">Agrupar: proyecto</option>
                             <option value="responsable">Agrupar: responsable</option>
                             <option value="prioridad">Agrupar: prioridad</option>
                         </select>
                     )}
-                    {/* Filtros de RF-TA-12. Se resuelven en el servidor. */}
-                    <select value={filtroPrioridad} onChange={(e) => setFiltroPrioridad(e.target.value)}
-                        title="Filtrar por prioridad"
-                        className="bg-white border border-[#efe8dd] rounded-lg px-2 py-2 text-[11px] text-slate-600 outline-none focus:border-emerald-500 cursor-pointer capitalize">
-                        <option value="">Prioridad: todas</option>
-                        {PRIORIDADES.map(p => <option key={p} value={p}>{p === 'critica' ? 'crítica' : p}</option>)}
-                    </select>
-                    <select value={filtroResponsable} onChange={(e) => setFiltroResponsable(e.target.value)}
-                        title="Filtrar por responsable"
-                        className="bg-white border border-[#efe8dd] rounded-lg px-2 py-2 text-[11px] text-slate-600 outline-none focus:border-emerald-500 cursor-pointer max-w-[10rem]">
-                        <option value="">Responsable: todos</option>
-                        {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
-                    </select>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-                        <input value={busq} onChange={(e) => setBusq(e.target.value)}
-                            placeholder="Buscar tarea, proyecto o persona..."
-                            className="w-56 bg-white border border-[#efe8dd] rounded-lg pl-9 pr-3 py-2 text-xs outline-none focus:border-emerald-500" />
-                    </div>
-                    <button onClick={() => setCrear(true)} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest"><Plus size={14} /> Tarea</button>
+                    {/* La lista muestra solo tareas madre. Esto saca a la luz las
+                        subtareas sueltas, con el nombre de la suya al lado. */}
+                    {vista !== 'arbol' && (
+                        <button onClick={() => setConSubtareas(v => !v)}
+                            title="Mostrar también las subtareas sueltas, con el nombre de su tarea madre"
+                            className={`px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors ${
+                                conSubtareas ? 'bg-emerald-600 text-white' : 'bg-[#f6f3ee] text-slate-600 hover:text-slate-900'}`}>
+                            Con subtareas
+                        </button>
+                    )}
+
+                    <div className="flex-1" />
+                    <button onClick={() => setVerProyectos(v => !v)}
+                        title="Mostrar u ocultar la columna de proyectos"
+                        className="text-[12px] font-medium text-slate-500 hover:text-emerald-700 flex items-center gap-1.5">
+                        <Folder size={13} /> {verProyectos ? 'Ocultar' : 'Ver'} proyectos
+                    </button>
                 </div>
-            </div>
+            )}
 
             {/* Cuántas calzan con el filtro. El total lo cuenta el servidor, así
                 que no miente cuando la lista está paginada. */}
@@ -1346,7 +1495,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
 
             <div className="flex-1 min-h-0 flex gap-3 lg:gap-4">
                 {/* Proyectos */}
-                <div className="w-44 xl:w-52 shrink-0 bg-white border border-[#efe8dd] rounded-2xl p-3 flex-col gap-2 hidden md:flex overflow-y-auto">
+                <div className={`w-44 xl:w-52 shrink-0 bg-white border border-[#efe8dd] rounded-2xl p-3 flex-col gap-2 overflow-y-auto ${verProyectos ? 'hidden md:flex' : 'hidden'}`}>
                     <div className="flex items-center justify-between">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Folder size={12} /> Proyectos</span>
                         <button onClick={() => setNuevoProy(v => !v)} className="text-slate-400 hover:text-emerald-600"><FolderPlus size={14} /></button>
@@ -1381,6 +1530,35 @@ const TareasPanel = ({ modo = 'todas' }) => {
                     {/* El tablero desplaza en horizontal y maneja el alto de sus
                         columnas; la lista desplaza en vertical. Son dos modos de
                         scroll distintos, así que el contenedor cambia con la vista. */}
+                    {/* Los encabezados solo en la LISTA: el tablero y el árbol
+                        tienen su propia forma y unas columnas encima no
+                        corresponderían a nada. */}
+                    {!loading && lista.length > 0 && vista === 'lista' && (
+                        <>
+                            {/* Lo que TODAS comparten, dicho una vez. Sin esto,
+                                colapsar la columna escondería el dato y la
+                                pantalla parecería haber perdido información. */}
+                            {(proyectoComun || responsableComun) && (
+                                <div className="flex items-center gap-3 flex-wrap px-4 py-1.5 border-b border-[#efe8dd] bg-white text-[11px] text-slate-500">
+                                    <span className="text-slate-400">Todas:</span>
+                                    {proyectoComun && (
+                                        <span className="flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />{proyectoComun}
+                                        </span>
+                                    )}
+                                    {responsableComun && (
+                                        <span className="flex items-center gap-1.5">
+                                            <span className="w-4 h-4 rounded-full bg-slate-100 text-slate-600 text-[8px] font-bold flex items-center justify-center">
+                                                {iniciales(responsableComun)}
+                                            </span>{responsableComun}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                            <EncabezadoLista verProy={verProy} verResp={verResp} />
+                        </>
+                    )}
+
                     <div className={`flex-1 min-h-0 ${vista === 'tablero' ? 'flex flex-col p-2 gap-2' : 'overflow-y-auto'}`}>
                         {loading ? (
                             <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="animate-spin" /></div>
@@ -1414,43 +1592,89 @@ const TareasPanel = ({ modo = 'todas' }) => {
                             const vencida = t.venceAt && new Date(t.venceAt) < new Date() && t.estado !== 'completada';
                             return (
                                 <div key={t.id} onClick={() => setSelId(t.id)}
-                                    className={`flex items-center gap-3 px-4 py-3 border-b border-[#efe8dd] cursor-pointer hover:bg-slate-50 group ${selId === t.id ? 'bg-emerald-500/5' : ''}`}>
-                                    <button onClick={(e) => completar(t, e)} title="Finalizar" className="shrink-0">
-                                        {t.estado === 'completada' ? <CheckCircle2 size={17} className="text-emerald-500" /> : <Circle size={17} className="text-slate-300 hover:text-emerald-500" />}
-                                    </button>
-                                    <div className="min-w-0 flex-1">
-                                        <p className={`text-xs font-bold truncate ${t.estado === 'completada' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{t.titulo}</p>
-                                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                            {/* De qué tarea cuelga. Solo aparece en las subtareas, y
-                                                es lo que hace legible el filtro "Finalizadas": ahí
-                                                salen sueltas y «EDITAR PLANTILLAS» sin contexto no
-                                                dice de dónde salió. Se puede pulsar para subir a la
-                                                madre sin buscarla en la lista. */}
-                                            {t.padreTitulo && (
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); setSelId(t.parentId); }}
-                                                    title={`Abrir la tarea madre: ${t.padreTitulo}`}
-                                                    className="text-[9px] font-bold text-slate-400 hover:text-emerald-600 flex items-center gap-0.5 max-w-[14rem] truncate"
-                                                >
-                                                    <ChevronRight size={9} className="rotate-180 shrink-0" />
-                                                    <span className="truncate">{t.padreTitulo}</span>
-                                                </button>
-                                            )}
-                                            {t.proyectoNombre && <span className="text-[9px] font-bold" style={{ color: t.proyectoColor || '#199b4d' }}>● {t.proyectoNombre}</span>}
-                                            {t.responsableNombre && <span className="text-[9px] text-slate-500 flex items-center gap-0.5"><User size={9} /> {t.responsableNombre}</span>}
-                                            {t.subtareasTotal > 0 && <span className="text-[9px] text-slate-500 flex items-center gap-0.5"><ListChecks size={9} /> {t.subtareasHechas}/{t.subtareasTotal}</span>}
-                                            {t.comentarios > 0 && <span className="text-[9px] text-slate-500 flex items-center gap-0.5"><MessageSquare size={9} /> {t.comentarios}</span>}
-                                        </div>
+                                    className={`${REJ} px-4 py-2 border-b border-[#efe8dd] cursor-pointer hover:bg-slate-50 group ${selId === t.id ? 'bg-emerald-500/5' : ''}`}>
+
+                                    {/* 1 · Prioridad (barra) + terminar */}
+                                    <div className="flex items-center gap-2">
+                                        <span className={`w-[3px] h-4 rounded-full shrink-0 ${PRIO_BARRA[t.prioridad] || PRIO_BARRA.media}`}
+                                              title={`Prioridad ${t.prioridad}`} />
+                                        <button onClick={(e) => completar(t, e)} title="Finalizar" className="shrink-0">
+                                            {t.estado === 'completada'
+                                                ? <CheckCircle2 size={15} className="text-emerald-500" />
+                                                : <Circle size={15} className="text-slate-300 hover:text-emerald-500" />}
+                                        </button>
                                     </div>
-                                    {t.venceAt && <span className={`text-[9px] font-bold shrink-0 ${vencida ? 'text-red-600' : 'text-slate-500'}`}>{fechaCorta(t.venceAt)}</span>}
-                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 ${PRIO[t.prioridad] || PRIO.media}`}>{t.prioridad}</span>
-                                    <span className={`text-[9px] font-black uppercase shrink-0 ${meta.c} hidden lg:inline`}>{meta.label}</span>
-                                    <button onClick={(e) => archivar(t, e)}
-                                        title={t.archivada ? 'Devolver a la lista' : 'Archivar (no se borra)'}
-                                        className="text-slate-300 hover:text-amber-600 opacity-0 group-hover:opacity-100 shrink-0">
-                                        {t.archivada ? <ArchiveRestore size={13} /> : <Archive size={13} />}
-                                    </button>
-                                    <button onClick={(e) => eliminar(t, e)} title="Eliminar definitivamente" className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={13} /></button>
+
+                                    {/* 2 · Título en UNA línea. La madre va DELANTE
+                                           y no debajo: con 225 subtareas, media
+                                           pantalla eran segundos renglones. */}
+                                    <div className="min-w-0 flex items-center gap-2">
+                                        {t.padreTitulo && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setSelId(t.parentId); }}
+                                                title={`Abrir la tarea madre: ${t.padreTitulo}`}
+                                                className="hidden sm:flex text-[11px] text-slate-400 hover:text-emerald-600 items-center gap-1 max-w-[8rem] shrink-0"
+                                            >
+                                                <span className="truncate">{t.padreTitulo}</span>
+                                                <ChevronRight size={10} className="shrink-0" />
+                                            </button>
+                                        )}
+                                        <span className={`text-[13px] font-semibold truncate ${t.estado === 'completada' ? 'text-slate-400 line-through' : 'text-slate-900'}`}>{t.titulo}</span>
+                                        {t.subtareasTotal > 0 && (
+                                            <span className="text-[10px] text-slate-400 flex items-center gap-0.5 shrink-0 tabular-nums" title="Subtareas">
+                                                <ListChecks size={10} /> {t.subtareasHechas}/{t.subtareasTotal}
+                                            </span>
+                                        )}
+                                        {t.comentarios > 0 && (
+                                            <span className="text-[10px] text-slate-400 flex items-center gap-0.5 shrink-0 tabular-nums" title="Comentarios">
+                                                <MessageSquare size={10} /> {t.comentarios}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* 3 · Proyecto — solo si aporta */}
+                                    {verProy && <span className="hidden xl:flex items-center gap-1.5 min-w-0">
+                                        {t.proyectoNombre ? (
+                                            <>
+                                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: t.proyectoColor || '#199b4d' }} />
+                                                <span className="text-[11px] text-slate-600 truncate">{t.proyectoNombre}</span>
+                                            </>
+                                        ) : <span className="text-slate-300 text-[11px]">—</span>}
+                                    </span>}
+
+                                    {/* 4 · Responsable — solo si aporta */}
+                                    {verResp && <span className="hidden md:flex items-center gap-1.5 min-w-0">
+                                        {t.responsableNombre ? (
+                                            <>
+                                                <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold flex items-center justify-center shrink-0">
+                                                    {iniciales(t.responsableNombre)}
+                                                </span>
+                                                <span className="text-[11px] text-slate-600 truncate">{t.responsableNombre}</span>
+                                            </>
+                                        ) : <span className="text-slate-300 text-[11px]">—</span>}
+                                    </span>}
+
+                                    {/* 5 · Vence */}
+                                    <span className={`hidden md:block text-[11px] tabular-nums ${vencida ? 'text-red-600 font-semibold' : 'text-slate-500'}`}>
+                                        {t.venceAt ? fechaCorta(t.venceAt) : <span className="text-slate-300">—</span>}
+                                    </span>
+
+                                    {/* 6 · Estado, punto + palabra en tono normal */}
+                                    <span className="hidden lg:flex items-center gap-1.5">
+                                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ESTADO_PUNTO[t.estado] || ESTADO_PUNTO.pendiente}`} />
+                                        <span className="text-[11px] text-slate-600">{meta.label}</span>
+                                    </span>
+
+                                    {/* 7 · Acciones */}
+                                    <div className="flex items-center justify-end gap-1.5">
+                                        <button onClick={(e) => archivar(t, e)}
+                                            title={t.archivada ? 'Devolver a la lista' : 'Archivar (no se borra)'}
+                                            className="text-slate-300 hover:text-amber-600 opacity-0 group-hover:opacity-100">
+                                            {t.archivada ? <ArchiveRestore size={13} /> : <Archive size={13} />}
+                                        </button>
+                                        <button onClick={(e) => eliminar(t, e)} title="Eliminar definitivamente"
+                                            className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><Trash2 size={13} /></button>
+                                    </div>
                                 </div>
                             );
                             })}
