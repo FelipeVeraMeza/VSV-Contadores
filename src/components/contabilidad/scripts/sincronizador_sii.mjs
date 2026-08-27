@@ -42,19 +42,46 @@ export async function ejecutarRobotSII({
     console.log(`\n🚀 Iniciando Robot SII | Rango: ${_mesDesde}/${_anioDesde} → ${_mesHasta}/${_anioHasta}`);
     console.log(`   Representante: ${rutLogin}${rutEmpresa ? ` | Empresa a seleccionar: ${rutEmpresa}` : ' | (sin empresa que seleccionar)'}`);
 
-    // El navegador se muestra por defecto (headless: false) para poder seguir lo
-    // que hace el robot en el portal. Dos variables opcionales del .env:
+    // ⚠️ EN EL SERVIDOR ESTO NO ES OPCIONAL.
+    //
+    // Railway corre el proceso como root, y Chrome se niega a arrancar como root
+    // si no se le pasa `--no-sandbox`: muere con «Running as root without
+    // --no-sandbox is not supported» y el usuario ve «ERROR EN EL ROBOT» sin
+    // ninguna pista de qué pasó. Reportado el 27-08-2026 al extraer de
+    // ASOCIACIÓN SEMBRANDO UN SUEÑO.
+    //
+    // Y con el sandbox arreglado seguiría fallando por lo otro: en producción no
+    // hay pantalla donde dibujar una ventana, así que allá va oculto SIEMPRE, sin
+    // depender de que alguien se acuerde de poner SII_HEADLESS. Es exactamente lo
+    // que ya hacían los orquestadores de `sii_core` —esta copia se quedó atrás—.
+    //
+    // En el computador de uno se mantiene el comportamiento de antes: ventana
+    // visible para poder seguir al robot en el portal. Dos variables opcionales:
     //
     //   SII_SLOWMO=250   → frena cada acción 250 ms, para alcanzar a leer las
     //                      pantallas. Sirve sobre todo para ver el paso de
     //                      selección de empresa. Sin la variable, va a full.
     //   SII_HEADLESS=1   → lo corre oculto (para cuando ya no haga falta mirar).
+    //
+    // No se pregunta solo por NODE_ENV: si en el despliegue no está puesta esa
+    // variable, la ventana se intentaría abrir igual y el robot moriría por lo
+    // otro («Missing X server or $DISPLAY»). Un Linux sin DISPLAY no tiene dónde
+    // dibujar una ventana, y eso es cierto lo diga o no una variable de entorno.
+    const sinPantalla = process.platform === 'linux' && !process.env.DISPLAY;
+    const enServidor = process.env.NODE_ENV === 'production' || sinPantalla;
     const slowMo = parseInt(process.env.SII_SLOWMO) || 0;
     const browser = await puppeteer.launch({
-        headless: process.env.SII_HEADLESS === '1',
+        headless: enServidor ? true : process.env.SII_HEADLESS === '1',
         slowMo,
         defaultViewport: null,
-        args: ['--start-maximized']
+        args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            // El /dev/shm de un contenedor es de 64 MB y a Chrome no le alcanza:
+            // sin esto se cae solo en medio de la extracción.
+            '--disable-dev-shm-usage',
+            '--start-maximized',
+        ],
     });
     if (slowMo) console.log(`🐢 Modo lento: ${slowMo} ms por acción.`);
 

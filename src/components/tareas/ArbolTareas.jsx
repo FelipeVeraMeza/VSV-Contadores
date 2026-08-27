@@ -50,7 +50,7 @@ const nombreCorto = (n) => {
 // ---------------------------------------------------------------------
 // Una fila. Se dibuja a sí misma y después a sus hijos, un nivel más adentro.
 // ---------------------------------------------------------------------
-const Fila = ({ t, nivel, hijosDe, colapsados, alternar, selId, onAbrir, onCompletar }) => {
+const Fila = ({ t, nivel, hijosDe, colapsados, alternar, selId, onAbrir }) => {
     const hijos = hijosDe.get(t.id) || [];
     const abierto = !colapsados.has(t.id);
     const meta = ESTADO[t.estado] || ESTADO.pendiente;
@@ -87,12 +87,15 @@ const Fila = ({ t, nivel, hijosDe, colapsados, alternar, selId, onAbrir, onCompl
                     </button>
                 ) : <span className="w-[14px] shrink-0" />}
 
-                {/* Completar de un clic, igual que en la lista. */}
-                <button onClick={(e) => onCompletar(t, e)} title="Finalizar" className="shrink-0">
+                {/* EL ESTADO, NO UN BOTÓN. Igual que en la lista: era un clic
+                    sin confirmación y con eso se cerraron tareas por accidente.
+                    El clic cae en la fila, que abre la tarea; el estado se
+                    cambia adentro. Ver `deshacer.jsx`. */}
+                <span className="shrink-0" title={`${meta.label} · ábrela para cambiar el estado`}>
                     {hecha
                         ? <CheckCircle2 size={15} className="text-emerald-500" />
-                        : <Circle size={15} className="text-slate-300 hover:text-emerald-500" />}
-                </button>
+                        : <Circle size={15} className="text-slate-300 group-hover:text-slate-400" />}
+                </span>
 
                 <span className={`flex-1 min-w-0 truncate text-[12px] ${
                     hecha ? 'text-slate-400 line-through' : 'text-slate-900'
@@ -136,13 +139,13 @@ const Fila = ({ t, nivel, hijosDe, colapsados, alternar, selId, onAbrir, onCompl
             {abierto && hijos.map(h => (
                 <Fila key={h.id} t={h} nivel={nivel + 1}
                     hijosDe={hijosDe} colapsados={colapsados} alternar={alternar}
-                    selId={selId} onAbrir={onAbrir} onCompletar={onCompletar} />
+                    selId={selId} onAbrir={onAbrir} />
             ))}
         </>
     );
 };
 
-const ArbolTareas = ({ tareas, selId, onAbrir, onCompletar }) => {
+const ArbolTareas = ({ tareas, selId, onAbrir }) => {
     // Se guardan los CONTRAÍDOS y no los desplegados: el árbol nace abierto,
     // que es justamente lo que se venía a buscar acá («verlo todo de una»).
     const [colapsados, setColapsados] = useState(() => new Set());
@@ -215,7 +218,7 @@ const ArbolTareas = ({ tareas, selId, onAbrir, onCompletar }) => {
                     {g.tareas.map(t => (
                         <Fila key={t.id} t={t} nivel={0}
                             hijosDe={hijosDe} colapsados={colapsados} alternar={alternar}
-                            selId={selId} onAbrir={onAbrir} onCompletar={onCompletar} />
+                            selId={selId} onAbrir={onAbrir} />
                     ))}
                 </div>
             ))}

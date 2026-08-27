@@ -154,6 +154,50 @@ un cliente que no se hizo también es información.
 
 ---
 
+## 5 bis. La llamada no vive en la pantalla
+
+**El problema.** La sala estaba dentro de `ReunionesPanel`, que se monta bajo el
+`<Outlet />` del router. Bastaba ir a Contabilidad —o a otra sección de Tickets,
+que además remonta por `key`— para que React desmontara el panel y su cleanup
+llamara a `dispose()`. Traducido: mirar cualquier otra pantalla **colgaba la
+reunión**, y sin aviso.
+
+**Por qué no bastaba con subir el estado.** El video de Jitsi es un `<iframe>`.
+Moverlo de un padre a otro en el DOM lo recarga —el navegador reinicia el
+documento de adentro— y eso es exactamente colgar y volver a entrar. La caja del
+video **no puede cambiar de sitio en el DOM, nunca**.
+
+**Cómo quedó.** `LlamadaProvider` se monta en `MainPage`, que es la ruta padre de
+todos los módulos y no se desmonta al navegar. Dibuja **una sola caja**, en un
+portal a `<body>`, que vive lo que dura la llamada. Lo único que cambia son sus
+coordenadas:
+
+| Modo | Cuándo | Qué se ve |
+|---|---|---|
+| **Acoplada** | estás en Tickets → Reuniones | ocupa el panel entero, igual que antes |
+| **Flotando** | te fuiste a otro módulo, o la minimizaste | ventanita en una esquina, arrastrable, con «volver» y «salir» |
+
+La pantalla de Reuniones ya no dibuja ningún video: deja un **hueco** vacío
+(`registrarHueco`) y el proveedor lo mide cuadro a cuadro con
+`getBoundingClientRect` y se dibuja justo encima. Se mide cada cuadro y no al
+cambiar de ruta porque el hueco se mueve por cosas que no avisan: el menú lateral
+que se colapsa, la animación de entrada de la pantalla, la ventana que cambia de
+tamaño.
+
+Con la llamada se subieron el cronómetro, el botón de salir y **la nota de lo
+acordado**: si colgar desde la ventanita flotante no la pidiera, se perdería justo
+lo que hace que las reuniones estén en el sistema.
+
+⚠️ **Al tocar `SalaJitsi.jsx`**: su efecto depende SOLO de `sala`, `dominio` y
+`jwt`. Si dependiera además de una función del padre, cualquier redibujo la traería
+con otra identidad, el efecto se volvería a ejecutar y su cleanup colgaría la
+llamada. Por eso lo demás se lee de refs.
+
+Recargar la página (F5) sigue cortando —el navegador tira el iframe—; ahora al
+menos el navegador pregunta antes.
+
+---
+
 ## 6. Dónde vive cada cosa
 
 | Pieza | Archivo |
@@ -164,6 +208,7 @@ un cliente que no se hizo también es información.
 | Montaje | `src/server.js` → `/api/reuniones` |
 | Llamadas | `src/services/reunionesService.js` |
 | Pantalla | `src/components/reuniones/ReunionesPanel.jsx` |
+| **La llamada en curso** | `src/contexts/LlamadaContext.jsx` (montado en `MainPage`) |
 | El video | `src/components/reuniones/SalaJitsi.jsx` |
 | Menú | `src/components/Tareas.jsx` (sección `reuniones`) · `src/components/MainPage.jsx` |
 

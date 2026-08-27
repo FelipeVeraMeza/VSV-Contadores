@@ -16,6 +16,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth.jsx';
 import { SiiProvider } from '@/contexts/SiiContext.jsx';
+// LA LLAMADA VA ACÁ ARRIBA, no dentro de una pantalla.
+// MainPage es la ruta padre de todos los módulos: no se desmonta al navegar
+// entre ellos. Poner el proveedor acá es lo que hace que una videollamada
+// sobreviva a irse a Contabilidad y volver. Ver el archivo para el porqué.
+import { LlamadaProvider } from '@/contexts/LlamadaContext.jsx';
 import DelayedLoader from './ui/DelayedLoader';
 import GlobalCompanySelector from '@/components/ui/GlobalCompanySelector'; // Importación del nuevo selector
 import AvisoFacturacion from '@/components/ui/AvisoFacturacion';
@@ -210,7 +215,7 @@ function MainPage() {
   const rail = railCollapsed && windowWidth >= 1024;
 
   return (
-    <>
+    <LlamadaProvider>
       <Helmet><title>VSV Pro | Sistema Contable</title></Helmet>
       <div className="flex h-screen overflow-hidden bg-gradient-to-br from-[#fdfcf9] via-[#f4eee3] to-[#eadfce] font-sans">
         
@@ -365,7 +370,7 @@ function MainPage() {
           </main>
         </div>
       </div>
-    </>
+    </LlamadaProvider>
   );
 }
 

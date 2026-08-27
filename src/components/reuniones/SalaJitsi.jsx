@@ -24,6 +24,18 @@
 // moderators have arrived»). Por eso el sistema apunta a un servidor sin
 // autenticación.
 // =====================================================================
+//
+// ⚠️ ESTE COMPONENTE SE MONTA UNA SOLA VEZ POR LLAMADA, y no lo monta la
+// pantalla de Reuniones sino `src/contexts/LlamadaContext.jsx`, arriba del
+// router. Es lo que permite cambiar de módulo sin cortar. Dos reglas que se
+// desprenden de eso y que hay que respetar al tocar este archivo:
+//   · el efecto de abajo depende SOLO de la sala, el dominio y el token. Si
+//     dependiera además de una función del padre —`onColgar`, por ejemplo—,
+//     cualquier redibujo del padre la traería con otra identidad, el efecto se
+//     volvería a ejecutar y su cleanup colgaría la llamada. Por eso lo que
+//     cambia se lee de refs.
+//   · el <div> de abajo no puede cambiar de padre en el DOM: mover un iframe lo
+//     recarga, que es colgar y volver a entrar.
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
 
@@ -75,8 +87,15 @@ const SalaJitsi = ({ sala, dominio, jwt, titulo, nombreUsuario, correoUsuario, o
     // funciona aunque incrustar no funcione.
     const [atascado, setAtascado] = useState(false);
 
+    // Lo que puede cambiar sin que la llamada tenga que reiniciarse, guardado en
+    // refs para dejarlo fuera de las dependencias del efecto. Ver el aviso de
+    // arriba: una dependencia de más acá es una llamada cortada.
+    const datos = useRef({ titulo, nombreUsuario, correoUsuario, onColgar });
+    datos.current = { titulo, nombreUsuario, correoUsuario, onColgar };
+
     useEffect(() => {
         let vivo = true;
+        const { titulo: tit, nombreUsuario: nom, correoUsuario: correo } = datos.current;
 
         cargarScript(DOMINIO)
             .then(() => {
@@ -91,7 +110,7 @@ const SalaJitsi = ({ sala, dominio, jwt, titulo, nombreUsuario, correoUsuario, o
                     parentNode: caja.current,
                     width: '100%',
                     height: '100%',
-                    userInfo: { displayName: nombreUsuario || 'Invitado', email: correoUsuario || undefined },
+                    userInfo: { displayName: nom || 'Invitado', email: correo || undefined },
                     configOverwrite: {
                         // NADA DE PANTALLA PREVIA. La persona ya pulsó "Entrar" en
                         // nuestra lista: preguntarle otra vez «¿entrar a la
@@ -123,7 +142,7 @@ const SalaJitsi = ({ sala, dominio, jwt, titulo, nombreUsuario, correoUsuario, o
                         // 6 F 209 F»— y la escribe grande arriba del video, dos
                         // veces. No le dice nada a nadie: el título de verdad ya
                         // está en nuestra barra, a dos centímetros.
-                        subject: titulo || '',
+                        subject: tit || '',
                         hideConferenceSubject: true,
 
                         // Lo que sobra de una app ajena metida dentro de la nuestra:
@@ -165,8 +184,8 @@ const SalaJitsi = ({ sala, dominio, jwt, titulo, nombreUsuario, correoUsuario, o
 
                 // Colgar desde adentro tiene que enterar a la pantalla: es lo
                 // que dispara la pregunta por la nota de la reunión.
-                api.current.addEventListener('readyToClose', () => onColgar?.());
-                api.current.addEventListener('videoConferenceLeft', () => onColgar?.());
+                api.current.addEventListener('readyToClose', () => datos.current.onColgar?.());
+                api.current.addEventListener('videoConferenceLeft', () => datos.current.onColgar?.());
                 api.current.addEventListener('videoConferenceJoined', () => {
                     entro.current = true;
                     if (vivo) { setCargando(false); setAtascado(false); }
@@ -184,7 +203,8 @@ const SalaJitsi = ({ sala, dominio, jwt, titulo, nombreUsuario, correoUsuario, o
             try { api.current?.dispose(); } catch { /* ya estaba cerrado */ }
             api.current = null;
         };
-    }, [sala, DOMINIO, jwt, titulo, nombreUsuario, correoUsuario, onColgar]);
+        // Solo la sala, el servidor y el token. Todo lo demás va por `datos`.
+    }, [sala, DOMINIO, jwt]);
 
     return (
         <div className="relative w-full h-full bg-slate-950 overflow-hidden">

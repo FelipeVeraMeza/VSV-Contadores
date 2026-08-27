@@ -10,20 +10,23 @@
 // se pide la nota de lo que se acordó. Esa nota es la razón de tener las
 // reuniones acá adentro; sin ella esto es un enlace de Meet con más pasos.
 //
-// El video en sí lo pone Jitsi (ver SalaJitsi.jsx). Esta pantalla solo sabe el
-// nombre de la sala, que se lo pide al servidor al entrar.
+// ⚠️ LA LLAMADA NO VIVE ACÁ. Vive en `src/contexts/LlamadaContext.jsx`, montada
+// arriba del router, y por eso sigue viva cuando te vas a otro módulo. Esta
+// pantalla, en modo SALA, no dibuja ningún video: deja un hueco vacío y le pasa
+// el elemento (`registrarHueco`) para que la llamada se dibuje justo encima.
+// Antes el video estaba acá adentro y salir de la pantalla lo desmontaba, o sea
+// que ir a mirar cualquier otra cosa colgaba la reunión.
 // =====================================================================
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     Video, VideoOff, Plus, Loader2, X, Calendar, Clock, Users, User,
-    Building2, CheckCircle2, PhoneOff, Search, Radio, Settings2, UserPlus,
+    Building2, Search, Radio, Settings2, UserPlus, Maximize2,
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import SalaJitsi from '@/components/reuniones/SalaJitsi';
 import DetalleReunion from '@/components/reuniones/DetalleReunion';
+import { useLlamada } from '@/contexts/LlamadaContext.jsx';
 import {
-    listarReunionesApi, crearReunionApi, entrarReunionApi,
-    salirReunionApi, terminarReunionApi, cancelarReunionApi,
+    listarReunionesApi, crearReunionApi, cancelarReunionApi,
 } from '@/services/reunionesService';
 import { getCatalogosApi, listarPersonasApi } from '@/services/personaService';
 
@@ -219,81 +222,20 @@ const CrearReunionModal = ({ onClose, onCreada, usuarios, ahoraPorDefecto }) => 
 };
 
 // ---------------------------------------------------------------------
-// LA NOTA AL COLGAR · solo a quien convocó
-// ---------------------------------------------------------------------
-// Se pregunta en el momento de colgar y no después, porque diez minutos más
-// tarde ya nadie escribe nada. Se puede saltar: obligar a escribir para poder
-// salir de la pantalla sería peor.
-const NotaFinalModal = ({ reunion, onListo, onSaltar }) => {
-    const [notas, setNotas] = useState('');
-    const [guardando, setGuardando] = useState(false);
-    const cerrar = async () => {
-        setGuardando(true);
-        try {
-            await terminarReunionApi(getSessionId(), reunion.id, notas.trim() || null);
-            toast({ title: 'Reunión cerrada', description: notas.trim() ? 'La nota quedó guardada.' : undefined });
-            onListo();
-        } catch { toast({ variant: 'destructive', title: 'No se pudo cerrar la reunión' }); onListo(); }
-        finally { setGuardando(false); }
-    };
-    return (
-        <div className="fixed inset-0 z-[130] bg-black/60 flex items-center justify-center p-4">
-            <div className="w-full max-w-md bg-white rounded-2xl border border-[#efe8dd] shadow-2xl p-5">
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-1">¿Qué quedó acordado?</h3>
-                <p className="text-[11px] text-slate-500 mb-3">
-                    Queda guardado en la reunión{reunion.personaNombre ? ` y en la ficha de ${reunion.personaNombre}` : ''}.
-                </p>
-                <textarea className={`${inp} resize-none`} rows={5} autoFocus
-                    placeholder="Los acuerdos, los pendientes, lo que hay que hacer…"
-                    value={notas} onChange={(e) => setNotas(e.target.value)} />
-                <div className="flex gap-2 mt-3">
-                    <button onClick={onSaltar} className="flex-1 text-[11px] font-bold text-slate-500 hover:text-slate-800 py-2">
-                        Dejarla abierta
-                    </button>
-                    <button onClick={cerrar} disabled={guardando}
-                        className="flex-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg py-2 text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                        {guardando ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
-                        Guardar y cerrar
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// ---------------------------------------------------------------------
 const ReunionesPanel = () => {
-    const yo = getUser().id;
     const [cuando, setCuando] = useState('proximas');
     const [reuniones, setReuniones] = useState([]);
     const [usuarios, setUsuarios] = useState([]);
     const [loading, setLoading] = useState(true);
     const [crear, setCrear] = useState(null);      // null | 'ahora' | 'agendar'
-    const [enSala, setEnSala] = useState(null);    // { reunion, sala }
-    const [pedirNota, setPedirNota] = useState(null);
-    const [detalle, setDetalle] = useState(null);   // la reunión abierta en el panel de gestión
+    const [detalle, setDetalle] = useState(null);  // la reunión abierta en el panel de gestión
 
-    // EL RELOJ DE LA REUNIÓN.
-    // Al esconder la barra de Jitsi —que mostraba el nombre aleatorio de la
-    // sala— se fue con ella su cronómetro, y saber cuánto llevas hablando sí
-    // sirve: es lo que hace que una reunión de 20 minutos no termine en 50.
-    // Cuenta desde que la reunión quedó en curso, no desde que entré yo.
-    const [transcurrido, setTranscurrido] = useState('');
-    useEffect(() => {
-        if (!enSala) { setTranscurrido(''); return; }
-        const desde = new Date(enSala.reunion?.iniciadaAt || Date.now()).getTime();
-        const marcar = () => {
-            const s = Math.max(0, Math.floor((Date.now() - desde) / 1000));
-            const dosDigitos = (n) => String(n).padStart(2, '0');
-            const h = Math.floor(s / 3600);
-            setTranscurrido(h
-                ? `${h}:${dosDigitos(Math.floor(s / 60) % 60)}:${dosDigitos(s % 60)}`
-                : `${dosDigitos(Math.floor(s / 60))}:${dosDigitos(s % 60)}`);
-        };
-        marcar();
-        const id = setInterval(marcar, 1000);
-        return () => clearInterval(id);
-    }, [enSala]);
+    // La llamada, el cronómetro, el botón de salir y la nota final son del
+    // proveedor: siguen existiendo aunque esta pantalla no esté a la vista.
+    // `cambios` sube cuando se cuelga desde cualquier parte del sistema, y es lo
+    // que hace que la lista se entere y se vuelva a leer sola.
+    const { llamada, modo, entrar, ampliar, registrarHueco, cambios } = useLlamada();
+    const enSala = llamada && modo === 'dock';
 
     const cargar = useCallback(async () => {
         setLoading(true);
@@ -303,7 +245,10 @@ const ReunionesPanel = () => {
             if (d.success) setReuniones(d.reuniones || []);
         } catch { /* se queda con lo que había */ } finally { setLoading(false); }
     }, [cuando]);
-    useEffect(() => { cargar(); }, [cargar]);
+    // `cambios` en las dependencias: al colgar —desde acá o desde la ventanita
+    // flotante, estando en otro módulo— la reunión cambia de estado, y la lista
+    // tiene que dejar de decir "en curso".
+    useEffect(() => { cargar(); }, [cargar, cambios]);
 
     useEffect(() => {
         (async () => {
@@ -311,24 +256,6 @@ const ReunionesPanel = () => {
                   if (d.success) setUsuarios(d.ejecutivos || []); } catch { /* */ }
         })();
     }, []);
-
-    const entrar = async (reunion) => {
-        try {
-            const r = await entrarReunionApi(getSessionId(), reunion.id);
-            const d = await r.json(); if (!d.success) throw new Error(d.message);
-            setEnSala({ reunion: d.reunion || reunion, sala: d.sala, dominio: d.dominio, jwt: d.jwt });
-        } catch (e) { toast({ variant: 'destructive', title: 'No se pudo entrar', description: e.message }); }
-    };
-
-    // Colgar: siempre se registra la salida. La nota se pide solo a quien
-    // convocó — al invitado que se va antes no le corresponde cerrar nada.
-    const colgar = useCallback(async () => {
-        const actual = enSala?.reunion;
-        setEnSala(null);
-        if (!actual) return;
-        try { await salirReunionApi(getSessionId(), actual.id); } catch { /* da igual */ }
-        if (actual.creadoPor === yo) setPedirNota(actual); else cargar();
-    }, [enSala, yo, cargar]);
 
     const cancelar = async (reunion) => {
         if (!window.confirm(`¿Cancelar «${reunion.titulo}»?\n\nSe avisa a los invitados. La reunión queda en el historial como cancelada.`)) return;
@@ -339,59 +266,37 @@ const ReunionesPanel = () => {
         } catch { toast({ variant: 'destructive', title: 'No se pudo cancelar' }); }
     };
 
-    // ── LA SALA ───────────────────────────────────────────────────────
-    // Una sola caja, no dos. Antes el video traía su propio marco redondeado
-    // adentro del marco de la pantalla: se veía una caja dentro de otra, con
-    // dos grises que no calzaban. Ahora el borde y el fondo los pone esta
-    // pantalla y el video llena el resto sin adornos.
+    // ── LA SALA · el hueco ────────────────────────────────────────────
+    // Un rectángulo vacío, y nada más. La llamada la dibuja el proveedor encima
+    // de este espacio, midiéndolo cuadro a cuadro; el borde y el fondo oscuro
+    // los pone él, así que acá no hace falta pintar nada —lo que se vería sería
+    // por medio segundo, hasta que la caja se coloca en su sitio.
     //
-    // La barra de arriba dice lo único que hay que saber mientras se habla: de
-    // qué es la reunión, con quién, cuántos hay, y cómo salir. El nombre de la
-    // sala —una tira aleatoria— no se muestra en ninguna parte.
+    // Que sea un hueco y no el video es TODO el arreglo: al irte a otro módulo
+    // esto se desmonta y no pasa nada, porque la llamada nunca estuvo adentro.
     if (enSala) {
-        const r = enSala.reunion;
-        return (
-            <div className="flex flex-col h-full min-h-0 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-xl">
-                <div className="flex items-center gap-3 px-4 py-2.5 shrink-0 bg-gradient-to-b from-slate-900 to-slate-900/60 border-b border-slate-800">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" title="En curso" />
-
-                    <div className="min-w-0 flex-1">
-                        <p className="text-[13px] font-bold text-white truncate leading-tight">{r.titulo}</p>
-                        {r.personaNombre && (
-                            <p className="text-[10px] text-slate-400 truncate leading-tight">con {r.personaNombre}</p>
-                        )}
-                    </div>
-
-                    {transcurrido && (
-                        <span className="text-[11px] font-semibold text-slate-300 tabular-nums shrink-0"
-                            title="Tiempo de la reunión">{transcurrido}</span>
-                    )}
-
-                    {r.participantes?.length > 0 && (
-                        <span className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-400 shrink-0 pl-1 border-l border-slate-700"
-                            title={r.participantes.map(p => p.nombre).join(', ')}>
-                            <Users size={13} /> {r.participantes.length}
-                        </span>
-                    )}
-
-                    <button onClick={colgar}
-                        className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg px-3 py-1.5 text-[11px] font-bold shrink-0 transition-colors">
-                        <PhoneOff size={13} /> Salir
-                    </button>
-                </div>
-
-                <div className="flex-1 min-h-0">
-                    <SalaJitsi
-                        sala={enSala.sala} dominio={enSala.dominio} jwt={enSala.jwt}
-                        titulo={r.titulo} nombreUsuario={getUser().nombre} onColgar={colgar} />
-                </div>
-            </div>
-        );
+        return <div ref={registrarHueco} data-hueco-llamada className="flex-1 min-h-0 rounded-2xl bg-slate-950" />;
     }
 
     // ── LA LISTA ──────────────────────────────────────────────────────
     return (
         <div className="flex flex-col h-full min-h-0 gap-3">
+            {/* Estás en la reunión pero la minimizaste y estás mirando la lista.
+                La ventanita ya lo dice, pero se puede haber arrastrado a una
+                esquina cualquiera: esta franja es el camino de vuelta seguro. */}
+            {llamada && modo === 'flotante' && (
+                <button onClick={ampliar}
+                    className="flex items-center gap-2 shrink-0 bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-3 py-2 transition-colors text-left">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                    <span className="text-[11px] font-bold truncate flex-1">
+                        Estás en «{llamada.reunion?.titulo}»
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-400 shrink-0">
+                        <Maximize2 size={12} /> Volver a la reunión
+                    </span>
+                </button>
+            )}
+
             <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
                 <div className="flex bg-slate-100 rounded-lg p-0.5">
                     {[['proximas', 'Próximas'], ['pasadas', 'Historial']].map(([v, label]) => (
@@ -497,14 +402,6 @@ const ReunionesPanel = () => {
                     onCerrar={() => setDetalle(null)}
                     onCambio={cargar}
                     onEntrar={(r) => { setDetalle(null); entrar(r); }}
-                />
-            )}
-
-            {pedirNota && (
-                <NotaFinalModal
-                    reunion={pedirNota}
-                    onListo={() => { setPedirNota(null); cargar(); }}
-                    onSaltar={() => { setPedirNota(null); cargar(); }}
                 />
             )}
         </div>

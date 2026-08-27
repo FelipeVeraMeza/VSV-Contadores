@@ -19,8 +19,7 @@ import {
     Plus, FolderPlus, CalendarDays, User, ArrowRight, Circle,
 } from 'lucide-react';
 import { PRIO_BARRA } from '@/components/tareas/estilos';
-import { resumenInicioApi, completarTareaApi } from '@/services/crmService';
-import { toast } from '@/components/ui/use-toast';
+import { resumenInicioApi } from '@/services/crmService';
 
 const getUser = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
 const getSessionId = () => getUser().sessionId;
@@ -49,10 +48,12 @@ const Tarjeta = ({ icono: Icono, n, label, tono, onClick }) => (
     </button>
 );
 
-// La fila entera abre la tarea, y el círculo de la izquierda la finaliza sin
-// salir de acá. Antes esta pantalla era solo de lectura: se veía qué estaba
-// atrasado pero para hacer algo al respecto había que ir a buscarlo a la lista.
-const FilaTarea = ({ t, atrasada, onAbrir, onCompletar, cerrando }) => {
+// La fila entera abre la tarea. El círculo de la izquierda finalizaba de un
+// clic desde acá; se sacó el 27-08-2026 después de que se cerraran varias
+// tareas por accidente —era un blanco chico, sin confirmación, al borde de una
+// fila clicable—. Ahora marca el estado y nada más: se finaliza adentro de la
+// tarea, que es un gesto deliberado. Ver `deshacer.jsx`.
+const FilaTarea = ({ t, atrasada, onAbrir }) => {
     const hecha = t.estado === 'completada';
     return (
         <div
@@ -66,22 +67,9 @@ const FilaTarea = ({ t, atrasada, onAbrir, onCompletar, cerrando }) => {
             {/* La prioridad, misma barra que en la lista y el árbol. */}
             <span className={`w-[3px] h-4 rounded-full shrink-0 ${PRIO_BARRA[t.prioridad] || PRIO_BARRA.media}`}
                   title={`Prioridad ${t.prioridad || 'media'}`} />
-            {/* El botón NO propaga el clic: si lo hiciera, finalizar abriría
-                además el detalle de la tarea recién cerrada. */}
-            {hecha ? (
-                <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
-            ) : (
-                <button
-                    onClick={(e) => { e.stopPropagation(); onCompletar(t); }}
-                    disabled={cerrando}
-                    title="Finalizar la tarea"
-                    className="shrink-0 disabled:opacity-50"
-                >
-                    {cerrando
-                        ? <Loader2 size={15} className="animate-spin text-emerald-500" />
-                        : <Circle size={15} className="text-slate-300 hover:text-emerald-500 transition-colors" />}
-                </button>
-            )}
+            {hecha
+                ? <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                : <Circle size={15} className="text-slate-300 shrink-0" />}
 
             <div className="min-w-0 flex-1">
                 <p className={`text-xs font-bold truncate ${hecha ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
@@ -103,7 +91,7 @@ const FilaTarea = ({ t, atrasada, onAbrir, onCompletar, cerrando }) => {
     );
 };
 
-const Bloque = ({ titulo, icono: Icono, tono, tareas, vacio, atrasadas, onVerTodas, onAbrir, onCompletar, cerrando }) => (
+const Bloque = ({ titulo, icono: Icono, tono, tareas, vacio, atrasadas, onVerTodas, onAbrir }) => (
     <div className="bg-white border border-[#efe8dd] rounded-2xl overflow-hidden flex flex-col">
         <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-[#efe8dd]">
             <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
@@ -120,8 +108,7 @@ const Bloque = ({ titulo, icono: Icono, tono, tareas, vacio, atrasadas, onVerTod
             {tareas.length === 0
                 ? <p className="text-[11px] text-slate-400 italic px-3.5 py-5 text-center">{vacio}</p>
                 : tareas.map(t => (
-                    <FilaTarea key={t.id} t={t} atrasada={atrasadas}
-                        onAbrir={onAbrir} onCompletar={onCompletar} cerrando={cerrando === t.id} />
+                    <FilaTarea key={t.id} t={t} atrasada={atrasadas} onAbrir={onAbrir} />
                 ))}
         </div>
     </div>
@@ -152,24 +139,9 @@ const InicioPanel = ({ modo = 'todas' }) => {
     // de la lista, y el panel de detalle no se duplica en cada pantalla.
     const abrirTarea = (id) => irA({ tarea: id });
 
-    // Finalizar sin salir de Inicio. La fila se marca al instante y recién
-    // después se pide el resumen de nuevo: esperar la ida y vuelta del servidor
-    // para tachar una línea se siente lento.
-    const [cerrando, setCerrando] = useState(null);
-    const completar = async (t) => {
-        setCerrando(t.id);
-        try {
-            const r = await completarTareaApi(getSessionId(), t.id);
-            const d = await r.json().catch(() => ({}));
-            if (d.success === false) throw new Error(d.message || 'No se pudo finalizar.');
-            toast({ title: 'Tarea finalizada', description: t.titulo });
-            await cargar();   // los seis contadores de arriba cambian con esto
-        } catch (e) {
-            toast({ variant: 'destructive', title: 'No se pudo finalizar', description: e.message });
-        } finally {
-            setCerrando(null);
-        }
-    };
+    // Acá vivía «finalizar sin salir de Inicio». Se sacó: cerrar una tarea desde
+    // un resumen de un solo clic es justo la forma en que se cierran las que no
+    // eran. Se abre la tarea y se cierra adentro.
 
     if (loading) return (
         <div className="flex items-center justify-center py-20 text-slate-400"><Loader2 className="animate-spin" /></div>
@@ -227,14 +199,11 @@ const InicioPanel = ({ modo = 'todas' }) => {
             {/* Las tres listas */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 flex-1 min-h-0">
                 <Bloque titulo="Atrasadas" icono={AlertTriangle} tono="text-red-500" atrasadas
-                    tareas={data.vencidas} vacio="Nada atrasado." onVerTodas={() => irA({})}
-                    onAbrir={abrirTarea} onCompletar={completar} cerrando={cerrando} />
+                    tareas={data.vencidas} vacio="Nada atrasado." onVerTodas={() => irA({})} onAbrir={abrirTarea} />
                 <Bloque titulo="Próximas a vencer" icono={Clock} tono="text-blue-500"
-                    tareas={data.proximas} vacio={`Nada vence en los próximos ${r.diasProximas} días.`} onVerTodas={() => irA({})}
-                    onAbrir={abrirTarea} onCompletar={completar} cerrando={cerrando} />
+                    tareas={data.proximas} vacio={`Nada vence en los próximos ${r.diasProximas} días.`} onVerTodas={() => irA({})} onAbrir={abrirTarea} />
                 <Bloque titulo="Cerradas hace poco" icono={CheckCircle2} tono="text-emerald-500"
-                    tareas={data.recientes} vacio="Todavía no cierras nada esta semana."
-                    onAbrir={abrirTarea} onCompletar={completar} cerrando={cerrando} />
+                    tareas={data.recientes} vacio="Todavía no cierras nada esta semana." onAbrir={abrirTarea} />
             </div>
         </div>
     );

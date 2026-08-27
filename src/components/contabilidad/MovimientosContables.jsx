@@ -1112,10 +1112,22 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
 
   // ── SII ───────────────────────────────────────────────────────
   const abrirSyncModal = () => {
-    if (!selectedCompany?.rut || !selectedCompany?.claveSII) {
-      toast({ variant:'destructive', title:'Credenciales Faltantes', description:'La empresa no tiene RUT o Clave SII configurada.' });
-      return;
-    }
+    // ACÁ NO SE VALIDAN LAS CREDENCIALES, a propósito.
+    //
+    // Este chequeo miraba `selectedCompany.claveSII`, y ese campo casi nunca
+    // viene: el objeto del selector solo trae RUT y clave cuando la empresa está
+    // en la cartera del CRM. Para la empresa PRINCIPAL y para las que están
+    // fuera de cartera se arma uno mínimo —id y razón social— así que el botón
+    // respondía «La empresa no tiene RUT o Clave SII configurada» aunque las
+    // tuviera, y no había forma de avanzar. Reportado el 27-08-2026 sobre
+    // VOLLAIRE & OLIVOS SIMPLE PYME LTDA, que es la principal.
+    //
+    // Las credenciales viven cifradas en la base y solo el servidor las lee
+    // (`src/utils/credencialesSii.js`); por eso ya no viajan al navegador y por
+    // eso no se pueden comprobar desde acá. Si falta alguna, el backend responde
+    // diciendo CUÁL —«falta el RUT del representante legal y la clave del SII»—,
+    // que es más útil que este aviso. `RegistroComprasVentas.jsx` ya se había
+    // corregido así; esta pantalla se quedó atrás.
     if (targetId === 'ALL') {
       toast({ variant:'destructive', title:'Selecciona una empresa', description:'Debes seleccionar una empresa para sincronizar.' });
       return;
@@ -1127,12 +1139,13 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     setIsSyncing(true);
     toast({ title:'🤖 Robot SII Iniciado', description:`Extrayendo ${mesDesde}/${anioDesde} → ${mesHasta}/${anioHasta}...` });
     try {
-      const result = await (await fetch(`${API_BASE_URL}/sincronizar-sii`, {
+      const respuesta = await fetch(`${API_BASE_URL}/sincronizar-sii`, {
         method:'POST', headers:{'Content-Type':'application/json', 'x-session-id': user?.sessionId},
         // Sin credenciales: el backend las lee de la ficha del cliente. Antes se
         // enviaban el RUT y la clave del SII desde el navegador.
         body: JSON.stringify({ mesDesde, anioDesde, mesHasta, anioHasta, empresaId: targetId }),
-      })).json();
+      });
+      const result = await respuesta.json();
       if (result.success) {
         toast({
           title: '✅ Extracción Exitosa',
@@ -1141,7 +1154,16 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
         setIsSyncModalOpen(false);
         cargarDatos();
       } else {
-        toast({ variant:'destructive', title:'❌ Error en el Robot', description: result.message });
+        // «Error en el robot» para TODO era parte de la confusión: cuando falta
+        // la clave del SII de la empresa, el robot ni siquiera llegó a arrancar
+        // y el título mandaba a buscar el problema donde no estaba. El servidor
+        // responde 400 cuando el problema son los datos de la ficha y 500 cuando
+        // se cayó de verdad en el portal.
+        toast({
+          variant: 'destructive',
+          description: result.message,
+          title: respuesta.status === 400 ? 'Faltan datos de la empresa' : '❌ Error en el Robot',
+        });
       }
     } catch {
       toast({ variant:'destructive', title:'Error de Conexión', description:'No se pudo contactar al servidor.' });

@@ -9,8 +9,9 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { toast } from '@/components/ui/use-toast';
+import { avisarFinalizada } from '@/components/tareas/deshacer';
 import {
-    getMetricasCrmApi, guardarMetaCrmApi, listarTareasApi,
+    getMetricasCrmApi, guardarMetaCrmApi, listarTareasApi, actualizarTareaApi,
     crearTareaApi, completarTareaApi, eliminarTareaApi, limpiarTareasCompletadasApi
 } from '@/services/crmService';
 
@@ -166,7 +167,7 @@ const TareaRow = ({ t, onComplete, onDelete }) => {
     const vencida = vence && vence < new Date() && t.estado === 'pendiente';
     return (
         <div className="flex items-center gap-2.5 py-2 border-b border-[#efe8dd] last:border-0 group">
-            <button onClick={() => onComplete(t)} title="Completar"
+            <button onClick={() => onComplete(t)} title="Finalizar la tarea (se puede deshacer)"
                 className="w-4 h-4 rounded-full border-2 border-slate-300 hover:border-emerald-500 hover:bg-emerald-500/20 shrink-0 transition-colors" />
             <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${TIPO_COLOR[t.tipo] || TIPO_COLOR.tarea}`}><Icon size={13} /></div>
             <div className="min-w-0 flex-1">
@@ -233,9 +234,21 @@ const CrmDashboard = ({ onCrear }) => {
     const persistWidgets = (w) => { setWidgets(w); try { localStorage.setItem('crm_dash_widgets', JSON.stringify(w)); } catch { /* */ } };
     const toggleWidget = (k) => persistWidgets({ ...widgets, [k]: !widgets[k] });
 
+    // Acá la fila NO abre la tarea —este widget no tiene panel de detalle—, así
+    // que el círculo sigue finalizando de un clic. Lo que sí trae ahora es
+    // vuelta atrás: es el mismo botón chico que en Tickets cerró tareas por
+    // accidente, y sin el aviso la fila simplemente desaparecía.
     const completar = async (t) => {
+        const anterior = t.estado || 'pendiente';
         setTareas(prev => prev.filter(x => x.id !== t.id));
-        try { await completarTareaApi(getSessionId(), t.id); cargar(true); }
+        try {
+            await completarTareaApi(getSessionId(), t.id);
+            avisarFinalizada(t.titulo, async () => {
+                try { await actualizarTareaApi(getSessionId(), t.id, { estado: anterior }); cargar(true); }
+                catch { toast({ variant: 'destructive', title: 'No se pudo deshacer' }); }
+            });
+            cargar(true);
+        }
         catch { toast({ variant: 'destructive', title: 'Error al completar' }); cargar(true); }
     };
     const borrar = async (t) => {

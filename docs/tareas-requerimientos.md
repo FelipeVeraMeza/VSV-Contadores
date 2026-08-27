@@ -109,6 +109,24 @@ quiere saber al revisar el archivo. Son dos ejes independientes: *en qué va* la
 tarea, y *si sigue a la vista*. Se materializa en la columna `tarea.archivada_at`
 (NULL = a la vista). Al desarchivar, la tarea vuelve exactamente como estaba.
 
+### Dónde se cambia el estado (27-08-2026)
+
+**Finalizar una tarea exige abrirla.** En la lista, el árbol e Inicio el círculo
+de la izquierda era un botón: un clic lo cerraba todo, sin confirmar y sin decir
+nada. Estaba pegado al borde de una fila que además es clicable entera, así que
+apuntar mal cerraba la tarea equivocada — pasó el 27-08-2026 con cuatro tareas.
+La que se cierra sale del filtro «Activas» y desaparece de la pantalla, o sea que
+el error tampoco se ve.
+
+Ahora ese círculo es un **indicador de estado** y el clic abre la tarea. El
+estado se cambia con los cuatro botones del panel de detalle.
+
+Donde sí se cierra de un gesto —el detalle, arrastrar al tablero, el widget de
+tareas del dashboard del CRM, que no tiene panel— el aviso trae **«Deshacer»**,
+que devuelve la tarea al estado que tenía. Vive en
+`src/components/tareas/deshacer.jsx`, una sola implementación para las cuatro
+pantallas.
+
 ### Prioridades
 
 `baja` · `media` · `alta` · `critica`

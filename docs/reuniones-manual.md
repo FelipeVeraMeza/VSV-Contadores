@@ -51,6 +51,20 @@ Adentro hay siete botones y nada más: micrófono, cámara, compartir pantalla,
 chat, ver a todos en mosaico, configuración de audio y colgar. Arriba, la barra
 del sistema muestra el título, el cliente, el tiempo transcurrido y cuántos hay.
 
+### Seguir trabajando mientras hablas
+
+**La llamada ya no se corta al salir de la pantalla.** Se puede ir a
+Contabilidad a mirar un saldo, abrir un ticket o revisar una factura sin colgar:
+la reunión se achica sola a una **ventanita en la esquina** y sigue igual.
+
+- Se **arrastra** de la barra de arriba, por si tapa algo.
+- El botón `⤢` vuelve a la reunión a pantalla completa.
+- El botón rojo cuelga, desde donde estés, y pide la nota igual.
+- Estando en Reuniones, `⤡` la deja flotando para poder mirar la lista.
+
+Lo único que sigue cortando la llamada es **recargar la página** (F5) o cerrar la
+pestaña. El navegador ahora pregunta antes de hacerlo.
+
 ### Salir y la nota
 
 Al pulsar «Salir», a **quien convocó** se le pregunta *qué quedó acordado*. Se
@@ -143,6 +157,7 @@ Migración: `src/DatabaseThings/migrations/2026-08-26_reuniones.sql`
 | **Quién sirve el video** | `src/utils/videoReunion.js` |
 | Las llamadas desde la pantalla | `src/services/reunionesService.js` |
 | La pantalla (lista + sala) | `src/components/reuniones/ReunionesPanel.jsx` |
+| **La llamada mientras navegas** | `src/contexts/LlamadaContext.jsx` |
 | El panel de gestión | `src/components/reuniones/DetalleReunion.jsx` |
 | La ventana de video | `src/components/reuniones/SalaJitsi.jsx` |
 | El menú | `src/components/Tareas.jsx` y `src/components/MainPage.jsx` |

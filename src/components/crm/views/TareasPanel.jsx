@@ -10,9 +10,10 @@ import { PRIO, PRIO_BARRA, ESTADO_PUNTO, iniciales, soyColaborador } from '@/com
 import TableroTareas from '@/components/tareas/TableroTareas';
 import ArbolTareas from '@/components/tareas/ArbolTareas';
 import { usePlantillas, SelectorPlantillas, PlantillasModal } from '@/components/tareas/PlantillasTarea';
+import { avisarFinalizada } from '@/components/tareas/deshacer';
 import { toast } from '@/components/ui/use-toast';
 import {
-    listarTareasApi, crearTareaApi, actualizarTareaApi, eliminarTareaApi, completarTareaApi,
+    listarTareasApi, crearTareaApi, actualizarTareaApi, eliminarTareaApi,
     obtenerTareaApi, agregarComentarioApi, eliminarComentarioApi,
     subirAdjuntoApi, descargarAdjuntoApi, eliminarAdjuntoApi,
     listarProyectosApi, crearProyectoApi, eliminarProyectoApi, archivarTareaApi,
@@ -430,9 +431,20 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
         if (cascadaResponsable) { cargar(); toast({ title: `Se traspasaron también las ${conSub} subtareas` }); }
     };
 
+    // ESTE es el lugar donde se finaliza una tarea, y a propósito el único:
+    // las listas ya no lo hacen de un clic (ver `deshacer.jsx`). Aun así el
+    // botón «Finalizada» está al lado de los otros tres y se puede errar, así
+    // que el aviso trae vuelta atrás al estado anterior.
     const cambiarEstado = async (estado) => {
+        const anterior = data.estado || 'pendiente';
         setData(p => ({ ...p, estado }));
-        try { await actualizarTareaApi(getSessionId(), tareaId, { estado }); onChanged(); }
+        try {
+            await actualizarTareaApi(getSessionId(), tareaId, { estado });
+            if (estado === 'completada' && anterior !== 'completada') {
+                avisarFinalizada(data.titulo, () => cambiarEstado(anterior));
+            }
+            onChanged();
+        }
         catch { toast({ variant: 'destructive', title: 'Error' }); cargar(); }
     };
     // Mismo cuidado que en los comentarios: se vacía primero y se bloquea
@@ -1397,10 +1409,14 @@ const TareasPanel = ({ modo = 'todas' }) => {
     // Mover una tarjeta de columna en el tablero. Se pinta al tiro y se manda
     // después; si el servidor rechaza, `refrescar()` deja la pantalla como la base.
     const moverEstado = async (t, estado) => {
+        const anterior = t.estado || 'pendiente';
         setTareas(prev => prev.map(x => x.id === t.id ? { ...x, estado } : x));
         try {
             const r = await actualizarTareaApi(getSessionId(), t.id, { estado });
             const d = await r.json(); if (!d.success) throw new Error(d.message);
+            // Soltar en «Finalizadas» es el único movimiento que saca la tarea de
+            // circulación, así que es el único que ofrece volver atrás.
+            if (estado === 'completada') avisarFinalizada(t.titulo, () => moverEstado(t, anterior));
             refrescar();
         } catch (e) {
             toast({ variant: 'destructive', title: 'No se pudo mover', description: e.message });
@@ -1408,11 +1424,6 @@ const TareasPanel = ({ modo = 'todas' }) => {
         }
     };
 
-    const completar = async (t, e) => {
-        e.stopPropagation();
-        setTareas(prev => prev.map(x => x.id === t.id ? { ...x, estado: 'completada' } : x));
-        try { await completarTareaApi(getSessionId(), t.id); refrescar(); } catch { refrescar(); }
-    };
     const eliminar = async (t, e) => {
         e.stopPropagation();
         if (!window.confirm(
@@ -1669,7 +1680,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
                         ) : vista === 'tablero' ? (
                             <TableroTareas tareas={lista} selId={selId} onAbrir={setSelId} onMover={moverEstado} />
                         ) : vista === 'arbol' ? (
-                            <ArbolTareas tareas={lista} selId={selId} onAbrir={setSelId} onCompletar={completar} />
+                            <ArbolTareas tareas={lista} selId={selId} onAbrir={setSelId} />
                         ) : (grupos || [{ clave: '_todo', label: null, tareas: lista }]).map(g => (
                           <div key={g.clave}>
                             {g.label && (
@@ -1686,15 +1697,23 @@ const TareasPanel = ({ modo = 'todas' }) => {
                                 <div key={t.id} onClick={() => setSelId(t.id)}
                                     className={`${REJ} px-4 py-2 border-b border-[#efe8dd] cursor-pointer hover:bg-slate-50 group ${selId === t.id ? 'bg-emerald-500/5' : ''}`}>
 
-                                    {/* 1 · Prioridad (barra) + terminar */}
+                                    {/* 1 · Prioridad (barra) + estado
+                                           EL CÍRCULO NO FINALIZA. Era un botón
+                                           de un clic, sin confirmación, pegado
+                                           al borde de una fila clicable entera:
+                                           el 27-08-2026 se cerraron varias
+                                           tareas por accidente así. Ahora es un
+                                           indicador y el clic abre la tarea —el
+                                           estado se cambia adentro, que es un
+                                           gesto que uno hace a propósito. */}
                                     <div className="flex items-center gap-2">
                                         <span className={`w-[3px] h-4 rounded-full shrink-0 ${PRIO_BARRA[t.prioridad] || PRIO_BARRA.media}`}
                                               title={`Prioridad ${t.prioridad}`} />
-                                        <button onClick={(e) => completar(t, e)} title="Finalizar" className="shrink-0">
+                                        <span className="shrink-0" title={`${meta.label} · ábrela para cambiar el estado`}>
                                             {t.estado === 'completada'
                                                 ? <CheckCircle2 size={15} className="text-emerald-500" />
-                                                : <Circle size={15} className="text-slate-300 hover:text-emerald-500" />}
-                                        </button>
+                                                : <Circle size={15} className="text-slate-300 group-hover:text-slate-400" />}
+                                        </span>
                                     </div>
 
                                     {/* 2 · Título en UNA línea. La madre va DELANTE
