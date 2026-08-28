@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Loader2, Search, CheckCircle2, AlertTriangle, Clock, FileText, Receipt,
-  RefreshCw, CalendarClock, Wallet, Building2, Zap, X
-} from 'lucide-react';
+import { Loader2, Search, AlertTriangle, RefreshCw, Zap, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth.jsx';
 import { toast } from '@/components/ui/use-toast';
 import {
@@ -16,27 +13,52 @@ import {
 const clp = (n) => `$${Number(n || 0).toLocaleString('es-CL')}`;
 const mesActual = () => new Date().toISOString().slice(0, 7); // YYYY-MM
 
-// Etiqueta y color por estado del cobro
-const estiloEstado = (c) => {
-  // Anulada por nota de crédito: no se cobra y no cuenta como mora.
-  if (c.estado === 'ANULADA')          return { label: 'Anulada',      c: 'text-slate-500 bg-slate-500/10 border-slate-400/30' };
-  if (c.estado === 'POR_EMITIR')       return { label: 'Por emitir',   c: 'text-blue-700 bg-blue-500/10 border-blue-500/30' };
-  if (c.estado === 'PAGADA')           return { label: 'Pagada',       c: 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30' };
-  if (c.estado === 'PENDIENTE_RECIBO') return { label: 'Pend. recibo', c: 'text-sky-700 bg-sky-500/10 border-sky-500/30' };
-  if (c.vencido)                       return { label: 'Vencido',      c: 'text-red-600 bg-red-500/10 border-red-500/30' };
-  return { label: 'Pend. pago', c: 'text-amber-700 bg-amber-500/10 border-amber-500/30' };
+// Desplaza un 'YYYY-MM' N meses. Se construye con día 1 y en UTC: con `new Date`
+// local, un periodo como '2026-03' en zona GMT-3 caía en febrero.
+const mesRelativo = (periodo, delta) => {
+  const [a, m] = periodo.split('-').map(Number);
+  const d = new Date(Date.UTC(a, m - 1 + delta, 1));
+  return d.toISOString().slice(0, 7);
 };
 
-const Kpi = ({ icon: Icon, label, value, sub, color }) => (
-  <div className="flex items-center gap-3 bg-slate-50 border border-[#efe8dd] rounded-2xl px-4 py-3">
-    <span className={`p-2 rounded-xl ${color}`}><Icon size={16} /></span>
-    <div className="min-w-0">
-      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-      <p className="text-lg font-black text-slate-900 leading-tight tabular-nums">{value}</p>
-      {sub && <p className="text-[9px] text-slate-400 font-bold">{sub}</p>}
-    </div>
-  </div>
-);
+// Etiqueta y color por estado del cobro. Un punto de color + texto normal: en una
+// tabla de 100 filas, cien píldoras en mayúscula compiten entre sí y no dejan leer
+// los montos, que es a lo que uno viene.
+const estiloEstado = (c) => {
+  // Anulada por nota de crédito: no se cobra y no cuenta como mora.
+  if (c.estado === 'ANULADA')          return { label: 'Anulada',      punto: 'bg-slate-300',   texto: 'text-slate-400' };
+  if (c.estado === 'POR_EMITIR')       return { label: 'Por emitir',   punto: 'bg-slate-400',   texto: 'text-slate-600' };
+  if (c.estado === 'PAGADA')           return { label: 'Pagada',       punto: 'bg-emerald-500', texto: 'text-slate-600' };
+  if (c.estado === 'PENDIENTE_RECIBO') return { label: 'Pend. recibo', punto: 'bg-sky-500',     texto: 'text-slate-600' };
+  if (c.vencido)                       return { label: 'Vencido',      punto: 'bg-red-500',     texto: 'text-red-600 font-medium' };
+  return { label: 'Pend. pago', punto: 'bg-amber-500', texto: 'text-slate-600' };
+};
+
+// Indicador del encabezado. `acento` tiñe solo la cifra, para que el color
+// signifique algo (rojo = hay que actuar) en vez de decorar la tarjeta entera.
+const Kpi = ({ label, value, sub, acento = 'text-slate-900', onClick, activo, title }) => {
+  const Tag = onClick ? 'button' : 'div';
+  return (
+    <Tag
+      onClick={onClick}
+      title={title}
+      className={`text-left bg-white border rounded-lg px-3 py-2 transition-colors ${
+        activo ? 'border-slate-300 ring-1 ring-slate-200' : 'border-[#efe8dd]'
+      } ${onClick ? 'hover:border-slate-300 cursor-pointer' : ''}`}
+    >
+      <p className="text-[11px] text-slate-500 truncate">{label}</p>
+      {/* Cifra y detalle en la misma línea: apilados gastaban una fila entera
+          por tarjeta para un dato que se lee de un vistazo. */}
+      <div className="flex items-baseline gap-1.5 flex-wrap">
+        {/* Un cero es ausencia de dato, no un dato: en gris no compite con las
+            cifras que sí importan. */}
+        <span className={`text-lg font-semibold leading-tight tabular-nums ${
+          Number(String(value).replace(/\D/g, '')) === 0 ? 'text-slate-300' : acento}`}>{value}</span>
+        {sub && <span className="text-[11px] text-slate-400 tabular-nums truncate">{sub}</span>}
+      </div>
+    </Tag>
+  );
+};
 
 const CobrosMensuales = () => {
   const { user } = useAuth();
@@ -62,6 +84,8 @@ const CobrosMensuales = () => {
   const [orden, setOrden] = useState({ campo: 'razonSocial', dir: 'asc' });
   const [confirmando, setConfirmando] = useState(false);  // paso final de confirmación
   const [resultado, setResultado] = useState(null);       // resumen tras emitir
+  const [resumenMora, setResumenMora] = useState(null);   // { morosos, monto } del preview
+  const [aceptaDesvio, setAceptaDesvio] = useState(false); // aprobó los montos fuera de lo pactado
 
   // Corta el sondeo de progreso si se desmonta el componente
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
@@ -102,6 +126,12 @@ const CobrosMensuales = () => {
     }
   };
 
+  // ¿Esta fila se puede emitir? Un solo criterio para toda la pantalla: la
+  // selección por defecto, el "marcar todas", el contador y el lote que se manda
+  // al robot. Cuando cada uno lo calculaba por su lado, bastaba con olvidar una
+  // condición en uno para que se emitiera algo que no correspondía.
+  const esEmitible = (it) => Boolean(it.rut) && Number(it.monto) > 0 && !(it.moraCobros > 0);
+
   // Abre la previsualización: trae TODO lo del periodo y lo deja listo para revisar.
   const abrirPreview = async () => {
     setPreparando(true);
@@ -112,14 +142,25 @@ const CobrosMensuales = () => {
         toast({ variant: 'destructive', title: 'Error', description: d?.message || 'No se pudo previsualizar.' });
         return;
       }
-      const norm = (arr, p) => (arr || []).map((it, i) => ({ ...it, _key: it.cobroId || `${p}${i}`, monto: Number(it.monto) || 0 }));
+      // `montoPactado` guarda el precio con el que llegó el cobro. Sin ese ancla no
+      // hay forma de saber que un monto se editó: si el usuario escribe 500.000
+      // donde decía 50.000, el sistema solo ve 500.000 y lo emite tan campante.
+      // Ya pasó (PARTY CARS, junio 2026: $50.000 pactados, $500.000 facturados).
+      const norm = (arr, p) => (arr || []).map((it, i) => ({
+        ...it, _key: it.cobroId || `${p}${i}`,
+        monto: Number(it.monto) || 0,
+        montoPactado: Number(it.monto) || 0,
+      }));
       const todas = [...norm(d.facturar, 'f'), ...norm(d.omitidas, 'o')];
       setLista(todas);
-      // Por defecto quedan marcadas las que se pueden emitir (RUT + monto > 0)
-      setSeleccion(new Set(todas.filter(it => it.rut && it.monto > 0).map(it => it._key)));
+      // Se marcan las que se pueden emitir. Los deudores quedan fuera por regla,
+      // no por olvido: se ven en la lista con su deuda, pero no se les factura.
+      setSeleccion(new Set(todas.filter(esEmitible).map(it => it._key)));
+      setResumenMora({ morosos: d.morosos || 0, monto: d.montoMoroso || 0 });
       setBuscarModal('');
       setOrden({ campo: 'razonSocial', dir: 'asc' });
       setConfirmando(false);
+      setAceptaDesvio(false);
       setShowConfirm(true);
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'No se pudo previsualizar la facturación.' });
@@ -128,19 +169,47 @@ const CobrosMensuales = () => {
     }
   };
 
-  // Motivo por el que una fila NO se puede facturar (null = sí se puede)
-  const motivoNoEmitible = (it) => !it.rut ? 'Sin RUT' : (Number(it.monto) <= 0 ? 'Monto inválido' : null);
+  // Motivo por el que una fila NO se factura (null = sí se factura).
+  //
+  // La REGLA DEL DESPACHO: al que arrastra una factura vencida no se le emite otra.
+  // Seguir facturándole agranda una deuda que ya no se está pagando y ensucia la
+  // cobranza. Por eso la mora es un impedimento como cualquier otro y el checkbox
+  // queda bloqueado: si hiciera falta emitirle igual, primero se le registra el
+  // pago (o se marca la factura vencida como pagada) y deja de estar en mora.
+  const motivoNoEmitible = (it) =>
+    !it.rut ? 'Sin RUT'
+    : Number(it.monto) <= 0 ? 'Monto inválido'
+    : it.moraCobros > 0 ? `Debe ${clp(it.moraMonto)}`
+    : null;
+
+  // ¿El monto a emitir se aparta de lo pactado? Devuelve el % de diferencia, o
+  // null si está dentro de lo normal.
+  //
+  // Un ajuste chico es rutina (un mes con trabajo extra). Un salto grande suele
+  // ser un dedazo: PARTY CARS se facturó por $500.000 con $50.000 pactados —un
+  // cero de más— y nadie lo vio hasta que estaba pagada. No se bloquea (a veces
+  // el cambio es legítimo), pero hay que verlo y confirmarlo.
+  const TOLERANCIA = 20; // %
+  const desvio = (it) => {
+    const pactado = Number(it.montoPactado) || 0;
+    const actual = Number(it.monto) || 0;
+    if (pactado <= 0 || actual === pactado) return null;
+    const pct = ((actual - pactado) / pactado) * 100;
+    return Math.abs(pct) >= TOLERANCIA ? Math.round(pct) : null;
+  };
 
   const editarMontoLista = (k, valor) => {
     const monto = Number(String(valor).replace(/[^\d]/g, '')) || 0;
     setLista(prev => prev.map(it => it._key === k ? { ...it, monto } : it));
+    // Cambiar un monto invalida la aprobación anterior: se aprobó otra cifra.
+    setAceptaDesvio(false);
   };
   const toggleSel = (k) => setSeleccion(prev => {
     const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n;
   });
-  // Marca / desmarca TODAS las emitibles visibles de una sola vez
+  // Marca / desmarca las emitibles visibles de una sola vez.
   const toggleTodas = (visibles) => {
-    const emitiblesKeys = visibles.filter(it => it.rut && Number(it.monto) > 0).map(it => it._key);
+    const emitiblesKeys = visibles.filter(esEmitible).map(it => it._key);
     const todasMarcadas = emitiblesKeys.length > 0 && emitiblesKeys.every(k => seleccion.has(k));
     setSeleccion(prev => {
       const n = new Set(prev);
@@ -155,7 +224,7 @@ const CobrosMensuales = () => {
   // Se llama solo tras la confirmación final (setConfirmando).
   const facturarMasivo = async () => {
     const finales = lista
-      .filter(it => it.rut && Number(it.monto) > 0 && seleccion.has(it._key))
+      .filter(it => esEmitible(it) && seleccion.has(it._key))
       .map(({ cobroId, empresaId, rut, razonSocial, plan, monto, correo }) =>
         ({ cobroId, empresaId, rut, razonSocial, plan, monto: Number(monto), correo }));
     if (finales.length === 0) {
@@ -300,11 +369,22 @@ const CobrosMensuales = () => {
     { id: 'ANULADA', label: 'Anuladas' },
   ];
 
-  // Lo que realmente se emitiría en la facturación masiva: por emitir con monto > 0
+  // Lo que realmente se emitiría en la facturación masiva.
+  //
+  // El conteo (`n`) viene del backend, que es el único que sabe qué clientes están
+  // en mora —eso se calcula sobre TODOS los períodos, y esta pantalla solo tiene
+  // cargado el mes elegido—. Calculado acá, el botón prometía facturas que después
+  // el servidor no emitía.
+  //
+  // `sinPrecio` sí sale de la lista local: son los del mes sin plan ni precio
+  // negociado. No es un detalle menor, es plata que no se cobra.
   const porEmitir = useMemo(() => {
-    const f = cobros.filter(c => c.estado === 'POR_EMITIR' && c.montoEsperado > 0);
-    return { n: f.length, total: f.reduce((s, c) => s + (c.montoEsperado || 0), 0) };
-  }, [cobros]);
+    const todos = cobros.filter(c => c.estado === 'POR_EMITIR');
+    return {
+      n: resumen?.facturables ?? todos.filter(c => c.montoEsperado > 0).length,
+      sinPrecio: todos.filter(c => !(c.montoEsperado > 0)),
+    };
+  }, [cobros, resumen?.facturables]);
 
   // Lista visible en el modal: filtrada por búsqueda y ordenada por la columna elegida
   const listaVisible = useMemo(() => {
@@ -313,8 +393,15 @@ const CobrosMensuales = () => {
       !t || String(it.razonSocial || '').toLowerCase().includes(t) || String(it.rut || '').toLowerCase().includes(t));
     const { campo, dir } = orden;
     return [...arr].sort((a, b) => {
-      if (campo === 'monto') {
-        const va = Number(a.monto) || 0, vb = Number(b.monto) || 0;
+      // Lo que requiere una decisión va primero: los deudores y los que no se
+      // pueden emitir. Ordenados solo por nombre quedaban repartidos entre 100
+      // filas y había que ir a buscarlos, aunque el aviso dijera que existían.
+      const pesoA = a.moraCobros > 0 ? 0 : (!a.rut || Number(a.monto) <= 0 ? 1 : 2);
+      const pesoB = b.moraCobros > 0 ? 0 : (!b.rut || Number(b.monto) <= 0 ? 1 : 2);
+      if (pesoA !== pesoB) return pesoA - pesoB;
+
+      if (campo === 'monto' || campo === 'moraMonto') {
+        const va = Number(a[campo]) || 0, vb = Number(b[campo]) || 0;
         return dir === 'asc' ? va - vb : vb - va;
       }
       const va = String(a[campo] || '').toLowerCase(), vb = String(b[campo] || '').toLowerCase();
@@ -322,227 +409,267 @@ const CobrosMensuales = () => {
     });
   }, [lista, buscarModal, orden]);
 
-  // Resumen de selección (para las tarjetas del modal)
-  const seleccionadas = lista.filter(it => it.rut && Number(it.monto) > 0 && seleccion.has(it._key));
+  // Resumen de selección (para las cifras del modal)
+  const seleccionadas = lista.filter(it => esEmitible(it) && seleccion.has(it._key));
+  // Montos que se apartan de lo pactado y correos que faltan: las dos cosas que
+  // hay que mirar ANTES de emitir, porque después la factura ya está en el SII.
+  const desviadas = seleccionadas.filter(it => desvio(it) !== null);
+  const sinCorreo = seleccionadas.filter(it => !it.correo);
   const totalSel = seleccionadas.reduce((s, it) => s + Number(it.monto), 0);
   const nOmitidas = lista.length - seleccionadas.length;
   // ¿Están todas las emitibles visibles marcadas? (para el check "seleccionar todas")
-  const emitiblesVisibles = listaVisible.filter(it => it.rut && Number(it.monto) > 0);
+  const emitiblesVisibles = listaVisible.filter(esEmitible);
   const todasVisiblesMarcadas = emitiblesVisibles.length > 0 && emitiblesVisibles.every(it => seleccion.has(it._key));
 
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+    // Ocupa el alto del panel: la tabla se estira hasta el pie y hace scroll ella
+    // misma cuando hay más filas de las que caben. Dejarla con alto natural sacaba
+    // el pie fuera de la ventana con 100 filas; con `max-h` fijo en vh se cortaba
+    // a media fila. El vacío con pocas filas se resuelve en la tabla, no acá.
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      className="flex flex-col gap-3 h-full min-h-0">
 
-      {/* AVISO DEL DÍA 26 — o cuenta regresiva si aún no toca */}
-      {resumen?.avisoFacturacion ? (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3">
-          <CalendarClock className="h-5 w-5 text-amber-600 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-amber-200 font-black uppercase tracking-widest text-[11px]">Toca facturar</p>
-            <p className="text-slate-600 text-xs">
-              Quedan <span className="font-black text-slate-900">{resumen.porEmitir}</span> empresas por facturar este periodo
-              ({clp(resumen.montoPorEmitir)}).
-            </p>
-          </div>
-        </div>
-      ) : resumen?.porEmitir > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-blue-500/[0.07] border border-blue-500/20 rounded-2xl px-4 py-3">
-          <CalendarClock className="h-5 w-5 text-blue-600 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-blue-700 font-black uppercase tracking-widest text-[11px]">
-              Próxima facturación: día {resumen.diaFacturacion}
-            </p>
-            <p className="text-slate-500 text-xs">
-              {resumen.diasParaFacturar === 0
-                ? 'Es hoy.'
-                : <>Faltan <span className="font-black text-slate-900">{resumen.diasParaFacturar}</span> días.</>}
-              {' '}Hay <span className="font-black text-slate-900">{resumen.porEmitir}</span> empresas por facturar ({clp(resumen.montoPorEmitir)}).
-            </p>
-          </div>
-        </div>
-      )}
+      {/* Sin título propio: el contenedor (Facturacion.jsx) ya rotula la pestaña
+          como «Cobro del Mes», y repetirlo acá gastaba dos líneas para decir lo
+          mismo. El aviso de cuándo toca facturar se movió junto al selector de mes.
 
-      {/* Mora arrastrada: se ve aunque el mes elegido esté al día, porque es plata
-          que ya venció y hay que salir a cobrar. */}
-      {resumen?.vencidos > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-red-500/[0.07] border border-red-500/20 rounded-2xl px-4 py-3">
-          <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-red-700 font-black uppercase tracking-widest text-[11px]">Cobranza pendiente</p>
-            <p className="text-slate-600 text-xs">
-              <span className="font-black text-slate-900">{resumen.vencidos}</span> factura(s) vencida(s) sin pagar por{' '}
-              <span className="font-black text-slate-900">{clp(resumen.montoVencido)}</span>
-              {resumen.vencidoMasAntiguo && <>, la más antigua venció el{' '}
-                <span className="font-black text-slate-900">{new Date(resumen.vencidoMasAntiguo).toLocaleDateString('es-CL')}</span></>}.
-              {' '}Usa el filtro <span className="font-black">Vencidos</span> para verlas.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi icon={FileText} label="Por emitir" value={resumen?.porEmitir ?? 0}
-             sub={clp(resumen?.montoPorEmitir)} color="bg-blue-500/15 text-blue-600" />
-        <Kpi icon={Clock} label="Pendiente pago" value={resumen?.pendientePago ?? 0}
-             color="bg-amber-500/15 text-amber-600" />
+          Cifras del mes: la de vencidos filtra al hacer clic, que es lo que uno
+          quiere hacer apenas la ve; antes había un banner que explicaba dónde
+          estaba el filtro en vez de llevarte a él. */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
+        <Kpi label="Por emitir" value={resumen?.porEmitir ?? 0}
+             sub={clp(resumen?.montoPorEmitir)}
+             onClick={() => setFiltro('POR_EMITIR')} activo={filtro === 'POR_EMITIR'} />
+        <Kpi label="Pendiente de pago" value={resumen?.pendientePago ?? 0}
+             onClick={() => setFiltro('PENDIENTE_PAGO')} activo={filtro === 'PENDIENTE_PAGO'} />
         {/* La mora no se acota al mes elegido: una factura vencida lo está venga del
-            período que venga. Acotada al mes, esta tarjeta marcaba 0 hasta el día 5
+            período que venga. Acotada al mes, esta cifra marcaba 0 hasta el día 5
             del mes siguiente y escondía lo que se arrastra de meses anteriores. */}
-        <Kpi icon={AlertTriangle} label="Vencidos (todos los meses)" value={resumen?.vencidos ?? 0}
-             sub={resumen?.montoVencido ? clp(resumen.montoVencido) : undefined}
-             color="bg-red-500/15 text-red-500" />
-        <Kpi icon={Wallet} label="Total del mes" value={clp(resumen?.montoEsperado)}
-             sub={`${resumen?.total ?? 0} empresas`} color="bg-emerald-500/15 text-emerald-600" />
+        <Kpi label="Vencidos · todos los meses" value={resumen?.vencidos ?? 0}
+             sub={resumen?.vencidos > 0 ? clp(resumen.montoVencido) : 'al día'}
+             acento={resumen?.vencidos > 0 ? 'text-red-600' : 'text-slate-900'}
+             title={resumen?.vencidoMasAntiguo
+               ? `La más antigua venció el ${new Date(resumen.vencidoMasAntiguo).toLocaleDateString('es-CL')}`
+               : undefined}
+             onClick={() => setFiltro('VENCIDOS')} activo={filtro === 'VENCIDOS'} />
+        <Kpi label="Total del mes" value={clp(resumen?.montoEsperado)}
+             sub={`${resumen?.total ?? 0} empresas`} />
       </div>
 
+      {/* Cobros en $0: no se emiten y no entran en ningún contador, así que sin
+          este aviso se pierden de vista. Un monto en $0 puede ser un dato que
+          falta (hay que cargarlo) o un cliente que deliberadamente no se factura
+          —TCG HUB se cobra a través de la EIRL de su dueña—, y la pantalla no
+          puede distinguirlos: por eso el texto invita a revisar, no acusa. */}
+      {porEmitir.sinPrecio.length > 0 && (
+        <div className="flex items-center gap-2 text-xs text-slate-600 flex-shrink-0">
+          <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+          <span className="truncate" title={porEmitir.sinPrecio.map(c => c.razonSocial).join('\n')}>
+            <span className="font-medium text-slate-900">{porEmitir.sinPrecio.length} en $0</span>
+            {' '}{porEmitir.sinPrecio.length === 1 ? 'no se factura' : 'no se facturan'} — revisa si falta cargar el precio.
+          </span>
+          <button onClick={() => { setFiltro('POR_EMITIR'); setBusqueda(''); }}
+            className="text-slate-500 hover:text-slate-900 underline decoration-dotted underline-offset-2 shrink-0">
+            ver
+          </button>
+        </div>
+      )}
+
       {/* Barra de control */}
-      <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-        <input
-          type="month" value={periodo} onChange={(e) => setPeriodo(e.target.value)}
-          className="bg-slate-50 border border-[#efe8dd] rounded-xl px-3 py-2 text-xs text-slate-900 [color-scheme:light] focus:outline-none focus:border-emerald-500/60"
-        />
-        <div className="flex flex-wrap gap-1.5 bg-slate-50 p-1 rounded-xl border border-[#efe8dd] w-fit">
+      <div className="flex flex-col lg:flex-row lg:items-center gap-2.5 flex-shrink-0">
+        {/* Navegación por mes con flechas. El `<input type="month">` abría el
+            calendario del sistema —una rejilla gris de 12 meses que no combina
+            con nada— para algo que casi siempre es «el mes anterior». */}
+        <div className="flex items-center bg-white border border-[#efe8dd] rounded-lg overflow-hidden flex-shrink-0">
+          <button onClick={() => setPeriodo(mesRelativo(periodo, -1))}
+            aria-label="Mes anterior"
+            className="px-2 py-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-50 transition-colors">
+            <ChevronLeft size={14} />
+          </button>
+          <span className="px-2 text-xs text-slate-700 whitespace-nowrap min-w-[104px] text-center">
+            {new Date(`${periodo}-02`).toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}
+          </span>
+          <button onClick={() => setPeriodo(mesRelativo(periodo, 1))}
+            disabled={periodo >= mesActual()}
+            aria-label="Mes siguiente"
+            className="px-2 py-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-50 transition-colors disabled:opacity-30 disabled:hover:bg-transparent">
+            <ChevronRight size={14} />
+          </button>
+        </div>
+        {periodo !== mesActual() && (
+          <button onClick={() => setPeriodo(mesActual())}
+            className="text-xs text-slate-500 hover:text-slate-900 underline decoration-dotted underline-offset-2 flex-shrink-0">
+            Mes actual
+          </button>
+        )}
+        <div className="flex flex-wrap gap-0.5 bg-slate-100/70 p-0.5 rounded-lg w-fit">
           {FILTROS.map(f => (
             <button key={f.id} onClick={() => setFiltro(f.id)}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                filtro === f.id ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+              className={`px-2.5 py-1 rounded-md text-xs transition-colors ${
+                filtro === f.id
+                  ? 'bg-white text-slate-900 shadow-sm font-medium'
+                  : 'text-slate-500 hover:text-slate-800'
               }`}>
               {f.label}
             </button>
           ))}
         </div>
         <div className="relative flex-1 min-w-[180px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
           <input
             placeholder="Buscar empresa..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-[#efe8dd] rounded-xl text-xs text-slate-900 placeholder-gray-600 focus:outline-none focus:border-emerald-500/60"
+            className="w-full pl-9 pr-3 py-1.5 bg-white border border-[#efe8dd] rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400"
           />
         </div>
         <button onClick={generar} disabled={generando || facturando}
           title="Sincroniza con el CRM: genera el cobro de cada cliente activo y depura los que ya no lo son"
-          className="flex items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 border border-[#efe8dd] text-slate-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors disabled:opacity-60">
+          className="flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-[#efe8dd] text-slate-600 px-3 py-1.5 rounded-lg text-xs transition-colors disabled:opacity-60">
           {generando ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Sincronizar con CRM
         </button>
-        <button onClick={abrirPreview} disabled={facturando || generando || preparando || porEmitir.n === 0}
-          title="Revisa y emite en lote las facturas de honorarios de los clientes por emitir (robot SII)"
-          className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm">
-          {(facturando || preparando) ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
-          {facturando ? 'Facturando…' : preparando ? 'Preparando…' : `Facturar${porEmitir.n > 0 ? ` (${porEmitir.n})` : ''}`}
-        </button>
+        {/* El botón solo aparece cuando hay algo que emitir. Deshabilitado y gris
+            no explicaba nada: en un mes ya facturado se veía apagado sin motivo. */}
+        {porEmitir.n > 0 ? (
+          <button onClick={abrirPreview} disabled={facturando || generando || preparando}
+            className="flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0">
+            {(facturando || preparando) ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
+            {facturando ? 'Facturando…' : preparando ? 'Preparando…' : `Facturar ${porEmitir.n}`}
+          </button>
+        ) : (
+          <span className="text-xs text-slate-400 px-2 whitespace-nowrap flex-shrink-0">
+            {(resumen?.total ?? 0) === 0 ? 'Sin cobros este mes' : 'Todo facturado'}
+          </span>
+        )}
       </div>
 
       {/* Progreso del robot de facturación masiva */}
       {facturando && (
-        <div className="flex flex-col gap-2 bg-blue-500/[0.06] border border-blue-500/20 rounded-2xl px-4 py-3">
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="font-black uppercase tracking-widest text-blue-700 flex items-center gap-2">
-              <Loader2 size={13} className="animate-spin" /> Emitiendo facturas en el SII…
+        <div className="flex flex-col gap-2 bg-white border border-[#efe8dd] rounded-xl px-4 py-3 flex-shrink-0">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-700 flex items-center gap-2">
+              <Loader2 size={13} className="animate-spin text-slate-400" /> Emitiendo facturas en el SII…
             </span>
-            <span className="font-bold text-slate-500 tabular-nums">
+            <span className="text-slate-500 tabular-nums">
               {progreso ? `${progreso.actual || 0} / ${progreso.total || porEmitir.n}` : 'Iniciando…'}
               {progreso?.rutActual ? ` · RUT ${progreso.rutActual}` : ''}
             </span>
           </div>
-          <div className="h-2 w-full rounded-full bg-blue-500/10 overflow-hidden">
-            <div className="h-full bg-blue-600 transition-all duration-500"
+          <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+            <div className="h-full bg-slate-800 transition-all duration-500"
               style={{ width: progreso?.total ? `${Math.round((progreso.actual / progreso.total) * 100)}%` : '8%' }} />
           </div>
           {progreso && (progreso.exitos > 0 || progreso.errores > 0) && (
-            <p className="text-[10px] font-bold text-slate-500">
-              ✅ {progreso.exitos} emitidas · ⚠️ {progreso.errores} con error
+            <p className="text-[11px] text-slate-500">
+              {progreso.exitos} emitidas{progreso.errores > 0 && <span className="text-red-600"> · {progreso.errores} con error</span>}
             </p>
           )}
-          <p className="text-[10px] text-slate-400 font-bold">No cierres esta pestaña mientras se emite. El proceso continúa en el servidor.</p>
+          <p className="text-[11px] text-slate-400">No cierres esta pestaña mientras se emite. El proceso continúa en el servidor.</p>
         </div>
       )}
 
-      {/* Tabla */}
-      <div className="rounded-2xl border border-[#efe8dd] bg-white overflow-hidden">
+      {/* Tabla — ocupa el alto disponible y hace scroll cuando sobran filas.
+          El borde envuelve solo las filas reales (va en el hijo, no acá): con 8
+          de 93 filas, un recuadro a pantalla completa dejaba media hoja en blanco
+          enmarcada como si faltaran datos por cargar. */}
+      <div className="flex-1 min-h-0 flex flex-col">
         {loading ? (
-          <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 text-blue-500 animate-spin" /></div>
+          <div className="flex items-center justify-center py-16 rounded-xl border border-[#efe8dd] bg-white">
+            <Loader2 className="h-5 w-5 text-slate-400 animate-spin" />
+          </div>
         ) : (
-          <div className="overflow-auto max-h-[52vh]">
+          <div className="min-h-0 overflow-auto rounded-xl border border-[#efe8dd] bg-white">
             <table className="w-full min-w-[720px] text-left border-collapse">
-              <thead className="bg-white sticky top-0 z-10">
-                <tr className="border-b border-[#efe8dd] text-[10px] uppercase tracking-widest text-slate-400">
-                  <th className="px-4 py-2.5 font-black">Empresa</th>
-                  <th className="px-4 py-2.5 font-black">Plan</th>
-                  <th className="px-4 py-2.5 font-black text-right">Monto</th>
-                  <th className="px-4 py-2.5 font-black">Folio</th>
-                  <th className="px-4 py-2.5 font-black">Estado</th>
-                  <th className="px-4 py-2.5 font-black text-right">Acciones</th>
+              <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur">
+                <tr className="border-b border-[#efe8dd] text-[11px] text-slate-500">
+                  <th className="px-4 py-2 font-medium">Empresa</th>
+                  <th className="px-4 py-2 font-medium">Plan</th>
+                  <th className="px-4 py-2 font-medium text-right">Monto</th>
+                  <th className="px-4 py-2 font-medium text-right">Folio</th>
+                  <th className="px-4 py-2 font-medium">Estado</th>
+                  <th className="pl-4 pr-2 py-2 font-medium text-right w-[1%]"></th>
                 </tr>
               </thead>
               <tbody>
                 {filtrados.map(c => {
                   const st = estiloEstado(c);
                   return (
-                    <tr key={c.id} className="border-b border-[#efe8dd] hover:bg-white transition-colors">
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center gap-2.5">
-                          <span className="w-7 h-7 rounded-lg bg-blue-500/15 border border-[#efe8dd] flex items-center justify-center text-blue-600 shrink-0">
-                            <Building2 size={13} />
-                          </span>
-                          <span className="font-bold text-slate-900 text-xs uppercase truncate max-w-[220px]" title={c.razonSocial}>
+                    <tr key={c.id} className="border-b border-[#f5f0e8] last:border-0 hover:bg-slate-50/60 transition-colors group">
+                      <td className="px-4 py-2">
+                        <span className="flex items-center gap-2 min-w-0">
+                          <span className="text-[13px] text-slate-800 truncate max-w-[260px]" title={c.razonSocial}>
                             {c.razonSocial}
                           </span>
-                        </div>
+                          {/* Cliente dado de baja que todavía debe: se le cobra igual,
+                              pero ya no es cartera y conviene verlo al llamar. */}
+                          {c.suspendida && (
+                            <span className="text-[10px] text-slate-500 bg-slate-100 border border-[#efe8dd] px-1.5 py-0.5 rounded shrink-0"
+                              title="Cliente suspendido — la deuda sigue vigente">
+                              suspendida
+                            </span>
+                          )}
+                        </span>
                       </td>
-                      <td className="px-4 py-2.5">
-                        <span className="text-[9px] font-black uppercase text-slate-500 bg-slate-50 border border-[#efe8dd] px-2 py-0.5 rounded-md">{c.plan}</span>
+                      <td className="px-4 py-2">
+                        <span className="text-[11px] text-slate-500">{c.plan}</span>
                       </td>
-                      <td className="px-4 py-2.5 text-right">
+                      <td className="px-4 py-2 text-right">
                         {editando === c.id ? (
                           <input
                             autoFocus type="text" value={montoTmp}
                             onChange={(e) => setMontoTmp(e.target.value)}
                             onBlur={() => guardarMonto(c)}
                             onKeyDown={(e) => { if (e.key === 'Enter') guardarMonto(c); if (e.key === 'Escape') setEditando(null); }}
-                            className="w-28 text-right bg-slate-50 border border-blue-500/60 rounded-lg px-2 py-1 text-sm text-slate-900 font-mono focus:outline-none"
+                            className="w-28 text-right bg-white border border-slate-400 rounded-md px-2 py-0.5 text-[13px] text-slate-900 tabular-nums focus:outline-none"
                           />
                         ) : (
                           <button
                             onClick={() => { setEditando(c.id); setMontoTmp(String(c.montoEsperado)); }}
                             title="Clic para corregir el monto"
-                            className={`font-mono font-bold text-sm hover:underline decoration-dotted ${c.montoEsperado > 0 ? 'text-slate-700' : 'text-amber-600'}`}
+                            className={`text-[13px] tabular-nums hover:underline decoration-dotted underline-offset-2 ${c.montoEsperado > 0 ? 'text-slate-800' : 'text-amber-600'}`}
                           >
-                            {clp(c.montoEsperado)}
+                            {c.montoEsperado > 0 ? clp(c.montoEsperado) : 'Sin precio'}
                           </button>
                         )}
                         {c.montoFacturado !== null && !c.montoCoincide && c.estado !== 'POR_EMITIR' && (
-                          <p className="text-[9px] font-black text-red-500 uppercase">Facturado {clp(c.montoFacturado)} ⚠</p>
+                          <p className="text-[11px] text-red-600 tabular-nums">Facturado {clp(c.montoFacturado)}</p>
                         )}
                         {c.montoAnulado > 0 && (
-                          <p className="text-[9px] font-black text-slate-500 uppercase">
+                          <p className="text-[11px] text-slate-400 tabular-nums">
                             NC −{clp(c.montoAnulado)}
                             {c.estado !== 'ANULADA' && <> · queda {clp(c.montoCobrable)}</>}
                           </p>
                         )}
                       </td>
-                      <td className="px-4 py-2.5">
-                        <span className="text-[10px] font-mono text-slate-500">{c.folio || '—'}</span>
+                      <td className="px-4 py-2 text-right">
+                        <span className="text-[11px] text-slate-400 tabular-nums">{c.folio || '—'}</span>
                       </td>
-                      <td className="px-4 py-2.5">
-                        <span className={`inline-flex text-[9px] font-black px-2 py-0.5 rounded-full border uppercase ${st.c}`}>{st.label}</span>
+                      <td className="px-4 py-2">
+                        <span className={`inline-flex items-center gap-1.5 text-[11px] ${st.texto}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${st.punto}`} />
+                          {st.label}
+                        </span>
                       </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="pl-4 pr-2 py-2 whitespace-nowrap">
+                        {/* Las acciones aparecen al pasar el mouse: en 100 filas, 100
+                            botones siempre visibles hacen ruido y esconden los datos.
+                            Sin `title`: el tooltip nativo del navegador es un cuadro
+                            negro que se dibuja sobre la fila siguiente y tapa datos.
+                            La etiqueta del botón ya dice lo que hace. */}
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                           {c.estado !== 'PAGADA' && c.estado !== 'POR_EMITIR' && c.estado !== 'ANULADA' && (
-                            <button onClick={() => marcar(c, 'PAGADA')} title="Marcar como pagada"
-                              className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-emerald-700 hover:text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-lg transition-colors">
-                              <CheckCircle2 size={11} /> Pagada
+                            <button onClick={() => marcar(c, 'PAGADA')}
+                              className="text-[11px] text-emerald-700 hover:bg-emerald-50 px-2 py-1 rounded-md transition-colors">
+                              Marcar pagada
                             </button>
                           )}
                           {c.estado === 'PENDIENTE_PAGO' && (
-                            <button onClick={() => marcar(c, 'PENDIENTE_RECIBO')} title="Pagó, falta el recibo"
-                              className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-sky-700 hover:text-sky-200 bg-sky-500/10 hover:bg-sky-500/20 px-2 py-1 rounded-lg transition-colors">
-                              <Receipt size={11} /> Recibo
+                            <button onClick={() => marcar(c, 'PENDIENTE_RECIBO')}
+                              className="text-[11px] text-sky-700 hover:bg-sky-50 px-2 py-1 rounded-md transition-colors">
+                              Recibo
                             </button>
                           )}
                           {c.estado === 'PAGADA' && (
-                            <button onClick={() => marcar(c, 'PENDIENTE_PAGO')} title="Revertir a pendiente"
-                              className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-900 transition-colors px-2 py-1">
+                            <button onClick={() => marcar(c, 'PENDIENTE_PAGO')}
+                              className="text-[11px] text-slate-400 hover:text-slate-700 hover:bg-slate-100 px-2 py-1 rounded-md transition-colors">
                               Revertir
                             </button>
                           )}
@@ -552,7 +679,7 @@ const CobrosMensuales = () => {
                   );
                 })}
                 {filtrados.length === 0 && (
-                  <tr><td colSpan="6" className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+                  <tr><td colSpan="6" className="p-10 text-center text-slate-400 text-xs">
                     No hay cobros que coincidan con el filtro.
                   </td></tr>
                 )}
@@ -562,8 +689,8 @@ const CobrosMensuales = () => {
         )}
       </div>
 
-      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center">
-        Mostrando {filtrados.length} de {cobros.length} cobros · Refleja los clientes activos del CRM · Vencimiento: día 5 del mes siguiente
+      <p className="text-[11px] text-slate-400 flex-shrink-0">
+        {filtrados.length} de {cobros.length} cobros · Refleja los clientes activos del CRM
       </p>
 
       {/* Previsualización editable de la facturación masiva (en portal al body
@@ -582,69 +709,74 @@ const CobrosMensuales = () => {
               className="w-full max-w-6xl max-h-[90vh] bg-white rounded-3xl border border-[#efe8dd] shadow-2xl overflow-hidden flex flex-col"
             >
               {/* Encabezado */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-[#efe8dd] flex-shrink-0">
+              <div className="flex items-start justify-between px-6 py-4 border-b border-[#efe8dd] flex-shrink-0">
                 <div>
-                  <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
-                    <Zap size={15} className="text-blue-600" /> Revisar facturación masiva
-                  </h3>
-                  <p className="text-[11px] text-slate-500 font-bold mt-0.5">Marca las empresas, ajusta montos y busca; luego confirma para emitir.</p>
+                  <h3 className="text-base font-semibold text-slate-900">Revisar facturación masiva</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Revisa los montos y confirma. No se factura a quien tiene deuda vencida.</p>
                 </div>
-                <button onClick={() => setShowConfirm(false)} className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
+                <button onClick={() => setShowConfirm(false)} className="text-slate-400 hover:text-slate-700 -mr-1"><X size={18} /></button>
               </div>
 
               {/* Resumen (seleccionadas / total / omitidas) + búsqueda */}
-              <div className="px-6 py-3 border-b border-[#efe8dd] flex flex-col lg:flex-row lg:items-center gap-3 flex-shrink-0 bg-slate-50/50">
-                <div className="grid grid-cols-3 gap-2 lg:flex">
-                  <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2">
-                    <CheckCircle2 size={17} className="text-blue-600 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-blue-700/70 leading-none">Seleccionadas</p>
-                      <p className="text-base font-black text-blue-700 leading-tight tabular-nums">{seleccionadas.length}</p>
-                    </div>
+              <div className="px-6 py-3 border-b border-[#efe8dd] flex flex-col lg:flex-row lg:items-center gap-4 flex-shrink-0">
+                <div className="flex items-center gap-6">
+                  <div>
+                    <p className="text-[11px] text-slate-500">Se emiten</p>
+                    <p className="text-lg font-semibold text-slate-900 leading-tight tabular-nums">{seleccionadas.length}</p>
                   </div>
-                  <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2">
-                    <Wallet size={17} className="text-emerald-600 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-emerald-700/70 leading-none">Total neto</p>
-                      <p className="text-base font-black text-emerald-700 leading-tight tabular-nums truncate">{clp(totalSel)}</p>
-                    </div>
+                  <div>
+                    <p className="text-[11px] text-slate-500">Total neto</p>
+                    <p className="text-lg font-semibold text-slate-900 leading-tight tabular-nums">{clp(totalSel)}</p>
                   </div>
-                  <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2">
-                    <AlertTriangle size={17} className="text-amber-600 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-[8px] font-black uppercase tracking-widest text-amber-700/70 leading-none">Omitidas</p>
-                      <p className="text-base font-black text-amber-700 leading-tight tabular-nums">{nOmitidas}</p>
-                    </div>
+                  <div>
+                    <p className="text-[11px] text-slate-500">Quedan fuera</p>
+                    <p className={`text-lg font-semibold leading-tight tabular-nums ${nOmitidas > 0 ? 'text-amber-600' : 'text-slate-900'}`}>{nOmitidas}</p>
                   </div>
                 </div>
                 <div className="relative flex-1 min-w-[180px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                   <input placeholder="Buscar por empresa o RUT..." value={buscarModal} onChange={(e) => setBuscarModal(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-white border border-[#efe8dd] rounded-xl text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-blue-500/60" />
+                    className="w-full pl-9 pr-3 py-1.5 bg-white border border-[#efe8dd] rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400" />
                 </div>
               </div>
 
+              {/* Deudores: quedan fuera de la emisión por regla, pero a la vista para
+                  que se sepa a quién hay que salir a cobrar. */}
+              {resumenMora?.morosos > 0 && (
+                <div className="flex items-start gap-2.5 px-6 py-2.5 border-b border-[#efe8dd] bg-red-50/50 flex-shrink-0">
+                  <AlertTriangle size={14} className="text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-slate-600 leading-relaxed">
+                    <span className="font-medium text-slate-900">{resumenMora.morosos} cliente(s) con deuda vencida</span> por{' '}
+                    <span className="font-medium text-slate-900 tabular-nums">{clp(resumenMora.monto)}</span> no se facturan.
+                    Para emitirles, primero registra el pago de su factura vencida.
+                  </p>
+                </div>
+              )}
+
               {/* Tabla editable con selección */}
               <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
-                <table className="w-full min-w-[680px] text-left border-collapse">
-                  <thead className="bg-slate-50 sticky top-0 z-10">
-                    <tr className="border-b border-[#efe8dd] text-[10px] uppercase tracking-widest text-slate-400">
-                      <th className="px-3 py-2.5 w-8">
+                <table className="w-full min-w-[820px] text-left border-collapse">
+                  <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur">
+                    <tr className="border-b border-[#efe8dd] text-[11px] text-slate-500">
+                      <th className="px-3 py-2 w-8">
                         <input type="checkbox" checked={todasVisiblesMarcadas} onChange={() => toggleTodas(listaVisible)}
-                          title="Seleccionar / quitar todas" className="w-4 h-4 accent-blue-600 cursor-pointer align-middle" />
+                          title="Seleccionar / quitar todas las que están al día" className="w-3.5 h-3.5 accent-slate-800 cursor-pointer align-middle" />
                       </th>
-                      <th className="px-3 py-2.5 font-black">
-                        <button onClick={() => ordenarPor('razonSocial')} className="inline-flex items-center gap-1 uppercase tracking-widest hover:text-slate-700">Empresa {orden.campo === 'razonSocial' && <span className="text-[8px]">{orden.dir === 'asc' ? '▲' : '▼'}</span>}</button>
+                      <th className="px-3 py-2 font-medium">
+                        <button onClick={() => ordenarPor('razonSocial')} className="inline-flex items-center gap-1 hover:text-slate-800">Empresa {orden.campo === 'razonSocial' && <span className="text-[8px]">{orden.dir === 'asc' ? '▲' : '▼'}</span>}</button>
                       </th>
-                      <th className="px-3 py-2.5 font-black">
-                        <button onClick={() => ordenarPor('rut')} className="inline-flex items-center gap-1 uppercase tracking-widest hover:text-slate-700">RUT {orden.campo === 'rut' && <span className="text-[8px]">{orden.dir === 'asc' ? '▲' : '▼'}</span>}</button>
+                      <th className="px-3 py-2 font-medium">
+                        <button onClick={() => ordenarPor('rut')} className="inline-flex items-center gap-1 hover:text-slate-800">RUT {orden.campo === 'rut' && <span className="text-[8px]">{orden.dir === 'asc' ? '▲' : '▼'}</span>}</button>
                       </th>
-                      <th className="px-3 py-2.5 font-black">Plan</th>
-                      <th className="px-3 py-2.5 font-black text-right">
-                        <button onClick={() => ordenarPor('monto')} className="inline-flex items-center gap-1 uppercase tracking-widest hover:text-slate-700">Monto neto {orden.campo === 'monto' && <span className="text-[8px]">{orden.dir === 'asc' ? '▲' : '▼'}</span>}</button>
+                      <th className="px-3 py-2 font-medium">Plan</th>
+                      <th className="px-3 py-2 font-medium text-right">
+                        <button onClick={() => ordenarPor('monto')} className="inline-flex items-center gap-1 hover:text-slate-800">Monto neto {orden.campo === 'monto' && <span className="text-[8px]">{orden.dir === 'asc' ? '▲' : '▼'}</span>}</button>
                       </th>
-                      <th className="px-3 py-2.5 font-black">Correo</th>
-                      <th className="px-3 py-2.5 font-black">Estado</th>
+                      <th className="px-3 py-2 font-medium">Correo</th>
+                      <th className="px-3 py-2 font-medium text-right">
+                        <button onClick={() => ordenarPor('moraMonto')} className="inline-flex items-center gap-1 hover:text-slate-800">Deuda vencida {orden.campo === 'moraMonto' && <span className="text-[8px]">{orden.dir === 'asc' ? '▲' : '▼'}</span>}</button>
+                      </th>
+                      <th className="px-3 py-2 font-medium">Estado</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -653,37 +785,67 @@ const CobrosMensuales = () => {
                       const marcada = seleccion.has(it._key);
                       const seEmite = !motivo && marcada;
                       return (
-                        <tr key={it._key} className={`border-b border-[#efe8dd] hover:bg-slate-50/60 transition-colors ${seEmite ? '' : 'opacity-70'}`}>
+                        <tr key={it._key} className={`border-b border-[#f5f0e8] last:border-0 hover:bg-slate-50/60 transition-colors ${seEmite ? '' : 'bg-slate-50/40'}`}>
                           <td className="px-3 py-2">
-                            <input type="checkbox" checked={marcada} disabled={!it.rut} onChange={() => toggleSel(it._key)}
-                              className="w-4 h-4 accent-blue-600 cursor-pointer align-middle disabled:cursor-not-allowed disabled:opacity-40" />
+                            <input type="checkbox" checked={marcada && !motivo} disabled={Boolean(motivo)}
+                              onChange={() => toggleSel(it._key)}
+                              title={motivo || 'Incluir en la emisión'}
+                              className="w-3.5 h-3.5 accent-slate-800 cursor-pointer align-middle disabled:cursor-not-allowed disabled:opacity-40" />
                           </td>
-                          <td className="px-3 py-2"><span className="font-bold text-slate-900 text-xs uppercase truncate block max-w-[200px]" title={it.razonSocial}>{it.razonSocial}</span></td>
-                          <td className="px-3 py-2"><span className="text-[11px] font-mono text-slate-500">{it.rut || '—'}</span></td>
-                          <td className="px-3 py-2"><span className="text-[9px] font-black uppercase text-slate-500 bg-slate-50 border border-[#efe8dd] px-2 py-0.5 rounded-md">{it.plan}</span></td>
+                          <td className="px-3 py-2"><span className={`text-[13px] truncate block max-w-[220px] ${seEmite ? 'text-slate-800' : 'text-slate-500'}`} title={it.razonSocial}>{it.razonSocial}</span></td>
+                          <td className="px-3 py-2"><span className="text-[11px] text-slate-500 tabular-nums">{it.rut || '—'}</span></td>
+                          <td className="px-3 py-2"><span className="text-[11px] text-slate-500">{it.plan}</span></td>
                           <td className="px-3 py-2 text-right">
-                            <input type="text" inputMode="numeric" disabled={!it.rut}
-                              value={it.monto ? Number(it.monto).toLocaleString('es-CL') : ''}
-                              onChange={(e) => editarMontoLista(it._key, e.target.value)} placeholder="0"
-                              className={`w-24 text-right bg-slate-50 border rounded-lg px-2 py-1 text-sm font-mono focus:outline-none focus:border-blue-500/60 disabled:opacity-40 ${Number(it.monto) > 0 ? 'border-[#efe8dd] text-slate-800' : 'border-amber-400/60 text-amber-600'}`} />
+                            {(() => {
+                              const d = desvio(it);
+                              return (
+                                <>
+                                  <input type="text" inputMode="numeric" disabled={!it.rut}
+                                    value={it.monto ? Number(it.monto).toLocaleString('es-CL') : ''}
+                                    onChange={(e) => editarMontoLista(it._key, e.target.value)} placeholder="0"
+                                    title={d !== null ? `Pactado ${clp(it.montoPactado)}` : ''}
+                                    className={`w-24 text-right bg-white border rounded-md px-2 py-0.5 text-[13px] tabular-nums focus:outline-none focus:border-slate-400 disabled:opacity-40 ${
+                                      Number(it.monto) <= 0 ? 'border-amber-400 text-amber-600'
+                                      : d !== null ? 'border-red-400 text-red-600' : 'border-[#efe8dd] text-slate-800'}`} />
+                                  {d !== null && (
+                                    <span className="block text-[11px] text-red-600 tabular-nums">
+                                      {d > 0 ? '+' : ''}{d}% · pactado {clp(it.montoPactado)}
+                                    </span>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </td>
                           <td className="px-3 py-2">
                             {it.correo
-                              ? <span className="text-[10px] text-slate-500 truncate block max-w-[150px]" title={it.correo}>{it.correo}</span>
-                              : <span className="text-[9px] font-black uppercase text-amber-600" title="Se emite la factura pero no se enviará correo">Sin correo</span>}
+                              ? <span className="text-[11px] text-slate-400 truncate block max-w-[150px]" title={it.correo}>{it.correo}</span>
+                              : <span className="text-[11px] text-amber-600" title="Se emite la factura pero no se enviará correo">Sin correo</span>}
+                          </td>
+                          <td className="px-3 py-2 text-right">
+                            {it.moraCobros > 0 ? (
+                              <span title={it.moraDesde ? `La más antigua venció el ${new Date(it.moraDesde).toLocaleDateString('es-CL')}` : ''}>
+                                <span className="text-[13px] text-red-600 tabular-nums">{clp(it.moraMonto)}</span>
+                                <span className="block text-[11px] text-red-500/70">{it.moraCobros} factura(s)</span>
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-slate-300">—</span>
+                            )}
                           </td>
                           <td className="px-3 py-2">
                             {motivo
-                              ? <span className="inline-flex text-[9px] font-black px-2 py-0.5 rounded-full border uppercase text-red-600 bg-red-500/10 border-red-500/30">{motivo}</span>
+                              ? <span className="inline-flex items-center gap-1.5 text-[11px] text-red-600" title={it.moraCobros > 0 ? 'No se factura mientras tenga facturas vencidas sin pagar' : motivo}>
+                                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                  {it.moraCobros > 0 ? 'No se factura' : motivo}
+                                </span>
                               : marcada
-                                ? <span className="inline-flex text-[9px] font-black px-2 py-0.5 rounded-full border uppercase text-blue-700 bg-blue-500/10 border-blue-500/30">Se emite</span>
-                                : <span className="inline-flex text-[9px] font-black px-2 py-0.5 rounded-full border uppercase text-slate-400 bg-slate-100 border-[#efe8dd]">Excluida</span>}
+                                ? <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Se emite</span>
+                                : <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400"><span className="w-1.5 h-1.5 rounded-full bg-slate-300" />Excluida</span>}
                           </td>
                         </tr>
                       );
                     })}
                     {listaVisible.length === 0 && (
-                      <tr><td colSpan="7" className="p-8 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
+                      <tr><td colSpan="8" className="p-8 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">
                         No hay empresas que coincidan con la búsqueda.
                       </td></tr>
                     )}
@@ -693,32 +855,63 @@ const CobrosMensuales = () => {
 
               {/* Pie: acciones — con paso de confirmación final */}
               {!confirmando ? (
-                <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-[#efe8dd] bg-slate-50 flex-shrink-0">
+                <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-[#efe8dd] bg-slate-50/60 flex-shrink-0">
                   <button onClick={() => setShowConfirm(false)}
-                    className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors">
+                    className="px-3.5 py-1.5 rounded-lg text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors">
                     Cancelar
                   </button>
                   <button onClick={() => setConfirmando(true)} disabled={seleccionadas.length === 0}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                    className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                     <Zap size={13} /> Emitir {seleccionadas.length} factura(s)
                   </button>
                 </div>
               ) : (
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-6 py-4 border-t border-red-500/30 bg-red-500/[0.06] flex-shrink-0">
-                  <p className="flex-1 text-[11px] font-bold text-slate-700 flex items-start gap-2">
-                    <AlertTriangle size={15} className="text-red-500 shrink-0 mt-0.5" />
-                    <span>Vas a generar <b className="text-slate-900">{seleccionadas.length}</b> factura(s) por <b className="text-slate-900">{clp(totalSel)}</b> de forma <b className="uppercase text-red-600">definitiva</b> en el SII y se enviará el correo a cada cliente. Esta acción no se puede deshacer.</span>
-                  </p>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <button onClick={() => setConfirmando(false)}
-                      className="px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors">
-                      Volver
-                    </button>
-                    <button onClick={facturarMasivo}
-                      className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors shadow-sm">
-                      <Zap size={13} /> Sí, emitir definitivamente
-                    </button>
+                <div className="flex flex-col gap-3 px-6 py-3.5 border-t border-red-200 bg-red-50/60 flex-shrink-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1 flex items-start gap-2.5">
+                      <AlertTriangle size={15} className="text-red-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-slate-700 leading-relaxed">
+                        Vas a emitir <span className="font-medium text-slate-900">{seleccionadas.length} factura(s)</span> por{' '}
+                        <span className="font-medium text-slate-900 tabular-nums">{clp(totalSel)}</span> de forma definitiva en el SII,
+                        y se enviará el correo a cada cliente. No se puede deshacer.
+                        {sinCorreo.length > 0 && (
+                          <span className="block mt-1 text-slate-500">
+                            {sinCorreo.length} sin correo: se emite la factura pero no le llega al cliente
+                            ({sinCorreo.slice(0, 3).map(c => c.razonSocial).join(', ')}{sinCorreo.length > 3 ? '…' : ''}).
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button onClick={() => setConfirmando(false)}
+                        className="px-3.5 py-1.5 rounded-lg text-xs text-slate-500 hover:text-slate-800 hover:bg-white transition-colors">
+                        Volver
+                      </button>
+                      <button onClick={facturarMasivo} disabled={desviadas.length > 0 && !aceptaDesvio}
+                        className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                        <Zap size={13} /> Sí, emitir
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Montos fuera de lo pactado: hay que aprobarlos a mano. Un cero
+                      de más pasa desapercibido en una lista de 89 y ya emitido no
+                      se puede deshacer, solo anular con nota de crédito. */}
+                  {desviadas.length > 0 && (
+                    <label className="flex items-start gap-2.5 bg-white border border-red-300 rounded-lg px-3 py-2 cursor-pointer">
+                      <input type="checkbox" checked={aceptaDesvio} onChange={(e) => setAceptaDesvio(e.target.checked)}
+                        className="w-3.5 h-3.5 accent-red-600 cursor-pointer mt-0.5 shrink-0" />
+                      <span className="text-xs text-slate-700 leading-relaxed">
+                        Confirmo que <span className="font-medium text-slate-900">{desviadas.length} monto(s)</span> se
+                        apartan de lo pactado y son correctos:{' '}
+                        {desviadas.map(d => (
+                          <span key={d._key} className="whitespace-nowrap">
+                            {d.razonSocial} <span className="tabular-nums">({clp(d.montoPactado)} → {clp(d.monto)})</span>
+                          </span>
+                        )).reduce((a, b) => [a, ', ', b])}.
+                      </span>
+                    </label>
+                  )}
                 </div>
               )}
             </motion.div>
@@ -742,36 +935,34 @@ const CobrosMensuales = () => {
               className="w-full max-w-2xl max-h-[85vh] bg-white rounded-3xl border border-[#efe8dd] shadow-2xl overflow-hidden flex flex-col"
             >
               <div className="flex items-center justify-between px-6 py-4 border-b border-[#efe8dd] flex-shrink-0">
-                <h3 className="text-sm font-black uppercase tracking-widest text-slate-900 flex items-center gap-2">
-                  <CheckCircle2 size={15} className="text-emerald-600" /> Resumen de facturación
-                </h3>
-                <button onClick={() => setResultado(null)} className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
+                <h3 className="text-base font-semibold text-slate-900">Resumen de facturación</h3>
+                <button onClick={() => setResultado(null)} className="text-slate-400 hover:text-slate-700 -mr-1"><X size={18} /></button>
               </div>
 
-              <div className="px-6 py-4 grid grid-cols-1 sm:grid-cols-3 gap-3 flex-shrink-0">
-                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl px-4 py-3 text-center">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-emerald-700">Emitidas</p>
-                  <p className="text-2xl font-black text-emerald-600 tabular-nums">{resultado.exitos}</p>
+              <div className="px-6 py-4 flex items-center gap-8 flex-shrink-0 border-b border-[#efe8dd]">
+                <div>
+                  <p className="text-[11px] text-slate-500">Emitidas</p>
+                  <p className="text-2xl font-semibold text-slate-900 tabular-nums leading-tight">{resultado.exitos}</p>
                 </div>
-                <div className="bg-red-500/10 border border-red-500/30 rounded-2xl px-4 py-3 text-center">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-red-600">Con error</p>
-                  <p className="text-2xl font-black text-red-500 tabular-nums">{resultado.errores}</p>
+                <div>
+                  <p className="text-[11px] text-slate-500">Con error</p>
+                  <p className={`text-2xl font-semibold tabular-nums leading-tight ${resultado.errores > 0 ? 'text-red-600' : 'text-slate-900'}`}>{resultado.errores}</p>
                 </div>
-                <div className="bg-slate-100 border border-[#efe8dd] rounded-2xl px-4 py-3 text-center">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">No procesadas</p>
-                  <p className="text-2xl font-black text-slate-500 tabular-nums">{resultado.noProcesadas}</p>
+                <div>
+                  <p className="text-[11px] text-slate-500">No procesadas</p>
+                  <p className="text-2xl font-semibold text-slate-500 tabular-nums leading-tight">{resultado.noProcesadas}</p>
                 </div>
               </div>
 
-              <div className="flex-1 min-h-0 overflow-auto custom-scrollbar px-6 pb-2 space-y-3">
+              <div className="flex-1 min-h-0 overflow-auto custom-scrollbar px-6 py-3 space-y-4">
                 {resultado.detalle.filter(r => r.estado === 'error').length > 0 && (
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-red-600 mb-1.5">Empresas que fallaron</p>
-                    <div className="flex flex-col gap-1">
+                    <p className="text-xs font-medium text-slate-900 mb-2">Empresas que fallaron</p>
+                    <div className="flex flex-col divide-y divide-[#f5f0e8] border border-[#efe8dd] rounded-lg overflow-hidden">
                       {resultado.detalle.filter(r => r.estado === 'error').map((r, i) => (
-                        <div key={`e${i}`} className="flex items-start justify-between gap-3 bg-red-500/[0.05] border border-red-500/20 rounded-lg px-3 py-1.5">
-                          <span className="text-[11px] font-bold text-slate-700 uppercase truncate">{r.razonSocial || r.nombre || r.rut}</span>
-                          <span className="text-[10px] text-red-600 text-right max-w-[55%]">{r.error || 'Error desconocido'}</span>
+                        <div key={`e${i}`} className="flex items-start justify-between gap-3 px-3 py-2">
+                          <span className="text-xs text-slate-700 truncate">{r.razonSocial || r.nombre || r.rut}</span>
+                          <span className="text-[11px] text-red-600 text-right max-w-[55%]">{r.error || 'Error desconocido'}</span>
                         </div>
                       ))}
                     </div>
@@ -779,28 +970,28 @@ const CobrosMensuales = () => {
                 )}
                 {resultado.detalle.filter(r => r.estado === 'exito').length > 0 && (
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 mb-1.5">Emitidas correctamente</p>
-                    <div className="flex flex-col gap-1">
+                    <p className="text-xs font-medium text-slate-900 mb-2">Emitidas correctamente</p>
+                    <div className="flex flex-col divide-y divide-[#f5f0e8] border border-[#efe8dd] rounded-lg overflow-hidden">
                       {resultado.detalle.filter(r => r.estado === 'exito').map((r, i) => (
-                        <div key={`s${i}`} className="flex items-center justify-between gap-3 bg-emerald-500/[0.05] border border-emerald-500/20 rounded-lg px-3 py-1.5">
-                          <span className="text-[11px] font-bold text-slate-700 uppercase truncate">{r.razonSocial || r.nombre || r.rut}</span>
-                          <span className="text-[10px] font-mono text-emerald-700">Folio {r.folio}</span>
+                        <div key={`s${i}`} className="flex items-center justify-between gap-3 px-3 py-2">
+                          <span className="text-xs text-slate-700 truncate">{r.razonSocial || r.nombre || r.rut}</span>
+                          <span className="text-[11px] text-slate-500 tabular-nums">Folio {r.folio}</span>
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
                 {resultado.noProcesadas > 0 && (
-                  <p className="text-[10px] text-slate-400 font-bold">
+                  <p className="text-[11px] text-slate-400">
                     {resultado.noProcesadas} no se procesaron (ya facturadas este mes o sin datos válidos) — el sistema evita duplicados.
                   </p>
                 )}
-                {resultado.vinc && <p className="text-[10px] text-slate-500 font-bold">{resultado.vinc}</p>}
+                {resultado.vinc && <p className="text-[11px] text-slate-500">{resultado.vinc}</p>}
               </div>
 
-              <div className="flex items-center justify-end px-6 py-4 border-t border-[#efe8dd] bg-slate-50 flex-shrink-0">
+              <div className="flex items-center justify-end px-6 py-3.5 border-t border-[#efe8dd] bg-slate-50/60 flex-shrink-0">
                 <button onClick={() => setResultado(null)}
-                  className="bg-slate-900 hover:bg-slate-700 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors">
+                  className="bg-slate-900 hover:bg-slate-700 text-white px-4 py-1.5 rounded-lg text-xs font-medium transition-colors">
                   Cerrar
                 </button>
               </div>

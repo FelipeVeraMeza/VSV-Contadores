@@ -131,8 +131,18 @@ const Facturacion = () => {
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col bg-white backdrop-blur-xl rounded-3xl border border-[#efe8dd] shadow-2xl overflow-hidden">
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+      {/* En Cobro del Mes el panel se ajusta al contenido (`items-start` sobre el
+          eje del padre vía `self-start`) en vez de estirarse: con 8 filas quedaba
+          media pantalla de blanco entre la tabla y el pie. `max-h-full` lo acota
+          para que con 100 filas no se pase de la ventana. */}
+      <div className={`flex flex-col bg-white backdrop-blur-xl rounded-3xl border border-[#efe8dd] shadow-2xl overflow-hidden min-h-0 ${
+        activeTab === 'cobros' ? 'flex-1 max-h-full' : 'flex-1'}`}>
+        {/* El Cobro del Mes trae su propia tabla con scroll: si el panel también
+            desplaza, quedan dos barras anidadas y la tabla se corta a media fila
+            con el pie fuera de la vista. Las otras pestañas sí necesitan scroll
+            aquí, porque su contenido crece hacia abajo sin límite. */}
+        <div className={`flex-1 min-h-0 p-4 md:p-8 ${
+          activeTab === 'cobros' ? 'overflow-hidden' : 'overflow-y-auto custom-scrollbar'}`}>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -140,7 +150,7 @@ const Facturacion = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="h-full"
+              className="h-full min-h-0"
             >
               {activeTab === 'emision' && (
                 <EmisionDTE

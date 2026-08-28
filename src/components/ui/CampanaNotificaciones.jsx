@@ -135,6 +135,13 @@ const CampanaNotificaciones = () => {
                 : '/tareas?sub=todas');
         }
         else if (a.entidad === 'proyecto') navigate('/tareas?sub=proyectos');
+        // Los avisos de reunión (`entidad: 'reunion'`) no llevaban a ninguna
+        // parte: se pulsaban y no pasaba nada, justo cuando el aviso dice que la
+        // reunión empieza. Se conecta ahora que la pantalla se mudó a
+        // Comunicaciones. La lista no abre una reunión concreta por id —no
+        // acepta ese parámetro—, así que lleva a la lista, donde la que está en
+        // curso aparece arriba y marcada.
+        else if (a.entidad === 'reunion') navigate('/comunicaciones?sub=reuniones');
     };
 
     return (

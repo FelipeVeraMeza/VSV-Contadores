@@ -76,11 +76,15 @@ export const listarCobros = async (req, res) => {
             if (estado) { params.push(estado); where.push(`cm.estado = $${params.length}`); }
         }
 
+        // `suspendida` viaja con cada cobro: una factura vencida hay que cobrarla
+        // aunque el cliente ya no esté en cartera, y quien la cobra necesita saber
+        // que se dio de baja —el trato es distinto y ya no hay servicio que cortar.
         const { rows } = await pool.query(
             `SELECT cm.id, cm.empresa_id, cm.periodo, cm.monto_esperado, cm.monto_facturado,
                     cm.monto_anulado,
                     cm.folio, cm.tipo_dte, cm.estado, cm.fecha_emision, cm.fecha_vencimiento, cm.fecha_pago,
-                    e.razon_social, p.nombre AS plan
+                    e.razon_social, p.nombre AS plan,
+                    (e.activo IS FALSE OR e.en_cartera IS FALSE) AS suspendida
              FROM cobro_mensual cm
              JOIN empresa e ON e.id = cm.empresa_id
              LEFT JOIN plan p ON p.id = e.plan_id
@@ -99,6 +103,8 @@ export const listarCobros = async (req, res) => {
                 empresaId: r.empresa_id,
                 razonSocial: r.razon_social,
                 plan: r.plan || 'Sin plan',
+                // Cliente dado de baja que aún debe: sigue en cobranza, ya no en cartera
+                suspendida: r.suspendida === true,
                 periodo: r.periodo,
                 montoEsperado: parseFloat(r.monto_esperado) || 0,
                 montoFacturado: facturado,
@@ -135,16 +141,30 @@ export const resumenCobros = async (req, res) => {
         const { periodo } = req.query;
         const per = periodoSql(periodo);
 
-        const params = [];
+        // El id de la organización va SIEMPRE como parámetro fijo (puede ser null),
+        // porque la subconsulta de mora lo necesita aunque el WHERE de arriba lo
+        // omita. Armarlo solo cuando existe dejaba a `facturables` apuntando a un
+        // $1 inexistente en el caso sin organización.
+        const params = [organizacionId];
         const where = [];
-        if (organizacionId) { params.push(organizacionId); where.push(`organizacion_id = $${params.length}`); }
+        if (organizacionId) where.push(`organizacion_id = $1`);
         if (per) { params.push(per); where.push(`periodo = $${params.length}::date`); }
         else where.push(`periodo = date_trunc('month', CURRENT_DATE)::date`);
 
+        // `facturables` = lo que realmente saldría en la emisión masiva: por emitir,
+        // con monto, y del cliente que no arrastra deuda vencida. El botón mostraba
+        // `por_emitir` a secas y prometía más facturas de las que iba a emitir.
         const { rows } = await pool.query(
             `SELECT
                 COUNT(*)                                                   AS total,
                 COUNT(*) FILTER (WHERE estado = 'POR_EMITIR')              AS por_emitir,
+                COUNT(*) FILTER (WHERE estado = 'POR_EMITIR' AND monto_esperado > 0
+                                   AND empresa_id NOT IN (
+                                       SELECT v.empresa_id FROM cobro_mensual v
+                                        WHERE v.estado = 'PENDIENTE_PAGO'
+                                          AND v.fecha_vencimiento < CURRENT_DATE
+                                          AND ($1::uuid IS NULL OR v.organizacion_id = $1)
+                                   ))                                      AS facturables,
                 COUNT(*) FILTER (WHERE estado = 'PENDIENTE_PAGO')          AS pendiente_pago,
                 COUNT(*) FILTER (WHERE estado = 'PAGADA')                  AS pagada,
                 COUNT(*) FILTER (WHERE estado = 'PENDIENTE_RECIBO')        AS pendiente_recibo,
@@ -187,6 +207,8 @@ export const resumenCobros = async (req, res) => {
             periodo: per || new Date(hoy.getFullYear(), hoy.getMonth(), 1).toISOString().slice(0, 10),
             total: parseInt(r.total) || 0,
             porEmitir,
+            // Los que de verdad se emitirían (sin los $0 ni los que están en mora)
+            facturables: parseInt(r.facturables) || 0,
             pendientePago: parseInt(r.pendiente_pago) || 0,
             pagada: parseInt(r.pagada) || 0,
             pendienteRecibo: parseInt(r.pendiente_recibo) || 0,
@@ -518,14 +540,35 @@ const construirFacturaRobot = ({ empresaId, rut, razonSocial, plan, monto, corre
 };
 
 // Trae los cobros POR_EMITIR del mes con datos del cliente (RUT desencriptado).
+//
+// Junto a cada cobro viaja la MORA del cliente: cuántas facturas suyas están
+// vencidas sin pagar y por cuánto. No se factura a ciegas a quien ya debe —
+// emitirle otra factura al que lleva meses sin pagar agranda la deuda y ensucia
+// la cobranza. La decisión final es del usuario (la pantalla las desmarca pero
+// las deja visibles), así que acá solo se informa, no se excluye.
 const cobrosDelMesParaFacturar = async (organizacionId) => {
     const { rows } = await pool.query(
         `SELECT cm.id AS cobro_id, cm.monto_esperado,
                 e.id AS empresa_id, e.razon_social, e.rut_encrypted, e.email_corporativo,
-                p.nombre AS plan
+                p.nombre AS plan,
+                COALESCE(mora.n, 0)     AS mora_n,
+                COALESCE(mora.monto, 0) AS mora_monto,
+                mora.mas_antiguo        AS mora_mas_antiguo
          FROM cobro_mensual cm
          JOIN empresa e ON e.id = cm.empresa_id
          LEFT JOIN plan p ON p.id = e.plan_id
+         LEFT JOIN (
+            -- Deuda vencida del cliente, de CUALQUIER período anterior.
+            SELECT v.empresa_id,
+                   COUNT(*)                                                   AS n,
+                   SUM(COALESCE(v.monto_facturado, v.monto_esperado))         AS monto,
+                   MIN(v.fecha_vencimiento)                                   AS mas_antiguo
+            FROM cobro_mensual v
+            WHERE v.estado = 'PENDIENTE_PAGO'
+              AND v.fecha_vencimiento < CURRENT_DATE
+              AND ($1::uuid IS NULL OR v.organizacion_id = $1)
+            GROUP BY v.empresa_id
+         ) mora ON mora.empresa_id = cm.empresa_id
          WHERE cm.periodo = date_trunc('month', CURRENT_DATE)::date
            AND cm.estado = 'POR_EMITIR'
            AND ($1::uuid IS NULL OR cm.organizacion_id = $1)
@@ -543,22 +586,44 @@ const cobrosDelMesParaFacturar = async (organizacionId) => {
             plan: r.plan || 'Sin plan',
             monto: Math.round(parseFloat(r.monto_esperado) || 0),
             correo: r.email_corporativo || '',
+            // Mora arrastrada: 0 = al día
+            moraCobros: parseInt(r.mora_n) || 0,
+            moraMonto: Math.round(parseFloat(r.mora_monto) || 0),
+            moraDesde: r.mora_mas_antiguo || null,
         };
     });
 };
 
 // PREVISUALIZACIÓN: devuelve lo que se facturaría para revisarlo antes de emitir.
-//   facturar → listos (monto > 0 y RUT válido)   ·   omitidas → por incluir a mano
+//   facturar → listos (monto > 0, RUT válido y cliente al día)
+//   omitidas → hay que decidirlos a mano (sin RUT, monto $0, o con deuda vencida)
+//
+// Los morosos NO se descartan: viajan en `omitidas` con su motivo y su deuda para
+// que la pantalla los muestre desmarcados. Excluir en silencio a un cliente que
+// solo debe $10.000 sería peor que emitirle la factura.
 export const previsualizarFacturacion = async (req, res) => {
     try {
         const organizacionId = req.user?.organizacionId || null;
         const items = await cobrosDelMesParaFacturar(organizacionId);
         const facturar = [], omitidas = [];
         for (const it of items) {
-            if (it.rut && it.monto > 0) facturar.push(it);
-            else omitidas.push({ ...it, motivo: !it.rut ? 'Sin RUT' : 'Monto $0' });
+            if (!it.rut)            omitidas.push({ ...it, motivo: 'Sin RUT' });
+            else if (it.monto <= 0) omitidas.push({ ...it, motivo: 'Monto $0' });
+            else if (it.moraCobros > 0) {
+                omitidas.push({
+                    ...it,
+                    motivo: `Debe ${it.moraCobros} factura(s) por $${it.moraMonto.toLocaleString('es-CL')}`,
+                });
+            }
+            else facturar.push(it);
         }
-        return res.json({ success: true, facturar, omitidas });
+        const conMora = omitidas.filter(o => o.moraCobros > 0);
+        return res.json({
+            success: true, facturar, omitidas,
+            // Resumen de la mora, para el aviso de la pantalla
+            morosos: conMora.length,
+            montoMoroso: conMora.reduce((s, o) => s + o.moraMonto, 0),
+        });
     } catch (err) {
         console.error('❌ Error previsualizando facturación:', err.message);
         return res.status(500).json({ success: false, message: 'Error al previsualizar la facturación.' });
@@ -576,44 +641,102 @@ export const facturarCobrosMasivo = async (req, res) => {
         // Lista revisada desde el frontend (preview editable); si no viene, se arma
         // sola desde la BD (compatibilidad).
         const revisadas = Array.isArray(req.body?.facturas) ? req.body.facturas : null;
-        const origen = revisadas || await cobrosDelMesParaFacturar(organizacionId);
+        const origenBruto = revisadas || await cobrosDelMesParaFacturar(organizacionId);
+
+        // REGLA: al cliente con facturas vencidas sin pagar no se le emite otra.
+        //
+        // Se comprueba acá, contra la BD, y no solo en la pantalla: el body lo arma
+        // el navegador y puede venir con un cobro cuyo cliente cayó en mora después
+        // de abrir la previsualización (o de un cliente que ya la tenía, si alguien
+        // llama al endpoint directamente). La emisión en el SII es irreversible, así
+        // que el filtro tiene que estar del lado que ejecuta.
+        const { rows: enMora } = await pool.query(
+            `SELECT DISTINCT cm.empresa_id
+               FROM cobro_mensual cm
+              WHERE cm.estado = 'PENDIENTE_PAGO'
+                AND cm.fecha_vencimiento < CURRENT_DATE
+                AND ($1::uuid IS NULL OR cm.organizacion_id = $1)`,
+            [organizacionId]
+        );
+        const morosos = new Set(enMora.map(r => r.empresa_id));
+        const bloqueadas = [];
+        const origen = origenBruto.filter(it => {
+            if (it.empresaId && morosos.has(it.empresaId)) {
+                bloqueadas.push(it.razonSocial || it.rut || 'sin nombre');
+                return false;
+            }
+            return true;
+        });
 
         const facturas = [];
         let omitidas = 0;
+        const desviadas = [];   // montos que se apartaron de lo pactado
         for (const it of origen) {
             const factura = construirFacturaRobot(it, mesNombre);
             if (!factura) { omitidas++; continue; }
             // Si el usuario ajustó el monto en la revisión, lo persistimos al cobro
-            // para que quede consistente con lo que se emite.
+            // para que quede consistente con lo que se emite. Antes de pisarlo,
+            // dejamos constancia de cuánto se apartó del precio que había: es el
+            // único registro de que la factura no salió por el valor pactado.
             if (it.cobroId) {
                 try {
+                    // El precio pactado se lee ANTES de pisarlo: dentro del propio
+                    // UPDATE ya vendría con el valor nuevo y la comparación siempre
+                    // daría cero diferencia.
+                    const { rows: [previo] } = await pool.query(
+                        `SELECT monto_esperado FROM cobro_mensual
+                          WHERE id = $1 AND ($2::uuid IS NULL OR organizacion_id = $2)`,
+                        [it.cobroId, organizacionId]
+                    );
+                    const antes = Number(previo?.monto_esperado) || 0;
+                    const ahora = Math.round(Number(it.monto) || 0);
+                    if (antes > 0 && Math.abs((ahora - antes) / antes) >= 0.20) {
+                        desviadas.push({ razonSocial: it.razonSocial, pactado: antes, emitido: ahora });
+                    }
                     await pool.query(
                         `UPDATE cobro_mensual SET monto_esperado = $2, updated_at = NOW()
                          WHERE id = $1 AND estado = 'POR_EMITIR' AND ($3::uuid IS NULL OR organizacion_id = $3)`,
-                        [it.cobroId, Math.round(Number(it.monto) || 0), organizacionId]
+                        [it.cobroId, ahora, organizacionId]
                     );
                 } catch { /* no bloquea la emisión */ }
             }
             facturas.push(factura);
         }
 
+        // Queda en el log del servidor: si mañana aparece una factura por diez veces
+        // lo pactado, hay dónde mirar qué pasó y cuándo.
+        if (desviadas.length) {
+            console.warn(`⚠️ [COBROS] ${desviadas.length} factura(s) con monto fuera de lo pactado:`,
+                desviadas.map(d => `${d.razonSocial}: ${d.pactado} → ${d.emitido}`).join(' | '));
+        }
+
         if (facturas.length === 0) {
-            return res.status(400).json({ success: false, message: `No hay facturas válidas para emitir (${omitidas} omitida(s) por monto $0 o RUT inválido).` });
+            return res.status(400).json({
+                success: false,
+                message: `No hay facturas válidas para emitir (${omitidas} omitida(s) por monto $0 o RUT inválido`
+                       + (bloqueadas.length ? `, ${bloqueadas.length} con deuda vencida` : '') + ').',
+                bloqueadas,
+            });
         }
 
         // Cobros que quedaron fuera: la pantalla manda la lista que tenía cargada,
         // así que si se creó un cobro después de abrirla, no viaja en el body y no
         // se factura. Se avisa en la respuesta en vez de dejarlo pasar en silencio.
+        // Los morosos NO cuentan acá: quedaron fuera porque así se decidió, no por
+        // un descuido de la pantalla. Mezclarlos convertiría la alerta en ruido de
+        // ocho nombres todos los meses y taparía el caso real que sí importa.
         const enviados = new Set(origen.map(it => it.cobroId).filter(Boolean));
         const { rows: pendientesBD } = await pool.query(
-            `SELECT cm.id, e.razon_social
+            `SELECT cm.id, cm.empresa_id, e.razon_social
              FROM cobro_mensual cm JOIN empresa e ON e.id = cm.empresa_id
              WHERE cm.periodo = date_trunc('month', CURRENT_DATE)::date
                AND cm.estado = 'POR_EMITIR'
                AND ($1::uuid IS NULL OR cm.organizacion_id = $1)`,
             [organizacionId]
         );
-        const noIncluidas = pendientesBD.filter(c => !enviados.has(c.id)).map(c => c.razon_social);
+        const noIncluidas = pendientesBD
+            .filter(c => !enviados.has(c.id) && !morosos.has(c.empresa_id))
+            .map(c => c.razon_social);
 
         // Respondemos de inmediato y disparamos el robot en segundo plano.
         res.json({
@@ -621,8 +744,11 @@ export const facturarCobrosMasivo = async (req, res) => {
             total: facturas.length,
             omitidas,
             noIncluidas,
+            bloqueadas,
+            desviadas,
             message: `Emisión iniciada para ${facturas.length} factura(s).`
                 + (omitidas ? ` ${omitidas} omitida(s).` : '')
+                + (bloqueadas.length ? ` ${bloqueadas.length} no se facturan por deuda vencida.` : '')
                 + (noIncluidas.length ? ` ⚠️ ${noIncluidas.length} cobro(s) creados después de abrir la pantalla quedaron fuera: ${noIncluidas.join(', ')}. Refresca y vuelve a facturar para incluirlos.` : '')
         });
 

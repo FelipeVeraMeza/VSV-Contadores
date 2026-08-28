@@ -269,7 +269,10 @@ export const LlamadaProvider = ({ children }) => {
     // cambiara el modo, no habría hueco donde acoplarla y no pasaría nada.
     const ampliar = useCallback(() => {
         setModo('dock');
-        navigate('/tareas?sub=reuniones');
+        // La pantalla vive en Comunicaciones desde el 27-08-2026; antes estaba en
+        // Tickets. Si esta ruta queda vieja, «volver a la reunión» lleva a una
+        // pantalla sin hueco y la llamada se queda flotando sin acoplarse.
+        navigate('/comunicaciones?sub=reuniones');
     }, [navigate]);
 
     // Recargar la página SÍ corta la llamada —el navegador tira el iframe— y es

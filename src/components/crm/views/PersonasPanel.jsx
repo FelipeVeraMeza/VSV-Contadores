@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { Search, User, Phone, Mail, Loader2, UserPlus, RefreshCw, ArrowRightCircle, Trash2, RotateCcw, CheckCircle2, X, UserMinus, AlertTriangle, FileSpreadsheet, CalendarClock, MessageCircle, ChevronDown, Check } from 'lucide-react';
+import { Search, User, Phone, Mail, Loader2, UserPlus, RefreshCw, ArrowRightCircle, Trash2, RotateCcw, CheckCircle2, X, UserMinus, AlertTriangle, FileSpreadsheet, CalendarClock, ChevronDown, Check } from 'lucide-react';
 import {
     listarPersonasApi, cambiarEstadoPersonaApi, eliminarPersonaApi,
     actualizarPersonaApi, obtenerPersonaApi, agregarNotaPersonaApi,
     listarAccionesApi, crearAccionApi, completarAccionApi,
 } from '@/services/personaService';
 import { toast } from '@/components/ui/use-toast';
+import PlantillaRapida from '@/components/crm/PlantillaRapida';
 import PersonaDetailDrawer from '../modals/PersonaDetailDrawer';
 import ConvertirClienteModal from '../modals/ConvertirClienteModal';
 import ImportarProspectosModal from '../modals/ImportarProspectosModal';
@@ -626,19 +627,19 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                                                 código. El teléfono marca por línea normal. */}
                                             {(tel1(p) || correo1(p)) && (
                                                 <span className="flex items-center gap-1 mt-1" onClick={(e) => e.stopPropagation()}>
+                                                    {/* Ya no abren la conversación en blanco: abren la
+                                                        viñeta con las plantillas de Comunicaciones, que
+                                                        era lo que faltaba del ticket. «Abrir en blanco»
+                                                        sigue estando dentro, primero de la lista. */}
                                                     {tel1(p) && (
-                                                        <a href={enlaceWhatsapp(tel1(p))} target="_blank" rel="noopener noreferrer"
-                                                            title={`Abrir WhatsApp con ${tel1(p)}`}
-                                                            className="h-6 w-6 flex items-center justify-center rounded-md text-emerald-600 hover:bg-emerald-500/10">
-                                                            <MessageCircle size={13} />
-                                                        </a>
+                                                        <PlantillaRapida via="whatsapp" persona={p}
+                                                            destino={enlaceWhatsapp(tel1(p))}
+                                                            titulo={`WhatsApp a ${tel1(p)} — con plantillas`} />
                                                     )}
                                                     {correo1(p) && (
-                                                        <a href={`mailto:${correo1(p)}`}
-                                                            title={`Escribir a ${correo1(p)}`}
-                                                            className="h-6 w-6 flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100">
-                                                            <Mail size={13} />
-                                                        </a>
+                                                        <PlantillaRapida via="correo" persona={p}
+                                                            destino={correo1(p)}
+                                                            titulo={`Escribir a ${correo1(p)} — con plantillas`} />
                                                     )}
                                                     {tel1(p) && (
                                                         <a href={`tel:${soloDigitos(tel1(p))}`}

@@ -149,10 +149,16 @@ export async function cargarJSONaBD(empresaId) {
             console.error(`⚠️ No se pudo eliminar el archivo JSON temporal: ${delErr.message}`);
         }
 
-        return true;
+        // Se devuelven los NÚMEROS, no solo `true`. El servidor los necesita para
+        // decirle al usuario qué pasó: hasta ahora una carga de cero documentos
+        // respondía «Extracción Exitosa» igual que una de doscientos, y quien
+        // miraba la pantalla no tenía cómo distinguir «el SII no tenía nada» de
+        // «algo se rompió». Se mantiene compatible con `if (cargaExitosa)` porque
+        // un objeto también es verdadero.
+        return { ok: true, compras: comprasCargadas, ventas: ventasCargadas, omitidos };
 
     } catch (e) {
-        if (client) await client.query('ROLLBACK'); 
+        if (client) await client.query('ROLLBACK');
         console.error('❌ Error crítico procesando la BD:', e.message);
         return false;
     } finally {

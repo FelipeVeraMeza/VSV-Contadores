@@ -163,7 +163,8 @@ export async function ejecutarRobotSII({
             // A. COMPRAS
             await page.click('#tabCompra');
             await new Promise(r => setTimeout(r, 2000));
-            if (!(await estaVacio(page))) {
+            const compras = await mirarPanel(page, 'COMPRAS');
+            if (!compras.vacio) {
                 console.log("🛒 Escaneando tabla de Resúmenes (COMPRAS)...");
                 await escanearTablaResumen(page, masterData, anio, mes, 'Compra');
             }
@@ -171,7 +172,8 @@ export async function ejecutarRobotSII({
             // B. VENTAS
             await page.click('a[ui-sref="venta"]');
             await new Promise(r => setTimeout(r, 2000));
-            if (!(await estaVacio(page))) {
+            const ventas = await mirarPanel(page, 'VENTAS');
+            if (!ventas.vacio) {
                 console.log("📈 Escaneando tabla de Resúmenes (VENTAS)...");
                 await escanearTablaResumen(page, masterData, anio, mes, 'Venta');
             }
@@ -183,7 +185,11 @@ export async function ejecutarRobotSII({
     }
 }
 
-        console.log("🏁 Proceso de escaneo terminado.");
+        console.log(`🏁 Proceso de escaneo terminado. Documentos recogidos: ${masterData.length}.`);
+        if (!masterData.length) {
+            console.log('   ↳ Si arriba dice «el portal responde No hay información», el SII no tiene nada registrado para ese periodo y la extracción está bien: no hay qué traer.');
+            console.log('   ↳ Si dice «sin aviso del portal y sin filas», la página no alcanzó a cargar y hay que volver a intentar.');
+        }
         return { success: true, count: masterData.length };
 
     } catch (e) {
@@ -223,11 +229,16 @@ export async function ejecutarRobotSII({
 
 async function escanearTablaResumen(page, masterData, anio, mes, tipo) {
     const filas = await page.$$('table tbody tr');
+    // Tercera vía por la que una extracción volvía en cero sin decir nada: la
+    // tabla de resúmenes existe pero ninguna fila trae enlace, así que el bucle
+    // de abajo no entra nunca y no se guarda un solo documento.
+    let abiertos = 0;
     for (let i = 0; i < filas.length; i++) {
         const currentFilas = await page.$$('table tbody tr');
         const link = await currentFilas[i].$('a');
 
         if (link) {
+            abiertos++;
             const nombreDoc = await page.evaluate(el => el.innerText.trim(), link);
             console.log(` 📄 Clic en: ${nombreDoc}`);
             
@@ -242,6 +253,9 @@ async function escanearTablaResumen(page, masterData, anio, mes, tipo) {
             });
             await new Promise(r => setTimeout(r, 2000));
         }
+    }
+    if (!abiertos) {
+        console.log(`   ⚠️  ${tipo}: la tabla tiene ${filas.length} fila(s) pero ninguna con enlace para abrir el detalle. No se extrajo nada.`);
     }
 }
 
@@ -431,11 +445,62 @@ async function clickConsultar(page) {
     await new Promise(r => setTimeout(r, 3000));
 }
 
-async function estaVacio(page) {
-    return await page.evaluate(() => {
-        const alerta = document.querySelector('.alert-danger');
-        return alerta && alerta.innerText.includes('No hay información');
+/**
+ * Mira la pestaña que está a la vista y CUENTA lo que hay, dejándolo en el log.
+ *
+ * POR QUÉ NO ES YA `estaVacio()`
+ * Antes esto respondía sí/no mirando `document.querySelector('.alert-danger')`, y
+ * eso tenía dos defectos que se notan justo cuando una extracción vuelve en cero:
+ *
+ *   1. PREGUNTABA AL DOCUMENTO ENTERO. El portal es una aplicación Angular y deja
+ *      los paneles de Compras y de Ventas los DOS en el DOM, mostrando uno. Así
+ *      que el aviso «No hay información» del panel ESCONDIDO se podía leer como
+ *      si fuera el del panel visible, y se saltaba una pestaña que sí tenía datos.
+ *   2. NO DEJABA RASTRO. Tanto «el SII dijo que no hay nada» como «no encontré la
+ *      tabla» terminaban en el mismo silencio, y la corrida acababa en 0
+ *      documentos sin una línea que dijera cuál de las dos cosas pasó. Fue
+ *      exactamente lo que ocurrió con A&L SOLUCIONES el 27-08-2026: cero
+ *      documentos y ninguna forma de saber por qué.
+ *
+ * Ahora se limita al panel visible y escribe en el log lo que vio: el aviso
+ * textual del portal, cuántas filas de resumen hay y en qué quedaron los tres
+ * desplegables (empresa, mes, año). Con eso la próxima corrida se diagnostica
+ * leyendo el log, sin adivinar.
+ */
+async function mirarPanel(page, etiqueta) {
+    const visto = await page.evaluate(() => {
+        const seVe = (el) => !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+
+        // El panel a la vista. Si no se reconoce ninguno se cae al documento
+        // entero, que es como se comportaba antes.
+        const paneles = Array.from(document.querySelectorAll('.tab-pane, .tab-content > div, [ui-view]'));
+        const panel = paneles.find(seVe) || document.body;
+
+        const alerta = Array.from(panel.querySelectorAll('.alert-danger, .alert')).find(seVe);
+        return {
+            aviso: alerta ? alerta.innerText.trim().replace(/\s+/g, ' ').slice(0, 160) : null,
+            filas: panel.querySelectorAll('table tbody tr').length,
+            enlaces: panel.querySelectorAll('table tbody tr a').length,
+            periodo: Array.from(document.querySelectorAll('select'))
+                .map((s) => (s.options[s.selectedIndex]?.text || s.value || '').trim())
+                .filter(Boolean).join(' · '),
+        };
     });
+
+    // Solo se da por vacío cuando el portal lo dice EN EL PANEL VISIBLE. Ante la
+    // duda se intenta escanear: traerse cero filas de una tabla que existe es
+    // barato, saltarse una pestaña con datos no.
+    const vacio = !!(visto.aviso && /no hay informaci/i.test(visto.aviso));
+
+    if (vacio) {
+        console.log(`   ℹ️  ${etiqueta}: el portal responde «${visto.aviso}»  [periodo consultado: ${visto.periodo || '?'}]`);
+    } else if (visto.filas === 0) {
+        console.log(`   ⚠️  ${etiqueta}: sin aviso del portal y sin filas en la tabla — puede que no alcanzara a cargar.  [periodo consultado: ${visto.periodo || '?'}]`);
+    } else {
+        console.log(`   ✓  ${etiqueta}: ${visto.filas} fila(s) de resumen, ${visto.enlaces} con enlace.  [periodo consultado: ${visto.periodo || '?'}]`);
+    }
+
+    return { ...visto, vacio };
 }
 
 async function matarPopups(page) {

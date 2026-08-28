@@ -1,7 +1,7 @@
 # Reuniones · Requerimientos
 
 **Creado:** 26 de agosto de 2026
-**Módulo:** Tickets → Reuniones · Ver también `docs/reuniones-modulo.md` (arquitectura)
+**Módulo:** Comunicaciones → Reuniones (estuvo en Tickets hasta el 27-08-2026) · Ver también `docs/reuniones-modulo.md` (arquitectura)
 
 Estado: ✅ hecho · 🟡 a medias · ❌ falta
 
@@ -11,7 +11,7 @@ Estado: ✅ hecho · 🟡 a medias · ❌ falta
 
 Se invita **en el momento de crear la reunión**, marcando personas en «Con quién».
 A cada una le llega un aviso en la campana, en vivo si tiene el sistema abierto.
-Entran desde Tickets → Reuniones → Entrar.
+Entran desde Comunicaciones → Reuniones → Entrar.
 
 Y ahí se acaba. Lo que **no** se puede hacer todavía:
 

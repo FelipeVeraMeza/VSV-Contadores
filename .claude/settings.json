@@ -193,7 +193,28 @@
       "PowerShell($s=\"C:\\\\Users\\\\felip\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-felip-OneDrive-Documentos-VS-VSV-Contadores\\\\49849b6f-0777-4259-a10d-91bada107d72\\\\scratchpad\"; foreach \\($t in @\\(\"probar-servicio-real\",\"probar-fechas-ui\",\"probar-periodicidad\",\"probar-sanitizador\"\\)\\) { \"--- $t ---\"; node \"$s\\\\$t.mjs\" | Select-Object -Last 1 })",
       "PowerShell(node \"C:\\\\Users\\\\felip\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-felip-OneDrive-Documentos-VS-VSV-Contadores\\\\49849b6f-0777-4259-a10d-91bada107d72\\\\scratchpad\\\\cerrar-crm2.mjs\")",
       "PowerShell(node \"C:\\\\Users\\\\felip\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-felip-OneDrive-Documentos-VS-VSV-Contadores\\\\49849b6f-0777-4259-a10d-91bada107d72\\\\scratchpad\\\\ver-madres.mjs\")",
-      "PowerShell(node \"C:\\\\Users\\\\felip\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-felip-OneDrive-Documentos-VS-VSV-Contadores\\\\49849b6f-0777-4259-a10d-91bada107d72\\\\scratchpad\\\\madre-revision.mjs\")"
+      "PowerShell(node \"C:\\\\Users\\\\felip\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-felip-OneDrive-Documentos-VS-VSV-Contadores\\\\49849b6f-0777-4259-a10d-91bada107d72\\\\scratchpad\\\\madre-revision.mjs\")",
+      "Bash(node ./_preview_tmp/shot.mjs)",
+      "Bash(node ./_audit_tmp.mjs)",
+      "Bash(node ./_audit2_tmp.mjs)",
+      "Bash(node ./_estr_tmp.mjs)",
+      "Bash(node ./_tramos_tmp.mjs)",
+      "Bash(node ./_sync_cartera.mjs)",
+      "Bash(node ./_ultimo_valor.mjs)",
+      "Bash(node ./_aplicar_ultimo.mjs)",
+      "Bash(node ./_aplicar_ultimo.mjs --aplicar)",
+      "Bash(node ./_cruce_final.mjs)",
+      "Bash(node ./_tcg_tmp.mjs)",
+      "Bash(node ./_nota_tcg.mjs)",
+      "Bash(node ./_pago_tmp.mjs)",
+      "Bash(node ./_correos_tmp.mjs)",
+      "Bash(node ./_tcg_out.mjs)",
+      "Bash(node ./_tcg_out.mjs --aplicar)",
+      "Bash(node ./_cuota_tmp.mjs)",
+      "Bash(node ./_check_final.mjs)",
+      "Bash(node ./_vincular.mjs)",
+      "Bash(node ./_vincular.mjs --aplicar)",
+      "Bash(node ./_reabrir.mjs --aplicar)"
     ]
   }
 }

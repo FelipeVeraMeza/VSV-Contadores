@@ -1147,9 +1147,16 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
       });
       const result = await respuesta.json();
       if (result.success) {
+        // Traer CERO documentos no es un fracaso —el SII puede no tener nada en
+        // ese periodo— pero tampoco es «listo, revísalos»: no hay nada que
+        // revisar. El texto de «quedaron como Pendientes» solo corresponde
+        // cuando de verdad entró algo, si no manda a buscar lo que no existe.
+        const entraron = (result.compras || 0) + (result.ventas || 0);
         toast({
-          title: '✅ Extracción Exitosa',
-          description: `${result.message} Quedaron como Pendientes: revísalos y contabiliza cuando corresponda.`,
+          title: entraron > 0 ? '✅ Extracción Exitosa' : 'Extracción terminada sin novedades',
+          description: entraron > 0
+            ? `${result.message} Quedaron como Pendientes: revísalos y contabiliza cuando corresponda.`
+            : result.message,
         });
         setIsSyncModalOpen(false);
         cargarDatos();

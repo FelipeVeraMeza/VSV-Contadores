@@ -246,7 +246,26 @@ app.post('/api/sincronizar-sii', apiLimiter, requireSession, requireAdmin, async
                 const cargaExitosa = await cargarJSONaBD(empresaId);
                 
                 if (cargaExitosa) {
-                    return res.json({ success: true, message: "Datos extraídos y guardados en tu base de datos con éxito." });
+                    // EL MENSAJE DICE LO QUE PASÓ DE VERDAD.
+                    //
+                    // Antes una extracción que no trajo NADA respondía «Datos
+                    // extraídos y guardados con éxito», igual que una de
+                    // doscientos documentos. El usuario veía el visto verde,
+                    // buscaba las compras y no había ninguna, sin forma de saber
+                    // si el SII no tenía nada o si el robot se había roto en
+                    // silencio. Pasó con A&L SOLUCIONES el 27-08-2026.
+                    const { compras = 0, ventas = 0, omitidos = 0 } = cargaExitosa;
+                    const total = compras + ventas;
+                    let message;
+                    if (total > 0) {
+                        message = `Se agregaron ${compras} compra(s) y ${ventas} venta(s).`;
+                        if (omitidos) message += ` Otros ${omitidos} ya estaban registrados.`;
+                    } else if (omitidos > 0) {
+                        message = `Sin novedades: los ${omitidos} documentos del periodo ya estaban registrados.`;
+                    } else {
+                        message = 'El SII no tiene documentos registrados en ese periodo, así que no se agregó nada. Revisa que el rango de meses sea el correcto.';
+                    }
+                    return res.json({ success: true, message, compras, ventas, omitidos });
                 } else {
                     return res.status(500).json({ success: false, message: "Los datos se extrajeron, pero falló la escritura en BD." });
                 }

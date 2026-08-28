@@ -1,7 +1,7 @@
 # Reuniones · cómo funciona el sistema de llamadas
 
 **Creado:** 26 de agosto de 2026
-**Dónde está:** menú **Tickets → Reuniones**
+**Dónde está:** menú **Comunicaciones → Reuniones** (estuvo en Tickets hasta el 27-08-2026)
 
 Este documento explica **qué hace el sistema de llamadas, cómo se usa y dónde
 vive cada pieza**. Los otros dos documentos del módulo son:
@@ -160,7 +160,7 @@ Migración: `src/DatabaseThings/migrations/2026-08-26_reuniones.sql`
 | **La llamada mientras navegas** | `src/contexts/LlamadaContext.jsx` |
 | El panel de gestión | `src/components/reuniones/DetalleReunion.jsx` |
 | La ventana de video | `src/components/reuniones/SalaJitsi.jsx` |
-| El menú | `src/components/Tareas.jsx` y `src/components/MainPage.jsx` |
+| El menú | `src/components/Comunicaciones.jsx` y `src/components/MainPage.jsx` |
 
 ### La API
 

@@ -1,7 +1,12 @@
 # Reuniones · videollamada dentro del sistema
 
 **Creado:** 26 de agosto de 2026
-**Dónde vive:** Tickets → Reuniones (`/tareas?sub=reuniones`)
+**Dónde vive:** Comunicaciones → Reuniones (`/comunicaciones?sub=reuniones`)
+
+> Vivió en **Tickets** hasta el 27-08-2026, con el argumento de que una reunión
+> es trabajo que entra igual que un ticket. Se mudó a Comunicaciones: hablar con
+> alguien es hablar con alguien, sea por correo, por WhatsApp o por video, y ese
+> es el módulo donde se busca. La ruta vieja ya no existe.
 
 ---
 
@@ -149,6 +154,16 @@ La ruta **no** se recorta con `requireModulo`: reunirse es transversal, igual qu
 los tickets. Dejar a alguien fuera de una reunión a la que lo invitaron, por una
 bandera de módulo mal puesta, no tiene arreglo a la hora en que ocurre.
 
+> ⚠️ **Ojo con un efecto de la mudanza (27-08-2026).** La API sigue abierta a
+> cualquiera con sesión, pero la ENTRADA DEL MENÚ ahora cuelga de Comunicaciones,
+> que se esconde con la bandera del CRM (`puedeVerCrm`, ver `BANDERA_POR_MODULO`
+> en `MainPage.jsx`). Antes colgaba de Tickets, que no se recorta por nadie. O
+> sea: a un usuario con `puedeVerCrm = false` le desaparecería el acceso a
+> Reuniones del menú, aunque la pantalla siga funcionando si escribe la URL.
+> Hoy no afecta a nadie —los tres usuarios tienen la bandera en `true`, medido el
+> 27-08-2026—, pero si algún día se recorta el CRM a alguien, hay que acordarse
+> de esto o darle a Comunicaciones su propia bandera.
+
 Cancelar es solo del que convocó. Cancelar **no borra**: una reunión agendada con
 un cliente que no se hizo también es información.
 
@@ -157,7 +172,7 @@ un cliente que no se hizo también es información.
 ## 5 bis. La llamada no vive en la pantalla
 
 **El problema.** La sala estaba dentro de `ReunionesPanel`, que se monta bajo el
-`<Outlet />` del router. Bastaba ir a Contabilidad —o a otra sección de Tickets,
+`<Outlet />` del router. Bastaba ir a Contabilidad —o a otra sección del mismo módulo,
 que además remonta por `key`— para que React desmontara el panel y su cleanup
 llamara a `dispose()`. Traducido: mirar cualquier otra pantalla **colgaba la
 reunión**, y sin aviso.
@@ -174,7 +189,7 @@ coordenadas:
 
 | Modo | Cuándo | Qué se ve |
 |---|---|---|
-| **Acoplada** | estás en Tickets → Reuniones | ocupa el panel entero, igual que antes |
+| **Acoplada** | estás en Comunicaciones → Reuniones | ocupa el panel entero, igual que antes |
 | **Flotando** | te fuiste a otro módulo, o la minimizaste | ventanita en una esquina, arrastrable, con «volver» y «salir» |
 
 La pantalla de Reuniones ya no dibuja ningún video: deja un **hueco** vacío
@@ -210,7 +225,7 @@ menos el navegador pregunta antes.
 | Pantalla | `src/components/reuniones/ReunionesPanel.jsx` |
 | **La llamada en curso** | `src/contexts/LlamadaContext.jsx` (montado en `MainPage`) |
 | El video | `src/components/reuniones/SalaJitsi.jsx` |
-| Menú | `src/components/Tareas.jsx` (sección `reuniones`) · `src/components/MainPage.jsx` |
+| Menú | `src/components/Comunicaciones.jsx` (sección `reuniones`) · `src/components/MainPage.jsx` |
 
 ---
 

@@ -89,6 +89,9 @@ function MainPage() {
   const subComunicaciones = [
     { id: 'correo',     name: 'Correo',        icon: Mail },
     { id: 'whatsapp',   name: 'WhatsApp',      icon: MessageCircle },
+    // Reuniones se mudó desde Tickets el 27-08-2026: hablar con alguien es
+    // hablar con alguien, sea por correo, por WhatsApp o por video.
+    { id: 'reuniones',  name: 'Reuniones',     icon: Video },
     { id: 'plantillas', name: 'Plantillas',    icon: LayoutTemplate },
     ...(esAdministrador && puedeVerFacturacion ? [
       { id: 'masivo',   name: 'Correo Masivo', icon: Send },
@@ -125,7 +128,6 @@ function MainPage() {
     { id: 'mias',      name: 'Mis tareas', icon: UserCircle },
     { id: 'todas',     name: 'Tareas',     icon: ListChecks },
     { id: 'proyectos', name: 'Proyectos',  icon: FolderOpen },
-    { id: 'reuniones', name: 'Reuniones',  icon: Video },
     ...(esAdministrador ? [
       { id: 'equipo',  name: 'Equipo',     icon: Users },
     ] : []),

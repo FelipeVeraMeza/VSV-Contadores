@@ -14,9 +14,16 @@
 //
 //   correo      · redactar y enviar a un conjunto de clientes
 //   whatsapp    · la conversación por WhatsApp
+//   reuniones   · las videollamadas del equipo y con clientes
 //   plantillas  · los textos guardados, sin tener que entrar a redactar
 //   historial   · qué salió, a quién y qué decía        (RF-CO-30)
 //   masivo      · facturas y recordatorios de pago — SOLO Administradores
+//
+// REUNIONES SE MUDÓ ACÁ DESDE TICKETS (27-08-2026, decisión de Felipe). Vivía
+// en Tickets con el argumento de que una reunión es trabajo que entra, igual que
+// un ticket. Pesó más el otro: hablar con alguien es hablar con alguien, sea por
+// correo, por WhatsApp o por video, y este es el módulo donde se busca eso. La
+// ruta cambió de `/tareas?sub=reuniones` a `/comunicaciones?sub=reuniones`.
 //
 // PERMISOS: se reusa la bandera del CRM (`puedeVerCrm`). El backend exige
 // `requireModulo('crm')` en /api/correos, así que esconder esto con otra
@@ -33,10 +40,12 @@ import ClienteCorreo from '@/components/comunicaciones/ClienteCorreo';
 import WhatsappPanel from '@/components/crm/views/WhatsappPanel';
 import PlantillasCorreo from '@/components/comunicaciones/PlantillasCorreo';
 import CorreoMasivo from '@/components/facturacion/tabs/CorreoMasivo';
+import ReunionesPanel from '@/components/reuniones/ReunionesPanel';
 
 const SECCIONES = {
   correo:     { titulo: 'Correo',        bajada: 'Lo que llega, lo que sale y lo que le contestas a cada cliente' },
   whatsapp:   { titulo: 'WhatsApp',      bajada: 'La conversación por WhatsApp con los clientes' },
+  reuniones:  { titulo: 'Reuniones',     bajada: 'Videollamadas del equipo y con clientes, con lo que se acordó en cada una' },
   plantillas: { titulo: 'Plantillas',    bajada: 'Los textos guardados, tuyos y los que el equipo compartió' },
   masivo:     { titulo: 'Correo Masivo', bajada: 'Facturas enviadas y recordatorios de pago' },
 };
@@ -74,6 +83,16 @@ const Comunicaciones = () => {
     switch (sub) {
       case 'whatsapp':   return <WhatsappPanel />;
       case 'plantillas': return <PlantillasCorreo />;
+      // La lista de reuniones son filas sueltas, sin marco propio: se le pone
+      // acá el mismo que traía en Tickets, o quedaría flotando sobre el fondo.
+      // El marco NO estorba a la videollamada: cuando hay una en curso el panel
+      // deja un hueco y la llamada se dibuja encima, midiendo ese hueco.
+      case 'reuniones':
+        return (
+          <div className="h-full min-h-0 flex flex-col bg-white border border-[#efe8dd] rounded-2xl p-4 md:p-5 overflow-hidden">
+            <ReunionesPanel />
+          </div>
+        );
       // Viene de Facturación, donde se dibujaba dentro de una tarjeta blanca.
       // Se la conserva para que la pantalla se vea igual que antes de mudarse.
       case 'masivo':
