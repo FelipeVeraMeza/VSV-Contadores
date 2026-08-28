@@ -90,6 +90,33 @@ const CobrosMensuales = () => {
   // Corta el sondeo de progreso si se desmonta el componente
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
+  // RETOMA UNA EMISIÓN EN CURSO AL VOLVER A LA PANTALLA.
+  //
+  // El robot corre en el SERVIDOR, pero la barra de progreso vivía solo en el
+  // estado local: bastaba cambiar de sección para que el componente se
+  // desmontara y, al volver, `facturando` arrancaba en false. La emisión seguía
+  // avanzando sin que nadie la viera, y no había forma de saber cuánto llevaba
+  // ni cuándo terminó. Al montar se le pregunta al servidor si hay un lote
+  // activo y, si lo hay, se reengancha el sondeo.
+  useEffect(() => {
+    if (!user?.sessionId) return;
+    let cancelado = false;
+    (async () => {
+      try {
+        const r = await progresoFacturacionApi(user.sessionId);
+        const p = await r.json();
+        if (!cancelado && p?.activo) {
+          setProgreso(p);
+          setFacturando(true);
+          seguirProgreso(p.total || 0);
+        }
+      } catch { /* si falla, la pantalla queda como siempre */ }
+    })();
+    return () => { cancelado = true; };
+    // Solo al montar: reengancharse en cada cambio dispararía sondeos duplicados.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.sessionId]);
+
   const cargar = useCallback(async () => {
     if (!user?.sessionId) return;
     setLoading(true);
@@ -132,6 +159,11 @@ const CobrosMensuales = () => {
   // condición en uno para que se emitiera algo que no correspondía.
   const esEmitible = (it) => Boolean(it.rut) && Number(it.monto) > 0 && !(it.moraCobros > 0);
 
+  // Ya tiene factura de este mes. Se PUEDE emitir otra (a veces corresponde: una
+  // por un servicio puntual y otra por el honorario del ciclo), pero nunca por
+  // defecto — hay que marcarla a mano.
+  const yaFacturadoEsteMes = (it) => Boolean(it.folioDelMes);
+
   // Abre la previsualización: trae TODO lo del periodo y lo deja listo para revisar.
   const abrirPreview = async () => {
     setPreparando(true);
@@ -153,9 +185,12 @@ const CobrosMensuales = () => {
       }));
       const todas = [...norm(d.facturar, 'f'), ...norm(d.omitidas, 'o')];
       setLista(todas);
-      // Se marcan las que se pueden emitir. Los deudores quedan fuera por regla,
-      // no por olvido: se ven en la lista con su deuda, pero no se les factura.
-      setSeleccion(new Set(todas.filter(esEmitible).map(it => it._key)));
+      // Se marcan las que se pueden emitir. Quedan fuera por regla —no por
+      // olvido— los deudores y quienes ya tienen factura de este mes: ambos se
+      // ven en la lista, y la segunda factura se marca a mano si corresponde.
+      setSeleccion(new Set(
+        todas.filter(it => esEmitible(it) && !yaFacturadoEsteMes(it)).map(it => it._key)
+      ));
       setResumenMora({ morosos: d.morosos || 0, monto: d.montoMoroso || 0 });
       setBuscarModal('');
       setOrden({ campo: 'razonSocial', dir: 'asc' });
@@ -207,9 +242,11 @@ const CobrosMensuales = () => {
   const toggleSel = (k) => setSeleccion(prev => {
     const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n;
   });
-  // Marca / desmarca las emitibles visibles de una sola vez.
+  // Marca / desmarca las emitibles visibles de una sola vez. Las que ya tienen
+  // factura del mes quedan fuera del atajo: reemitir es siempre uno a uno.
   const toggleTodas = (visibles) => {
-    const emitiblesKeys = visibles.filter(esEmitible).map(it => it._key);
+    const emitiblesKeys = visibles
+      .filter(it => esEmitible(it) && !yaFacturadoEsteMes(it)).map(it => it._key);
     const todasMarcadas = emitiblesKeys.length > 0 && emitiblesKeys.every(k => seleccion.has(k));
     setSeleccion(prev => {
       const n = new Set(prev);
@@ -220,13 +257,79 @@ const CobrosMensuales = () => {
   };
   const ordenarPor = (campo) => setOrden(prev => ({ campo, dir: prev.campo === campo && prev.dir === 'asc' ? 'desc' : 'asc' }));
 
+  // SONDEA EL PROGRESO DEL ROBOT HASTA QUE TERMINA.
+  //
+  // Vive aparte de `facturarMasivo` porque se usa desde dos lados: al lanzar el
+  // lote y al volver a la pantalla con una emisión ya en curso. Estaba embebido
+  // en el lanzamiento, así que la única forma de ver el avance era no moverse
+  // de la pestaña.
+  //
+  // `enviadas` sirve para el resumen final. Al reengancharse no se conoce
+  // (la pantalla no lanzó el lote), y se usa el total que reporta el robot.
+  const seguirProgreso = (enviadas) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    let vistoActivo = false;
+    let ticks = 0;
+
+    const finalizar = async (p) => {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+      let vinc = '';
+      try {
+        const vr = await vincularFoliosApi(user.sessionId);
+        const vd = await vr.json();
+        vinc = vd?.message || '';
+      } catch { /* la vinculación se puede reintentar luego */ }
+      const detalle = Array.isArray(p?.resultados) ? p.resultados : [];
+      const exitos = p?.exitos ?? detalle.filter(r => r.estado === 'exito').length;
+      const errores = p?.errores ?? detalle.filter(r => r.estado === 'error').length;
+      const total = enviadas || p?.total || (exitos + errores);
+
+      // El robot corta el lote cuando el SII deja de aceptar el ingreso; hay que
+      // decirlo, si no parece que "terminó" con la mitad de las facturas.
+      if (p?.detenidoPorSii) {
+        toast({
+          variant: 'destructive',
+          title: '🛑 El SII cortó la sesión',
+          description: p.motivoDetencion || 'Se detuvo la emisión. Las facturas ya emitidas quedaron registradas; retoma con las que faltan.',
+        });
+      }
+
+      setResultado({
+        enviadas: total, exitos, errores,
+        noProcesadas: Math.max(0, total - exitos - errores),
+        detalle, vinc,
+        detenidoPorSii: Boolean(p?.detenidoPorSii),
+        motivoDetencion: p?.motivoDetencion || '',
+      });
+      setFacturando(false);
+      setProgreso(null);
+      cargar();
+    };
+
+    pollRef.current = setInterval(async () => {
+      ticks++;
+      try {
+        const pr = await progresoFacturacionApi(user.sessionId);
+        const p = await pr.json();
+        setProgreso(p);
+        if (p?.activo) vistoActivo = true;
+        if (vistoActivo && p && p.activo === false) await finalizar(p);
+        else if (!vistoActivo && ticks >= 6) await finalizar(p || {});
+      } catch { /* reintenta en el próximo ciclo */ }
+    }, 3000);
+  };
+
   // Emite el lote con las empresas SELECCIONADAS, y sigue el progreso.
   // Se llama solo tras la confirmación final (setConfirmando).
   const facturarMasivo = async () => {
     const finales = lista
       .filter(it => esEmitible(it) && seleccion.has(it._key))
-      .map(({ cobroId, empresaId, rut, razonSocial, plan, monto, correo }) =>
-        ({ cobroId, empresaId, rut, razonSocial, plan, monto: Number(monto), correo }));
+      .map(({ cobroId, empresaId, rut, razonSocial, plan, monto, correo, folioDelMes }) =>
+        ({ cobroId, empresaId, rut, razonSocial, plan, monto: Number(monto), correo,
+           // Marcarla equivale a decir «sí, emítele una segunda de este mes»: el
+           // robot descarta por defecto a quien ya tiene factura del período.
+           reemitir: Boolean(folioDelMes) }));
     if (finales.length === 0) {
       return toast({ variant: 'destructive', title: 'Nada que emitir', description: 'No hay empresas seleccionadas con monto válido.' });
     }
@@ -256,58 +359,9 @@ const CobrosMensuales = () => {
         });
       }
 
-      // Sondea el progreso cada 3s. Solo damos por terminado tras haber visto
-      // el robot activo (evita el falso "terminó" del arranque). Si nunca se
-      // activa (p.ej. todo ya emitido), cortamos tras unos ciclos de gracia.
-      let vistoActivo = false;
-      let ticks = 0;
-      const finalizar = async (p) => {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-        let vinc = '';
-        try {
-          const vr = await vincularFoliosApi(user.sessionId);
-          const vd = await vr.json();
-          vinc = vd?.message || '';
-        } catch { /* la vinculación se puede reintentar luego */ }
-        const detalle = Array.isArray(p?.resultados) ? p.resultados : [];
-        const exitos = p?.exitos ?? detalle.filter(r => r.estado === 'exito').length;
-        const errores = p?.errores ?? detalle.filter(r => r.estado === 'error').length;
-
-        // El robot corta el lote cuando el SII deja de aceptar el ingreso; hay que
-        // decirlo, si no parece que "terminó" con la mitad de las facturas.
-        if (p?.detenidoPorSii) {
-          toast({
-            variant: 'destructive',
-            title: '🛑 El SII cortó la sesión',
-            description: p.motivoDetencion || 'Se detuvo la emisión. Las facturas ya emitidas quedaron registradas; retoma con las que faltan.',
-          });
-        }
-
-        // Resumen final para mostrar al usuario
-        setResultado({
-          enviadas, exitos, errores,
-          noProcesadas: Math.max(0, enviadas - exitos - errores),
-          detalle, vinc,
-          detenidoPorSii: Boolean(p?.detenidoPorSii),
-          motivoDetencion: p?.motivoDetencion || '',
-        });
-        setFacturando(false);
-        setProgreso(null);
-        cargar();
-      };
-
-      pollRef.current = setInterval(async () => {
-        ticks++;
-        try {
-          const pr = await progresoFacturacionApi(user.sessionId);
-          const p = await pr.json();
-          setProgreso(p);
-          if (p?.activo) vistoActivo = true;
-          if (vistoActivo && p && p.activo === false) await finalizar(p);
-          else if (!vistoActivo && ticks >= 6) await finalizar(p || {});
-        } catch { /* reintenta en el próximo ciclo */ }
-      }, 3000);
+      // El seguimiento vive en `seguirProgreso`, que también se usa al volver a
+      // la pantalla con un lote ya corriendo.
+      seguirProgreso(enviadas);
     } catch {
       toast({ variant: 'destructive', title: 'Error', description: 'No se pudo iniciar la facturación masiva.' });
       setFacturando(false);
@@ -415,10 +469,12 @@ const CobrosMensuales = () => {
   // hay que mirar ANTES de emitir, porque después la factura ya está en el SII.
   const desviadas = seleccionadas.filter(it => desvio(it) !== null);
   const sinCorreo = seleccionadas.filter(it => !it.correo);
+  // Clientes a los que se les emitirá una segunda factura del mismo mes
+  const segundaFactura = seleccionadas.filter(yaFacturadoEsteMes);
   const totalSel = seleccionadas.reduce((s, it) => s + Number(it.monto), 0);
   const nOmitidas = lista.length - seleccionadas.length;
   // ¿Están todas las emitibles visibles marcadas? (para el check "seleccionar todas")
-  const emitiblesVisibles = listaVisible.filter(esEmitible);
+  const emitiblesVisibles = listaVisible.filter(it => esEmitible(it) && !yaFacturadoEsteMes(it));
   const todasVisiblesMarcadas = emitiblesVisibles.length > 0 && emitiblesVisibles.every(it => seleccion.has(it._key));
 
   return (
@@ -562,7 +618,9 @@ const CobrosMensuales = () => {
               {progreso.exitos} emitidas{progreso.errores > 0 && <span className="text-red-600"> · {progreso.errores} con error</span>}
             </p>
           )}
-          <p className="text-[11px] text-slate-400">No cierres esta pestaña mientras se emite. El proceso continúa en el servidor.</p>
+          <p className="text-[11px] text-slate-400">
+            El proceso corre en el servidor: puedes cambiar de sección y al volver acá verás el avance.
+          </p>
         </div>
       )}
 
@@ -838,8 +896,17 @@ const CobrosMensuales = () => {
                                   {it.moraCobros > 0 ? 'No se factura' : motivo}
                                 </span>
                               : marcada
-                                ? <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Se emite</span>
-                                : <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400"><span className="w-1.5 h-1.5 rounded-full bg-slate-300" />Excluida</span>}
+                                ? <span className={`inline-flex items-center gap-1.5 text-[11px] ${it.folioDelMes ? 'text-amber-700' : 'text-slate-600'}`}
+                                    title={it.folioDelMes ? `Se le emitirá una SEGUNDA factura de agosto (ya tiene la ${it.folioDelMes})` : ''}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${it.folioDelMes ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                                    {it.folioDelMes ? '2ª factura' : 'Se emite'}
+                                  </span>
+                                : it.folioDelMes
+                                  ? <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500" title="Ya tiene factura de este mes. Márcala solo si corresponde emitirle otra.">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                                      Ya facturada · {it.folioDelMes}
+                                    </span>
+                                  : <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-400"><span className="w-1.5 h-1.5 rounded-full bg-slate-300" />Excluida</span>}
                           </td>
                         </tr>
                       );
@@ -874,6 +941,12 @@ const CobrosMensuales = () => {
                         Vas a emitir <span className="font-medium text-slate-900">{seleccionadas.length} factura(s)</span> por{' '}
                         <span className="font-medium text-slate-900 tabular-nums">{clp(totalSel)}</span> de forma definitiva en el SII,
                         y se enviará el correo a cada cliente. No se puede deshacer.
+                        {segundaFactura.length > 0 && (
+                          <span className="block mt-1 text-amber-700">
+                            {segundaFactura.length} recibirá una <b>segunda factura de este mes</b>:{' '}
+                            {segundaFactura.map(s => `${s.razonSocial} (ya tiene la ${s.folioDelMes})`).join(', ')}.
+                          </span>
+                        )}
                         {sinCorreo.length > 0 && (
                           <span className="block mt-1 text-slate-500">
                             {sinCorreo.length} sin correo: se emite la factura pero no le llega al cliente

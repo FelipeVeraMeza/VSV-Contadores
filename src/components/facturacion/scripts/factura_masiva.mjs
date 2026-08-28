@@ -313,6 +313,7 @@ export async function emitirLotePuppeteer(facturasFront, credSii = credencialesD
     }
 
     const pendientes = [];
+    const reemitidos = [];
     facturasFront.forEach((f) => {
         const rutCuerpo = String(f.rutReceptor || '').toUpperCase().trim();
         const nombrePlan = (f.producto?.nombre || '').toUpperCase();
@@ -321,8 +322,26 @@ export async function emitirLotePuppeteer(facturasFront, credSii = credencialesD
             ? fallbackLineas.some(linea => linea.includes(rutCuerpo) && !linea.includes('FALLO') && !linea.includes('ERROR'))
             : yaEmitidos.has(rutCuerpo);
 
+        // SEGUNDA FACTURA DEL MISMO MES, A PROPÓSITO.
+        //
+        // El candado mira `documentos_emitidos`, así que a un cliente que ya tiene
+        // factura del mes NO se le emite otra —bien, para eso está—. Pero a veces
+        // corresponde: la del día 11 era de un servicio y la de fin de mes es el
+        // honorario del ciclo. Reabrir el cobro no bastaba, porque el robot no
+        // mira `cobro_mensual`: la descartaba en silencio y `vincularFolios` le
+        // devolvía el folio antiguo, dejándola como facturada sin estarlo.
+        // Con `reemitir` la pantalla dice explícitamente «esta va igual».
+        if (f.reemitir && yaFacturado && !esExclusion) {
+            reemitidos.push(rutCuerpo);
+            pendientes.push(f);
+            return;
+        }
+
         if (!yaFacturado && !esExclusion) pendientes.push(f);
     });
+    if (reemitidos.length) {
+        console.log(`[DEDUP BD] ${reemitidos.length} RUT(s) se reemiten a pedido: ${reemitidos.join(', ')}`);
+    }
 
     if (pendientes.length === 0) return { ok: true, mensaje: "No hay facturas pendientes." };
 

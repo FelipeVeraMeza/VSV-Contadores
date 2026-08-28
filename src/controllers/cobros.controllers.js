@@ -514,7 +514,9 @@ export const registrarPagoCliente = async (req, res) => {
 // ============================================================================
 
 // Arma el objeto que espera el robot a partir de un cliente + monto.
-const construirFacturaRobot = ({ empresaId, rut, razonSocial, plan, monto, correo }, mesNombre) => {
+// `reemitir` viaja hasta el robot para saltarse su candado anti-duplicados
+// cuando la segunda factura del mes es intencional (ver factura_masiva.mjs).
+const construirFacturaRobot = ({ empresaId, rut, razonSocial, plan, monto, correo, reemitir }, mesNombre) => {
     const rutLimpio = cleanRut(String(rut || ''));
     const [rutFull, dv] = rutLimpio.includes('-') ? rutLimpio.split('-') : [rutLimpio, ''];
     if (!rutFull) return null;                       // sin RUT no se puede facturar
@@ -522,6 +524,7 @@ const construirFacturaRobot = ({ empresaId, rut, razonSocial, plan, monto, corre
     if (precio <= 0) return null;                    // no se emiten facturas en $0
     return {
         empresa_id: empresaId || 'EXTERNO',          // receptor = el cliente que se factura
+        reemitir: Boolean(reemitir),
         tipo_documento: '33',
         rutReceptor: rutFull,
         dvReceptor: dv,
@@ -553,7 +556,15 @@ const cobrosDelMesParaFacturar = async (organizacionId) => {
                 p.nombre AS plan,
                 COALESCE(mora.n, 0)     AS mora_n,
                 COALESCE(mora.monto, 0) AS mora_monto,
-                mora.mas_antiguo        AS mora_mas_antiguo
+                mora.mas_antiguo        AS mora_mas_antiguo,
+                -- Factura del mes que este cliente YA tiene. El robot no vuelve a
+                -- emitirle salvo que se le pida expresamente, así que la pantalla
+                -- tiene que mostrarlo: si no, se manda el lote creyendo que va y
+                -- el cobro vuelve marcado con el folio viejo, sin factura nueva.
+                (SELECT de.folio FROM documentos_emitidos de
+                  WHERE de.empresa_id = e.id AND de.tipo_dte = 33
+                    AND de.fecha_emision >= date_trunc('month', CURRENT_DATE)
+                  ORDER BY de.fecha_emision DESC LIMIT 1) AS folio_del_mes
          FROM cobro_mensual cm
          JOIN empresa e ON e.id = cm.empresa_id
          LEFT JOIN plan p ON p.id = e.plan_id
@@ -590,6 +601,8 @@ const cobrosDelMesParaFacturar = async (organizacionId) => {
             moraCobros: parseInt(r.mora_n) || 0,
             moraMonto: Math.round(parseFloat(r.mora_monto) || 0),
             moraDesde: r.mora_mas_antiguo || null,
+            // Folio que este cliente ya tiene este mes (null = ninguno)
+            folioDelMes: r.folio_del_mes ? String(r.folio_del_mes) : null,
         };
     });
 };
@@ -811,6 +824,18 @@ export const vincularFoliosDeOrganizacion = async (organizacionId) => {
                     -- varchar: hay que castear o Postgres no compara.
                     SELECT 1 FROM cobro_mensual usado
                     WHERE usado.folio = de.folio::text AND usado.empresa_id = de.empresa_id
+              )
+              -- El folio tiene que ser POSTERIOR a la reapertura del cobro. Sin
+              -- esto, a un cobro reabierto para refacturar se le enganchaba de
+              -- vuelta su factura antigua del mismo mes: quedaba en
+              -- PENDIENTE_PAGO con el folio viejo, aparentando estar facturado
+              -- cuando el robot ni siquiera lo había procesado.
+              AND de.fecha_emision >= (
+                    SELECT c.updated_at FROM cobro_mensual c
+                     WHERE c.empresa_id = de.empresa_id
+                       AND c.periodo = date_trunc('month', CURRENT_DATE)::date
+                       AND c.estado = 'POR_EMITIR'
+                     LIMIT 1
               )
             ORDER BY de.empresa_id, de.fecha_emision DESC
          ) de
