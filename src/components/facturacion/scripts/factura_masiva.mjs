@@ -6,7 +6,7 @@ import pkg from 'pg';
 import crypto from 'crypto'; 
 import { encrypt } from '../../../utils/crypto.js';
 import { pool } from '../../../database/db.js';
-import { enviarCorreoFacturaEnSesion } from './revisar para envios/mensajes_facturador_masivo.mjs';
+import { enviarCorreoFacturaEnSesion, limpiarPdfsViejos } from './revisar para envios/mensajes_facturador_masivo.mjs';
 import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
 // La descarga del PDF deja de depender de que el correo salga bien.
 import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
@@ -279,6 +279,10 @@ async function cerrarSesionSII(page, browser) {
 export async function emitirLotePuppeteer(facturasFront, credSii = credencialesDelSistema()) {
     console.log('\n==================================================');
     console.log('[INFO] AUDITORÍA: Iniciando Motor Masivo por Lotes...');
+
+    // Los PDFs de facturas que quedaron de emisiones anteriores fallidas no
+    // tienen por qué seguir en el disco: son documentos tributarios de clientes.
+    limpiarPdfsViejos();
 
     // ==========================================================================
     // 🔒 CANDADO ANTI-DUPLICADOS DESDE LA BASE DE DATOS (por periodo del mes).

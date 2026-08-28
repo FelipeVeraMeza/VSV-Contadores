@@ -214,7 +214,16 @@
       "Bash(node ./_check_final.mjs)",
       "Bash(node ./_vincular.mjs)",
       "Bash(node ./_vincular.mjs --aplicar)",
-      "Bash(node ./_reabrir.mjs --aplicar)"
+      "Bash(node ./_reabrir.mjs --aplicar)",
+      "Bash(node ./_fix.mjs --aplicar)",
+      "Bash(node --check \"src/components/facturacion/scripts/revisar para envios/recordatorio_pago.mjs\")",
+      "Bash(node --check \"src/components/facturacion/scripts/revisar para envios/mensajes_facturador_masivo.mjs\")",
+      "Bash(grep -i \"\\\\.pdf$\")",
+      "Bash(grep -ci \"\\\\.pdf$\")",
+      "Bash(git rm *)",
+      "Bash(node --check src/components/facturacion/scripts/factura_masiva.mjs)",
+      "Bash(grep -n '`')",
+      "Bash(timeout 25 node -e ' *)"
     ]
   }
 }

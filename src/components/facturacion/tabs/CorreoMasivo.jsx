@@ -33,9 +33,14 @@ const ESTILO_PAGO = {
   ANULADA:           { label: 'Anulada',     c: 'text-slate-500 bg-slate-500/10 border-slate-400/30' },
 };
 
+// «Anuladas» existe porque, sin ella, una factura dada de baja con nota de
+// crédito no caía en ningún filtro: no debe, no pagó y sí tiene cobro asociado.
+// Quedaba fuera de las tres pestañas y solo aparecía en «Todos», donde las
+// cuentas no cuadraban (91 + 0 + 5 = 96 de 97).
 const FILTROS = [
   { id: 'deben',     label: 'Deben' },
   { id: 'pagaron',   label: 'Ya pagaron' },
+  { id: 'anuladas',  label: 'Anuladas' },
   { id: 'sin_cobro', label: 'Sin cobro asociado' },
   { id: 'todos',     label: 'Todos' },
 ];
@@ -73,6 +78,26 @@ const CorreoMasivo = () => {
 
   const [correosLog, setCorreosLog] = useState([]);
   const [isLoadingCorreos, setIsLoadingCorreos] = useState(false);
+  // Mes que se está mirando (YYYY-MM). Vacío = el que se está cobrando.
+  // Sin esto la pantalla mostraba siempre el mes en curso y no había forma de
+  // revisar los envíos de meses anteriores.
+  const [periodo, setPeriodo] = useState('');
+
+  // Los últimos 12 meses para el desplegable. Se arman en el cliente en vez de
+  // pedirlos: la lista de meses con envíos cambia poco y no vale una consulta.
+  const mesesDisponibles = useMemo(() => {
+    const out = [];
+    const hoy = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(Date.UTC(hoy.getFullYear(), hoy.getMonth() - i, 1));
+      const valor = d.toISOString().slice(0, 7);
+      out.push({
+        valor,
+        label: d.toLocaleDateString('es-CL', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+      });
+    }
+    return out;
+  }, []);
   const [reenviandoFolio, setReenviandoFolio] = useState(null);
   const [manualFolio, setManualFolio] = useState('');
   const [selectedFolios, setSelectedFolios] = useState(leerSeleccionGuardada);
@@ -89,7 +114,12 @@ const CorreoMasivo = () => {
 
   const timers = useRef([]);
   const programar = (fn, ms) => { timers.current.push(setTimeout(fn, ms)); };
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  // Sondeo del reenvío masivo en curso (ver `seguirReenvio`).
+  const pollReenvio = useRef(null);
+  useEffect(() => () => {
+    timers.current.forEach(clearTimeout);
+    if (pollReenvio.current) clearInterval(pollReenvio.current);
+  }, []);
 
   // ====================================================
   // 📒 REGISTRO DE CORREOS
@@ -98,10 +128,10 @@ const CorreoMasivo = () => {
   // llamaba con `fetch` pelado, sin la cabecera, así que el servidor
   // respondía 401 y la tabla salía siempre vacía: "aún no hay correos
   // registrados" aunque la base tuviera cientos.
-  const cargarCorreosLog = async () => {
+  const cargarCorreosLog = async (per = periodo) => {
     setIsLoadingCorreos(true);
     try {
-      const res = await apiDTE.getCorreosLog();
+      const res = await apiDTE.getCorreosLog(per);
       if (res.status === 401) {
         return toast({ variant: 'destructive', title: 'Sesión expirada', description: 'Vuelve a iniciar sesión para ver el registro.' });
       }
@@ -114,7 +144,29 @@ const CorreoMasivo = () => {
     }
   };
 
-  useEffect(() => { if (user?.sessionId) cargarCorreosLog(); }, [user?.sessionId]);
+  // Recarga al cambiar de mes. `periodo` vacío = el mes que se está cobrando,
+  // que es el criterio por omisión del backend.
+  useEffect(() => { if (user?.sessionId) cargarCorreosLog(periodo); }, [user?.sessionId, periodo]);
+
+  // Si al entrar hay un reenvío corriendo en el servidor, se retoma su
+  // seguimiento: el proceso vive en el backend y sigue aunque uno cambie de
+  // pantalla, pero sin esto nadie avisaría cuando termina.
+  useEffect(() => {
+    if (!user?.sessionId) return;
+    let cancelado = false;
+    (async () => {
+      try {
+        const r = await apiDTE.getProgresoReenvio();
+        const p = await r.json();
+        if (!cancelado && p?.activo) {
+          setIsReenviandoMasivo(true);
+          seguirReenvio(p.total || 0);
+        }
+      } catch { /* si falla, la pantalla queda como siempre */ }
+    })();
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.sessionId]);
 
   // La selección sobrevive a cambiar de sub-página y volver.
   useEffect(() => {
@@ -301,7 +353,9 @@ const CorreoMasivo = () => {
   // Solo sobre lo que se está viendo: si hay un filtro puesto, no se seleccionan
   // filas escondidas.
   const seleccionarPendientes = () =>
-    setSelectedFolios(filas.filter(c => c.estado === 'fallido' || c.estado === 'omitido').map(c => String(c.folio)));
+    setSelectedFolios(filas
+      .filter(c => ['fallido', 'omitido', 'pendiente'].includes(c.estado))
+      .map(c => String(c.folio)));
   const limpiarSeleccion = () => setSelectedFolios([]);
 
   const reenviarSeleccionados = async () => {
@@ -317,16 +371,54 @@ const CorreoMasivo = () => {
       const data = await res.json();
       if (!data.ok) {
         toast({ variant: 'destructive', title: 'No se pudo iniciar', description: data.error || 'Error' });
-      } else {
-        setSelectedFolios([]);
-        programar(cargarCorreosLog, 30000);
-        programar(cargarCorreosLog, 90000);
+        setIsReenviandoMasivo(false);
+        return;
       }
+      setSelectedFolios([]);
+      // Se sigue el proceso hasta que termina, en vez de refrescar a ciegas a
+      // los 30 y 90 segundos: el reenvío abre el SII y baja un PDF por folio,
+      // así que puede tardar más y el usuario se quedaba sin saber cómo salió.
+      seguirReenvio(items.length);
     } catch (e) {
       toast({ variant: 'destructive', title: 'Error de conexión', description: e.message });
-    } finally {
       setIsReenviandoMasivo(false);
     }
+  };
+
+  // Sondea el reenvío hasta que el servidor dice que terminó, y recién ahí
+  // refresca la tabla y avisa con el resultado.
+  const seguirReenvio = (enviados) => {
+    if (pollReenvio.current) clearInterval(pollReenvio.current);
+    let vistoActivo = false;
+    let ticks = 0;
+
+    pollReenvio.current = setInterval(async () => {
+      ticks++;
+      try {
+        const r = await apiDTE.getProgresoReenvio();
+        const p = await r.json();
+        if (p?.activo) vistoActivo = true;
+
+        // Termina cuando el servidor lo dice, o tras 10 minutos de gracia si
+        // nunca se vio activo (el proceso pudo acabar entre dos sondeos).
+        const termino = (vistoActivo && p && p.activo === false) || (!vistoActivo && ticks >= 200);
+        if (!termino) return;
+
+        clearInterval(pollReenvio.current);
+        pollReenvio.current = null;
+        setIsReenviandoMasivo(false);
+        await cargarCorreosLog(periodo);
+
+        const ok = p?.enviados ?? 0;
+        const mal = p?.fallidos ?? 0;
+        toast({
+          variant: mal > 0 ? 'destructive' : undefined,
+          title: mal > 0 ? `Reenvío terminado con ${mal} fallo(s)` : '✅ Reenvío terminado',
+          description: `${ok} de ${enviados} correo(s) enviados correctamente.`,
+          duration: 12000,
+        });
+      } catch { /* reintenta en el próximo ciclo */ }
+    }, 3000);
   };
 
   // ====================================================
@@ -414,6 +506,7 @@ const CorreoMasivo = () => {
     if (id === 'todos') return true;
     if (id === 'sin_cobro') return !c.estadoPago;
     if (id === 'pagaron') return c.estadoPago === 'PAGADA';
+    if (id === 'anuladas') return c.estadoPago === 'ANULADA';
     if (id === 'deben') return c.estadoPago === 'PENDIENTE_PAGO' || c.estadoPago === 'PENDIENTE_RECIBO';
     return true;
   };
@@ -471,6 +564,13 @@ const CorreoMasivo = () => {
           <span className="text-emerald-600 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Enviados: {cuenta('enviado')}</span>
           <span className="text-red-500 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />Fallidos: {cuenta('fallido')}</span>
           <span className="text-slate-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-gray-500" />Omitidos: {cuenta('omitido')}</span>
+          {/* Facturas emitidas sin correo: si no se cuentan, pasan inadvertidas
+              —no son un fallo, simplemente nunca se intentó enviarlas—. */}
+          {cuenta('pendiente') > 0 && (
+            <span className="text-amber-600 flex items-center gap-1 font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />Sin enviar: {cuenta('pendiente')}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-slate-50 border border-[#efe8dd] rounded-lg pl-3 pr-1 h-9">
@@ -489,8 +589,22 @@ const CorreoMasivo = () => {
               {reenviandoFolio === manualFolio ? <Loader2 size={13} className="animate-spin" /> : 'Enviar'}
             </Button>
           </div>
+          {/* Mes que se está mirando. Es un desplegable y no un `<input
+              type="month">` porque, vacío, el input pinta su máscara
+              («---------- de ----») y parece un campo roto. Acá el valor por
+              omisión se puede nombrar: "Mes en cobro". */}
+          <select
+            value={periodo} onChange={(e) => setPeriodo(e.target.value)}
+            title="Mes de los envíos que se están mostrando."
+            className="h-9 px-3 bg-white border border-[#efe8dd] rounded-lg text-xs text-slate-700 focus:outline-none focus:border-slate-400 cursor-pointer"
+          >
+            <option value="">Mes en cobro</option>
+            {mesesDisponibles.map(m => (
+              <option key={m.valor} value={m.valor}>{m.label}</option>
+            ))}
+          </select>
           <Button
-            onClick={cargarCorreosLog}
+            onClick={() => cargarCorreosLog(periodo)}
             disabled={isLoadingCorreos}
             className="h-9 px-4 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-700 text-[10px] font-black uppercase tracking-widest rounded-lg inline-flex items-center gap-2"
           >
@@ -605,29 +719,41 @@ const CorreoMasivo = () => {
           <span className="text-slate-500">Seleccionados: <span className="text-blue-600">{selectedFolios.length}</span></span>
           <button onClick={seleccionarPendientes} className="text-orange-600 hover:text-orange-700 underline-offset-2 hover:underline">Seleccionar los que faltan</button>
           {selectedFolios.length > 0 && <button onClick={limpiarSeleccion} className="text-slate-400 hover:text-slate-600">Limpiar</button>}
+          {/* Qué manda cada botón, a la vista: son dos correos distintos y el
+              tooltip solo aparece si uno sospecha que hay algo que leer. */}
+          <span className="text-slate-400 hidden lg:inline">
+            · <span className="text-amber-700">Cobrar</span> = aviso de pago (sin factura)
+            · <span className="text-emerald-700">Reenviar</span> = la factura con su PDF
+          </span>
         </div>
+        {/* LOS DOS BOTONES MANDAN CORREOS DISTINTOS y estaban nombrados casi
+            igual («Recordatorio a seleccionados» / «Enviar seleccionados»), así
+            que no se sabía cuál hacía qué. Ahora cada uno dice QUÉ manda:
+              · Cobrar   → recordatorio de pago, al que debe (no lleva factura)
+              · Reenviar → la MISMA factura otra vez, con su PDF adjunto */}
         <div className="flex items-center gap-2">
           <Button
             onClick={enviarRecordatoriosPago}
             disabled={isEnviandoRecordatorios || isReenviandoMasivo || reenviandoFolio !== null}
             title={selectedFolios.length
-              ? `Recordatorio de pago solo a los ${selectedFolios.length} seleccionado(s)`
-              : 'Recordatorio de pago a TODOS los clientes con el cobro del mes pendiente'}
+              ? `Manda un correo de COBRO ("recuerda pagar") a los ${selectedFolios.length} seleccionado(s). No adjunta la factura.`
+              : 'Manda un correo de COBRO ("recuerda pagar") a TODOS los que tienen el cobro del mes pendiente. No adjunta la factura.'}
             className="h-9 px-5 bg-amber-600 hover:bg-amber-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-amber-600/20 inline-flex items-center gap-2"
           >
             {isEnviandoRecordatorios
               ? <><Loader2 size={14} className="animate-spin" />{progresoRecordatorio?.total ? ` ${progresoRecordatorio.actual}/${progresoRecordatorio.total}` : ' Enviando…'}</>
               : <><Mail size={14} /> {selectedFolios.length
-                    ? `Recordatorio a seleccionados (${selectedFolios.length})`
-                    : `Recordatorio a todos (${cuentaFiltro('deben')})`}</>}
+                    ? `Cobrar a ${selectedFolios.length} seleccionado(s)`
+                    : `Cobrar a los ${cuentaFiltro('deben')} que deben`}</>}
           </Button>
           <Button
             onClick={reenviarSeleccionados}
             disabled={selectedFolios.length === 0 || isReenviandoMasivo || reenviandoFolio !== null}
+            title="Vuelve a mandar la MISMA factura (con su PDF adjunto) a los seleccionados. Útil si el correo falló o el cliente dice que no le llegó."
             className="h-9 px-5 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest rounded-lg shadow-lg shadow-emerald-600/20 inline-flex items-center gap-2"
           >
             {isReenviandoMasivo ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-            Enviar seleccionados ({selectedFolios.length})
+            Reenviar factura ({selectedFolios.length})
           </Button>
         </div>
       </div>
@@ -688,7 +814,11 @@ const CorreoMasivo = () => {
                     {c.estado === 'enviado' && <span className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-600 font-black text-[8px] uppercase border border-emerald-500/20 inline-flex items-center gap-1"><CheckCircle2 size={9} /> Enviado</span>}
                     {c.estado === 'fallido' && <span className="px-2 py-1 rounded-full bg-red-500/10 text-red-500 font-black text-[8px] uppercase border border-red-500/20 inline-flex items-center gap-1"><AlertCircle size={9} /> Fallido</span>}
                     {c.estado === 'omitido' && <span className="px-2 py-1 rounded-full bg-gray-500/10 text-slate-500 font-black text-[8px] uppercase border border-gray-500/20">Omitido</span>}
-                    {!['enviado', 'fallido', 'omitido'].includes(c.estado) && <span className="text-slate-400 text-[9px]">{c.estado}</span>}
+                    {/* Factura emitida a la que nunca se le mandó el correo: no
+                        es un envío fallido —no hubo intento— pero el cliente
+                        igual se quedó sin su factura. */}
+                    {c.estado === 'pendiente' && <span className="px-2 py-1 rounded-full bg-amber-500/10 text-amber-600 font-black text-[8px] uppercase border border-amber-500/20 inline-flex items-center gap-1"><AlertCircle size={9} /> Sin enviar</span>}
+                    {!['enviado', 'fallido', 'omitido', 'pendiente'].includes(c.estado) && <span className="text-slate-400 text-[9px]">{c.estado}</span>}
                   </td>
                   <td className="px-3 py-2 text-center">
                     {c.estadoPago ? (

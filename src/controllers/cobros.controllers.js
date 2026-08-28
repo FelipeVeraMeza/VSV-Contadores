@@ -156,7 +156,10 @@ export const resumenCobros = async (req, res) => {
         // `por_emitir` a secas y prometía más facturas de las que iba a emitir.
         const { rows } = await pool.query(
             `SELECT
-                COUNT(*)                                                   AS total,
+                -- El total acompaña al monto del mes, así que cuenta lo mismo
+                -- que él: sin las anuladas. Decir "92 empresas" junto a un monto
+                -- que solo cubre 91 no cuadra con nada.
+                COUNT(*) FILTER (WHERE estado <> 'ANULADA')                AS total,
                 COUNT(*) FILTER (WHERE estado = 'POR_EMITIR')              AS por_emitir,
                 COUNT(*) FILTER (WHERE estado = 'POR_EMITIR' AND monto_esperado > 0
                                    AND empresa_id NOT IN (
@@ -171,7 +174,11 @@ export const resumenCobros = async (req, res) => {
                 COUNT(*) FILTER (WHERE estado = 'PENDIENTE_PAGO'
                                    AND fecha_vencimiento < CURRENT_DATE)   AS vencidos,
                 COUNT(*) FILTER (WHERE estado = 'ANULADA')                 AS anuladas,
-                COALESCE(SUM(monto_esperado), 0)                           AS monto_esperado,
+                -- Las ANULADAS no suman: su factura se dio de baja con nota de
+                -- crédito y no hay nada que cobrar. Incluirlas hacía que el
+                -- "Total del mes" mostrara plata que ya no existe —YOVANKA
+                -- MATULIC, $60.500 anulados el 28-08-2026, seguía sumando—.
+                COALESCE(SUM(monto_esperado) FILTER (WHERE estado <> 'ANULADA'), 0) AS monto_esperado,
                 COALESCE(SUM(monto_esperado) FILTER (WHERE estado = 'POR_EMITIR'), 0) AS monto_por_emitir,
                 COALESCE(SUM(monto_anulado), 0)                            AS monto_anulado,
                 -- Lo realmente facturado del período: emitido menos lo devuelto por notas

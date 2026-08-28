@@ -131,6 +131,30 @@ const FOLIOS_PERMITIDOS = [
 const carpetaDescargasTemporal = path.join(__dirname, 'pdf_descargados');
 if (!fs.existsSync(carpetaDescargasTemporal)) fs.mkdirSync(carpetaDescargasTemporal);
 
+// BARRIDO DE PDFs VIEJOS.
+//
+// El PDF se baja solo para adjuntarlo al correo y se borra al terminar, pero si
+// la emisión falla a medio camino el archivo queda ahí para siempre. Son
+// FACTURAS REALES de clientes acumulándose dentro de `src/`: el 28-08-2026
+// había cinco, y tres se habían commiteado al repositorio.
+//
+// Se borran los de más de 24 horas: los del día pueden estar en uso por un lote
+// en curso o servir para reintentar un envío que falló hace un rato.
+export function limpiarPdfsViejos(horas = 24) {
+    try {
+        const limite = Date.now() - horas * 3600 * 1000;
+        let n = 0;
+        for (const f of fs.readdirSync(carpetaDescargasTemporal)) {
+            if (!f.toLowerCase().endsWith('.pdf')) continue;
+            const ruta = path.join(carpetaDescargasTemporal, f);
+            if (fs.statSync(ruta).mtimeMs < limite) { fs.unlinkSync(ruta); n++; }
+        }
+        if (n) console.log(`🧹 ${n} PDF(s) temporales de más de ${horas}h eliminados.`);
+    } catch (e) {
+        console.log(`⚠️ No se pudieron limpiar los PDFs temporales: ${e.message}`);
+    }
+}
+
 let rutaBaseDescargas = path.join(os.homedir(), 'Downloads');
 if (!fs.existsSync(rutaBaseDescargas)) {
     rutaBaseDescargas = path.join(os.homedir(), 'Descargas'); 
@@ -154,13 +178,28 @@ export async function registrarCorreoEnLog({ folio, rut, razonSocial, correo, es
     if (folioStr) {
         try {
             await pool.query(
-                // La organización sale del cobro del mismo folio: es la llave que
-                // comparten las dos tablas. Sin esto la fila queda global y, al
-                // entrar la segunda firma, se vería desde la otra organización.
+                // La organización sale del cobro del cliente. Se busca primero por
+                // folio y, si no aparece, por el RUT de la empresa.
+                //
+                // POR QUÉ EL RESPALDO POR RUT: en el lote masivo el correo se
+                // registra apenas sale, y el folio recién se escribe en
+                // `cobro_mensual` al final, cuando corre `vincularFolios`. Buscar
+                // solo por folio no encontraba nada y la fila quedaba con
+                // organizacion_id NULL —invisible en Correo Masivo, que filtra por
+                // organización—. El 28-08-2026 los 95 correos del lote quedaron
+                // así y la pantalla mostraba "aún no hay correos registrados".
                 `INSERT INTO correos_facturas (folio, rut, razon_social, correo, estado, motivo, datos, fecha, organizacion_id)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(),
-                         (SELECT cm.organizacion_id FROM cobro_mensual cm
-                           WHERE TRIM(cm.folio) = TRIM($1) ORDER BY cm.periodo DESC LIMIT 1))
+                         COALESCE(
+                           (SELECT cm.organizacion_id FROM cobro_mensual cm
+                             WHERE TRIM(cm.folio) = TRIM($1) ORDER BY cm.periodo DESC LIMIT 1),
+                           -- Respaldo por el documento emitido, que sí tiene el
+                           -- folio y el RUT desde el momento de la emisión.
+                           (SELECT e.organizacion_id
+                              FROM documentos_emitidos de JOIN empresa e ON e.id = de.empresa_id
+                             WHERE de.folio::text = TRIM($1) AND de.tipo_dte IN (33, 34)
+                             ORDER BY de.fecha_emision DESC LIMIT 1)
+                         ))
                  ON CONFLICT (folio) DO UPDATE SET
                     rut = EXCLUDED.rut,
                     razon_social = EXCLUDED.razon_social,
@@ -539,7 +578,7 @@ Junto con saludar, informamos que ya hemos emitido la factura N°${datosFactura.
 
 📅 Fecha de vencimiento: 5 de ${mesVencimiento}
 
-Solicitamos realizar el pago antes de esa fecha para evitar la suspensión del servicio y asegurar la continuidad normal de tus procesos contables y tributarios.
+Le agradecemos realizar el pago antes de esa fecha para mantener la continuidad normal de sus procesos contables y tributarios.
 
 VALOR: $${fmtMoneda(netoNum)} + IVA ($${fmtMoneda(ivaNum)}) = $${fmtMoneda(brutoNum)}
 
@@ -557,6 +596,8 @@ Correo: MATIAS.OLIVOS@VSVCONSULTORES.COM
 https://www.flow.cl/btn.php?token=xe78c9acb73c3eff5e917d5c932a4a2f7f971abe
 
 Una vez realizado el pago, agradecemos enviar el comprobante para su registro.
+
+Ante cualquier duda sobre esta factura, responda este correo y lo revisamos.
 
 Saludos cordiales,
 Simple Pyme`;

@@ -49,6 +49,17 @@ const credencialesDe = async (req) => {
 // la facturación parada media hora sin necesidad.
 let correoEnCurso = false;
 
+// Progreso del reenvío masivo, consultable desde la pantalla.
+//
+// El reenvío abre el SII, busca cada folio y descarga su PDF: tarda minutos.
+// Antes la pantalla refrescaba a ciegas a los 30 y 90 segundos y nunca avisaba
+// cómo salió: si el proceso demoraba más, el usuario se quedaba mirando una
+// tabla sin cambios sin saber si funcionó.
+export const estadoReenvio = {
+    activo: false, total: 0, actual: 0, enviados: 0, fallidos: 0,
+    iniciado: null, terminado: null,
+};
+
 /**
  * Resuelve las credenciales del que factura y toma el candado de ESA cuenta.
  * Devuelve null (y ya respondió 409) si la cuenta está ocupada.
@@ -238,7 +249,53 @@ export const getCorreosLogController = async (req, res) => {
              LIMIT 2000`,
             [req.user?.organizacionId || null, req.query.periodo || null]
         );
-        res.json({ ok: true, correos: rows });
+
+        // FACTURAS EMITIDAS A LAS QUE NUNCA SE LES MANDÓ CORREO.
+        //
+        // `correos_facturas` solo tiene fila si hubo un INTENTO de envío. Si el
+        // robot emite la factura y falla antes de mandar el correo —o si se
+        // emite a mano desde el SII—, no queda rastro y el cliente se queda sin
+        // su factura sin que nadie lo note: no aparece en esta pantalla ni como
+        // fallida. El 28-08-2026 pasó con los folios 1472 y 1474.
+        //
+        // Se agregan como `pendiente`, para que se vean y se puedan enviar.
+        const { rows: sinCorreo } = await pool.query(
+            `SELECT de.folio::text          AS folio,
+                    de.rut_cliente          AS rut,
+                    e.razon_social          AS "razonSocial",
+                    e.email_corporativo     AS correo,
+                    'pendiente'             AS estado,
+                    'La factura se emitió pero nunca se envió el correo' AS motivo,
+                    NULL::jsonb             AS datos,
+                    de.fecha_emision        AS fecha,
+                    cm.estado               AS "estadoPago",
+                    cm.monto_facturado      AS "montoCobro",
+                    to_char(cm.periodo, 'YYYY-MM') AS "periodoCobro"
+               FROM documentos_emitidos de
+               JOIN empresa e ON e.id = de.empresa_id
+               LEFT JOIN LATERAL (
+                    SELECT c.estado, c.monto_facturado, c.periodo
+                      FROM cobro_mensual c
+                     WHERE TRIM(c.folio) = de.folio::text
+                     ORDER BY c.periodo DESC LIMIT 1
+               ) cm ON true
+              WHERE de.tipo_dte IN (33, 34)
+                AND e.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                AND date_trunc('month', de.fecha_emision)::date = COALESCE(
+                        $2::date,
+                        (SELECT MAX(c2.periodo) FROM cobro_mensual c2
+                          WHERE c2.estado = 'PENDIENTE_PAGO'
+                            AND c2.organizacion_id IS NOT DISTINCT FROM $1::uuid))
+                AND NOT EXISTS (
+                    SELECT 1 FROM correos_facturas cf2 WHERE TRIM(cf2.folio) = de.folio::text)
+              ORDER BY de.fecha_emision DESC
+              LIMIT 200`,
+            [req.user?.organizacionId || null, req.query.periodo || null]
+        );
+
+        const correos = [...rows, ...sinCorreo]
+            .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        res.json({ ok: true, correos });
     } catch (e) {
         console.error("❌ Error leyendo correos_facturas:", e.message);
         res.json({ ok: true, correos: [], error: e.message });
@@ -260,13 +317,31 @@ export const reenviarCorreosMasivoController = async (req, res) => {
         }
 
         correoEnCurso = true;
+        // El reenvío abre el SII, busca cada folio y baja su PDF: puede tardar
+        // minutos. La pantalla necesita poder preguntar si terminó, si no
+        // refresca a ciegas y el usuario nunca sabe cómo salió.
+        estadoReenvio.activo = true;
+        estadoReenvio.total = items.length;
+        estadoReenvio.actual = 0;
+        estadoReenvio.enviados = 0;
+        estadoReenvio.fallidos = 0;
+        estadoReenvio.iniciado = new Date().toISOString();
+
         console.log(`[INFO] Reenvío MASIVO de ${items.length} correo(s) solicitado.`);
         // Respondemos de inmediato; el proceso corre en segundo plano (puede tardar minutos).
         res.json({ ok: true, mensaje: `Reenvío masivo iniciado para ${items.length} correo(s). Refresca el registro en unos minutos.` });
 
         reenviarCorreosMasivo(items, true)
+            .then((r) => {
+                estadoReenvio.enviados = r?.enviados ?? 0;
+                estadoReenvio.fallidos = r?.fallidos ?? 0;
+            })
             .catch(err => console.error("❌ Error en reenvío masivo de correos:", err))
-            .finally(() => { correoEnCurso = false; });
+            .finally(() => {
+                correoEnCurso = false;
+                estadoReenvio.activo = false;
+                estadoReenvio.terminado = new Date().toISOString();
+            });
 
     } catch (error) {
         correoEnCurso = false;
@@ -274,6 +349,9 @@ export const reenviarCorreosMasivoController = async (req, res) => {
         if (!res.headersSent) res.status(500).json({ ok: false, error: error.message });
     }
 };
+
+// Progreso del reenvío masivo, para que la pantalla sepa cuándo terminó.
+export const progresoReenvioController = (req, res) => res.json({ ok: true, ...estadoReenvio });
 
 // ==========================================
 // 📢 RECORDATORIOS DE PAGO (módulo aparte)

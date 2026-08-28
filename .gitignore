@@ -12,3 +12,10 @@ whatsapp_auth
 # Respaldos de la base: contienen datos reales de clientes (RUT, razón social,
 # montos). Se generan al borrar o migrar en masa y NUNCA deben commitearse.
 src/DatabaseThings/respaldos/
+
+# PDFs de documentos tributarios. Se bajan del SII solo para adjuntarlos al
+# correo y se borran después, pero cuando la emisión falla a medio camino el
+# archivo queda ahí. Son facturas REALES de clientes: no van al repositorio.
+**/pdf_descargados/
+# Documentos que bajan los robots del SII, por si se guardan fuera de esa carpeta.
+src/components/**/revisar/*.pdf

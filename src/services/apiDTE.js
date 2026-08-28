@@ -67,9 +67,13 @@ export const emitirDte  = (dteJson) => dteFetch('/emitir-dte',  { method: 'POST'
 // ---------------------------------------------------------------------
 // Correos
 // ---------------------------------------------------------------------
-export const getCorreosLog          = ()              => dteFetch('/correos-log');
+// `periodo` en formato YYYY-MM. Sin él, el backend muestra el mes que se está
+// cobrando (el último con deuda).
+export const getCorreosLog          = (periodo)       =>
+  dteFetch(`/correos-log${periodo ? `?periodo=${periodo}-01` : ''}`);
 export const reenviarCorreo         = (folio, datos)  => dteFetch('/reenviar-correo', { method: 'POST', body: { folio, datos: datos || null } });
 export const reenviarCorreosMasivo  = (items)         => dteFetch('/reenviar-correos-masivo', { method: 'POST', body: { items } });
+export const getProgresoReenvio     = ()              => dteFetch('/progreso-reenvio');
 
 // ---------------------------------------------------------------------
 // Recordatorios de pago

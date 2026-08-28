@@ -713,21 +713,23 @@ const CobrosMensuales = () => {
                             negro que se dibuja sobre la fila siguiente y tapa datos.
                             La etiqueta del botón ya dice lo que hace. */}
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                          {/* Con fondo y borde propios: en texto plano se leían
+                              como parte de la fila y no como algo clicable. */}
                           {c.estado !== 'PAGADA' && c.estado !== 'POR_EMITIR' && c.estado !== 'ANULADA' && (
                             <button onClick={() => marcar(c, 'PAGADA')}
-                              className="text-[11px] text-emerald-700 hover:bg-emerald-50 px-2 py-1 rounded-md transition-colors">
+                              className="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 px-2.5 py-1 rounded-md transition-colors">
                               Marcar pagada
                             </button>
                           )}
                           {c.estado === 'PENDIENTE_PAGO' && (
                             <button onClick={() => marcar(c, 'PENDIENTE_RECIBO')}
-                              className="text-[11px] text-sky-700 hover:bg-sky-50 px-2 py-1 rounded-md transition-colors">
+                              className="text-[11px] font-medium text-sky-700 bg-sky-50 border border-sky-200 hover:bg-sky-100 hover:border-sky-300 px-2.5 py-1 rounded-md transition-colors">
                               Recibo
                             </button>
                           )}
                           {c.estado === 'PAGADA' && (
                             <button onClick={() => marcar(c, 'PENDIENTE_PAGO')}
-                              className="text-[11px] text-slate-400 hover:text-slate-700 hover:bg-slate-100 px-2 py-1 rounded-md transition-colors">
+                              className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-700 px-2.5 py-1 rounded-md transition-colors">
                               Revertir
                             </button>
                           )}

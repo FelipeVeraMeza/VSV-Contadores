@@ -131,6 +131,12 @@ export async function obtenerDestinatariosRecordatorio({ periodo = null, soloAct
         `SELECT e.razon_social       AS "razonSocial",
                 c.folio,
                 c.monto_facturado    AS "monto",
+                -- El TOTAL con IVA del documento real: es lo que el cliente
+                -- tiene que transferir. La columna monto_facturado es neto.
+                (SELECT de.monto_total FROM documentos_emitidos de
+                  WHERE de.folio::text = TRIM(c.folio) AND de.tipo_dte IN (33, 34)
+                    AND de.monto_total > 0
+                  ORDER BY de.fecha_emision DESC LIMIT 1) AS "montoBruto",
                 to_char(c.periodo, 'YYYY-MM') AS "periodo",
                 -- LOS DOS, no uno u otro.
                 --
@@ -204,15 +210,45 @@ export async function obtenerDestinatariosRecordatorio({ periodo = null, soloAct
 // =====================================================================
 // ✉️ CONTENIDO DEL CORREO RECORDATORIO
 // =====================================================================
-export function construirCorreoRecordatorio(razonSocial, { fechaLimite = fechaLimitePorDefecto() } = {}) {
+// `folio`, `monto` y `periodo` identifican QUÉ factura se está cobrando.
+//
+// Sin ellos el correo decía «la factura correspondiente al servicio» y el
+// cliente no tenía cómo saber cuál era, de qué mes ni por cuánto. Con dueños
+// que tienen dos empresas —SOCIEDAD DE INVERSIONES PONCE Y AÑAZCO y AÑAZCO Y
+// PONCE llegan al mismo correo— era imposible saber cuál de las dos pagar.
+export function construirCorreoRecordatorio(razonSocial, {
+    fechaLimite = fechaLimitePorDefecto(), folio = null, monto = null, periodo = null,
+} = {}) {
     const nombre = razonSocial || 'Estimado cliente';
+    const fmt = (n) => `$${Math.round(Number(n) || 0).toLocaleString('es-CL')}`;
 
-    const asunto = 'Recordatorio de pago – Factura servicio contable';
+    // El mes en palabras: "2026-07" → "julio de 2026".
+    const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    let mesTexto = '';
+    if (periodo && /^\d{4}-\d{2}/.test(periodo)) {
+        const [a, m] = periodo.split('-');
+        mesTexto = `${MESES[Number(m) - 1]} de ${a}`;
+    }
+
+    // El asunto lleva el folio: en la bandeja del cliente se distingue de los
+    // otros recordatorios sin tener que abrirlo.
+    const asunto = folio
+        ? `Recordatorio de pago – Factura N°${folio}${mesTexto ? ` (${mesTexto})` : ''}`
+        : 'Recordatorio de pago – Factura servicio contable';
+
+    // El detalle solo aparece si hay datos: un correo con "factura N°null" es
+    // peor que uno genérico.
+    const detalle = [
+        folio    ? `Factura N°: ${folio}` : null,
+        mesTexto ? `Periodo: servicio de contabilidad de ${mesTexto}` : null,
+        monto    ? `Monto pendiente: ${fmt(monto)} (IVA incluido)` : null,
+    ].filter(Boolean).join('\n');
 
     const texto = `Estimados ${nombre}:
 
 Junto con saludar, le recordamos que se encuentra pendiente el pago de la factura correspondiente al servicio de contabilidad mensual contratado por la empresa.
-
+${detalle ? `\n${detalle}\n` : ''}
 Le solicitamos regularizar el pago a más tardar el ${fechaLimite}. Si ya realizó el pago, por favor ignore este mensaje y le agradecemos enviarnos el comprobante por este medio.
 
 Medios de pago:
@@ -229,9 +265,12 @@ LINK DE PAGO DEBITO O CREDITO
 
 https://www.flow.cl/btn.php?token=xe78c9acb73c3eff5e917d5c932a4a2f7f971abe
 
-Solicito enviar el comprobante de pago por este medio.
+Una vez realizado el pago, agradecemos enviar el comprobante por este medio.
 
-Saludos cordiales,`;
+Ante cualquier duda sobre este cobro, responda este correo y lo revisamos.
+
+Saludos cordiales,
+Simple Pyme`;
 
     const html = `<div style="font-family: Arial, sans-serif; color: #333; line-height: 1.5;">
                     ${texto.replace(/\n/g, '<br>')}
@@ -291,7 +330,18 @@ export async function enviarRecordatoriosPago({ periodo = null, fechaLimite = nu
         estadoRecordatorio.actual = i + 1;
         estadoRecordatorio.ultimoCorreo = dest.correo;
 
-        const { asunto, html } = construirCorreoRecordatorio(dest.razonSocial, { fechaLimite: tope });
+        // El cliente paga el BRUTO. `monto_facturado` guarda el neto, así que
+        // el correo diría $60.500 donde la factura dice $71.995 y el cliente
+        // transferiría de menos. Se usa el total del documento emitido y, si no
+        // está, se calcula el IVA.
+        const brutoAvisar = Number(dest.montoBruto) > 0
+            ? Number(dest.montoBruto)
+            : Math.round((Number(dest.monto) || 0) * 1.19);
+
+        const { asunto, html } = construirCorreoRecordatorio(dest.razonSocial, {
+            fechaLimite: tope,
+            folio: dest.folio, monto: brutoAvisar, periodo: dest.periodo,
+        });
         const mailOptions = {
             from: `"Matias Olivos" <matias.olivos@vsvconsultores.com>`,
             to: dest.correo,

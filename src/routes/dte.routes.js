@@ -11,6 +11,7 @@ import {
     emitirMasivoController,
     reenviarCorreoController,
     reenviarCorreosMasivoController,
+    progresoReenvioController,
     getCorreosLogController,
     previewRecordatoriosController,
     enviarRecordatoriosController,
@@ -115,6 +116,8 @@ dteRoutes.post('/reenviar-correo', reenviarCorreoController);
 
 // 📧 Reenvío MASIVO de los correos seleccionados
 dteRoutes.post('/reenviar-correos-masivo', soloAdmin, envioMasivoLimiter, reenviarCorreosMasivoController);
+// Progreso del reenvío en curso: la pantalla lo sondea para avisar al terminar.
+dteRoutes.get('/progreso-reenvio', progresoReenvioController);
 
 // 📒 Registro de correos enviados (desde la BD) — requiere sesión
 dteRoutes.get('/correos-log', getCorreosLogController);

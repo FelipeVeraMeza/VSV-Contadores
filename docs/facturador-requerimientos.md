@@ -2,6 +2,13 @@
 
 **Fecha de la revisión:** 31-jul-2026 · *actualizado el 14-ago-2026 (ver el final).*
 
+> **⚠️ Para el estado de HOY del Cobro del Mes y Correo Masivo, ir a
+> [cobro-del-mes-agosto-2026.md](cobro-del-mes-agosto-2026.md)** (28-ago-2026).
+> Ahí está el cierre de agosto, las reglas nuevas del ciclo —no se factura a
+> quien debe, precio por tramo, tope de variación—, diez bugs corregidos y, sobre
+> todo, **los pendientes**: ~$200.000 de junio dados por pagados sin factura, la
+> nota de crédito que no avisa al cliente y la tabla `bitacora` que no existe.
+
 > **Lo último (14-ago-2026):** separador de miles en los montos, botón para
 > descargar la factura al terminar la emisión, y un bug latente de la proyección
 > del lote. Está todo al final, en **«Trabajo del 14-ago-2026»**, junto con las

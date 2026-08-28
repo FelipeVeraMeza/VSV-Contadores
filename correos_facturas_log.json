@@ -3759,5 +3759,33 @@
     "estado": "enviado",
     "motivo": "",
     "datos": {}
+  },
+  {
+    "fecha": "2026-08-28T15:37:09.530Z",
+    "folio": "1474",
+    "rut": "78481935-3",
+    "razonSocial": "SUSANA CHAMORRO MARTINEZ TRANSPORTES E.I.R.L.",
+    "correo": "SUSANA.CHAMORRO.MARTINEZ@GMAIL.COM",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {
+      "razonSocial": "SUSANA CHAMORRO MARTINEZ TRANSPORTES E.I.R.L.",
+      "rut": "78481935-3",
+      "correo": "SUSANA.CHAMORRO.MARTINEZ@GMAIL.COM"
+    }
+  },
+  {
+    "fecha": "2026-08-28T15:37:12.494Z",
+    "folio": "1472",
+    "rut": "78068412-7",
+    "razonSocial": "CALDERÓN GESTIÓN INMOBILIARIA SPA",
+    "correo": "talo19@gmail.com",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {
+      "razonSocial": "CALDERÓN GESTIÓN INMOBILIARIA SPA",
+      "rut": "78068412-7",
+      "correo": "talo19@gmail.com"
+    }
   }
 ]
