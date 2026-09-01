@@ -1,29 +1,35 @@
 // ============================================================================
 // ELEGIR LA EMPRESA EMISORA EN EL SII · por su RUT, no por su posición
 // ----------------------------------------------------------------------------
+// SON DOS RUT DISTINTOS, Y CONFUNDIRLOS ES EL ERROR CLÁSICO ACÁ
+//
+//   · QUIÉN ENTRA al portal: el RUT de una PERSONA con su clave tributaria.
+//     Es `DTE_RUT` del entorno (11030124-3, la cuenta master) o el del usuario
+//     que apretó el botón, si cargó los suyos en Mi Perfil.
+//   · QUIÉN EMITE: el RUT de la EMPRESA a nombre de la cual sale la factura.
+//     Es `78306207-0`, VOLLAIRE Y OLIVOS SIMPLE PYME —el mismo que ya estaba
+//     en config.js como RUT_EMPRESA_LOCAL y en descargarDocumentoSii.mjs—.
+//
+// Una persona puede emitir por varias empresas: Matías entra con su RUT y el
+// SII le ofrece JUEGOS RETRO CHILE y VOLLAIRE Y OLIVOS. Buscar el RUT del login
+// entre las empresas no encuentra nada, porque él no es ninguna de las dos.
+//
 // EL PROBLEMA QUE RESUELVE
-// Cuando una cuenta del SII tiene más de una empresa, el portal pide elegir con
-// cuál se emite antes de mostrar el formulario. Los cuatro robots de facturación
-// —factura manual, factura masiva, exenta manual y exenta masiva— resolvían eso
-// tomando «la segunda opción del desplegable», a ciegas.
-//
-// Y el RUT correcto lo tenían ahí mismo: `credSii.DTE_RUT`, que sale de las
-// variables de entorno (Railway en producción) o de las credenciales propias del
-// usuario que factura. El robot sabía con qué empresa emitir y elegía por
-// posición igual.
-//
-// Eso falla de dos formas, y las dos pasaron:
-//   · Si el orden cambia —una empresa nueva, o el usuario entra con SUS
-//     credenciales y ve otra lista— la segunda ya no es la que se quiere. El
-//     robot seguía y se quedaba esperando 45 s un formulario que no llegaba.
-//     Es el error de `EFXP_RUT_RECEP` que le salió a Mati el 31-08-2026.
-//   · Peor: si sí cargaba, emitía a nombre de la empresa equivocada. Un
-//     documento tributario mal emitido no se deshace con un F5.
+// Cuando la cuenta tiene más de una empresa, el SII pide elegir antes de mostrar
+// el formulario. Los cuatro robots resolvían eso tomando «la segunda opción del
+// desplegable», a ciegas. Funcionaba de casualidad: VOLLAIRE Y OLIVOS es la
+// segunda de la lista. En cuanto el orden cambia —una empresa nueva, u otro
+// usuario con otra lista— la segunda ya no es la correcta, y ahí hay dos
+// desenlaces y los dos son malos:
+//   · No carga el formulario: el robot espera 45 s un campo que no llega. Es el
+//     error de `EFXP_RUT_RECEP` que le salió a Mati el 31-08-2026 21:13.
+//   · Sí carga: se emite a nombre de la empresa equivocada. Un documento
+//     tributario mal emitido no se deshace con un F5, hay que anularlo.
 //
 // POR QUÉ ABORTA EN VEZ DE SEGUIR
-// Si el RUT buscado no está en la lista, esto lanza. Emitir con la empresa que
-// no corresponde es peor que no emitir: lo primero hay que anularlo con el SII,
-// lo segundo se reintenta.
+// Si la empresa buscada no está en la lista, esto lanza diciendo cuáles había.
+// Emitir con la que no corresponde es peor que no emitir: lo primero se anula
+// con el SII, lo segundo se reintenta.
 //
 // POR QUÉ VIVE EN SU PROPIO ARCHIVO
 // Estaba copiado en los cuatro robots, y el 11-08 se arregló en uno solo: el
@@ -31,6 +37,12 @@
 // masiva, exenta manual y exenta masiva». Copiado cuatro veces, se corrige una y
 // se olvidan tres. Acá se corrige una vez.
 // ============================================================================
+
+// El RUT de la empresa que EMITE. Se puede cambiar por entorno sin tocar código
+// —en Railway, con RUT_EMPRESA_EMISORA— y si no está, cae al de siempre, que es
+// el que ya usaban config.js y descargarDocumentoSii.mjs.
+export const rutEmpresaEmisora = () =>
+    process.env.RUT_EMPRESA_EMISORA || '78306207-0';
 
 // Saca el CUERPO del RUT (sin dígito verificador) de una cadena cualquiera.
 //
@@ -57,26 +69,30 @@ const cuerpoRut = (valor) => {
 };
 
 /**
- * Selecciona en el SII la empresa cuyo RUT calza con el configurado.
+ * Selecciona en el SII la empresa a nombre de la cual se emite.
  *
- * No hace nada si la pantalla de selección no aparece (cuenta con una sola
+ * No hace nada si la pantalla de selección no aparece (la cuenta tiene una sola
  * empresa): en ese caso el SII va directo al formulario.
  *
+ * OJO con el parámetro: es el RUT de la EMPRESA (78306207-0), NO el de la
+ * persona que inició sesión (DTE_RUT). Pasarle el del login hace que no
+ * encuentre nada, porque la persona no figura entre las empresas.
+ *
  * @param {import('puppeteer').Page} page
- * @param {string} rutEmisor  El RUT configurado (credSii.DTE_RUT)
+ * @param {string} [rutEmisor]  RUT de la empresa emisora. Por omisión, el configurado.
  * @param {(msg: string) => void} [log]
  * @returns {Promise<boolean>} true si eligió una empresa, false si no hubo que elegir
- * @throws Si hay que elegir y el RUT buscado no está entre las opciones
+ * @throws Si hay que elegir y la empresa no está entre las opciones
  */
-export async function seleccionarEmpresaEmisora(page, rutEmisor, log = console.log) {
+export async function seleccionarEmpresaEmisora(page, rutEmisor = rutEmpresaEmisora(), log = console.log) {
     const selectBox = await page.$('select[name="RUT_EMP"]');
     if (!selectBox) return false;          // una sola empresa: no hay que elegir
 
     const rutBuscado = String(rutEmisor || '').replace(/\D/g, '');
     if (!rutBuscado) {
         throw new Error(
-            'No hay un RUT emisor configurado, y esta cuenta del SII tiene varias empresas. ' +
-            'Revisa la variable DTE_RUT (en Railway, si es producción).'
+            'No hay un RUT de empresa emisora configurado, y esta cuenta del SII tiene ' +
+            'varias empresas. Revisa la variable RUT_EMPRESA_EMISORA (en Railway, si es producción).'
         );
     }
 

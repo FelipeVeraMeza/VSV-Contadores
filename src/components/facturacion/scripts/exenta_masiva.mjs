@@ -228,11 +228,10 @@ export async function emitirLoteExentaPuppeteer(facturasFront, credSii = credenc
                     if (estadoRobotExenta.cancelar) throw new Error("Operación cancelada por el usuario.");
                     if (!loginCompletado) throw new Error("El SII no permitió iniciar sesión después de 3 intentos.");
 
-                    // Por RUT, no por posición (ver empresaEmisora.mjs). En un
-                    // LOTE esto pesa el doble: elegir mal no arruina un documento,
-                    // arruina todos los del lote, y hay que anularlos uno por uno.
-                    // Si el RUT no está en la lista, aborta antes de emitir nada.
-                    if (await seleccionarEmpresaEmisora(page, credSii.DTE_RUT)) {
+                    // Por RUT de la EMPRESA, no por posición (ver empresaEmisora.mjs).
+                    // En un LOTE esto pesa el doble: elegir mal no arruina un
+                    // documento, arruina todos, y hay que anularlos uno por uno.
+                    if (await seleccionarEmpresaEmisora(page)) {
                         await delay(2000);   // el SII masivo necesita este respiro
                     }
 

@@ -161,10 +161,12 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
             await Promise.all([page.waitForNavigation(), page.click('#bt_ingresar')]);
             await delay(1500); 
 
-            // La empresa emisora se elige por su RUT (ver empresaEmisora.mjs).
-            // Antes se tomaba «la segunda del desplegable» a ciegas, y por eso el
-            // 31-08 el robot quedó esperando 45 s un formulario que no llegaba.
-            await seleccionarEmpresaEmisora(page, credSii.DTE_RUT);
+            // La empresa emisora se elige por SU RUT, no por su posición en la
+            // lista (ver empresaEmisora.mjs). Sin argumento usa el configurado:
+            // 78306207-0, VOLLAIRE Y OLIVOS. NO se le pasa credSii.DTE_RUT —ese
+            // es el RUT de la PERSONA que inicia sesión, y no figura entre las
+            // empresas del desplegable.
+            await seleccionarEmpresaEmisora(page);
         }
 
         // =======================================================================

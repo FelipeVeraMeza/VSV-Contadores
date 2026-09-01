@@ -519,13 +519,12 @@ export async function emitirLotePuppeteer(facturasFront, credSii = credencialesD
                     if (estadoRobot.cancelar) throw new Error("Operación cancelada por el usuario.");
                     if (!loginCompletado) throw new Error("El SII no permitió iniciar sesión después de 3 intentos.");
 
-                    // 2. VALIDAR EMPRESA EMISORA · por RUT, no por posición.
-                    // Ver empresaEmisora.mjs. Acá es donde más importa: este robot
-                    // emite el cobro del mes entero, así que elegir la empresa
-                    // equivocada no arruina una factura sino cien, y cada una hay
-                    // que anularla con el SII. Si el RUT configurado no está en la
-                    // lista, aborta ANTES de emitir la primera.
-                    if (await seleccionarEmpresaEmisora(page, credSii.DTE_RUT)) {
+                    // 2. VALIDAR EMPRESA EMISORA · por RUT de la EMPRESA, no por
+                    // posición. Ver empresaEmisora.mjs. Acá es donde más importa:
+                    // este robot emite el cobro del mes entero, así que elegir mal
+                    // no arruina una factura sino cien, y cada una hay que anularla
+                    // con el SII. Si la empresa no está, aborta ANTES de la primera.
+                    if (await seleccionarEmpresaEmisora(page)) {
                         await delay(800);
                     }
 

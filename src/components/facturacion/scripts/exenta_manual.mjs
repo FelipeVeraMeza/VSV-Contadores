@@ -96,10 +96,9 @@ export async function emitirExentaPuppeteer(datos, credSii = credencialesDelSist
             await Promise.all([page.waitForNavigation(), page.click('#bt_ingresar')]);
             await delay(1500); 
 
-            // Por RUT, no por posición. Ver empresaEmisora.mjs: elegir «la
-            // segunda del desplegable» emitía a nombre de quien no correspondía
-            // en cuanto cambiaba el orden de la lista.
-            await seleccionarEmpresaEmisora(page, credSii.DTE_RUT);
+            // Por RUT de la EMPRESA, no por posición ni por el RUT del login.
+            // Ver empresaEmisora.mjs.
+            await seleccionarEmpresaEmisora(page);
         }
 
         // =======================================================================
