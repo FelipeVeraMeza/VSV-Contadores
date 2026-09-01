@@ -321,7 +321,17 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
             const btn = document.querySelector('button[name="Button_Update"]');
             if (btn) btn.click();
         });
-        await delay(3500);
+        // ESPERAR A QUE EL SII RESPONDA, NO 3,5 SEGUNDOS SIEMPRE.
+        // Este era el `delay` más caro del robot: se pagaba entero en cada
+        // factura, incluso cuando el portal ya había terminado en medio segundo.
+        // Ahora se sale apenas el botón de firma queda habilitado —que es la
+        // señal real de que la validación terminó— y solo se agotan los 4 s
+        // cuando el SII de verdad está lento. En una emisión normal esto
+        // devuelve casi al instante.
+        await page.waitForFunction(() => {
+            const b = document.querySelector('input[name="btnSign"]');
+            return b && !b.disabled;
+        }, { timeout: 4000, polling: 200 }).catch(() => {});
         
         try {
             const alertaAceptada = await page.evaluate(() => {
@@ -335,17 +345,42 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
         
         paso(7, 'Firmando la factura');
         console.log('✍️  Abriendo cuadro de firma...');
+        // POR QUÉ ESTO REINTENTA, Y POR QUÉ AHORA TARDA MENOS.
+        //
+        // El botón de firma del SII (`btnSign`) recién se habilita cuando el
+        // portal terminó de validar los montos. Apretarlo antes no hace nada. Por
+        // eso el bucle: apretar, esperar el cuadro de la clave y, si no salió,
+        // volver a «Actualizar» y probar otra vez.
+        //
+        // Antes eran 5 vueltas de 3,5 s + 2 s: 27 segundos de reintentos mudos
+        // antes de rendirse, y el error final —«El SII no cargó la caja»— no
+        // decía nada. Con eso no se puede distinguir un portal lento de un
+        // formulario que el SII rechazó. Los 65 s del intento del 31-08 21:37 son
+        // en su mayoría este bucle girando en falso.
+        //
+        // Ahora son 3 vueltas, y antes de apretar se revisa si el botón siquiera
+        // existe y está habilitado: si el SII está mostrando un error de
+        // validación, se corta enseguida y se dice cuál, en vez de esperar.
         let intentosFirma = 0, cajaVisible = false;
-        while (intentosFirma < 5 && !cajaVisible) {
+        while (intentosFirma < 3 && !cajaVisible) {
             try {
-                await page.evaluate(() => {
+                const estadoBoton = await page.evaluate(() => {
                     const btn = document.querySelector('input[name="btnSign"]');
-                    if (btn && !btn.disabled) btn.click();
+                    if (!btn) return 'no-existe';
+                    if (btn.disabled) return 'deshabilitado';
+                    btn.click();
+                    return 'apretado';
                 });
-                await page.waitForSelector('#myPass', { visible: true, timeout: 3500 });
-                cajaVisible = true;
+                if (estadoBoton === 'apretado') {
+                    await page.waitForSelector('#myPass', { visible: true, timeout: 4000 });
+                    cajaVisible = true;
+                    break;
+                }
+                intentosFirma++;
             } catch (e) {
                 intentosFirma++;
+            }
+            if (!cajaVisible) {
                 await page.evaluate(() => {
                     const btn = document.querySelector('button[name="Button_Update"]');
                     if (btn) btn.click();
@@ -353,7 +388,34 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
                 await delay(2000);
             }
         }
-        if (!cajaVisible) throw new Error("El SII no cargó la caja para la clave digital.");
+
+        if (!cajaVisible) {
+            // Se mira la página antes de rendirse: casi siempre el SII está
+            // diciendo en pantalla qué campo no le gustó, y ese es justo el dato
+            // que hace falta. Sin esto había que adivinar.
+            const diag = await page.evaluate(() => {
+                const texto = (document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+                const avisos = texto.split(/(?<=\.)\s+/)
+                    .filter(l => /error|obligatori|inv[áa]lid|debe |falta|incorrect|no puede/i.test(l))
+                    .slice(0, 3).join(' | ');
+                const btn = document.querySelector('input[name="btnSign"]');
+                return {
+                    avisos,
+                    boton: !btn ? 'no está en la página' : (btn.disabled ? 'está deshabilitado' : 'está habilitado'),
+                    extracto: texto.slice(0, 250),
+                };
+            }).catch(() => null);
+
+            throw new Error(
+                'El SII no abrió el cuadro para la clave del certificado. ' +
+                (diag
+                    ? `El botón de firma ${diag.boton}. ` +
+                      (diag.avisos ? `El SII decía: "${diag.avisos}". ` : '') +
+                      `La página mostraba: "${diag.extracto}".`
+                    : 'Además, no se pudo leer la página para saber por qué.') +
+                ' Suele ser un dato del formulario que el SII rechazó, o el portal lento.'
+            );
+        }
 
         console.log('🔒 Ingresando clave y enviando factura...');
         await page.focus('#myPass');
