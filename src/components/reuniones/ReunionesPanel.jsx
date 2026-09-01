@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import DetalleReunion from '@/components/reuniones/DetalleReunion';
+import CalendarioReuniones from '@/components/reuniones/CalendarioReuniones';
 import { useLlamada } from '@/contexts/LlamadaContext.jsx';
 import {
     listarReunionesApi, crearReunionApi, cancelarReunionApi,
@@ -57,10 +58,18 @@ const ESTADO_PINTA = {
 // Las dos formas están en el mismo formulario porque son la misma cosa con una
 // fecha distinta, y separarlas en dos botones obligaba a decidir antes de
 // escribir el título.
-const CrearReunionModal = ({ onClose, onCreada, usuarios, ahoraPorDefecto }) => {
+const CrearReunionModal = ({ onClose, onCreada, usuarios, ahoraPorDefecto, fechaPorDefecto }) => {
     const yo = getUser().id;
     const [form, setForm] = useState({
-        titulo: '', descripcion: '', iniciaAt: '', duracionMin: 30,
+        titulo: '', descripcion: '',
+        // Al agendar desde un día del calendario, la fecha llega puesta —a las
+        // 9:00, que es un horario de oficina razonable— y solo queda ajustar la
+        // hora. El input datetime-local quiere hora LOCAL sin zona, así que se
+        // arma a mano: toISOString() pasa a UTC y correría el día.
+        iniciaAt: fechaPorDefecto
+            ? `${fechaPorDefecto.getFullYear()}-${String(fechaPorDefecto.getMonth() + 1).padStart(2, '0')}-${String(fechaPorDefecto.getDate()).padStart(2, '0')}T09:00`
+            : '',
+        duracionMin: 30,
         participantes: [], personaId: null, personaNombre: '',
     });
     const [ahora, setAhora] = useState(!!ahoraPorDefecto);
@@ -240,7 +249,18 @@ const ReunionesPanel = () => {
     const cargar = useCallback(async () => {
         setLoading(true);
         try {
-            const r = await listarReunionesApi(getSessionId(), { cuando });
+            // El calendario pide OTRA cosa que las listas: un mes entero, con las
+            // pasadas y las futuras juntas. Se le manda un rango amplio —seis meses
+            // hacia atrás y seis hacia adelante— para poder navegar entre meses sin
+            // volver a llamar al servidor en cada flecha.
+            const params = cuando === 'calendario'
+                ? {
+                    cuando: 'todas',
+                    desde: new Date(new Date().getFullYear(), new Date().getMonth() - 6, 1).toISOString(),
+                    hasta: new Date(new Date().getFullYear(), new Date().getMonth() + 7, 1).toISOString(),
+                }
+                : { cuando };
+            const r = await listarReunionesApi(getSessionId(), params);
             const d = await r.json();
             if (d.success) setReuniones(d.reuniones || []);
         } catch { /* se queda con lo que había */ } finally { setLoading(false); }
@@ -299,7 +319,7 @@ const ReunionesPanel = () => {
 
             <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
                 <div className="flex bg-slate-100 rounded-lg p-0.5">
-                    {[['proximas', 'Próximas'], ['pasadas', 'Historial']].map(([v, label]) => (
+                    {[['proximas', 'Próximas'], ['calendario', 'Calendario'], ['pasadas', 'Historial']].map(([v, label]) => (
                         <button key={v} onClick={() => setCuando(v)}
                             className={`px-3 py-1.5 rounded-md text-[11px] font-black uppercase tracking-widest transition-colors ${
                                 cuando === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
@@ -319,6 +339,18 @@ const ReunionesPanel = () => {
                 </div>
             </div>
 
+            {/* El calendario reemplaza la lista, no se suma: son dos formas de
+                mirar lo mismo y tenerlas juntas obligaría a desplazarse. */}
+            {cuando === 'calendario' ? (
+                <div className="flex-1 min-h-0">
+                    {loading
+                        ? <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="animate-spin" /></div>
+                        : <CalendarioReuniones
+                            reuniones={reuniones}
+                            onAbrir={(r) => setDetalle(r)}
+                            onAgendarEn={(fecha) => setCrear({ modo: 'agendar', fecha })} />}
+                </div>
+            ) : (
             <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
                 {loading ? (
                     <div className="flex items-center justify-center py-16 text-slate-400"><Loader2 className="animate-spin" /></div>
@@ -380,11 +412,15 @@ const ReunionesPanel = () => {
                     );
                 })}
             </div>
+            )}
 
             {crear && (
                 <CrearReunionModal
                     onClose={() => setCrear(null)}
+                    // `crear` es 'ahora' | 'agendar' desde los botones, o un objeto
+                    // { modo, fecha } cuando se agenda tocando un día del calendario.
                     ahoraPorDefecto={crear === 'ahora'}
+                    fechaPorDefecto={crear?.fecha || null}
                     usuarios={usuarios}
                     onCreada={(reunion, entrarYa) => {
                         cargar();

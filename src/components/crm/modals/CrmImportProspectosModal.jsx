@@ -76,6 +76,15 @@ const mapRow = (row) => {
     const partes = [];
     if (llamados) partes.push(`Llamados: ${llamados}`);
     if (cuandoLlego) partes.push(`Llegó: ${cuandoLlego}`);
+    // EL ESTADO DE LA PLANILLA VA A LAS NOTAS, NO AL CAMPO ESTADO.
+    //
+    // La columna "estado" del Excel trae texto libre escrito por quien vendía
+    // —"contrata ?", "llamar 18:30", y en varios casos el RUT y la clave del SII
+    // del cliente—. Copiarla al campo estado_comercial fue lo que lo llenó de 65
+    // valores distintos y lo dejó inservible para filtrar. El campo ahora es una
+    // lista cerrada de 7 estados; lo que trae la planilla se conserva acá, que es
+    // donde va una nota, y una persona clasifica el estado al revisar el prospecto.
+    if (estadoCli) partes.push(`Estado en la planilla: ${estadoCli}`);
     const observaciones = partes.join('\n');
 
     // "contactar": si trae una fecha, se usa como Próxima acción
@@ -86,7 +95,9 @@ const mapRow = (row) => {
         telefonos: tels,
         correos,
         necesidad: cap(necesita, 500),
-        estadoComercial: cap(estadoCli),
+        // Nace sin estado: la planilla no trae los 7 estados de la lista, trae texto
+        // libre (que queda arriba, en las observaciones). Lo clasifica una persona.
+        estadoComercial: null,
         accionSiguiente: cap(accion),
         observaciones: observaciones || null,
         proximoContacto: aISO(contactarDate),

@@ -9,6 +9,9 @@ import { enviarCorreoFacturaEnSesion } from './revisar para envios/mensajes_fact
 // Bajar el PDF es su propia responsabilidad, no un efecto del correo.
 import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
 import { cerrarNavegador, cerrarCliente } from './cerrarNavegador.mjs';
+// Elegir con qué empresa se emite. Vive aparte porque los cuatro robots lo
+// necesitan y copiado se corrige en uno y se olvida en los otros tres.
+import { seleccionarEmpresaEmisora } from './empresaEmisora.mjs';
 
 const { Client } = pkg;
 dotenv.config();
@@ -158,32 +161,10 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
             await Promise.all([page.waitForNavigation(), page.click('#bt_ingresar')]);
             await delay(1500); 
 
-            const selectBox = await page.$('select[name="RUT_EMP"]');
-            if (selectBox) {
-                console.log('🏢 Seleccionando empresa emisora...');
-                const valueSegundaEmpresa = await page.evaluate(() => {
-                    const selectElement = document.querySelector('select[name="RUT_EMP"]');
-                    if (selectElement && selectElement.options.length > 0) {
-                        let targetIndex = 1;
-                        if (selectElement.options[0].text.toLowerCase().includes('seleccione')) {
-                            if (selectElement.options.length > 2) targetIndex = 2;
-                        } else {
-                            if (selectElement.options.length > 1) targetIndex = 1;
-                        }
-                        return selectElement.options[targetIndex].value;
-                    }
-                    return null;
-                });
-
-                if (valueSegundaEmpresa) {
-                    await page.select('select[name="RUT_EMP"]', valueSegundaEmpresa);
-                    await delay(500);
-                    await Promise.all([
-                        page.waitForNavigation({ waitUntil: 'networkidle2' }),
-                        page.evaluate(() => { document.querySelector('button[type="submit"], input[type="submit"]').click(); })
-                    ]);
-                }
-            }
+            // La empresa emisora se elige por su RUT (ver empresaEmisora.mjs).
+            // Antes se tomaba «la segunda del desplegable» a ciegas, y por eso el
+            // 31-08 el robot quedó esperando 45 s un formulario que no llegaba.
+            await seleccionarEmpresaEmisora(page, credSii.DTE_RUT);
         }
 
         // =======================================================================
@@ -195,8 +176,28 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
         // Ya no necesitamos llamar a tu antigua función 'navegarAEmision' porque ya estamos en la página
         // y pasamos la selección de empresa. Solo esperamos a que el input de receptor aparezca.
         
-        await page.waitForSelector('input[name="EFXP_RUT_RECEP"], #EFXP_RUT_RECEP', { visible: true, timeout: 45000 });
-        await delay(1000); 
+        // Si el formulario no aparece, se dice DÓNDE quedó el robot. El error
+        // pelado de Puppeteer —«Waiting for selector EFXP_RUT_RECEP failed»— no
+        // permite distinguir un SII lento de una pantalla intermedia inesperada,
+        // y fue lo único que quedó del fallo del 31-08.
+        try {
+            await page.waitForSelector('input[name="EFXP_RUT_RECEP"], #EFXP_RUT_RECEP', { visible: true, timeout: 45000 });
+        } catch (err) {
+            const donde = await page.evaluate(() => ({
+                url: location.href,
+                titulo: document.title,
+                // Un texto corto de la página basta para reconocer si el SII
+                // mostró un aviso, una sesión caída o una pantalla distinta.
+                texto: (document.body?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 300),
+            })).catch(() => ({ url: '?', titulo: '?', texto: '?' }));
+            throw new Error(
+                `No apareció el formulario para escribir el RUT del cliente. ` +
+                `El robot quedó en: ${donde.url} («${donde.titulo}»). ` +
+                `La página decía: "${donde.texto}". ` +
+                `Suele ser el SII lento, o que quedó en una pantalla intermedia distinta a la de emisión.`
+            );
+        }
+        await delay(1000);
 
         const rutInputSelector = await page.$('#EFXP_RUT_RECEP') ? '#EFXP_RUT_RECEP' : 'input[name="EFXP_RUT_RECEP"]';
         const dvInputSelector = await page.$('#EFXP_DV_RECEP') ? '#EFXP_DV_RECEP' : 'input[name="EFXP_DV_RECEP"]';

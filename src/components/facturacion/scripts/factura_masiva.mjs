@@ -8,6 +8,7 @@ import { encrypt } from '../../../utils/crypto.js';
 import { pool } from '../../../database/db.js';
 import { enviarCorreoFacturaEnSesion, limpiarPdfsViejos } from './revisar para envios/mensajes_facturador_masivo.mjs';
 import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
+import { seleccionarEmpresaEmisora } from './empresaEmisora.mjs';
 // La descarga del PDF deja de depender de que el correo salga bien.
 import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
 
@@ -518,32 +519,14 @@ export async function emitirLotePuppeteer(facturasFront, credSii = credencialesD
                     if (estadoRobot.cancelar) throw new Error("Operación cancelada por el usuario.");
                     if (!loginCompletado) throw new Error("El SII no permitió iniciar sesión después de 3 intentos.");
 
-                    // 2. Validar Empresa Emisora
-                    const selectBox = await page.$('select[name="RUT_EMP"]');
-                    if (selectBox) {
-                        console.log('🏢 Seleccionando empresa emisora...');
-                        const valueSegundaEmpresa = await page.evaluate(() => {
-                            const selectElement = document.querySelector('select[name="RUT_EMP"]');
-                            if (selectElement && selectElement.options.length > 0) {
-                                let targetIndex = 1; 
-                                if (selectElement.options[0].text.toLowerCase().includes('seleccione')) {
-                                    if (selectElement.options.length > 2) targetIndex = 2;
-                                } else {
-                                    if (selectElement.options.length > 1) targetIndex = 1;
-                                }
-                                return selectElement.options[targetIndex].value;
-                            }
-                            return null;
-                        });
-                        if (valueSegundaEmpresa) {
-                            await page.select('select[name="RUT_EMP"]', valueSegundaEmpresa);
-                            await delay(300);
-                            await Promise.all([
-                                page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-                                page.evaluate(() => { document.querySelector('button[type="submit"], input[type="submit"]').click(); })
-                            ]);
-                            await delay(800);
-                        }
+                    // 2. VALIDAR EMPRESA EMISORA · por RUT, no por posición.
+                    // Ver empresaEmisora.mjs. Acá es donde más importa: este robot
+                    // emite el cobro del mes entero, así que elegir la empresa
+                    // equivocada no arruina una factura sino cien, y cada una hay
+                    // que anularla con el SII. Si el RUT configurado no está en la
+                    // lista, aborta ANTES de emitir la primera.
+                    if (await seleccionarEmpresaEmisora(page, credSii.DTE_RUT)) {
+                        await delay(800);
                     }
 
                     if (estadoRobot.cancelar) throw new Error("Operación cancelada por el usuario.");

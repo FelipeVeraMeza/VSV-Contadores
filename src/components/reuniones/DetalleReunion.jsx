@@ -21,12 +21,12 @@
 import React, { useState } from 'react';
 import {
     X, Users, Link2, Copy, Check, Trash2, Loader2, UserPlus, Video,
-    CalendarX2, Building2, Clock, StickyNote, ShieldAlert,
+    CalendarX2, CalendarClock, Building2, Clock, StickyNote, ShieldAlert,
 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import {
     agregarParticipanteApi, quitarParticipanteApi,
-    editarNotasApi, eliminarReunionApi, cancelarReunionApi,
+    editarNotasApi, eliminarReunionApi, cancelarReunionApi, reagendarReunionApi,
 } from '@/services/reunionesService';
 
 const getUser = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
@@ -100,12 +100,43 @@ const DetalleReunion = ({ reunion, usuarios, onCerrar, onCambio, onEntrar }) => 
     };
 
     const cancelar = async () => {
-        if (!window.confirm(`¿Cancelar «${r.titulo}»?\n\nSe avisa a los invitados y queda en el historial como cancelada.`)) return;
+        if (!window.confirm(`¿Cancelar «${r.titulo}»?\n\nSe avisa a los invitados y al cliente. Queda en el historial como cancelada.`)) return;
         try {
             await cancelarReunionApi(getSessionId(), r.id);
             toast({ title: 'Reunión cancelada' });
             onCambio?.(); onCerrar();
         } catch { toast({ variant: 'destructive', title: 'No se pudo cancelar' }); }
+    };
+
+    // MOVERLA DE FECHA · el caso es siempre «el cliente avisó que no puede».
+    // Antes había que cancelar y crear otra, con lo que se perdían las notas y
+    // los invitados, y el cliente recibía un «se canceló» seguido de un «tiene
+    // una reunión». Acá es la MISMA reunión con otra hora: se le avisa una vez.
+    const reagendar = async () => {
+        const actual = r.iniciaAt ? new Date(r.iniciaAt) : new Date();
+        const sugerido = `${actual.getFullYear()}-${String(actual.getMonth() + 1).padStart(2, '0')}-${String(actual.getDate()).padStart(2, '0')} ${String(actual.getHours()).padStart(2, '0')}:${String(actual.getMinutes()).padStart(2, '0')}`;
+        const texto = window.prompt(
+            `Nueva fecha y hora para «${r.titulo}»\n\nFormato: AAAA-MM-DD HH:MM`, sugerido);
+        if (!texto) return;
+        const nueva = new Date(texto.trim().replace(' ', 'T'));
+        if (Number.isNaN(nueva.getTime())) {
+            toast({ variant: 'destructive', title: 'Fecha no válida', description: 'Usa el formato AAAA-MM-DD HH:MM' });
+            return;
+        }
+        try {
+            const res = await reagendarReunionApi(getSessionId(), r.id, { iniciaAt: nueva.toISOString() });
+            const d = await res.json();
+            if (!d.success) throw new Error(d.message);
+            refrescar(d.reunion);
+            const c = d.confirmacion || {};
+            toast({
+                title: 'Reunión movida',
+                description: (c.whatsapp || c.correo)
+                    ? `Se le avisó al cliente por ${[c.whatsapp && 'WhatsApp', c.correo && 'correo'].filter(Boolean).join(' y ')}.`
+                    : `No se pudo avisar al cliente: ${c.motivo || 'sin datos de contacto'}.`,
+            });
+            onCambio?.();
+        } catch (e) { toast({ variant: 'destructive', title: 'No se pudo reagendar', description: e.message }); }
     };
 
     const eliminar = async () => {
@@ -248,10 +279,17 @@ const DetalleReunion = ({ reunion, usuarios, onCerrar, onCambio, onEntrar }) => 
                 {soyQuienConvoco && (
                     <div className="px-5 py-3 shrink-0 border-t border-[#efe8dd] flex items-center gap-2">
                         {viva ? (
-                            <button onClick={cancelar}
-                                className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-amber-700">
-                                <CalendarX2 size={13} /> Cancelar la reunión
-                            </button>
+                            <>
+                                <button onClick={reagendar}
+                                    title="Mover a otra fecha, conservando invitados y notas"
+                                    className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-emerald-700">
+                                    <CalendarClock size={13} /> Reagendar
+                                </button>
+                                <button onClick={cancelar}
+                                    className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 hover:text-amber-700">
+                                    <CalendarX2 size={13} /> Cancelar la reunión
+                                </button>
+                            </>
                         ) : (
                             <button onClick={eliminar}
                                 className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-red-600">

@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { encrypt } from '../../../utils/crypto.js';
 import { pool } from '../../../database/db.js';
 import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.js';
+import { seleccionarEmpresaEmisora } from './empresaEmisora.mjs';
 // Bajar el PDF del documento emitido, igual que la factura.
 import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
 
@@ -227,31 +228,12 @@ export async function emitirLoteExentaPuppeteer(facturasFront, credSii = credenc
                     if (estadoRobotExenta.cancelar) throw new Error("Operación cancelada por el usuario.");
                     if (!loginCompletado) throw new Error("El SII no permitió iniciar sesión después de 3 intentos.");
 
-                    const selectBox = await page.$('select[name="RUT_EMP"]');
-                    if (selectBox) {
-                        console.log('🏢 Seleccionando empresa emisora...');
-                        const valueSegundaEmpresa = await page.evaluate(() => {
-                            const selectElement = document.querySelector('select[name="RUT_EMP"]');
-                            if (selectElement && selectElement.options.length > 0) {
-                                let targetIndex = 1; 
-                                if (selectElement.options[0].text.toLowerCase().includes('seleccione')) {
-                                    if (selectElement.options.length > 2) targetIndex = 2;
-                                } else {
-                                    if (selectElement.options.length > 1) targetIndex = 1;
-                                }
-                                return selectElement.options[targetIndex].value;
-                            }
-                            return null;
-                        });
-                        if (valueSegundaEmpresa) {
-                            await page.select('select[name="RUT_EMP"]', valueSegundaEmpresa);
-                            await delay(500);
-                            await Promise.all([
-                                page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-                                page.evaluate(() => { document.querySelector('button[type="submit"], input[type="submit"]').click(); })
-                            ]);
-                            await delay(2000);
-                        }
+                    // Por RUT, no por posición (ver empresaEmisora.mjs). En un
+                    // LOTE esto pesa el doble: elegir mal no arruina un documento,
+                    // arruina todos los del lote, y hay que anularlos uno por uno.
+                    // Si el RUT no está en la lista, aborta antes de emitir nada.
+                    if (await seleccionarEmpresaEmisora(page, credSii.DTE_RUT)) {
+                        await delay(2000);   // el SII masivo necesita este respiro
                     }
 
                     if (estadoRobotExenta.cancelar) throw new Error("Operación cancelada.");

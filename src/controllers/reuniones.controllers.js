@@ -25,6 +25,7 @@ import { pool } from '../database/db.js';
 import { registrar } from '../utils/bitacora.js';
 import { notificarA } from '../utils/notificaciones.js';
 import { configVideo, dominioVideo } from '../utils/videoReunion.js';
+import { confirmarReunionAlCliente, avisarCambioAlCliente } from '../utils/confirmacionReunion.js';
 
 const ESTADOS = ['agendada', 'en_curso', 'terminada', 'cancelada'];
 
@@ -123,6 +124,12 @@ export const listarReuniones = async (req, res) => {
             where.push(`(r.estado IN ('terminada','cancelada')
                          OR (r.inicia_at IS NOT NULL AND r.inicia_at <= NOW() - INTERVAL '12 hours'))`);
         }
+        // 'todas' no agrega condición: lo pide el CALENDARIO, que muestra un mes
+        // entero y necesita las de antes y las de después de hoy en la misma
+        // respuesta. Por eso también acepta un rango: sin él, el LIMIT de abajo
+        // recortaría meses con muchas reuniones y el calendario mentiría.
+        if (req.query.desde) { params.push(req.query.desde); where.push(`r.inicia_at >= $${params.length}::timestamptz`); }
+        if (req.query.hasta) { params.push(req.query.hasta); where.push(`r.inicia_at <  $${params.length}::timestamptz`); }
         if (req.query.personaId) { params.push(req.query.personaId); where.push(`r.persona_id = $${params.length}`); }
         if (req.query.tareaId)   { params.push(req.query.tareaId);   where.push(`r.tarea_id = $${params.length}`); }
 
@@ -131,7 +138,7 @@ export const listarReuniones = async (req, res) => {
               WHERE ${where.join(' AND ')}
               ORDER BY r.estado = 'en_curso' DESC,
                        COALESCE(r.inicia_at, r.created_at) ${cuando === 'pasadas' ? 'DESC' : 'ASC'}
-              LIMIT 100`, params);
+              LIMIT ${req.query.desde && req.query.hasta ? 500 : 100}`, params);
 
         return res.json({ success: true, reuniones: rows.map(mapReunion) });
     } catch (error) {
@@ -241,12 +248,25 @@ export const crearReunion = async (req, res) => {
                 entidad: 'reunion', entidadId: id,
             });
 
+        // ------------------------------------------------------------------
+        // Y AL CLIENTE, QUE ES EL QUE TIENE QUE APARECERSE
+        // ------------------------------------------------------------------
+        // `notificarA` de arriba escribe a USUARIOS del sistema. El cliente no
+        // tiene cuenta, así que era justo el único que no se enteraba de su
+        // propia reunión: había que mandarle el link a mano por WhatsApp, y
+        // cuando alguien se olvidaba, no llegaba. Se le avisa por WhatsApp y
+        // por correo. Nunca lanza: si el aviso falla, la reunión igual quedó.
+        const confirmacion = await confirmarReunionAlCliente(completa, {
+            organizacionId: req.user?.organizacionId || null,
+            enlace: completa.enlace,          // ya lo arma `reunionCompleta`
+        });
+
         await registrar(req, {
             modulo: 'reuniones', accion: 'crear', entidad: 'reunion', entidadId: id,
             descripcion: `${ahora ? 'Abrió una sala' : 'Agendó una reunión'}: «${completa.titulo}» con ${invitados.length} participante(s)`,
         });
 
-        return res.status(201).json({ success: true, reunion: completa });
+        return res.status(201).json({ success: true, reunion: completa, confirmacion });
     } catch (error) {
         console.error('❌ Error creando reunión:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo crear la reunión.' });
@@ -555,10 +575,93 @@ export const cancelarReunion = async (req, res) => {
             entidad: 'reunion', entidadId: rows[0].id,
         });
 
-        return res.json({ success: true });
+        // Al cliente también: se le confirmó la cita, así que se le avisa cuando
+        // se cae. Que aparezca a una reunión cancelada es peor que no avisarle.
+        const completa = await reunionCompleta(rows[0].id);
+        const confirmacion = await avisarCambioAlCliente(completa, {
+            organizacionId: req.user?.organizacionId || null, motivo: 'cancelada',
+        });
+
+        return res.json({ success: true, confirmacion });
     } catch (error) {
         console.error('❌ Error cancelando la reunión:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo cancelar la reunión.' });
+    }
+};
+
+// ------------------------------------------------------------
+// REAGENDAR · mover la reunión a otra fecha
+// ------------------------------------------------------------
+// El caso que lo pide es siempre el mismo: el cliente avisa que no puede. Antes
+// la única salida era cancelar y crear una nueva, con lo cual se perdía el hilo
+// —las notas, los invitados, de qué ticket colgaba— y el cliente recibía un
+// "se canceló" seguido de un "tiene una reunión", que se lee como un error.
+//
+// La sala NO cambia: quien ya tenía el enlace lo sigue teniendo, y es la misma
+// reunión, no otra. Si estaba cancelada, vuelve a quedar agendada.
+export const reagendarReunion = async (req, res) => {
+    try {
+        const { iniciaAt, duracionMin } = req.body || {};
+        if (!iniciaAt) return res.status(400).json({ success: false, message: 'Falta la nueva fecha.' });
+
+        const cuando = new Date(iniciaAt);
+        if (Number.isNaN(cuando.getTime())) {
+            return res.status(400).json({ success: false, message: 'La fecha no es válida.' });
+        }
+
+        const { rows } = await pool.query(
+            `UPDATE reunion
+                SET inicia_at = $4,
+                    duracion_min = COALESCE($5, duracion_min),
+                    estado = 'agendada',
+                    updated_at = NOW()
+              WHERE id = $1
+                AND organizacion_id IS NOT DISTINCT FROM $2::uuid
+                AND creado_por = $3
+                -- Una reunión que ya pasó no se mueve: se agenda una nueva.
+                AND estado IN ('agendada', 'cancelada')
+              RETURNING id, titulo`,
+            [
+                req.params.id,
+                req.user?.organizacionId || null,
+                req.user?.usuarioId || null,
+                cuando,
+                Number.isFinite(+duracionMin) ? Math.min(Math.max(+duracionMin, 5), 480) : null,
+            ]);
+        if (!rows.length) {
+            return res.status(403).json({
+                success: false,
+                message: 'Solo quien la creó puede reagendarla, y solo si no se hizo todavía.',
+            });
+        }
+
+        const completa = await reunionCompleta(rows[0].id);
+
+        const { rows: otros } = await pool.query(
+            `SELECT usuario_id FROM reunion_participante WHERE reunion_id=$1 AND usuario_id <> $2`,
+            [rows[0].id, req.user?.usuarioId || null]);
+        await notificarA(otros.map(o => o.usuario_id), {
+            actor: req.user, tipo: 'reunion_agendada',
+            titulo: `Se movió la reunión: ${completa.titulo}`,
+            descripcion: `Ahora es el ${new Date(completa.iniciaAt).toLocaleString('es-CL', {
+                weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+            })} h`,
+            entidad: 'reunion', entidadId: rows[0].id,
+        });
+
+        const confirmacion = await avisarCambioAlCliente(completa, {
+            organizacionId: req.user?.organizacionId || null, motivo: 'reagendada',
+        });
+
+        await registrar(req, {
+            modulo: 'reuniones', accion: 'editar', entidad: 'reunion', entidadId: rows[0].id,
+            descripcion: `Reagendó «${completa.titulo}» para el ${completa.iniciaAt}`,
+        });
+
+        return res.json({ success: true, reunion: completa, confirmacion });
+    } catch (error) {
+        console.error('❌ Error reagendando la reunión:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo reagendar la reunión.' });
     }
 };
 

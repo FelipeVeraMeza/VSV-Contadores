@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import {
     listarReuniones, obtenerReunion, crearReunion,
-    entrarReunion, salirReunion, terminarReunion, cancelarReunion,
+    entrarReunion, salirReunion, terminarReunion, cancelarReunion, reagendarReunion,
     agregarParticipante, quitarParticipante, editarNotas, eliminarReunion,
 } from '../controllers/reuniones.controllers.js';
 import { requireSession } from '../middleware/auth.js';
@@ -18,6 +18,9 @@ router.post('/:id/entrar', requireSession, entrarReunion);
 router.post('/:id/salir',  requireSession, salirReunion);
 router.post('/:id/terminar', requireSession, terminarReunion);
 router.post('/:id/cancelar', requireSession, cancelarReunion);
+// Mover la reunión a otra fecha, sin perder las notas ni los invitados. Es lo
+// que se necesita cuando el cliente avisa que no puede.
+router.patch('/:id/reagendar', requireSession, reagendarReunion);
 
 // Invitados. Sumar puede cualquiera que esté en la reunión; sacar, solo quien
 // la convocó (ver el controlador).

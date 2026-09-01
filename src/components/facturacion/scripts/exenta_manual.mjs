@@ -7,6 +7,7 @@ import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.j
 // Bajar el PDF del documento emitido, igual que la factura.
 import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
 import { cerrarNavegador, cerrarCliente } from './cerrarNavegador.mjs';
+import { seleccionarEmpresaEmisora } from './empresaEmisora.mjs';
 
 const { Client } = pkg;
 dotenv.config();
@@ -95,32 +96,10 @@ export async function emitirExentaPuppeteer(datos, credSii = credencialesDelSist
             await Promise.all([page.waitForNavigation(), page.click('#bt_ingresar')]);
             await delay(1500); 
 
-            const selectBox = await page.$('select[name="RUT_EMP"]');
-            if (selectBox) {
-                console.log('🏢 Seleccionando empresa emisora...');
-                const valueSegundaEmpresa = await page.evaluate(() => {
-                    const selectElement = document.querySelector('select[name="RUT_EMP"]');
-                    if (selectElement && selectElement.options.length > 0) {
-                        let targetIndex = 1;
-                        if (selectElement.options[0].text.toLowerCase().includes('seleccione')) {
-                            if (selectElement.options.length > 2) targetIndex = 2;
-                        } else {
-                            if (selectElement.options.length > 1) targetIndex = 1;
-                        }
-                        return selectElement.options[targetIndex].value;
-                    }
-                    return null;
-                });
-
-                if (valueSegundaEmpresa) {
-                    await page.select('select[name="RUT_EMP"]', valueSegundaEmpresa);
-                    await delay(500);
-                    await Promise.all([
-                        page.waitForNavigation({ waitUntil: 'networkidle2' }),
-                        page.evaluate(() => { document.querySelector('button[type="submit"], input[type="submit"]').click(); })
-                    ]);
-                }
-            }
+            // Por RUT, no por posición. Ver empresaEmisora.mjs: elegir «la
+            // segunda del desplegable» emitía a nombre de quien no correspondía
+            // en cuanto cambiaba el orden de la lista.
+            await seleccionarEmpresaEmisora(page, credSii.DTE_RUT);
         }
 
         // =======================================================================

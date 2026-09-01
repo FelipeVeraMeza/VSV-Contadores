@@ -19,7 +19,7 @@ import {
     listarProyectosApi, crearProyectoApi, eliminarProyectoApi, archivarTareaApi,
     usarPlantillaApi, guardarComoPlantillaApi,
 } from '@/services/crmService';
-import { getCatalogosApi as getCatalogosPersonasApi } from '@/services/personaService';
+import { getCatalogosApi as getCatalogosPersonasApi, listarPersonasApi } from '@/services/personaService';
 
 const getUser = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
 const getSessionId = () => getUser().sessionId;
@@ -89,15 +89,58 @@ const fechaCorta = (d) => d ? new Date(d).toLocaleDateString('es-CL', { day: 'nu
 // ---------------------------------------------------------------
 // Modal: crear tarea
 // ---------------------------------------------------------------
-const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActual }) => {
+const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActual, responsableActual }) => {
     const [form, setForm] = useState({
         titulo: '', descripcion: '', prioridad: 'media', venceAt: '',
-        responsableId: getUser().id || '', proyectoId: proyectoActual || '', colaboradores: [],
+        // El responsable arranca en el de la vista, igual que el proyecto: creando
+        // desde «Mis tareas» —o desde el filtro de otra persona— la tarea nacía a
+        // nombre de quien la escribe y quedaba fuera de la lista donde se creó.
+        responsableId: responsableActual || getUser().id || '',
+        proyectoId: proyectoActual || '', colaboradores: [],
+        // De qué cliente es la tarea. Opcional: una tarea interna no tiene.
+        personaId: null, personaNombre: '',
         // «Quien crea la tarea puede definir quién la ve». Por defecto la ve todo
         // el proyecto; privada la deja solo para responsable, creador y colaboradores.
         visibilidad: 'proyecto',
     });
     const [saving, setSaving] = useState(false);
+
+    // ---- CLIENTE DE LA TAREA ----
+    // La base y la API ya lo aceptaban (tarea.persona_id); lo que faltaba era
+    // poder decirlo al crear. Desde WhatsApp la tarea sí quedaba ligada al
+    // contacto, pero una abierta a mano no, y después no había forma de saber
+    // de qué cliente era. Se busca contra el CRM en vez de traer la lista
+    // entera: son cientos de personas y un desplegable con cientos no se usa.
+    const [buscaCliente, setBuscaCliente] = useState('');
+    const [clientes, setClientes] = useState([]);
+    useEffect(() => {
+        const q = buscaCliente.trim();
+        if (q.length < 3) { setClientes([]); return; }
+        const t = setTimeout(async () => {
+            try {
+                const r = await listarPersonasApi(getSessionId(), { q });
+                const d = await r.json();
+                if (d.success) setClientes((d.personas || []).slice(0, 6));
+            } catch { /* sin resultados, el campo sigue sirviendo */ }
+        }, 300);
+        return () => clearTimeout(t);
+    }, [buscaCliente]);
+
+    // Los archivos se juntan acá y se suben cuando la tarea ya existe (ver
+    // `guardar`). Se quedan en memoria: no se sube nada hasta que se crea.
+    const [archivos, setArchivos] = useState([]);
+    const [arrastrando, setArrastrando] = useState(0);
+    const fileRef = useRef(null);
+    const sumarArchivos = (lista) => {
+        const nuevos = [...lista].filter(f => {
+            if (f.size > 7 * 1024 * 1024) {
+                toast({ variant: 'destructive', title: 'Archivo muy grande', description: `«${f.name}» pasa de 7 MB.` });
+                return false;
+            }
+            return true;
+        });
+        if (nuevos.length) setArchivos(prev => [...prev, ...nuevos]);
+    };
     const { plantillas, recargar } = usePlantillas();
     const [plantilla, setPlantilla] = useState(null);
     const [verPlantillas, setVerPlantillas] = useState(false);
@@ -141,14 +184,42 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
                 ? await usarPlantillaApi(getSessionId(), plantilla.id, cuerpo)
                 : await crearTareaApi(getSessionId(), cuerpo);
             const d = await r.json(); if (!d.success) throw new Error(d.message);
+            const nuevaId = d.tarea?.id || null;
+
+            // LOS ARCHIVOS VAN DESPUÉS, Y ES A PROPÓSITO.
+            // Un adjunto se guarda contra una tarea que ya existe, así que no se
+            // pueden mandar en la misma llamada. Se suben acá, enseguida, para
+            // que quien los eligió no note los dos pasos. Si alguno falla, la
+            // tarea igual quedó creada: se dice cuál falló y no se pierde nada.
+            let subidos = 0, fallados = [];
+            if (nuevaId && archivos.length) {
+                for (const f of archivos) {
+                    try {
+                        const dataBase64 = await new Promise((res, rej) => {
+                            const fr = new FileReader();
+                            fr.onload = () => res(fr.result); fr.onerror = rej;
+                            fr.readAsDataURL(f);
+                        });
+                        const ra = await subirAdjuntoApi(getSessionId(), nuevaId,
+                            { nombre: f.name, mime: f.type, dataBase64 });
+                        const da = await ra.json();
+                        if (da.success) subidos++; else fallados.push(f.name);
+                    } catch { fallados.push(f.name); }
+                }
+            }
+
             toast({
                 title: 'Tarea creada',
-                description: d.subtareas ? `Con ${d.subtareas} subtareas de «${plantilla.nombre}».` : undefined,
+                description: [
+                    d.subtareas ? `Con ${d.subtareas} subtareas de «${plantilla.nombre}».` : null,
+                    subidos ? `${subidos} archivo${subidos > 1 ? 's' : ''} adjunto${subidos > 1 ? 's' : ''}.` : null,
+                    fallados.length ? `No se pudo subir: ${fallados.join(', ')}.` : null,
+                ].filter(Boolean).join(' ') || undefined,
             });
             // Se devuelve el id para que la pantalla la abra enseguida: recién
             // creada es cuando se le agregan los archivos, la descripción larga
             // o las subtareas. Antes había que buscarla en la lista.
-            onCreated(d.tarea?.id || null); onClose();
+            onCreated(nuevaId); onClose();
         } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
         finally { setSaving(false); }
     };
@@ -202,6 +273,89 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
                             </select>
                         </label>
                     </div>
+
+                    {/* CLIENTE · de quién es esta tarea. Opcional: una tarea interna
+                        no tiene cliente. Al elegirlo, la tarea queda colgada de su
+                        ficha y se puede ver desde el CRM. */}
+                    <div>
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cliente (opcional)</span>
+                        {form.personaId ? (
+                            <div className="flex items-center gap-2 mt-1 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5">
+                                <User size={12} className="text-slate-400 shrink-0" />
+                                <span className="text-xs text-slate-700 truncate flex-1">{form.personaNombre}</span>
+                                <button type="button" title="Quitar el cliente"
+                                    onClick={() => { setForm(p => ({ ...p, personaId: null, personaNombre: '' })); setBuscaCliente(''); }}
+                                    className="text-slate-400 hover:text-red-600 transition-colors">
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="relative mt-1">
+                                <input value={buscaCliente} onChange={(e) => setBuscaCliente(e.target.value)}
+                                    placeholder="Buscar cliente por nombre…" className={inp} />
+                                {clientes.length > 0 && (
+                                    <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-[#efe8dd] rounded-lg shadow-lg overflow-hidden">
+                                        {clientes.map(p => (
+                                            <button type="button" key={p.id}
+                                                onClick={() => {
+                                                    const nombre = [p.nombre, p.apellidos].filter(Boolean).join(' ');
+                                                    setForm(prev => ({ ...prev, personaId: p.id, personaNombre: nombre }));
+                                                    setBuscaCliente(''); setClientes([]);
+                                                }}
+                                                className="block w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors truncate">
+                                                {[p.nombre, p.apellidos].filter(Boolean).join(' ')}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ARCHIVOS · se eligen acá y se suben apenas la tarea existe.
+                        Antes solo se podía adjuntar con la tarea ya creada, así que
+                        quien abría un ticket con un pantallazo tenía que crearlo,
+                        buscarlo y recién ahí subir el archivo. Se aceptan las dos
+                        formas que se pidieron: el botón y arrastrar. */}
+                    <div
+                        onDragEnter={(e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); setArrastrando(n => n + 1); } }}
+                        onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); }}
+                        onDragLeave={() => setArrastrando(n => Math.max(0, n - 1))}
+                        onDrop={(e) => { e.preventDefault(); setArrastrando(0); sumarArchivos(e.dataTransfer?.files || []); }}
+                        className={`rounded-lg border border-dashed p-2 transition-colors ${
+                            arrastrando > 0 ? 'border-emerald-400 bg-emerald-50' : 'border-[#efe8dd] bg-slate-50'}`}>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex-1">
+                                Archivos {archivos.length > 0 && `(${archivos.length})`}
+                            </span>
+                            <button type="button" onClick={() => fileRef.current?.click()}
+                                className="flex items-center gap-1 text-[10px] font-bold text-slate-500 hover:text-emerald-700 transition-colors">
+                                <Paperclip size={11} /> Adjuntar
+                            </button>
+                            <input ref={fileRef} type="file" multiple className="hidden"
+                                onChange={(e) => { sumarArchivos(e.target.files); e.target.value = ''; }} />
+                        </div>
+                        {archivos.length === 0 ? (
+                            <p className="text-[10px] text-slate-400 mt-0.5">
+                                {arrastrando > 0 ? 'Suelta los archivos acá' : 'Arrastra archivos o usa Adjuntar · máx. 7 MB c/u'}
+                            </p>
+                        ) : (
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                                {archivos.map((f, i) => (
+                                    <span key={`${f.name}-${i}`}
+                                        className="flex items-center gap-1 bg-white border border-[#efe8dd] rounded-md pl-2 pr-1 py-0.5 text-[10px] text-slate-600 max-w-full">
+                                        <span className="truncate max-w-[150px]" title={f.name}>{f.name}</span>
+                                        <button type="button" title="Quitar"
+                                            onClick={() => setArchivos(prev => prev.filter((_, j) => j !== i))}
+                                            className="text-slate-400 hover:text-red-600 transition-colors">
+                                            <X size={11} />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                     {/* Quién ve esta tarea. Solo tiene sentido dentro de un proyecto:
                         una tarea suelta ya es privada por naturaleza. */}
                     {form.proyectoId && (
@@ -544,6 +698,28 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
         if (await subirBlob(file)) toast({ title: 'Archivo subido' });
     };
 
+    // ---- ARRASTRAR ARCHIVOS DESDE EL ESCRITORIO ----
+    // Era la tercera forma que faltaba: estaba el clip y estaba Ctrl+V, pero
+    // soltar un archivo encima del panel no hacía nada —el navegador lo abría
+    // en una pestaña, que es lo peor que puede pasar: se pierde la tarea de
+    // vista y el archivo no se subió—. Se sube por el mismo camino que el clip.
+    //
+    // `arrastrando` es un CONTADOR, no un booleano: dragenter y dragleave se
+    // disparan también al pasar por los hijos del panel, así que con un booleano
+    // el borde parpadea al mover el mouse por dentro. Contando entradas y
+    // salidas, solo se apaga cuando se sale de verdad.
+    const [arrastrando, setArrastrando] = useState(0);
+
+    const alSoltar = async (e) => {
+        e.preventDefault();
+        setArrastrando(0);
+        const files = [...(e.dataTransfer?.files || [])];
+        if (!files.length) return;
+        let ok = 0;
+        for (const f of files) if (await subirBlob(f)) ok++;
+        if (ok) toast({ title: ok === 1 ? 'Archivo subido' : `${ok} archivos subidos` });
+    };
+
     // ---- PEGAR UNA IMAGEN CON Ctrl+V ----
     // Para adjuntar un pantallazo había que guardarlo en el disco, apretar el
     // clip, buscarlo en la carpeta y subirlo. Con esto se pega y ya.
@@ -678,8 +854,30 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
         <div className="w-full lg:w-2/5 bg-white border border-[#efe8dd] rounded-2xl flex items-center justify-center min-h-[400px]"><Loader2 className="animate-spin text-slate-400" /></div>
     );
 
+    // EL DETALLE VA AL CENTRO, NO AL COSTADO.
+    // `lg:order-2` lo deja entre los proyectos —que se repliegan a una tira de
+    // puntos cuando hay una tarea abierta— y la lista, que pasa a la derecha con
+    // `order-3`. Es lo que se pidió: «si hago click en una tarea, en el centro
+    // debo ver la tarea y las demás tareas pasan a la derecha». En pantallas
+    // chicas no hay tres columnas y el orden no aplica.
     return (
-        <div className="w-full lg:w-2/5 bg-white border border-[#efe8dd] rounded-2xl flex flex-col overflow-hidden h-full min-h-[400px]">
+        <div
+            onDragEnter={(e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); setArrastrando(n => n + 1); } }}
+            onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); }}
+            onDragLeave={() => setArrastrando(n => Math.max(0, n - 1))}
+            onDrop={alSoltar}
+            className={`relative w-full flex-1 min-w-0 lg:order-2 bg-white border rounded-2xl flex flex-col overflow-hidden h-full min-h-[400px] transition-colors ${
+                arrastrando > 0 ? 'border-emerald-400 border-dashed' : 'border-[#efe8dd]'}`}>
+            {/* El aviso de soltar. `pointer-events-none` es lo que lo hace
+                funcionar: si la capa recibiera el mouse, taparía al panel y
+                dispararía un dragleave apenas apareciera. */}
+            {arrastrando > 0 && (
+                <div className="absolute inset-0 z-30 bg-emerald-50/90 flex flex-col items-center justify-center gap-2 pointer-events-none">
+                    <Paperclip size={22} className="text-emerald-600" />
+                    <span className="text-[12px] font-bold text-emerald-700">Suelta para adjuntar</span>
+                    <span className="text-[10px] text-emerald-600">Máximo {kb(limites.porArchivo)} por archivo</span>
+                </div>
+            )}
             <div className="p-4 border-b border-[#efe8dd] flex items-start gap-2">
                 <div className="min-w-0 flex-1">
                     {data.parentId && (
@@ -1048,20 +1246,26 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
 //   lg    · + estado
 //   xl    · + proyecto
 // ============================================================================
+// LA COLUMNA DE RESPONSABLE SON 64 px, NO 140.
+// Antes llevaba la inicial Y el nombre escrito, y ese nombre se repetía idéntico
+// hacia abajo —«Administrador master» cien veces— gastando 140 px que el título
+// sí necesita. Ahora es solo la inicial, con el nombre en una burbuja al posarse
+// encima: la misma información, sin el ruido. Los 76 px liberados se los queda
+// el título, que es lo que uno viene a leer.
 const REJILLAS = {
     // con proyecto · con responsable
     'PR': [
         'grid-cols-[34px_minmax(0,1fr)_46px]',
-        'md:grid-cols-[34px_minmax(0,1fr)_140px_78px_46px]',
-        'lg:grid-cols-[34px_minmax(0,1fr)_140px_78px_100px_46px]',
-        'xl:grid-cols-[34px_minmax(0,1fr)_148px_140px_78px_100px_46px]',
+        'md:grid-cols-[34px_minmax(0,1fr)_64px_78px_46px]',
+        'lg:grid-cols-[34px_minmax(0,1fr)_64px_78px_100px_46px]',
+        'xl:grid-cols-[34px_minmax(0,1fr)_148px_64px_78px_100px_46px]',
     ],
     // sin proyecto · con responsable
     'R': [
         'grid-cols-[34px_minmax(0,1fr)_46px]',
-        'md:grid-cols-[34px_minmax(0,1fr)_140px_78px_46px]',
-        'lg:grid-cols-[34px_minmax(0,1fr)_140px_78px_100px_46px]',
-        'xl:grid-cols-[34px_minmax(0,1fr)_140px_78px_100px_46px]',
+        'md:grid-cols-[34px_minmax(0,1fr)_64px_78px_46px]',
+        'lg:grid-cols-[34px_minmax(0,1fr)_64px_78px_100px_46px]',
+        'xl:grid-cols-[34px_minmax(0,1fr)_64px_78px_100px_46px]',
     ],
     // con proyecto · sin responsable
     'P': [
@@ -1078,8 +1282,17 @@ const REJILLAS = {
         'xl:grid-cols-[34px_minmax(0,1fr)_78px_100px_46px]',
     ],
 };
-const rejilla = (verProy, verResp) =>
-    ['grid items-center gap-x-3', ...REJILLAS[(verProy ? 'P' : '') + (verResp ? 'R' : '')]].join(' ');
+// CON UNA TAREA ABIERTA LA LISTA MIDE UN TERCIO, Y ES OTRA REJILLA.
+// Las siete columnas de arriba necesitan ~700 px. Metidas en 500 px se montan
+// unas sobre otras —el nombre encima del proyecto, el contador encima del punto
+// de color— que es exactamente lo que se veía. Acá quedan solo las cuatro que
+// sirven para elegir a qué tarea saltar: marcar, título, quién y estado.
+const REJILLA_ANGOSTA = 'grid items-center gap-x-2 grid-cols-[28px_minmax(0,1fr)_36px_70px_32px]';
+
+const rejilla = (verProy, verResp, angosta) =>
+    angosta
+        ? REJILLA_ANGOSTA
+        : ['grid items-center gap-x-3', ...REJILLAS[(verProy ? 'P' : '') + (verResp ? 'R' : '')]].join(' ');
 
 // Un valor que se repite en TODAS las filas no es informacion, es ruido.
 // Devuelve ese valor cuando todas coinciden; null cuando hay variedad (o
@@ -1091,15 +1304,25 @@ const valorUnico = (lista, campo) => {
     return lista.every(t => t[campo] === primero) ? primero : null;
 };
 
-const EncabezadoLista = ({ verProy, verResp }) => {
+const EncabezadoLista = ({ verProy, verResp, angosta }) => {
     const th = 'text-[10px] font-semibold uppercase tracking-wider text-slate-400';
+    // `angosta` = hay una tarea abierta y la lista quedó en un tercio de la
+    // pantalla. Las clases `xl:`/`lg:`/`md:` miran el ancho de la VENTANA, no el
+    // del contenedor: en un monitor grande Tailwind las mostraba todas aunque la
+    // lista midiera 500 px, y las columnas se montaban unas sobre otras. Con la
+    // lista angosta se ocultan de verdad —proyecto y vence— y quedan las tres
+    // que se necesitan para elegir a cuál saltar.
+    const ocultaProy = angosta ? 'hidden' : 'hidden xl:block';
+    const ocultaVence = angosta ? 'hidden' : 'hidden md:block';
     return (
-        <div className={`${rejilla(verProy, verResp)} px-4 py-2 border-b border-[#efe8dd] bg-[#fbf9f6] sticky top-0 z-20`}>
+        <div className={`${rejilla(verProy, verResp, angosta)} px-4 py-2 border-b border-[#efe8dd] bg-[#fbf9f6] sticky top-0 z-20`}>
             <span />
             <span className={th}>Tarea</span>
-            {verProy && <span className={`hidden xl:block ${th}`}>Proyecto</span>}
-            {verResp && <span className={`hidden md:block ${th}`}>Responsable</span>}
-            <span className={`hidden md:block ${th}`}>Vence</span>
+            {verProy && <span className={`${ocultaProy} ${th}`}>Proyecto</span>}
+            {/* «Resp.» y no «Responsable»: la columna son 64 px y el título
+                completo se cortaría a la mitad. */}
+            {verResp && <span className={`hidden md:block ${th}`} title="Responsable">Resp.</span>}
+            <span className={`${ocultaVence} ${th}`}>Vence</span>
             <span className={`hidden lg:block ${th}`}>Estado</span>
             <span />
         </div>
@@ -1368,7 +1591,10 @@ const TareasPanel = ({ modo = 'todas' }) => {
     const responsableComun = valorUnico(lista, 'responsableNombre');
     const verProy = !proyectoComun;
     const verResp = !responsableComun;
-    const REJ = rejilla(verProy, verResp);
+    // Con el detalle abierto la lista queda en un tercio de la pantalla: ahí no
+    // caben las siete columnas y hay que mostrar menos, no apretarlas.
+    const angosta = !!selId;
+    const REJ = rejilla(verProy, verResp, angosta);
 
 
     // AGRUPAR · parte la misma lista en bloques con encabezado.
@@ -1597,7 +1823,31 @@ const TareasPanel = ({ modo = 'todas' }) => {
             )}
 
             <div className="flex-1 min-h-0 flex gap-3 lg:gap-4">
-                {/* Proyectos */}
+                {/* PROYECTOS · se REPLIEGA cuando hay una tarea abierta.
+                    Con el detalle abierto la pantalla queda en tres columnas y la
+                    del medio —la lista— se apretaba tanto que los títulos se
+                    cortaban. Los proyectos no dejan de servir por eso: se siguen
+                    necesitando para cambiar de proyecto sin cerrar la tarea. Por
+                    eso se replieg­a a una tira de puntos de color en vez de
+                    esconderse: se ve dónde estás parado y se puede cambiar de un
+                    clic, que es lo que pedía «manteniendo cierta visibilidad para
+                    poder clickearlas de forma ágil». */}
+                {selId ? (
+                    <div className={`w-11 shrink-0 bg-white border border-[#efe8dd] rounded-2xl py-3 px-1.5 flex-col gap-1.5 overflow-y-auto items-center ${verProyectos ? 'hidden md:flex' : 'hidden'}`}>
+                        <button onClick={() => elegirProyecto('')} title="Todas las tareas"
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                                !proyectoSel ? 'bg-emerald-500/10 text-emerald-700' : 'text-slate-400 hover:bg-slate-50'}`}>
+                            <ListChecks size={14} />
+                        </button>
+                        {proyectos.map(p => (
+                            <button key={p.id} onClick={() => elegirProyecto(p.id)} title={p.nombre}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                                    proyectoSel === p.id ? 'bg-emerald-500/10 ring-1 ring-emerald-300' : 'hover:bg-slate-50'}`}>
+                                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: p.color || '#199b4d' }} />
+                            </button>
+                        ))}
+                    </div>
+                ) : (
                 <div className={`w-44 xl:w-52 shrink-0 bg-white border border-[#efe8dd] rounded-2xl p-3 flex-col gap-2 overflow-y-auto ${verProyectos ? 'hidden md:flex' : 'hidden'}`}>
                     <div className="flex items-center justify-between">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Folder size={12} /> Proyectos</span>
@@ -1627,9 +1877,19 @@ const TareasPanel = ({ modo = 'todas' }) => {
                     ))}
                     {proyectos.length === 0 && !nuevoProy && <p className="text-[10px] text-slate-400 italic">Sin proyectos aún.</p>}
                 </div>
+                )}
 
-                {/* Lista de tareas */}
-                <div className={`min-h-0 bg-white border border-[#efe8dd] rounded-2xl flex flex-col overflow-hidden transition-all ${selId ? 'flex-1 lg:w-3/5' : 'flex-1'}`}>
+                {/* LISTA DE TAREAS · con una tarea abierta se va A LA DERECHA.
+                    `order` lo hace sin mover el JSX: la tarea abierta queda al
+                    centro —que es donde mira uno— y las demás del proyecto pasan
+                    al costado, como se pidió. En pantallas chicas no hay tres
+                    columnas, así que el orden no aplica y manda el flujo normal. */}
+                {/* `basis` + `shrink-0` y NO `flex-1`: los dos juntos se pelean
+                    —flex-1 fuerza a crecer e ignora el ancho— y las columnas
+                    terminaban montadas unas sobre otras. Acá la lista tiene un
+                    ancho fijo y el detalle se queda con lo que sobra. */}
+                <div className={`min-h-0 bg-white border border-[#efe8dd] rounded-2xl flex flex-col overflow-hidden transition-all ${
+                    selId ? 'hidden lg:flex lg:basis-[34%] lg:shrink-0 lg:order-3' : 'flex-1'}`}>
                     {/* El tablero desplaza en horizontal y maneja el alto de sus
                         columnas; la lista desplaza en vertical. Son dos modos de
                         scroll distintos, así que el contenedor cambia con la vista. */}
@@ -1658,7 +1918,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
                                     )}
                                 </div>
                             )}
-                            <EncabezadoLista verProy={verProy} verResp={verResp} />
+                            <EncabezadoLista verProy={verProy} verResp={verResp} angosta={angosta} />
                         </>
                     )}
 
@@ -1743,8 +2003,9 @@ const TareasPanel = ({ modo = 'todas' }) => {
                                         )}
                                     </div>
 
-                                    {/* 3 · Proyecto — solo si aporta */}
-                                    {verProy && <span className="hidden xl:flex items-center gap-1.5 min-w-0">
+                                    {/* 3 · Proyecto — solo si aporta, y nunca con la
+                                           lista angosta: no cabe. */}
+                                    {verProy && <span className={`${angosta ? 'hidden' : 'hidden xl:flex'} items-center gap-1.5 min-w-0`}>
                                         {t.proyectoNombre ? (
                                             <>
                                                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: t.proyectoColor || '#199b4d' }} />
@@ -1759,14 +2020,24 @@ const TareasPanel = ({ modo = 'todas' }) => {
                                         uno colabora, pero la fila solo mostraba al
                                         responsable. Viendo el nombre de otro, la
                                         tarea parecía colada (bug del 26-08). */}
-                                    {verResp && <span className="hidden md:flex items-center gap-1.5 min-w-0">
+                                    {verResp && <span className={`${angosta ? 'flex' : 'hidden md:flex'} items-center gap-1.5 min-w-0`}>
+                                        {/* SOLO LA INICIAL, EL NOMBRE EN LA BURBUJA.
+                                            El nombre escrito gastaba 140 px por fila
+                                            repitiendo «Administrador master» hacia
+                                            abajo, y ese ancho lo necesita el título,
+                                            que es lo que uno viene a leer. La burbuja
+                                            aparece al posarse encima. */}
                                         {t.responsableNombre ? (
-                                            <>
-                                                <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold flex items-center justify-center shrink-0">
+                                            <span className="relative group/resp flex items-center shrink-0">
+                                                <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-[9px] font-bold flex items-center justify-center shrink-0 cursor-default">
                                                     {iniciales(t.responsableNombre)}
                                                 </span>
-                                                <span className="text-[11px] text-slate-600 truncate">{t.responsableNombre}</span>
-                                            </>
+                                                {/* `pointer-events-none` para que la burbuja no se
+                                                    coma el clic de la fila que tiene debajo. */}
+                                                <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1 z-30 opacity-0 group-hover/resp:opacity-100 transition-opacity whitespace-nowrap bg-slate-900 text-white text-[10px] rounded-md px-2 py-1 shadow-lg">
+                                                    {t.responsableNombre}
+                                                </span>
+                                            </span>
                                         ) : <span className="text-slate-300 text-[11px]">—</span>}
                                         {soyColaborador(t) && (
                                             <span title="Colaboras en esta tarea"
@@ -1776,15 +2047,17 @@ const TareasPanel = ({ modo = 'todas' }) => {
                                         )}
                                     </span>}
 
-                                    {/* 5 · Vence */}
-                                    <span className={`hidden md:block text-[11px] tabular-nums ${vencida ? 'text-red-600 font-semibold' : 'text-slate-500'}`}>
+                                    {/* 5 · Vence — se oculta con la lista angosta. La
+                                           fecha está en el detalle, que es lo que se
+                                           está mirando al lado. */}
+                                    <span className={`${angosta ? 'hidden' : 'hidden md:block'} text-[11px] tabular-nums ${vencida ? 'text-red-600 font-semibold' : 'text-slate-500'}`}>
                                         {t.venceAt ? fechaCorta(t.venceAt) : <span className="text-slate-300">—</span>}
                                     </span>
 
                                     {/* 6 · Estado, punto + palabra en tono normal */}
-                                    <span className="hidden lg:flex items-center gap-1.5">
+                                    <span className={`${angosta ? 'flex' : 'hidden lg:flex'} items-center gap-1.5 min-w-0`}>
                                         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ESTADO_PUNTO[t.estado] || ESTADO_PUNTO.pendiente}`} />
-                                        <span className="text-[11px] text-slate-600">{meta.label}</span>
+                                        <span className="text-[11px] text-slate-600 truncate">{meta.label}</span>
                                     </span>
 
                                     {/* 7 · Acciones */}
@@ -1820,7 +2093,8 @@ const TareasPanel = ({ modo = 'todas' }) => {
 
             {crear && <CrearTareaModal onClose={cerrarCrear}
                 onCreated={(id) => { cargar(); if (id) setSelId(id); }}
-                proyectos={proyectos} usuarios={usuarios} proyectoActual={proyectoSel} />}
+                proyectos={proyectos} usuarios={usuarios} proyectoActual={proyectoSel}
+                responsableActual={filtroResponsable || (modo === 'mias' ? getUser().id : '')} />}
         </div>
     );
 };

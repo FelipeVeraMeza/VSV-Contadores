@@ -4,12 +4,23 @@ import { fetchWithAuth } from './apiClient';
 // cliente, qué se acordó—; el video lo sirve Jitsi directamente entre los
 // navegadores (ver SalaJitsi.jsx).
 
-export const listarReunionesApi = (sessionId, { cuando = 'proximas', personaId, tareaId } = {}) => {
+export const listarReunionesApi = (sessionId, { cuando = 'proximas', personaId, tareaId, desde, hasta } = {}) => {
   const qs = new URLSearchParams({ cuando });
   if (personaId) qs.set('personaId', personaId);
   if (tareaId) qs.set('tareaId', tareaId);
+  // El calendario pide un rango de fechas: necesita el mes entero, con las
+  // pasadas y las futuras juntas, que es lo que 'proximas' y 'pasadas' separan.
+  if (desde) qs.set('desde', desde);
+  if (hasta) qs.set('hasta', hasta);
   return fetchWithAuth(`/reuniones?${qs.toString()}`, sessionId);
 };
+
+// Mover una reunión a otra fecha, conservando notas, invitados y la sala.
+export const reagendarReunionApi = (sessionId, id, { iniciaAt, duracionMin }) =>
+  fetchWithAuth(`/reuniones/${id}/reagendar`, sessionId, {
+    method: 'PATCH',
+    body: JSON.stringify({ iniciaAt, duracionMin }),
+  });
 
 export const obtenerReunionApi = (sessionId, id) =>
   fetchWithAuth(`/reuniones/${id}`, sessionId);

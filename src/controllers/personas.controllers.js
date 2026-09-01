@@ -425,7 +425,7 @@ export const obtenerPersona = async (req, res) => {
         if (pRes.rows.length === 0) return res.status(404).json(NO_ENCONTRADO);
         const p = pRes.rows[0];
 
-        const [tels, mails, emps, notas, hist, etiq, servInt, ejec] = await Promise.all([
+        const [tels, mails, emps, notas, hist, etiq, servInt, ejec, reus] = await Promise.all([
             pool.query(`SELECT id, telefono, tipo, principal FROM persona_telefono WHERE persona_id = $1`, [id]),
             pool.query(`SELECT id, correo, tipo, principal FROM persona_correo WHERE persona_id = $1`, [id]),
             pool.query(`SELECT pe.empresa_id, pe.cargo, pe.principal, e.razon_social
@@ -436,6 +436,16 @@ export const obtenerPersona = async (req, res) => {
             pool.query(`SELECT e.id, e.nombre FROM persona_etiqueta pe JOIN etiqueta e ON e.id = pe.etiqueta_id WHERE pe.persona_id = $1`, [id]),
             pool.query(`SELECT s.id, s.nombre FROM persona_servicio_interes psi JOIN servicio s ON s.id = psi.servicio_id WHERE psi.persona_id = $1`, [id]),
             p.ejecutivo_id ? pool.query(`SELECT nombre FROM usuario WHERE id = $1`, [p.ejecutivo_id]) : Promise.resolve({ rows: [] }),
+            // LAS REUNIONES CON ESTE CLIENTE, Y LO QUE SE ACORDÓ EN ELLAS.
+            // La nota de una reunión se guardaba solo en la reunión, así que al
+            // mes siguiente —cuando uno busca «qué le dijimos a este cliente»—
+            // había que acordarse de que hubo una reunión y en qué fecha. Acá es
+            // donde se busca, así que acá tiene que estar.
+            pool.query(
+                `SELECT id, titulo, inicia_at, estado, notas, duracion_min
+                   FROM reunion WHERE persona_id = $1
+                  ORDER BY COALESCE(inicia_at, created_at) DESC
+                  LIMIT 20`, [id]),
         ]);
 
         return res.json({
@@ -463,6 +473,16 @@ export const obtenerPersona = async (req, res) => {
                 empresas: emps.rows.map(e => ({ empresaId: e.empresa_id, razonSocial: e.razon_social, cargo: e.cargo, principal: e.principal })),
                 notas: notas.rows.map(n => ({ id: n.id, texto: n.texto, autor: n.usuario_nombre || 'Sistema', esIa: n.es_ia === true, fecha: n.created_at ? new Date(n.created_at).toLocaleString('es-CL') : '' })),
                 historialEstado: hist.rows.map(h => ({ anterior: h.estado_anterior, nuevo: h.estado_nuevo, motivo: h.motivo, autor: h.usuario_nombre || 'Sistema', fecha: h.created_at ? new Date(h.created_at).toLocaleString('es-CL') : '' })),
+                reuniones: reus.rows.map(r => ({
+                    id: r.id, titulo: r.titulo, estado: r.estado,
+                    iniciaAt: r.inicia_at, duracionMin: r.duracion_min,
+                    // Lo que se acordó. Es el dato que se viene a buscar acá.
+                    notas: r.notas || null,
+                    fecha: r.inicia_at
+                        ? new Date(r.inicia_at).toLocaleString('es-CL', {
+                            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                        : null,
+                })),
             }
         });
     } catch (error) {
@@ -652,7 +672,7 @@ export const catalogosCRM = async (req, res) => {
     try {
         // Los ejecutivos asignables son los de la propia organización.
         const org = req.user?.organizacionId || null;
-        const [etiq, ejec, serv, estCom] = await Promise.all([
+        const [etiq, ejec, serv] = await Promise.all([
             pool.query(`SELECT id, nombre, color FROM etiqueta ORDER BY nombre`),
             pool.query(
                 `SELECT id, nombre FROM usuario
@@ -661,18 +681,25 @@ export const catalogosCRM = async (req, res) => {
             pool.query(`SELECT id, nombre, categoria FROM servicio
                  WHERE activo = true AND organizacion_id IS NOT DISTINCT FROM $1::uuid
                  ORDER BY nombre`, [org]),
-            // "Estado del cliente" (situación comercial): valores ya usados en la
-            // organización. El combobox los ofrece para buscar y permite escribir uno nuevo.
-            pool.query(
-                `SELECT DISTINCT estado_comercial FROM persona
-                 WHERE estado_comercial IS NOT NULL AND trim(estado_comercial) <> ''
-                   AND organizacion_id IS NOT DISTINCT FROM $1::uuid
-                 ORDER BY estado_comercial`, [org]),
         ]);
-        // Situaciones comerciales sugeridas por defecto, más las ya usadas (sin repetir).
-        const DEFAULT_ESTADOS = ['Nuevo', 'Contactado', 'Esperando respuesta', 'Pensándolo', 'Reunión agendada', 'Propuesta enviada', 'Ganado', 'Perdido'];
-        const usados = estCom.rows.map(r => r.estado_comercial);
-        const estadosComerciales = [...new Set([...DEFAULT_ESTADOS, ...usados])];
+        // ESTADO DEL CLIENTE · LISTA CERRADA (definida por Felipe el 31-08-2026).
+        //
+        // Antes esta lista se armaba sumando los valores YA USADOS en la base, así
+        // que cada texto que alguien escribía se volvía una opción nueva y la lista
+        // crecía sola. Terminó con 65 valores distintos para 133 prospectos: dejó de
+        // servir para filtrar, y peor, se usó de libreta —había RUT y claves del SII
+        // de clientes escritos ahí, a la vista de cualquiera—. Los 80 textos que
+        // había se movieron a las observaciones del prospecto el 31-08 y el campo
+        // quedó limpio.
+        //
+        // Por eso la lista es FIJA y no se alimenta de lo escrito: si vuelve a sumar
+        // lo usado, vuelve el mismo problema. Para agregar un estado se agrega acá.
+        // Lo que no es un estado —un recordatorio, una nota de la conversación— va a
+        // las observaciones o a la agenda de acciones, que para eso están.
+        const estadosComerciales = [
+            'Por contactar', 'En conversación', 'Reunión',
+            'Propuesta enviada', 'Ganado', 'Perdido', 'En pausa',
+        ];
         return res.json({
             success: true,
             etiquetas: etiq.rows,

@@ -404,9 +404,20 @@ const CobrosMensuales = () => {
   };
 
   const filtrados = useMemo(() => {
+    // El RUT se compara sin puntos ni guion: quien busca escribe "12345678" o
+    // "12.345.678-9" indistintamente y ambas formas tienen que encontrar la fila.
     const term = busqueda.trim().toLowerCase();
+    const termRut = term.replace(/[.\-\s]/g, '');
     return cobros.filter(c => {
-      const matchTexto = !term || String(c.razonSocial || '').toLowerCase().includes(term);
+      // Se busca por empresa, RUT, correo y por las personas asociadas
+      // (representante legal, contacto o tercero): en la práctica uno se acuerda
+      // del nombre de quien atiende, no siempre de la razón social.
+      const personas = (c.personas || [])
+        .map(p => `${p?.nombre || ''} ${p?.cargo || ''} ${p?.correo || ''}`).join(' ');
+      const heno = `${c.razonSocial || ''} ${c.correo || ''} ${c.nombreRep || ''} ${personas}`.toLowerCase();
+      const matchTexto = !term
+        || heno.includes(term)
+        || (!!termRut && String(c.rut || '').replace(/[.\-\s]/g, '').toLowerCase().includes(termRut));
       if (!matchTexto) return false;
       if (filtro === 'TODOS') return true;
       if (filtro === 'VENCIDOS') return c.vencido;
@@ -573,7 +584,7 @@ const CobrosMensuales = () => {
         <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
           <input
-            placeholder="Buscar empresa..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar empresa, RUT, correo o persona..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)}
             className="w-full pl-9 pr-3 py-1.5 bg-white border border-[#efe8dd] rounded-lg text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-400"
           />
         </div>
@@ -665,6 +676,26 @@ const CobrosMensuales = () => {
                             </span>
                           )}
                         </span>
+                        {/* RUT y con quién se habla, en gris bajo el nombre. Al cobrar
+                            hace falta saber a quién llamar sin salir a buscarlo al CRM;
+                            además explica por qué la fila apareció al buscar a alguien. */}
+                        {(() => {
+                          const cont = (c.personas || [])[0];
+                          const quien = cont?.nombre || c.nombreRep;
+                          const cargo = cont?.nombre ? cont.cargo : (c.nombreRep ? 'rep. legal' : '');
+                          if (!c.rut && !quien) return null;
+                          return (
+                            <span className="flex items-center gap-1.5 text-[11px] text-slate-400 min-w-0">
+                              {c.rut && <span className="tabular-nums shrink-0">{c.rut}</span>}
+                              {c.rut && quien && <span className="text-slate-300">·</span>}
+                              {quien && (
+                                <span className="truncate" title={cont?.correo || c.correo || ''}>
+                                  {quien}{cargo ? ` (${cargo})` : ''}
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-2">
                         <span className="text-[11px] text-slate-500">{c.plan}</span>

@@ -54,6 +54,7 @@ import { cargarJSONaBD } from './components/contabilidad/scripts/subir_documento
 
 // 🔒 Estado del Facturador Masivo: si está activo, NO sincronizamos el SII (misma cuenta = se botan la sesión)
 import { estadoRobot } from './components/facturacion/scripts/factura_masiva.mjs';
+import { iniciarRecordatoriosReunion } from './utils/recordatorioReunion.js';
 
 // --- Inicialización del Servidor ---
 const app = express();
@@ -317,6 +318,14 @@ app.post('/api/sincronizar-sii', apiLimiter, requireSession, requireAdmin, async
 // cron.schedule('0 */4 * * *', async () => {
 //     console.log('⏸️ [CRON 4H] Deshabilitado - Solo se ejecuta manualmente');
 // });
+
+// RECORDATORIO DE REUNIONES · este SÍ corre solo, y es la excepción a la regla
+// de arriba. Los dos cron comentados son robots del SII: pesados, lentos y con
+// efectos hacia afuera, por eso se dejaron a mano. Este es lo contrario —una
+// consulta a un índice parcial que casi siempre devuelve cero filas y, cuando
+// devuelve algo, solo escribe una notificación interna—. Y a mano no serviría:
+// el sentido del aviso es que llegue 15 minutos antes sin que nadie lo pida.
+iniciarRecordatoriosReunion();
 
 // --- Archivos Estáticos ---
 app.use('/static', express.static(path.join(process.cwd(), 'tmp')));

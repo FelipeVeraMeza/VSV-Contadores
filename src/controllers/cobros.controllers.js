@@ -84,7 +84,39 @@ export const listarCobros = async (req, res) => {
                     cm.monto_anulado,
                     cm.folio, cm.tipo_dte, cm.estado, cm.fecha_emision, cm.fecha_vencimiento, cm.fecha_pago,
                     e.razon_social, p.nombre AS plan,
-                    (e.activo IS FALSE OR e.en_cartera IS FALSE) AS suspendida
+                    e.rut_encrypted, e.email_corporativo, e.nombre_rep,
+                    (e.activo IS FALSE OR e.en_cartera IS FALSE) AS suspendida,
+                    -- Personas ligadas a la empresa. Quien cobra se acuerda del
+                    -- interlocutor, no siempre de la razón social, así que la
+                    -- búsqueda tiene que alcanzarlas.
+                    --
+                    -- Son DOS orígenes distintos y hay que unir los dos:
+                    --   · empresa_representante → los representantes legales
+                    --     (es la tabla que está poblada de verdad).
+                    --   · persona_empresa       → terceros del CRM ligados a la
+                    --     empresa con un cargo (hoy vacía, pero es por donde
+                    --     entran los contactos que no son representantes).
+                    (SELECT json_agg(x ORDER BY x->>'orden')
+                       FROM (
+                            SELECT json_build_object(
+                                     'nombre', er.nombre,
+                                     'cargo',  'rep. legal',
+                                     'correo', er.email,
+                                     'orden',  CASE WHEN er.principal THEN '0' ELSE '1' END) AS x
+                              FROM empresa_representante er
+                             WHERE er.empresa_id = e.id AND er.nombre IS NOT NULL
+                            UNION ALL
+                            SELECT json_build_object(
+                                     'nombre', trim(concat_ws(' ', ps.nombre, ps.apellidos)),
+                                     'cargo',  pe.cargo,
+                                     'correo', (SELECT pc.correo FROM persona_correo pc
+                                                 WHERE pc.persona_id = ps.id
+                                                 ORDER BY pc.principal DESC NULLS LAST LIMIT 1),
+                                     'orden',  '2') AS x
+                              FROM persona_empresa pe
+                              JOIN persona ps ON ps.id = pe.persona_id
+                             WHERE pe.empresa_id = e.id
+                       ) t) AS personas
              FROM cobro_mensual cm
              JOIN empresa e ON e.id = cm.empresa_id
              LEFT JOIN plan p ON p.id = e.plan_id
@@ -102,6 +134,14 @@ export const listarCobros = async (req, res) => {
                 id: r.id,
                 empresaId: r.empresa_id,
                 razonSocial: r.razon_social,
+                // El RUT viaja cifrado en la base: se descifra acá porque el
+                // buscador de la pantalla filtra por él y SQL no puede verlo.
+                rut: (() => { try { return decrypt(r.rut_encrypted) || ''; } catch { return ''; } })(),
+                correo: r.email_corporativo || '',
+                // Representante legal y demás personas asociadas, para que buscar
+                // por el nombre de un contacto encuentre el cobro de su empresa.
+                nombreRep: r.nombre_rep || '',
+                personas: r.personas || [],
                 plan: r.plan || 'Sin plan',
                 // Cliente dado de baja que aún debe: sigue en cobranza, ya no en cartera
                 suspendida: r.suspendida === true,

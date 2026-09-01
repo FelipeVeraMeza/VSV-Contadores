@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, User, Edit, Save, Send, Clock, Building2, Loader2, History, ChevronDown, Trash2, CheckCircle2, UserMinus, Tag, Briefcase, Plus, Search, Pencil, GitMerge, Phone, Mail, Target, ArrowRight } from 'lucide-react';
+import { X, User, Edit, Save, Send, Clock, Building2, Loader2, History, ChevronDown, Trash2, CheckCircle2, UserMinus, Tag, Briefcase, Plus, Search, Pencil, GitMerge, Phone, Mail, Target, ArrowRight, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import {
     obtenerPersonaApi, actualizarPersonaApi, agregarNotaPersonaApi, cambiarEstadoPersonaApi, eliminarPersonaApi,
     getCatalogosApi, getEmpresasListaApi, asociarEmpresaApi, desasociarEmpresaApi, editarNotaApi, eliminarNotaApi, fusionarPersonaApi, listarPersonasApi, crearEmpresaParaPersonaApi,
-    listarAccionesApi, crearAccionApi, completarAccionApi, eliminarAccionApi
+    listarAccionesApi, crearAccionApi, completarAccionApi, eliminarAccionApi, crearServicioApi
 } from '@/services/personaService';
+import { crearReunionApi } from '@/services/reunionesService';
 
 const getSessionId = () => {
     try { return JSON.parse(localStorage.getItem('user') || '{}').sessionId; }
@@ -42,6 +43,7 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
     const [showHist, setShowHist] = useState(false);
     const [catalogos, setCatalogos] = useState({ ejecutivos: [], servicios: [], estadosComerciales: [], accionesSugeridas: [] });
     const [serviciosSel, setServiciosSel] = useState([]);
+    const [nuevoServicio, setNuevoServicio] = useState('');   // alta al vuelo desde la ficha
     // Empresas
     const [empQuery, setEmpQuery] = useState('');
     const [empResults, setEmpResults] = useState([]);
@@ -217,7 +219,90 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
         }
     };
 
+    // ---- CONVOCAR UNA REUNIÓN CON ESTE CLIENTE ----
+    // Se pide la fecha y se crea acá mismo. La reunión queda ligada a la persona
+    // (persona_id), y por eso el servidor le manda solo la confirmación por
+    // WhatsApp y correo, y su nota vuelve después a esta misma ficha.
+    const [convocando, setConvocando] = useState(false);
+    const convocarReunion = async () => {
+        const ahora = new Date(Date.now() + 24 * 60 * 60 * 1000);   // mañana a esta hora
+        ahora.setMinutes(0, 0, 0);
+        const sugerido = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')} ${String(ahora.getHours()).padStart(2, '0')}:00`;
+        const texto = window.prompt(
+            `¿Cuándo es la reunión con ${data.nombre || 'este cliente'}?\n\nFormato: AAAA-MM-DD HH:MM`, sugerido);
+        if (!texto) return;
+        const cuando = new Date(texto.trim().replace(' ', 'T'));
+        if (Number.isNaN(cuando.getTime())) {
+            toast({ variant: 'destructive', title: 'Fecha no válida', description: 'Usa el formato AAAA-MM-DD HH:MM' });
+            return;
+        }
+        setConvocando(true);
+        try {
+            const nombre = [data.nombre, data.apellidos].filter(Boolean).join(' ');
+            const r = await crearReunionApi(getSessionId(), {
+                titulo: `Reunión con ${nombre || 'cliente'}`,
+                iniciaAt: cuando.toISOString(),
+                duracionMin: 30,
+                personaId: personaId,
+            });
+            const d = await r.json();
+            if (!d.success) throw new Error(d.message);
+            const c = d.confirmacion || {};
+            toast({
+                title: 'Reunión agendada',
+                description: (c.whatsapp || c.correo)
+                    ? `Se le avisó por ${[c.whatsapp && 'WhatsApp', c.correo && 'correo'].filter(Boolean).join(' y ')}.`
+                    : `No se pudo avisar al cliente: ${c.motivo || 'sin datos de contacto'}.`,
+            });
+            cargar();
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'No se pudo agendar', description: e.message });
+        } finally { setConvocando(false); }
+    };
+
     const toggleServicio = (id) => setServiciosSel(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+    // Marca o desmarca un servicio y lo GUARDA al toque, sin pasar por "editar".
+    // El toggle de arriba solo mueve el estado local y sirve dentro del formulario
+    // de edición; acá el vendedor está mirando la ficha y anota lo que le pidieron.
+    const toggleServicioYGuardar = async (id) => {
+        const nuevos = serviciosSel.includes(id) ? serviciosSel.filter(x => x !== id) : [...serviciosSel, id];
+        setServiciosSel(nuevos);
+        try {
+            const res = await actualizarPersonaApi(getSessionId(), personaId,
+                construirPayload({ serviciosInteres: nuevos }));
+            const payload = await res.json();
+            if (!payload.success) throw new Error(payload.message);
+            if (onChanged) onChanged();
+        } catch (e) {
+            setServiciosSel(serviciosSel);   // se deshace: la pantalla no miente
+            toast({ variant: 'destructive', title: 'Error', description: e.message });
+        }
+    };
+
+    // Crea un servicio que no está en el catálogo y lo deja marcado. Nace de la
+    // realidad de la planilla: "bloqueo de factura" lo pedían 47 de 133 prospectos
+    // y no existía como servicio, así que se escribía a mano en el texto libre.
+    const agregarServicio = async () => {
+        const nombre = (nuevoServicio || '').trim();
+        if (!nombre) return;
+        const yaEsta = catalogos.servicios.find(s => s.nombre.toLowerCase() === nombre.toLowerCase());
+        if (yaEsta) {                       // no se duplica: se marca el que ya existe
+            setNuevoServicio('');
+            if (!serviciosSel.includes(yaEsta.id)) toggleServicioYGuardar(yaEsta.id);
+            return;
+        }
+        try {
+            const r = await crearServicioApi(getSessionId(), nombre);
+            const d = await r.json();
+            if (!d.success) throw new Error(d.message);
+            setCatalogos(prev => ({ ...prev, servicios: [...prev.servicios, d.servicio] }));
+            setNuevoServicio('');
+            toggleServicioYGuardar(d.servicio.id);
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'Error', description: e.message });
+        }
+    };
 
     // Buscar empresas para asociar
     useEffect(() => {
@@ -341,9 +426,23 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
                             {(data.telefonos || []).length === 0 && (data.correos || []).length === 0 && (
                                 <span className="text-[10px] text-slate-400 italic">Sin contacto registrado</span>
                             )}
+                            {/* CONVOCAR DESDE ACÁ. Uno se da cuenta de que hay que
+                                reunirse mirando la ficha del cliente, no entrando a
+                                la sección de reuniones: obligar a cambiar de pantalla
+                                y volver a buscar a la persona es perder el impulso.
+                                La reunión nace ligada a este cliente, así que su nota
+                                vuelve sola a esta misma ficha. */}
+                            <button onClick={convocarReunion} disabled={convocando}
+                                title="Agendar una reunión con este cliente"
+                                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-emerald-700 ml-auto disabled:opacity-50">
+                                {convocando ? <Loader2 size={12} className="animate-spin" /> : <Video size={12} />} Convocar
+                            </button>
                         </div>
 
-                        {/* Estado del ciclo (prospecto/activo/…) — controla la conversión a cliente */}
+                        {/* Estado del ciclo (prospecto/activo/…) — controla la conversión a cliente.
+                            La conversión va ACÁ, al lado del estado que cambia, y no como una
+                            barra ancha al final del bloque: es la acción que más se usa en esta
+                            pantalla y antes había que bajar la vista para encontrarla. */}
                         <div className="flex items-center gap-2 mt-3 relative">
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estado:</span>
                             <button onClick={() => setShowEstado(!showEstado)} className={`flex items-center gap-1 text-[10px] font-black px-2.5 py-1 rounded-full border uppercase ${ESTADO_STYLE[data.estado] || 'text-red-700 border-red-400/30 bg-red-400/10'}`}>
@@ -356,20 +455,75 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
                                     ))}
                                 </div>
                             )}
+                            {data.estado === 'prospecto' && (
+                                <button onClick={() => cambiarEstado('activo')} title="Convertir este prospecto en cliente activo"
+                                    className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors">
+                                    <CheckCircle2 size={12} /> Convertir
+                                </button>
+                            )}
+                            {data.estado === 'activo' && (
+                                <button onClick={() => cambiarEstado('inactivo')} title="Marcar este cliente como inactivo"
+                                    className="flex items-center gap-1.5 bg-white hover:bg-slate-50 border border-[#efe8dd] text-slate-600 rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors">
+                                    <UserMinus size={12} /> Inactivar
+                                </button>
+                            )}
                             <span className="text-[9px] text-slate-400 ml-auto uppercase tracking-widest">{data.origen}</span>
+                        </div>
+
+                        {/* QUÉ NECESITA · dos partes, a propósito.
+                            Era un solo cuadro de texto y ahí se mezclaban dos cosas distintas:
+                            QUÉ servicio quiere ("ce", "conta", "bloqueo") y EL CASO ("barra
+                            móvil", "deuda de 5 millones en 6 meses"). Con todo junto no se
+                            podía contar cuántos piden cada servicio —y era lo que más se
+                            preguntaba—. Arriba se marca el servicio, abajo se cuenta el caso;
+                            el detalle sigue siendo libre porque cada venta es distinta. */}
+                        <div className="mt-3">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1 mb-1.5"><Target size={11} /> Qué necesita</span>
+                            {catalogos.servicios.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mb-1.5">
+                                    {catalogos.servicios.map(s => (
+                                        <button type="button" key={s.id} onClick={() => toggleServicioYGuardar(s.id)}
+                                            className={`text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors ${
+                                                serviciosSel.includes(s.id)
+                                                    ? 'bg-emerald-600 border-emerald-500 text-white'
+                                                    : 'bg-white border-[#efe8dd] text-slate-500 hover:border-slate-300'}`}>
+                                            {s.nombre}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {/* Alta al vuelo: si el servicio no está, se crea sin salir de acá. */}
+                            <div className="flex gap-1 mb-1.5">
+                                <input value={nuevoServicio} onChange={(e) => setNuevoServicio(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); agregarServicio(); } }}
+                                    placeholder="Otro servicio…"
+                                    className="flex-1 min-w-0 bg-white border border-[#efe8dd] rounded-lg px-2 py-1 text-[10px] text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-400" />
+                                <button type="button" onClick={agregarServicio} disabled={!nuevoServicio.trim()}
+                                    title="Agregar este servicio al catálogo y marcarlo"
+                                    className="flex items-center gap-1 bg-white hover:bg-slate-50 border border-[#efe8dd] text-slate-600 rounded-lg px-2 py-1 text-[10px] font-bold transition-colors disabled:opacity-40">
+                                    <Plus size={11} /> Agregar
+                                </button>
+                            </div>
+                            <textarea key={`nec-top-${personaId}`} defaultValue={data.necesidad || ''} rows={2}
+                                onBlur={(e) => { const v = e.target.value.trim(); if (v !== (data.necesidad || '')) guardarRapido('necesidad', v); }}
+                                placeholder="El caso: rubro, socios, deuda, lo que haya que recordar…"
+                                className="w-full bg-white border border-[#efe8dd] rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-emerald-500 resize-none placeholder:text-slate-400" />
                         </div>
 
                         {/* Estado del cliente (situación comercial) + Acción — editables al vuelo */}
                         <div className="grid grid-cols-2 gap-2 mt-3">
                             <div className="flex flex-col gap-1">
                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><Target size={11} /> Estado del cliente</span>
-                                <input list="drawer-estados-comerciales" defaultValue={data.estadoComercial || ''} key={`ec-${personaId}`}
-                                    onBlur={(e) => { const v = e.target.value.trim(); if (v !== (data.estadoComercial || '')) guardarRapido('estadoComercial', v); }}
-                                    placeholder="Esperando respuesta…"
-                                    className="bg-white border border-[#efe8dd] rounded-lg px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-400" />
-                                <datalist id="drawer-estados-comerciales">
-                                    {(catalogos.estadosComerciales || []).map(s => <option key={s} value={s} />)}
-                                </datalist>
+                                {/* Lista CERRADA a propósito. Como campo libre terminó con 65
+                                    valores distintos para 133 prospectos —y con claves del SII
+                                    escritas dentro—, así que dejó de servir para filtrar. Lo
+                                    que no es un estado va a las notas o a la agenda. */}
+                                <select value={data.estadoComercial || ''} key={`ec-${personaId}`}
+                                    onChange={(e) => guardarRapido('estadoComercial', e.target.value)}
+                                    className="bg-white border border-[#efe8dd] rounded-lg px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-emerald-500 cursor-pointer">
+                                    <option value="">Sin definir</option>
+                                    {(catalogos.estadosComerciales || []).map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
                             </div>
                             <div className="flex flex-col gap-1">
                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1"><ArrowRight size={11} /> Acción (próximo paso)</span>
@@ -383,17 +537,7 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
                             </div>
                         </div>
 
-                        {/* Acción rápida de conversión */}
-                        {data.estado === 'prospecto' && (
-                            <button onClick={() => cambiarEstado('activo')} className="mt-3 w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition-colors">
-                                <CheckCircle2 size={14} /> Convertir a Cliente Activo
-                            </button>
-                        )}
-                        {data.estado === 'activo' && (
-                            <button onClick={() => cambiarEstado('inactivo')} className="mt-3 w-full flex items-center justify-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition-colors">
-                                <UserMinus size={14} /> Marcar como Inactivo
-                            </button>
-                        )}
+                        {/* La conversión y el marcar inactivo subieron junto al estado, arriba. */}
                         {data.estado === 'inactivo' && (
                             <button onClick={() => cambiarEstado('activo')} className="mt-3 w-full flex items-center justify-center gap-2 bg-emerald-600/80 hover:bg-emerald-600 text-white rounded-xl py-2 text-[10px] font-black uppercase tracking-widest transition-colors">
                                 <CheckCircle2 size={14} /> Reactivar Cliente
@@ -490,6 +634,40 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
                             })()}
                         </div>
 
+                        {/* REUNIONES CON ESTE CLIENTE, Y LO QUE SE ACORDÓ.
+                            La nota de una reunión vivía solo dentro de la reunión,
+                            así que al mes siguiente —cuando uno viene a buscar «qué
+                            le dijimos a este cliente»— había que acordarse de que
+                            hubo una y de la fecha. Acá es donde se busca. */}
+                        {(data.reuniones || []).length > 0 && (
+                            <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
+                                <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                    <Video size={14} /> Reuniones ({data.reuniones.length})
+                                </h3>
+                                <div className="space-y-2">
+                                    {data.reuniones.map(r => (
+                                        <div key={r.id} className="border-b border-[#efe8dd] pb-2 last:border-0 last:pb-0">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                                    r.estado === 'terminada' ? 'bg-slate-300'
+                                                    : r.estado === 'cancelada' ? 'bg-red-300' : 'bg-emerald-500'}`} />
+                                                <span className={`text-[11px] truncate flex-1 ${
+                                                    r.estado === 'cancelada' ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+                                                    {r.titulo}
+                                                </span>
+                                                {r.fecha && <span className="text-[10px] text-slate-400 shrink-0 tabular-nums">{r.fecha}</span>}
+                                            </div>
+                                            {/* La nota es la razón de tener las reuniones acá adentro
+                                                y no en Meet: es lo que se acordó. */}
+                                            {r.notas && (
+                                                <p className="text-[10px] text-slate-500 mt-1 pl-3.5 whitespace-pre-wrap">{r.notas}</p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Historial de estado */}
                         {(data.historialEstado || []).length > 0 && (
                             <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
@@ -514,14 +692,8 @@ const PersonaDetailDrawer = ({ personaId, onClose, onChanged }) => {
                         <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
                             <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><User size={14} /> Información</h3>
 
-                            {/* Qué necesita — siempre visible y editable (se guarda al salir del campo) */}
-                            <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3">
-                                <span className="text-[9px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-1 mb-1.5"><Target size={11} /> Qué necesita</span>
-                                <textarea key={`nec-${personaId}`} defaultValue={data.necesidad || ''} rows={2}
-                                    onBlur={(e) => { const v = e.target.value.trim(); if (v !== (data.necesidad || '')) guardarRapido('necesidad', v); }}
-                                    placeholder="Describe qué necesita el prospecto…"
-                                    className="w-full bg-white border border-emerald-200 rounded-lg p-2 text-xs text-slate-900 outline-none focus:border-emerald-500 resize-none placeholder:text-slate-400" />
-                            </div>
+                            {/* "Qué necesita" subió al resumen, arriba: tenerlo dos veces en la
+                                misma pantalla invitaba a editarlo en un lado y leerlo en el otro. */}
 
                             {isEditing ? (
                                 <div className="grid grid-cols-2 gap-3">

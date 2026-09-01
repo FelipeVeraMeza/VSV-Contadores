@@ -223,7 +223,29 @@
       "Bash(git rm *)",
       "Bash(node --check src/components/facturacion/scripts/factura_masiva.mjs)",
       "Bash(grep -n '`')",
-      "Bash(timeout 25 node -e ' *)"
+      "Bash(timeout 25 node -e ' *)",
+      "Bash(git config *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(node --check src/components/facturacion/tabs/CobrosMensuales.jsx)",
+      "Bash(node \"C:/Users/felip/AppData/Local/Temp/claude/c--Users-felip-OneDrive-Documentos-VS-VSV-Contadores/28d8a9f6-e00f-4fe2-b2d1-8b64ce01f3b8/scratchpad/q1.mjs\")",
+      "Bash(node ./tmp/_q1.mjs)",
+      "Bash(node ./tmp/_q2.mjs)",
+      "Bash(node ./tmp/_q3.mjs)",
+      "Bash(node ./tmp/_q4.mjs)",
+      "Bash(node ./tmp/_q5.mjs)",
+      "Bash(node ./tmp/_q6.mjs)",
+      "Bash(node ./tmp/_q7.mjs)",
+      "Bash(node ./tmp/_q8.mjs)",
+      "Bash(node ./tmp/_c1.mjs)",
+      "Bash(node ./tmp/_c2.mjs)",
+      "Bash(node ./tmp/_c3.mjs)",
+      "Bash(node ./tmp/_d1.mjs)",
+      "Bash(node ./tmp/_d2.mjs)",
+      "Bash(node ./tmp/_e2.mjs)",
+      "Bash(rm -f tmp/_e1.mjs tmp/_e2.mjs)",
+      "Bash(node ./tmp/_h1.mjs)",
+      "Bash(rm -f tmp/_h1.mjs)"
     ]
   }
 }
