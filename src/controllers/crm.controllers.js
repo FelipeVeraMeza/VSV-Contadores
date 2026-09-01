@@ -408,8 +408,19 @@ export const crearTarea = async (req, res) => {
                 (organizacion_id, persona_id, empresa_id, titulo, descripcion, tipo, prioridad, estado,
                  responsable_id, vence_at, origen, creado_por, proyecto_id, parent_id, visibilidad,
                  completed_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-                     CASE WHEN $8 = 'completada' THEN NOW() ELSE NULL END) RETURNING id`,
+             -- LOS DOS ::text SON OBLIGATORIOS, no son decoración.
+             --
+             -- $8 aparece dos veces: como valor de la columna estado (varchar) y acá
+             -- abajo comparado con un literal dentro del CASE. Postgres deduce el
+             -- tipo del parámetro por cada uso, saca dos distintos y rechaza la
+             -- consulta entera con «inconsistent types deduced for parameter $8».
+             -- Resultado: NINGUNA tarea se podía crear, ni desde Tickets ni desde el
+             -- dashboard. Reventó en producción el 01-09-2026.
+             --
+             -- Castear solo el del CASE no alcanza —probado—: hay que fijar el tipo
+             -- en AMBAS apariciones para que la deducción sea una sola.
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8::text,$9,$10,$11,$12,$13,$14,$15,
+                     CASE WHEN $8::text = 'completada' THEN NOW() ELSE NULL END) RETURNING id`,
             [
                 req.user?.organizacionId || null,
                 personaId || null, empresaId || null,
