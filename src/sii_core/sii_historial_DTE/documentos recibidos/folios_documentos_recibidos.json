@@ -661,5 +661,260 @@
         "montoIva": 968
       }
     }
+  },
+  {
+    "rutEmisor": "76644017-7",
+    "razonSocial": "FLOW PAGOS CHILE SPA",
+    "documento": "Factura Electronica",
+    "folio": "12940",
+    "fecha": "2026-08-31",
+    "montoTotal": 1521,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 1278,
+        "montoIva": 243
+      }
+    }
+  },
+  {
+    "rutEmisor": "76830014-3",
+    "razonSocial": "FLOW S A",
+    "documento": "Factura Electronica",
+    "folio": "538551",
+    "fecha": "2026-08-31",
+    "montoTotal": 49458,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 41561,
+        "montoIva": 7897
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "93201",
+    "fecha": "2026-08-19",
+    "montoTotal": 540,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 454,
+        "montoIva": 86
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "93167",
+    "fecha": "2026-08-19",
+    "montoTotal": 540,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 454,
+        "montoIva": 86
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "93164",
+    "fecha": "2026-08-19",
+    "montoTotal": 540,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 454,
+        "montoIva": 86
+      }
+    }
+  },
+  {
+    "rutEmisor": "97006000-6",
+    "razonSocial": "BANCO DE CREDITO E INVERSIONES",
+    "documento": "Factura Electronica",
+    "folio": "30594903",
+    "fecha": "2026-08-06",
+    "montoTotal": 6076,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 5106,
+        "montoIva": 970
+      }
+    }
+  },
+  {
+    "rutEmisor": "77327430-4",
+    "razonSocial": "Rosa Agustina Conference",
+    "documento": "Factura Electronica",
+    "folio": "44222",
+    "fecha": "2026-08-13",
+    "montoTotal": 109800,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 92269,
+        "montoIva": 17531
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "92016",
+    "fecha": "2026-08-06",
+    "montoTotal": 540,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 454,
+        "montoIva": 86
+      }
+    }
+  },
+  {
+    "rutEmisor": "76644017-7",
+    "razonSocial": "FLOW PAGOS CHILE SPA",
+    "documento": "Factura Electronica",
+    "folio": "9805",
+    "fecha": "2026-07-31",
+    "montoTotal": 1101,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 925,
+        "montoIva": 176
+      }
+    }
+  },
+  {
+    "rutEmisor": "76830014-3",
+    "razonSocial": "FLOW S A",
+    "documento": "Factura Electronica",
+    "folio": "529437",
+    "fecha": "2026-07-31",
+    "montoTotal": 54537,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 45829,
+        "montoIva": 8708
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "90234",
+    "fecha": "2026-07-23",
+    "montoTotal": 540,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 454,
+        "montoIva": 86
+      }
+    }
+  },
+  {
+    "rutEmisor": "97006000-6",
+    "razonSocial": "BANCO DE CREDITO E INVERSIONES",
+    "documento": "Factura Electronica",
+    "folio": "30437618",
+    "fecha": "2026-07-10",
+    "montoTotal": 6075,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 5105,
+        "montoIva": 970
+      }
+    }
+  },
+  {
+    "rutEmisor": "76610718-4",
+    "razonSocial": "BPO ADVISORS SPA",
+    "documento": "Factura Electronica",
+    "folio": "88054",
+    "fecha": "2026-06-30",
+    "montoTotal": 750,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 630,
+        "montoIva": 120
+      }
+    }
+  },
+  {
+    "rutEmisor": "76830014-3",
+    "razonSocial": "FLOW S A",
+    "documento": "Factura Electronica",
+    "folio": "521772",
+    "fecha": "2026-06-30",
+    "montoTotal": 31703,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 26641,
+        "montoIva": 5062
+      }
+    }
+  },
+  {
+    "rutEmisor": "76388223-3",
+    "razonSocial": "RHEEM CHILE S A.",
+    "documento": "Factura Electronica",
+    "folio": "221972",
+    "fecha": "2026-06-24",
+    "montoTotal": 334970,
+    "procesado": true,
+    "detalleCompleto": {
+      "cabecera": {
+        "receptorRut": "78.306.207-0",
+        "receptorNombre": "VOLLAIRE Y OLIVOS SIMPLE PYME",
+        "montoNeto": 281487,
+        "montoIva": 53483
+      }
+    }
   }
 ]

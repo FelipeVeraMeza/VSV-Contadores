@@ -362,7 +362,25 @@ const CorreoMasivo = () => {
     if (selectedFolios.length === 0) return;
     const items = correosLog
       .filter(c => selectedFolios.includes(String(c.folio)))
-      .map(c => ({ folio: String(c.folio), datos: c.datos || { razonSocial: c.razonSocial, rut: c.rut, correo: c.correo } }));
+      // EL CORREO DE LA FILA MANDA SOBRE EL DE `datos`.
+      //
+      // `c.datos` es la foto de la emisión original. Si se usaba tal cual —como
+      // pasaba con `c.datos || {...}`— el reenvío repetía el correo viejo y
+      // volvía a fallar, aunque alguien ya hubiera corregido la dirección.
+      //
+      // Pasó con la 1476 el 01-09-2026: la factura se emitió sin correo, quedó
+      // guardado el marcador `No_encontrado@falta_correo.cl`, se cargó el correo
+      // bueno en la ficha… y el reenvío siguió mandando al marcador, que Gmail
+      // rechaza por no ser una dirección válida.
+      .map(c => ({
+        folio: String(c.folio),
+        datos: {
+          ...(c.datos || {}),
+          razonSocial: c.razonSocial || c.datos?.razonSocial,
+          rut: c.rut || c.datos?.rut,
+          correo: c.correo || c.datos?.correo,
+        },
+      }));
 
     setIsReenviandoMasivo(true);
     toast({ title: '📧 Reenvío masivo iniciado', description: `Procesando ${items.length} correo(s) en segundo plano. Puede tardar varios minutos.`, duration: 10000 });
@@ -833,7 +851,12 @@ const CorreoMasivo = () => {
                   <td className="px-3 py-2 text-[9px] text-slate-400 whitespace-normal max-w-[260px]">{c.motivo || (c.estado === 'enviado' ? '✓ Entregado al cliente' : '—')}</td>
                   <td className="px-3 py-2 text-center">
                     <Button
-                      onClick={() => reenviarCorreo(c.folio, c.datos)}
+                      onClick={() => reenviarCorreo(c.folio, {
+                        ...(c.datos || {}),
+                        razonSocial: c.razonSocial || c.datos?.razonSocial,
+                        rut: c.rut || c.datos?.rut,
+                        correo: c.correo || c.datos?.correo,
+                      })}
                       disabled={!c.folio || reenviandoFolio !== null}
                       title="Reenviar este correo"
                       className="h-7 px-3 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-700 text-[9px] font-black uppercase tracking-widest rounded-md inline-flex items-center gap-1"

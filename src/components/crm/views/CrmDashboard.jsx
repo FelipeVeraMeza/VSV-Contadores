@@ -1,13 +1,12 @@
-import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    DollarSign, Target, TrendingUp, Percent, Loader2, Plus, Clock,
-    AlertTriangle, ChevronLeft, ChevronRight, Phone, MessageCircle, Mail,
-    Users, CalendarDays, Pencil, X, Trash2, UserPlus, Building2, FileText,
-    Bell, Download, Printer, Sliders, CheckCircle2, Ticket, Activity,
-    Award, Check, Search
+    DollarSign, Loader2, Plus, ChevronLeft, ChevronRight, CalendarDays,
+    Pencil, X, Trash2, UserPlus, Building2, FileText, Bell, Download,
+    Printer, Sliders, CheckCircle2, Ticket, Activity, Check, Search,
+    Clock, AlertTriangle
 } from 'lucide-react';
-import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { toast } from '@/components/ui/use-toast';
 import { avisarFinalizada } from '@/components/tareas/deshacer';
 import {
@@ -23,23 +22,27 @@ const fmtK = (n) => { const v = Number(n || 0); return v >= 1e6 ? `$${(v / 1e6).
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 const DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
-const TIPO_ICON = { llamada: Phone, whatsapp: MessageCircle, correo: Mail, reunion: CalendarDays, ticket: Ticket, tarea: Check };
-const TIPO_COLOR = {
-    llamada: 'text-blue-600 bg-blue-500/10', whatsapp: 'text-emerald-600 bg-emerald-500/10',
-    correo: 'text-purple-600 bg-purple-500/10', reunion: 'text-amber-600 bg-amber-500/10',
-    ticket: 'text-red-600 bg-red-500/10', tarea: 'text-slate-600 bg-slate-500/10',
-};
-const PRIO_STYLE = { alta: 'text-red-600 bg-red-500/10 border-red-500/30', media: 'text-amber-600 bg-amber-500/10 border-amber-500/30', baja: 'text-slate-500 bg-slate-500/10 border-slate-400/30' };
+// Lo que sigue abierto. Debe coincidir con ESTADOS_ACTIVOS del backend: si los
+// dos no cuentan lo mismo, el KPI y la lista muestran cifras distintas.
+const ESTADOS_ABIERTOS = ['pendiente', 'en_proceso', 'en_revision'];
 
+// El ícono va suelto, sin cuadrito de fondo: en una lista de doce filas esos
+// doce cuadritos de color pesaban más que el texto que había que leer.
 const ACT_ICON = {
-    prospecto_nuevo: { i: UserPlus, c: 'text-blue-600 bg-blue-500/10', t: 'Nuevo prospecto' },
-    reunion_creada: { i: CalendarDays, c: 'text-amber-600 bg-amber-500/10', t: 'Reunión creada' },
-    tarea_creada: { i: Plus, c: 'text-slate-600 bg-slate-500/10', t: 'Tarea creada' },
-    tarea_completada: { i: CheckCircle2, c: 'text-emerald-600 bg-emerald-500/10', t: 'Tarea completada' },
-    cobro_registrado: { i: DollarSign, c: 'text-emerald-600 bg-emerald-500/10', t: 'Cobro registrado' },
+    prospecto_nuevo:  { i: UserPlus,    c: 'text-blue-500',    t: 'Nuevo prospecto' },
+    reunion_creada:   { i: CalendarDays, c: 'text-amber-500',  t: 'Reunión agendada' },
+    tarea_creada:     { i: Plus,        c: 'text-slate-400',   t: 'Tarea creada' },
+    tarea_completada: { i: CheckCircle2, c: 'text-emerald-500', t: 'Tarea cerrada' },
+    cobro_registrado: { i: DollarSign,  c: 'text-emerald-500', t: 'Cobro registrado' },
 };
 
-const PIPE_COLOR = ['#6366f1', '#0ea5e9', '#f59e0b', '#f97316', '#10b981', '#ef4444'];
+// Embudo: una sola familia de color que se ACLARA a medida que avanza la
+// etapa, más el verde de ganado y el rojo de perdido —los dos únicos desenlaces
+// que importan—. Antes eran seis colores saturados sin relación entre sí
+// (índigo, celeste, ámbar, naranja, verde, rojo): parecía un gráfico de torta y
+// el color no significaba nada, porque las etapas no son categorías sueltas
+// sino una progresión. «Otros» va en gris, que es lo que es.
+const PIPE_COLOR = ['#334155', '#475569', '#64748b', '#94a3b8', '#059669', '#b91c1c', '#cbd5e1'];
 
 const PERIODOS = [
     { id: 'hoy', label: 'Hoy' }, { id: 'semana', label: 'Semana' },
@@ -67,47 +70,60 @@ const relativo = (d) => {
 };
 
 // ---- UI reutilizable ----
-const Kpi = ({ icon: Icon, label, value, sub, color, bg, right }) => (
-    <div className="bg-white border border-[#efe8dd] rounded-2xl p-4 flex items-center justify-between">
-        <div className="flex flex-col gap-1 min-w-0">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</span>
-            <span className="text-2xl font-black text-slate-900 tracking-tight truncate">{value}</span>
-            {sub && <span className="text-[10px] font-bold text-slate-500 truncate">{sub}</span>}
-        </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-            <div className={`w-11 h-11 rounded-full flex items-center justify-center ${bg}`}><Icon size={18} className={color} /></div>
+//
+// CRITERIO: ESTO ES UN REPORTE, NO UN TABLERO DE COLORES.
+//
+// La referencia es un informe de gestión impreso: cifras alineadas, etiquetas
+// discretas, reglas finas que separan y ni un adorno que no signifique algo.
+// Tres pesos tipográficos y nada más —600 para cifras y títulos, 500 para
+// etiquetas, 400 para el resto—; el color solo donde hay que actuar.
+//
+// `tabular-nums` en TODA cifra: sin eso los dígitos tienen anchos distintos,
+// las columnas bailan y la fila deja de leerse como una tabla.
+
+// Cifra principal. La etiqueta va ARRIBA y en versalita discreta; la cifra
+// manda por tamaño, no por negrita ni por un círculo de color al lado.
+const Kpi = ({ label, value, sub, alerta, right }) => (
+    <div className="bg-white border border-[#e8e0d2] rounded-lg px-5 py-4 flex flex-col min-w-0">
+        <div className="flex items-start justify-between gap-2 mb-2">
+            <span className="text-[10.5px] font-medium uppercase tracking-[0.07em] text-slate-500 truncate">{label}</span>
             {right}
         </div>
+        <span className={`text-[27px] leading-none font-semibold tabular-nums tracking-[-0.02em] truncate
+            ${alerta ? 'text-red-700' : 'text-slate-900'}`}>{value}</span>
+        {sub && <span className="text-[11.5px] text-slate-500 mt-2 truncate">{sub}</span>}
     </div>
 );
 
-const Mini = ({ icon: Icon, label, value, color }) => (
-    <div className="bg-white border border-[#efe8dd] rounded-xl p-3 flex items-center gap-3">
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center bg-slate-50 ${color}`}><Icon size={15} /></div>
-        <div className="min-w-0">
-            <div className="text-lg font-black text-slate-900 leading-none truncate">{value}</div>
-            <div className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mt-0.5">{label}</div>
-        </div>
+// Cifra secundaria, dentro de una tarjeta. Sin marco propio: el marco es la
+// tarjeta. En fila se separan con una regla vertical, como las columnas de un
+// informe; en cuadrícula la regla estorba, así que va con `suelto`.
+const Mini = ({ label, value, alerta, suelto }) => (
+    <div className={`min-w-0 ${suelto ? '' : 'px-4 first:pl-0 last:pr-0 border-r border-[#f0eae0] last:border-r-0'}`}>
+        <div className="text-[10.5px] font-medium uppercase tracking-[0.07em] text-slate-500 truncate">{label}</div>
+        <div className={`text-[21px] font-semibold tabular-nums leading-none mt-2 truncate
+            ${alerta ? 'text-red-700' : 'text-slate-900'}`}>{value}</div>
     </div>
 );
 
-// Encabezado de sección para agrupar widgets y dar orden visual.
+// Encabezado de sección: versalita con una regla que llega hasta el borde. Es
+// el recurso clásico para dividir un informe en capítulos sin gritar.
 const SectionLabel = ({ children }) => (
-    <div className="flex items-center gap-3 pt-2">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">{children}</span>
-        <div className="flex-1 h-px bg-[#efe8dd]" />
+    <div className="flex items-center gap-3 pt-5 pb-1">
+        <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-slate-500 whitespace-nowrap">{children}</h2>
+        <div className="flex-1 h-px bg-[#e8e0d2]" />
     </div>
 );
 
-const Card = ({ title, icon: Icon, children, className = '', action }) => (
-    <div className={`bg-white border border-[#efe8dd] rounded-2xl p-4 ${className}`}>
-        <div className="flex items-center justify-between mb-3 gap-2">
-            <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2 min-w-0">
-                {Icon && <Icon size={14} className="text-slate-400 shrink-0" />} <span className="truncate">{title}</span>
-            </h3>
+// Tarjeta con cabecera separada por una regla: da un borde superior claro al
+// contenido y evita que el título y los datos se lean como un solo bloque.
+const Card = ({ title, children, className = '', action, sinPadding }) => (
+    <div className={`bg-white border border-[#e8e0d2] rounded-lg flex flex-col ${className}`}>
+        <div className="flex items-center justify-between gap-2 px-5 h-11 border-b border-[#f0eae0] shrink-0">
+            <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-slate-600 truncate">{title}</h3>
             {action}
         </div>
-        {children}
+        <div className={sinPadding ? '' : 'px-5 py-4'}>{children}</div>
     </div>
 );
 
@@ -138,10 +154,14 @@ const NuevaTareaModal = ({ onClose, onCreated, initialTipo = 'tarea' }) => {
                 <div className="space-y-3">
                     <input className={inp} placeholder="¿Qué hay que hacer?" value={form.titulo} onChange={set('titulo')} autoFocus />
                     <div className="grid grid-cols-2 gap-2">
+                        {/* Sin «Reunión» ni «Ticket»: acá se crea una tarea suelta del
+                            dashboard. Una reunión necesita hora de término, participantes
+                            y el aviso al cliente —eso vive en Comunicaciones—, y un ticket
+                            necesita proyecto y subtareas. Marcarles el tipo desde acá solo
+                            dejaba la actividad guardada donde nadie la buscaba. */}
                         <select className={`${inp} cursor-pointer`} value={form.tipo} onChange={set('tipo')}>
                             <option value="tarea">Tarea</option><option value="llamada">Llamada</option>
                             <option value="whatsapp">WhatsApp</option><option value="correo">Correo</option>
-                            <option value="reunion">Reunión</option><option value="ticket">Ticket</option>
                         </select>
                         <select className={`${inp} cursor-pointer`} value={form.prioridad} onChange={set('prioridad')}>
                             <option value="alta">Prioridad alta</option><option value="media">Prioridad media</option><option value="baja">Prioridad baja</option>
@@ -161,25 +181,35 @@ const NuevaTareaModal = ({ onClose, onCreated, initialTipo = 'tarea' }) => {
     );
 };
 
+// Una fila = una tarea. Sin cuadrito de color por tipo (todas son del mismo
+// tipo en la práctica) y sin la etiqueta de prioridad gritando en mayúsculas:
+// la prioridad alta se marca con un punto rojo y las demás no se marcan, porque
+// «media» es el valor por defecto y no aporta nada repetirlo en cada fila.
 const TareaRow = ({ t, onComplete, onDelete }) => {
-    const Icon = TIPO_ICON[t.tipo] || Check;
     const vence = t.venceAt ? new Date(t.venceAt) : null;
-    const vencida = vence && vence < new Date() && t.estado === 'pendiente';
+    const vencida = vence && vence < new Date();
     return (
-        <div className="flex items-center gap-2.5 py-2 border-b border-[#efe8dd] last:border-0 group">
-            <button onClick={() => onComplete(t)} title="Finalizar la tarea (se puede deshacer)"
-                className="w-4 h-4 rounded-full border-2 border-slate-300 hover:border-emerald-500 hover:bg-emerald-500/20 shrink-0 transition-colors" />
-            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${TIPO_COLOR[t.tipo] || TIPO_COLOR.tarea}`}><Icon size={13} /></div>
+        <div className="flex items-center gap-3 py-2.5 border-b border-[#f4efe6] last:border-0 group">
+            <button onClick={() => onComplete(t)} title="Cerrar la tarea (se puede deshacer)"
+                className="w-[15px] h-[15px] rounded-full border border-slate-300 hover:border-emerald-600 hover:bg-emerald-50 shrink-0 transition-colors" />
             <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-slate-900 truncate">{t.titulo}</p>
-                <p className="text-[10px] text-slate-500 truncate">
-                    {t.personaNombre ? `${t.personaNombre} · ` : ''}{vence ? vence.toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Sin fecha'}
-                    {t.origen === 'ia' && <span className="text-purple-600 font-bold"> · IA</span>}
+                {/* El título se muestra tal como lo escribieron. Muchos vienen en
+                    mayúsculas desde la importación y se leen fuerte, pero pasarlos
+                    a minúscula rompería las siglas del rubro —IVA, SII, DTE, F29—,
+                    que son justamente las palabras que hay que reconocer de un
+                    vistazo. Se compensa bajando el peso del resto de la fila. */}
+                <p className="text-[12.5px] text-slate-800 truncate leading-snug">{t.titulo}</p>
+                <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                    {t.personaNombre ? `${t.personaNombre} · ` : ''}
+                    <span className={vencida ? 'text-red-700' : ''}>
+                        {vence ? vence.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }) : 'sin fecha'}
+                    </span>
+                    {t.origen === 'ia' && ' · IA'}
                 </p>
             </div>
-            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase shrink-0 ${PRIO_STYLE[t.prioridad]}`}>{t.prioridad}</span>
-            {vencida && <span className="text-[8px] font-black text-red-600 shrink-0">VENCIDA</span>}
-            <button onClick={() => onDelete(t)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"><Trash2 size={12} /></button>
+            {(t.prioridad === 'alta' || t.prioridad === 'critica') &&
+                <span className="text-[10px] font-medium uppercase tracking-[0.06em] text-red-700 shrink-0" title={`Prioridad ${t.prioridad}`}>Alta</span>}
+            <button onClick={() => onDelete(t)} title="Eliminar" className="text-slate-300 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"><Trash2 size={13} /></button>
         </div>
     );
 };
@@ -214,9 +244,20 @@ const CrmDashboard = ({ onCrear }) => {
         if (!silencioso) setLoading(true);
         try {
             const opts = { periodo, scope: esAdmin ? scope : '', desde: rango.desde, hasta: rango.hasta };
+            // EL BOTÓN «MÍAS / EQUIPO» TAMBIÉN FILTRA LA LISTA DE TAREAS.
+            //
+            // Antes en «Mías» se mandaba `scope: ''`, que el servicio descarta por
+            // vacío, y el backend caía en su valor por defecto: «todas». En «Equipo»
+            // mandaba 'equipo', que desde que existen los integrantes por proyecto
+            // significa exactamente lo mismo que «todas». O sea que las dos
+            // posiciones del botón devolvían la misma lista y el widget de tareas
+            // pendientes no cambiaba nunca —aunque los KPIs de arriba sí—.
+            //
+            // Ahora «Mías» pide el ámbito 'mias' de verdad: lo que uno tiene encima
+            // como responsable o colaborador.
             const [mRes, tRes] = await Promise.all([
                 getMetricasCrmApi(getSessionId(), opts),
-                listarTareasApi(getSessionId(), { scope: esAdmin && scope === 'equipo' ? 'equipo' : '' }),
+                listarTareasApi(getSessionId(), { ambito: esAdmin && scope === 'equipo' ? 'equipo' : 'mias' }),
             ]);
             const m = await mRes.json(); const t = await tRes.json();
             if (m.success) setMetricas(m.metricas);
@@ -251,31 +292,68 @@ const CrmDashboard = ({ onCrear }) => {
         }
         catch { toast({ variant: 'destructive', title: 'Error al completar' }); cargar(true); }
     };
+    // Borrar PREGUNTA, y si el servidor dice que no, se dice.
+    //
+    // El basurero está pegado al círculo de completar y es del mismo tamaño: un
+    // clic corrido borraba la tarea al instante, sin aviso y sin vuelta atrás
+    // —la tabla no guarda historial—. Peor: el error se tragaba en silencio, así
+    // que si el servidor rechazaba el borrado por permisos la fila igual
+    // desaparecía de la pantalla y parecía borrada hasta recargar.
     const borrar = async (t) => {
+        if (!window.confirm(`¿Eliminar «${t.titulo}»? Se van sus comentarios y adjuntos. No se puede deshacer.`)) return;
         setTareas(prev => prev.filter(x => x.id !== t.id));
-        try { await eliminarTareaApi(getSessionId(), t.id); cargar(true); } catch { cargar(true); }
+        try {
+            const r = await eliminarTareaApi(getSessionId(), t.id);
+            const d = await r.json();
+            if (!d.success) throw new Error(d.message || 'No se pudo eliminar.');
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'No se eliminó', description: e.message });
+        } finally { cargar(true); }
     };
 
     // ---- Tareas completadas: ver, buscar y eliminar de la BD ----
     const cargarCompletadas = useCallback(async () => {
         try {
-            const r = await listarTareasApi(getSessionId(), { estado: 'completada', scope: esAdmin && scope === 'equipo' ? 'equipo' : '' });
+            // Mismo ámbito que la lista de pendientes, o las dos pestañas del
+            // widget mostrarían universos distintos de tareas.
+            const r = await listarTareasApi(getSessionId(), { estado: 'completada', ambito: esAdmin && scope === 'equipo' ? 'equipo' : 'mias' });
             const d = await r.json(); if (d.success) setCompletadas(d.tareas || []);
         } catch { /* */ }
     }, [esAdmin, scope]);
     useEffect(() => { if (tab === 'completadas') cargarCompletadas(); }, [tab, cargarCompletadas]);
 
     const borrarCompletada = async (t) => {
+        if (!window.confirm(`¿Eliminar «${t.titulo}» de la base? Se van sus comentarios y adjuntos. No se puede deshacer.`)) return;
         setCompletadas(prev => prev.filter(x => x.id !== t.id));
-        try { await eliminarTareaApi(getSessionId(), t.id); } catch { cargarCompletadas(); }
+        try {
+            const r = await eliminarTareaApi(getSessionId(), t.id);
+            const d = await r.json();
+            if (!d.success) throw new Error(d.message || 'No se pudo eliminar.');
+        } catch (e) {
+            toast({ variant: 'destructive', title: 'No se eliminó', description: e.message });
+            cargarCompletadas();
+        }
     };
+    // El aviso dice lo que REALMENTE va a pasar. Antes prometía borrar las N que
+    // se veían en pantalla y el servidor borraba todas las completadas de la
+    // organización, con sus comentarios y adjuntos detrás. Ahora el servidor solo
+    // toca las propias y sin subtareas, y el texto lo explica antes de apretar.
     const limpiarCompletadas = async () => {
-        if (!window.confirm(`¿Eliminar definitivamente ${completadas.length} tarea(s) completada(s)? Esta acción no se puede deshacer.`)) return;
+        if (!window.confirm(
+            'Se van a borrar tus tareas completadas: las que creaste o tienes asignadas, ' +
+            'junto con sus comentarios y adjuntos.\n\n' +
+            'No se tocan las tareas de otras personas, ni las archivadas, ni las que tienen ' +
+            'subtareas colgando.\n\nEsto no se puede deshacer. ¿Continuar?')) return;
         try {
             const r = await limpiarTareasCompletadasApi(getSessionId(), esAdmin && scope === 'equipo' ? '' : 'mias');
             const d = await r.json(); if (!d.success) throw new Error(d.message);
-            setCompletadas([]);
-            toast({ title: `${d.eliminadas} tarea(s) eliminada(s)` });
+            cargarCompletadas();
+            toast({
+                title: `${d.eliminadas} tarea(s) eliminada(s)`,
+                description: d.conSubtareas
+                    ? `Quedaron ${d.conSubtareas} sin borrar por tener subtareas.`
+                    : undefined,
+            });
         } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); cargarCompletadas(); }
     };
     const completadasFiltradas = useMemo(() => {
@@ -291,10 +369,20 @@ const CrmDashboard = ({ onCrear }) => {
         } catch (e) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
     };
 
-    const pendientes = useMemo(() => tareas.filter(t => t.estado === 'pendiente'), [tareas]);
-    const vencidas = useMemo(() => pendientes.filter(t => t.venceAt && new Date(t.venceAt) < new Date()), [pendientes]);
-    const proximas = useMemo(() => pendientes.filter(t => !vencidas.includes(t)), [pendientes, vencidas]);
-    const reunionesHoyList = useMemo(() => pendientes.filter(t => t.tipo === 'reunion' && t.venceAt && new Date(t.venceAt).toDateString() === new Date().toDateString()), [pendientes]);
+    // «Pendiente» es TODO lo que sigue abierto, no solo el estado literal.
+    //
+    // El widget filtraba `estado === 'pendiente'` y dejaba fuera las que están en
+    // proceso o en revisión, que son trabajo abierto igual. El KPI de arriba sí
+    // las cuenta, así que la pantalla se contradecía: decía «165 tareas
+    // pendientes» y la lista de al lado mostraba «Pendientes (35)».
+    const pendientes = useMemo(() => tareas.filter(t => ESTADOS_ABIERTOS.includes(t.estado)), [tareas]);
+    // Se separa en una pasada: `vencidas.includes()` recorría el arreglo entero
+    // por cada tarea, y con cientos de filas eso se nota al escribir.
+    const [vencidas, proximas] = useMemo(() => {
+        const ahora = Date.now(), v = [], p = [];
+        pendientes.forEach(t => ((t.venceAt && new Date(t.venceAt).getTime() < ahora) ? v : p).push(t));
+        return [v, p];
+    }, [pendientes]);
 
     const cal = useMemo(() => {
         const y = calMes.getFullYear(), mo = calMes.getMonth();
@@ -348,79 +436,91 @@ const CrmDashboard = ({ onCrear }) => {
     const maxPipe = Math.max(1, ...(m.pipeline || []).map(p => p.n));
 
     // Acciones rápidas (RF-012)
+    // «Reunión» y «Ticket» llevan a su módulo en vez de crear una tarea marcada
+    // con ese tipo. Una «tarea tipo reunión» no aparecía en el calendario ni en
+    // el módulo de Reuniones —que lee la tabla `reunion`—, así que quedaba
+    // agendada en un lugar donde nadie la iba a ver, sin hora de término, sin
+    // participantes y sin el aviso al cliente. Lo mismo con los tickets, que se
+    // gestionan en su propia pantalla con proyecto, subtareas y adjuntos.
     const acciones = [
         { label: 'Prospecto', icon: UserPlus, run: () => onCrear && onCrear() },
         { label: 'Tarea', icon: Check, run: () => setNueva({ tipo: 'tarea' }) },
-        { label: 'Reunión', icon: CalendarDays, run: () => setNueva({ tipo: 'reunion' }) },
-        { label: 'Ticket', icon: Ticket, run: () => setNueva({ tipo: 'ticket' }) },
+        { label: 'Reunión', icon: CalendarDays, run: () => navigate('/comunicaciones?sub=reuniones') },
+        { label: 'Ticket', icon: Ticket, run: () => navigate('/tareas') },
         { label: 'Empresa', icon: Building2, run: () => navigate('/CRM?sub=list') },
         { label: 'Factura', icon: FileText, run: () => navigate('/facturacion') },
     ];
 
     return (
         <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 space-y-4">
-            {/* ===== Barra superior ===== */}
-            <div className="flex items-center justify-between flex-wrap gap-2">
+            {/* ===== Barra superior =====
+                Los controles se agrupan por lo que hacen: primero QUÉ se mira
+                (período y alcance), después las herramientas sobre lo mirado
+                (avisos, exportar, imprimir, widgets) y al final la acción. Antes
+                iban los ocho seguidos, del mismo tamaño y sin separación: había
+                que leerlos uno por uno para encontrar el que se buscaba. */}
+            <div className="flex items-end justify-between flex-wrap gap-3">
                 <div>
-                    <h2 className="text-lg font-black text-slate-900">Hola{nombre ? `, ${nombre}` : ''} 👋</h2>
-                    <p className="text-[11px] text-slate-500 capitalize">{hoy}</p>
+                    <h2 className="text-[15px] font-semibold text-slate-900 tracking-[-0.01em]">Panel comercial</h2>
+                    <p className="text-[11.5px] text-slate-500 capitalize mt-1">{hoy}{nombre ? ` · ${nombre}` : ''}</p>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-3 flex-wrap">
                     {/* Filtro de período (RF-018) */}
-                    <div className="flex rounded-lg border border-[#efe8dd] overflow-hidden text-[10px] font-black uppercase tracking-widest">
+                    <div className="flex rounded-lg border border-[#efe8dd] overflow-hidden text-[12px] bg-white">
                         {PERIODOS.map(p => (
-                            <button key={p.id} onClick={() => setPeriodo(p.id)} className={`px-2.5 py-1.5 ${periodo === p.id ? 'bg-emerald-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`}>{p.label}</button>
+                            <button key={p.id} onClick={() => setPeriodo(p.id)}
+                                className={`px-3 py-1.5 transition-colors ${periodo === p.id ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>{p.label}</button>
                         ))}
                     </div>
                     {esAdmin && (
-                        <div className="flex rounded-lg border border-[#efe8dd] overflow-hidden text-[10px] font-black uppercase tracking-widest">
-                            <button onClick={() => setScope('mias')} className={`px-3 py-1.5 ${scope === 'mias' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-500'}`}>Mías</button>
-                            <button onClick={() => setScope('equipo')} className={`px-3 py-1.5 ${scope === 'equipo' ? 'bg-emerald-600 text-white' : 'bg-white text-slate-500'}`}>Equipo</button>
+                        <div className="flex rounded-lg border border-[#efe8dd] overflow-hidden text-[12px] bg-white">
+                            <button onClick={() => setScope('mias')} className={`px-3 py-1.5 transition-colors ${scope === 'mias' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Mías</button>
+                            <button onClick={() => setScope('equipo')} className={`px-3 py-1.5 transition-colors ${scope === 'equipo' ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>Equipo</button>
                         </div>
                     )}
-                    {/* Notificaciones (RF-011) */}
-                    <div className="relative">
-                        <button onClick={() => setShowNotis(v => !v)} className="relative p-2 rounded-lg border border-[#efe8dd] bg-white text-slate-500 hover:text-slate-900">
-                            <Bell size={15} />
-                            {notis.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black rounded-full w-4 h-4 flex items-center justify-center">{notis.length}</span>}
-                        </button>
-                        {showNotis && (
-                            <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-[#efe8dd] rounded-xl shadow-2xl p-2 z-30">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 py-1">Notificaciones</p>
-                                {notis.length === 0 ? <p className="text-[11px] text-slate-400 italic px-2 py-2">Nada pendiente 👌</p> :
-                                    notis.map((n, i) => { const I = n.i; return (
-                                        <div key={i} className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-slate-700"><I size={13} className={n.c} /> {n.t}</div>
-                                    ); })}
-                            </div>
-                        )}
-                    </div>
-                    {/* Exportar (RF-019) */}
-                    <button onClick={exportarCSV} title="Exportar CSV" className="p-2 rounded-lg border border-[#efe8dd] bg-white text-slate-500 hover:text-slate-900"><Download size={15} /></button>
-                    <button onClick={() => window.print()} title="Imprimir / PDF" className="p-2 rounded-lg border border-[#efe8dd] bg-white text-slate-500 hover:text-slate-900"><Printer size={15} /></button>
-                    {/* Personalizar (RF-020) */}
-                    <div className="relative">
-                        <button onClick={() => setShowPers(v => !v)} title="Personalizar" className="p-2 rounded-lg border border-[#efe8dd] bg-white text-slate-500 hover:text-slate-900"><Sliders size={15} /></button>
-                        {showPers && (
-                            <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-[#efe8dd] rounded-xl shadow-2xl p-2 z-30">
-                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-2 py-1">Mostrar widgets</p>
-                                {WIDGETS.map(([k, lbl]) => (
-                                    <label key={k} className="flex items-center gap-2 px-2 py-1.5 text-[11px] text-slate-700 cursor-pointer hover:bg-slate-50 rounded-lg">
-                                        <input type="checkbox" checked={!!widgets[k]} onChange={() => toggleWidget(k)} className="accent-emerald-600" /> {lbl}
-                                    </label>
-                                ))}
-                            </div>
-                        )}
+                    {/* Herramientas: un solo bloque, sin marco por botón. */}
+                    <div className="flex items-center gap-0.5 rounded-lg border border-[#efe8dd] bg-white px-0.5">
+                        <div className="relative">
+                            <button onClick={() => setShowNotis(v => !v)} title="Avisos" className="relative p-1.5 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-50">
+                                <Bell size={15} />
+                                {notis.length > 0 && <span className="absolute top-0.5 right-0.5 bg-red-500 rounded-full w-1.5 h-1.5" />}
+                            </button>
+                            {showNotis && (
+                                <div className="absolute right-0 top-full mt-1.5 w-72 bg-white border border-[#efe8dd] rounded-xl shadow-lg p-1.5 z-30">
+                                    <p className="text-[11px] font-semibold text-slate-500 px-2 py-1.5">Avisos</p>
+                                    {notis.length === 0 ? <p className="text-[12px] text-slate-400 px-2 pb-2">Nada pendiente.</p> :
+                                        notis.map((n, i) => { const I = n.i; return (
+                                            <div key={i} className="flex items-center gap-2.5 px-2 py-1.5 text-[12px] text-slate-700"><I size={14} className={n.c} /> {n.t}</div>
+                                        ); })}
+                                </div>
+                            )}
+                        </div>
+                        <button onClick={exportarCSV} title="Exportar CSV" className="p-1.5 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-50"><Download size={15} /></button>
+                        <button onClick={() => window.print()} title="Imprimir" className="p-1.5 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-50"><Printer size={15} /></button>
+                        <div className="relative">
+                            <button onClick={() => setShowPers(v => !v)} title="Elegir qué se muestra" className="p-1.5 rounded-md text-slate-500 hover:text-slate-900 hover:bg-slate-50"><Sliders size={15} /></button>
+                            {showPers && (
+                                <div className="absolute right-0 top-full mt-1.5 w-56 bg-white border border-[#efe8dd] rounded-xl shadow-lg p-1.5 z-30">
+                                    <p className="text-[11px] font-semibold text-slate-500 px-2 py-1.5">Mostrar en la pantalla</p>
+                                    {WIDGETS.map(([k, lbl]) => (
+                                        <label key={k} className="flex items-center gap-2.5 px-2 py-1.5 text-[12px] text-slate-700 cursor-pointer hover:bg-slate-50 rounded-md">
+                                            <input type="checkbox" checked={!!widgets[k]} onChange={() => toggleWidget(k)} className="accent-emerald-600" /> {lbl}
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                     {/* Acciones rápidas (RF-012) */}
                     <div className="relative">
-                        <button onClick={() => setShowAcciones(v => !v)} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-3 py-2 text-[10px] font-black uppercase tracking-widest">
-                            <Plus size={14} /> Crear
+                        <button onClick={() => setShowAcciones(v => !v)} className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-3.5 py-2 text-[12px] font-medium transition-colors">
+                            <Plus size={15} /> Crear
                         </button>
                         {showAcciones && (
-                            <div className="absolute right-0 top-full mt-1 w-44 bg-white border border-[#efe8dd] rounded-xl shadow-2xl p-2 z-30">
+                            <div className="absolute right-0 top-full mt-1.5 w-48 bg-white border border-[#efe8dd] rounded-xl shadow-lg p-1.5 z-30">
                                 {acciones.map((a, i) => { const I = a.icon; return (
-                                    <button key={i} onClick={() => { a.run(); setShowAcciones(false); }} className="w-full flex items-center gap-2 px-2 py-2 text-[11px] font-bold text-slate-700 hover:bg-emerald-500/10 hover:text-emerald-700 rounded-lg">
-                                        <I size={14} /> {a.label}
+                                    <button key={i} onClick={() => { a.run(); setShowAcciones(false); }} className="w-full flex items-center gap-2.5 px-2 py-2 text-[12px] text-slate-700 hover:bg-slate-50 rounded-md">
+                                        <I size={14} className="text-slate-400" /> {a.label}
                                     </button>
                                 ); })}
                             </div>
@@ -431,11 +531,11 @@ const CrmDashboard = ({ onCrear }) => {
 
             {/* Rango personalizado */}
             {periodo === 'custom' && (
-                <div className="flex items-center gap-2 flex-wrap bg-white border border-[#efe8dd] rounded-xl p-2">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Desde</span>
-                    <input type="date" value={rango.desde} onChange={e => setRango(r => ({ ...r, desde: e.target.value }))} className="bg-slate-50 border border-[#efe8dd] rounded-lg px-2 py-1 text-xs" />
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hasta</span>
-                    <input type="date" value={rango.hasta} onChange={e => setRango(r => ({ ...r, hasta: e.target.value }))} className="bg-slate-50 border border-[#efe8dd] rounded-lg px-2 py-1 text-xs" />
+                <div className="flex items-center gap-2 flex-wrap bg-white border border-[#efe8dd] rounded-xl px-3 py-2">
+                    <span className="text-[12px] text-slate-500">Desde</span>
+                    <input type="date" value={rango.desde} onChange={e => setRango(r => ({ ...r, desde: e.target.value }))} className="bg-slate-50 border border-[#efe8dd] rounded-md px-2 py-1 text-[12px]" />
+                    <span className="text-[12px] text-slate-500">hasta</span>
+                    <input type="date" value={rango.hasta} onChange={e => setRango(r => ({ ...r, hasta: e.target.value }))} className="bg-slate-50 border border-[#efe8dd] rounded-md px-2 py-1 text-[12px]" />
                 </div>
             )}
 
@@ -443,130 +543,174 @@ const CrmDashboard = ({ onCrear }) => {
                 <div className="flex items-center justify-center py-20 text-slate-400"><Loader2 size={24} className="animate-spin" /></div>
             ) : (
                 <>
-                    <SectionLabel>Resumen</SectionLabel>
-                    {/* ===== KPIs principales (RF-001) ===== */}
+                    {/* ===== Lo que entra · RF-001 =====
+                        Cuatro cifras y no más. Antes eran cuatro tarjetas grandes
+                        seguidas de diez cifras sueltas, todas con el mismo tamaño
+                        y su propio marco: catorce números al mismo volumen, así
+                        que la vista no sabía dónde posarse. Ahora manda el dinero
+                        y el resto pasa a las tarjetas agrupadas de abajo. */}
+                    <SectionLabel>Dinero</SectionLabel>
                     <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-                        <Kpi icon={DollarSign} label={`Ventas · ${PERIODOS.find(p => p.id === periodo)?.label || 'Mes'}`} value={fmt(m.ventasPeriodo ?? m.ventasMes)} sub="Recaudado en el período elegido" color="text-emerald-600" bg="bg-emerald-500/15" />
-                        <Kpi icon={Target} label="Meta mensual" value={fmt(m.metaMensual)} color="text-blue-600" bg="bg-blue-500/15"
-                            right={esAdmin && <button onClick={() => { setEditandoMeta(true); setMetaInput(String(m.metaMensual || '')); }} className="text-[9px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5"><Pencil size={9} /> Editar</button>} />
-                        <Kpi icon={TrendingUp} label="Avance" value={`${m.avance || 0}%`} sub={m.metaMensual ? `${fmtK(m.ventasMes)} de ${fmtK(m.metaMensual)}` : 'Fija una meta'} color="text-amber-600" bg="bg-amber-500/15" />
-                        <Kpi icon={Percent} label="Conversión" value={`${m.tasaConversion || 0}%`} sub={`${m.activos || 0} de ${m.totalPersonas || 0} prospectos`} color="text-purple-600" bg="bg-purple-500/15" />
+                        <Kpi label={`Cobrado · ${PERIODOS.find(p => p.id === periodo)?.label?.toLowerCase() || 'mes'}`}
+                             value={fmt(m.ventasPeriodo ?? m.ventasMes)} sub="pagos recibidos en el período" />
+                        <Kpi label="Meta del mes" value={m.metaMensual ? fmt(m.metaMensual) : '—'}
+                             sub={m.metaMensual ? `${fmtK(m.ventasMes)} cobrados este mes` : 'sin meta definida'}
+                             right={esAdmin && (
+                                <button onClick={() => { setEditandoMeta(true); setMetaInput(String(m.metaMensual || '')); }}
+                                    className="text-[11px] text-slate-500 hover:text-slate-700 flex items-center gap-1 shrink-0">
+                                    <Pencil size={11} /> {m.metaMensual ? 'Cambiar' : 'Definir'}
+                                </button>)} />
+                        <Kpi label="Por cobrar" value={fmt(m.ingresosEsperados)} sub={`${m.facturasPendientes || 0} facturas emitidas`} />
+                        <Kpi label="Cobros vencidos" value={m.cobrosVencidos || 0} alerta={m.cobrosVencidos > 0}
+                             sub={m.cobrosVencidos > 0 ? 'pasaron su fecha de pago' : 'todo al día'} />
                     </div>
 
                     {editandoMeta && (
-                        <div className="bg-white border border-blue-500/30 rounded-2xl p-4 flex items-center gap-3 flex-wrap">
-                            <span className="text-xs font-bold text-slate-700">Meta mensual de ventas:</span>
-                            <input value={metaInput} onChange={(e) => setMetaInput(e.target.value)} placeholder="2.000.000" className="bg-slate-50 border border-[#efe8dd] rounded-lg px-3 py-1.5 text-xs w-40 outline-none focus:border-blue-500" />
-                            <button onClick={guardarMeta} className="bg-blue-600 text-white rounded-lg px-3 py-1.5 text-[10px] font-black uppercase">Guardar</button>
-                            <button onClick={() => setEditandoMeta(false)} className="text-slate-400 hover:text-red-500"><X size={16} /></button>
+                        <div className="bg-white border border-[#efe8dd] rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
+                            <span className="text-[12px] text-slate-600">Meta mensual de cobranza</span>
+                            <input value={metaInput} onChange={(e) => setMetaInput(e.target.value)} placeholder="4.000.000" autoFocus
+                                className="bg-slate-50 border border-[#efe8dd] rounded-md px-3 py-1.5 text-[12px] w-36 tabular-nums outline-none focus:border-emerald-500" />
+                            <button onClick={guardarMeta} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-md px-3 py-1.5 text-[12px] font-medium">Guardar</button>
+                            <button onClick={() => setEditandoMeta(false)} className="text-slate-400 hover:text-slate-700"><X size={16} /></button>
                         </div>
                     )}
                     {m.metaMensual > 0 && (
-                        <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
-                            <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2"><span>Avance de la meta</span><span>{m.avance}%</span></div>
-                            <div className="h-3 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all" style={{ width: `${m.avance}%` }} /></div>
-                        </div>
-                    )}
-
-                    {/* ===== Resumen diario (RF-009) ===== */}
-                    {widgets.resumen && (
-                        <Card title="Resumen del día" icon={Activity}>
-                            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-                                <Mini icon={Clock} label="Tareas pendientes" value={m.tareasPendientes || 0} color="text-blue-600" />
-                                <Mini icon={CalendarDays} label="Reuniones hoy" value={m.reunionesHoy || 0} color="text-amber-600" />
-                                <Mini icon={AlertTriangle} label="Vencen hoy" value={m.vencenHoy || 0} color="text-red-600" />
-                                <Mini icon={DollarSign} label="Cobrado hoy" value={fmtK(m.cobradoHoy)} color="text-emerald-600" />
-                                <Mini icon={Target} label="Cumplimiento meta" value={`${m.avance || 0}%`} color="text-emerald-600" />
+                        <div className="bg-white border border-[#efe8dd] rounded-xl px-4 py-3">
+                            <div className="flex justify-between items-baseline text-[12px] mb-2">
+                                <span className="text-slate-500">Avance de la meta</span>
+                                <span className="text-slate-900 font-semibold tabular-nums">{m.avance}%</span>
                             </div>
-                        </Card>
-                    )}
-
-                    {/* ===== Indicadores comerciales (RF-013) ===== */}
-                    {widgets.indicadores && (
-                        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-                            <Mini icon={UserPlus} label="Prospectos nuevos" value={m.prospectosNuevos || 0} color="text-blue-600" />
-                            <Mini icon={Users} label="Clientes activos" value={m.clientesActivos || 0} color="text-emerald-600" />
-                            <Mini icon={FileText} label="Facturas pendientes" value={m.facturasPendientes || 0} color="text-amber-600" />
-                            <Mini icon={AlertTriangle} label="Cobros vencidos" value={m.cobrosVencidos || 0} color="text-red-600" />
-                            <Mini icon={TrendingUp} label="Ingresos esperados" value={fmtK(m.ingresosEsperados)} color="text-purple-600" />
+                            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${m.avance}%` }} />
+                            </div>
                         </div>
                     )}
 
-                    {/* ===== Tareas / vencidas / calendario ===== */}
+                    {/* ===== Hoy y cartera · RF-009 / RF-013 =====
+                        Dos tarjetas en vez de diez cuadritos sueltos: lo que hay
+                        que hacer hoy, y cómo viene la cartera. Cada cifra pierde
+                        su marco propio —el marco es la tarjeta— y lo que exige
+                        actuar se pone en rojo. */}
+                    {(widgets.resumen || widgets.indicadores) && <SectionLabel>Estado</SectionLabel>}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                        {widgets.resumen && (
+                            <Card title="Jornada de hoy">
+                                <div className="flex">
+                                    <Mini label="Abiertas" value={m.tareasPendientes || 0} />
+                                    <Mini label="Vencen hoy" value={m.vencenHoy || 0} alerta={m.vencenHoy > 0} />
+                                    <Mini label="Reuniones" value={m.reunionesHoy || 0} />
+                                    <Mini label="Cobrado" value={fmtK(m.cobradoHoy)} />
+                                </div>
+                            </Card>
+                        )}
+                        {widgets.indicadores && (
+                            <Card title="Cartera comercial">
+                                <div className="flex">
+                                    <Mini label="Clientes" value={m.clientesActivos || 0} />
+                                    <Mini label="Prospectos" value={m.prospectos || 0} />
+                                    <Mini label="Nuevos" value={m.prospectosNuevos || 0} />
+                                    <Mini label="Conversión" value={`${m.tasaConversion || 0}%`} />
+                                </div>
+                            </Card>
+                        )}
+                    </div>
+
+                    {/* ===== Tareas y agenda =====
+                        Las vencidas van PRIMERO y ocupan menos: son pocas pero
+                        urgentes. La lista de pendientes se lleva el ancho porque
+                        es donde se trabaja. El calendario queda angosto: con el
+                        81% de las tareas sin fecha estaba casi vacío y se llevaba
+                        un tercio de la pantalla. */}
+                    {/* `items-stretch`: las tres columnas comparten alto. Con
+                        `items-start` cada tarjeta media lo suyo y quedaban de 166,
+                        346 y 311 px —tres bordes inferiores a distinta altura en la
+                        misma fila, que es lo que hace ver desordenada una pantalla
+                        aunque cada pieza por separado esté bien—. */}
                     {(widgets.tareas || widgets.vencidas || widgets.calendario) && <SectionLabel>Tareas y agenda</SectionLabel>}
-                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 items-stretch">
+                        {widgets.vencidas && (
+                            <Card title="Vencidas" className="xl:col-span-4" sinPadding
+                                action={<span className={`text-[12px] font-semibold tabular-nums ${vencidas.length ? 'text-red-700' : 'text-slate-400'}`}>{vencidas.length}</span>}>
+                                {vencidas.length === 0
+                                    ? <p className="text-[12px] text-slate-400 py-8 text-center">Nada vencido.</p>
+                                    : <div className="flex-1 min-h-0 max-h-[310px] overflow-y-auto px-5 pt-1 pb-2">{vencidas.map(t => <TareaRow key={t.id} t={t} onComplete={completar} onDelete={borrar} />)}</div>}
+                            </Card>
+                        )}
                         {widgets.tareas && (
-                            <div className="bg-white border border-[#efe8dd] rounded-2xl p-4 xl:col-span-4">
-                                <div className="flex items-center justify-between mb-3 gap-2">
-                                    <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                                        <button onClick={() => setTab('pendientes')} className={`flex items-center gap-1 ${tab === 'pendientes' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}><Clock size={13} /> Pendientes ({proximas.length})</button>
-                                        <span className="text-slate-300">·</span>
-                                        <button onClick={() => setTab('completadas')} className={`flex items-center gap-1 ${tab === 'completadas' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}><CheckCircle2 size={13} /> Completadas</button>
+                            <div className="bg-white border border-[#e8e0d2] rounded-lg xl:col-span-5 flex flex-col">
+                                <div className="flex items-center justify-between gap-2 px-5 h-11 border-b border-[#f0eae0] shrink-0">
+                                    <div className="flex items-center gap-4 text-[10.5px] font-semibold uppercase tracking-[0.07em]">
+                                        <button onClick={() => setTab('pendientes')}
+                                            className={`h-11 border-b-2 -mb-px transition-colors ${tab === 'pendientes' ? 'text-slate-900 border-slate-800' : 'text-slate-500 border-transparent hover:text-slate-800'}`}>
+                                            Abiertas <span className="tabular-nums">({proximas.length})</span>
+                                        </button>
+                                        <button onClick={() => setTab('completadas')}
+                                            className={`h-11 border-b-2 -mb-px transition-colors ${tab === 'completadas' ? 'text-slate-900 border-slate-800' : 'text-slate-500 border-transparent hover:text-slate-800'}`}>
+                                            Cerradas
+                                        </button>
                                     </div>
                                     {tab === 'completadas' && completadas.length > 0 && (
-                                        <button onClick={limpiarCompletadas} className="text-[9px] font-black uppercase tracking-widest text-red-600 hover:text-red-700 flex items-center gap-1"><Trash2 size={11} /> Limpiar todas</button>
+                                        <button onClick={limpiarCompletadas} className="text-[11px] text-slate-500 hover:text-red-700 flex items-center gap-1 shrink-0"><Trash2 size={12} /> Borrar las mías</button>
                                     )}
                                 </div>
                                 {tab === 'pendientes' ? (
                                     proximas.length === 0
-                                        ? <p className="text-xs text-slate-400 italic text-center py-6">Sin tareas pendientes 🎉</p>
-                                        : <div className="max-h-[320px] overflow-y-auto pr-1">{proximas.map(t => <TareaRow key={t.id} t={t} onComplete={completar} onDelete={borrar} />)}</div>
+                                        ? <p className="text-[12px] text-slate-400 py-8 text-center">Sin tareas abiertas.</p>
+                                        // `pb-2` cierra la lista con aire: sin él la última fila
+                                        // visible quedaba pegada al borde y parecía cortada por
+                                        // la mitad, como si faltara contenido en vez de haber
+                                        // más abajo.
+                                        : <div className="flex-1 min-h-0 max-h-[310px] overflow-y-auto px-5 pt-1 pb-2">{proximas.map(t => <TareaRow key={t.id} t={t} onComplete={completar} onDelete={borrar} />)}</div>
                                 ) : (
-                                    <>
+                                    <div className="px-5 py-3">
                                         {completadas.length > 0 && (
                                             <div className="relative mb-2">
-                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
-                                                <input value={busqCompl} onChange={(e) => setBusqCompl(e.target.value)} placeholder="Buscar en completadas..." className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-900 outline-none focus:border-emerald-500 placeholder:text-slate-400" />
+                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
+                                                <input value={busqCompl} onChange={(e) => setBusqCompl(e.target.value)} placeholder="Buscar…" className="w-full bg-[#fbfaf7] border border-[#e8e0d2] rounded-md pl-8 pr-3 py-1.5 text-[12px] text-slate-900 outline-none focus:border-emerald-600 placeholder:text-slate-400" />
                                             </div>
                                         )}
                                         {completadasFiltradas.length === 0 ? (
-                                            <p className="text-xs text-slate-400 italic text-center py-6">{busqCompl ? 'Sin coincidencias.' : 'Aún no hay tareas completadas.'}</p>
+                                            <p className="text-[12px] text-slate-400 py-6 text-center">{busqCompl ? 'Sin coincidencias.' : 'Nada cerrado todavía.'}</p>
                                         ) : (
-                                            <div className="max-h-[300px] overflow-y-auto pr-1">
-                                                {completadasFiltradas.map(t => {
-                                                    const Icon = TIPO_ICON[t.tipo] || Check;
-                                                    return (
-                                                        <div key={t.id} className="flex items-center gap-2.5 py-2 border-b border-[#efe8dd] last:border-0 group">
-                                                            <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
-                                                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${TIPO_COLOR[t.tipo] || TIPO_COLOR.tarea}`}><Icon size={13} /></div>
-                                                            <div className="min-w-0 flex-1">
-                                                                <p className="text-xs font-bold text-slate-500 line-through truncate">{t.titulo}</p>
-                                                                <p className="text-[10px] text-slate-400 truncate">{t.completedAt ? `Completada ${relativo(t.completedAt)}` : ''}{t.personaNombre ? ` · ${t.personaNombre}` : ''}</p>
-                                                            </div>
-                                                            <button onClick={() => borrarCompletada(t)} title="Eliminar de la base" className="text-slate-300 hover:text-red-500 shrink-0"><Trash2 size={13} /></button>
+                                            <div className="max-h-[270px] overflow-y-auto">
+                                                {completadasFiltradas.map(t => (
+                                                    <div key={t.id} className="flex items-center gap-3 py-2 border-b border-[#f4efe6] last:border-0 group">
+                                                        <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-[12.5px] text-slate-500 truncate">{t.titulo}</p>
+                                                            <p className="text-[11px] text-slate-500 truncate">{t.completedAt ? relativo(t.completedAt) : ''}{t.personaNombre ? ` · ${t.personaNombre}` : ''}</p>
                                                         </div>
-                                                    );
-                                                })}
+                                                        <button onClick={() => borrarCompletada(t)} title="Eliminar" className="text-slate-300 hover:text-red-700 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"><Trash2 size={13} /></button>
+                                                    </div>
+                                                ))}
                                             </div>
                                         )}
-                                    </>
+                                    </div>
                                 )}
                             </div>
                         )}
-                        {widgets.vencidas && (
-                            <Card title="Tareas vencidas" icon={AlertTriangle} className="xl:col-span-4" action={<span className={`text-[10px] font-black ${vencidas.length ? 'text-red-600' : 'text-slate-400'}`}>{vencidas.length}</span>}>
-                                {vencidas.length === 0
-                                    ? <p className="text-xs text-slate-400 italic text-center py-6">Nada vencido, al día ✅</p>
-                                    : <div className="max-h-[320px] overflow-y-auto pr-1">{vencidas.map(t => <TareaRow key={t.id} t={t} onComplete={completar} onDelete={borrar} />)}</div>}
-                            </Card>
-                        )}
                         {widgets.calendario && (
-                            <Card title="Calendario" icon={CalendarDays} className="xl:col-span-4"
-                                action={<div className="flex items-center gap-1">
-                                    <button onClick={() => setCalMes(new Date(cal.y, cal.mo - 1, 1))} className="text-slate-400 hover:text-slate-700"><ChevronLeft size={14} /></button>
-                                    <span className="text-[10px] font-bold text-slate-600 w-20 text-center">{MESES[cal.mo]} {cal.y}</span>
-                                    <button onClick={() => setCalMes(new Date(cal.y, cal.mo + 1, 1))} className="text-slate-400 hover:text-slate-700"><ChevronRight size={14} /></button>
+                            <Card title={`${MESES[cal.mo]} ${cal.y}`} className="xl:col-span-3"
+                                action={<div className="flex items-center gap-0.5">
+                                    <button onClick={() => setCalMes(new Date(cal.y, cal.mo - 1, 1))} className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-[#faf8f4]"><ChevronLeft size={14} /></button>
+                                    <button onClick={() => setCalMes(new Date(cal.y, cal.mo + 1, 1))} className="p-1 rounded text-slate-400 hover:text-slate-800 hover:bg-[#faf8f4]"><ChevronRight size={14} /></button>
                                 </div>}>
-                                <div className="grid grid-cols-7 gap-1 text-center">
-                                    {DIAS.map((d, i) => <span key={i} className="text-[9px] font-black text-slate-400 py-1">{d}</span>)}
+                                <div className="grid grid-cols-7 gap-y-0.5 text-center">
+                                    {DIAS.map((d, i) => <span key={i} className="text-[10px] font-medium uppercase text-slate-500 pb-2">{d}</span>)}
                                     {cal.celdas.map((d, i) => {
                                         if (!d) return <span key={i} />;
                                         const items = cal.porDia[d] || [];
                                         const hoyCel = d === new Date().getDate() && cal.mo === new Date().getMonth() && cal.y === new Date().getFullYear();
                                         return (
-                                            <div key={i} title={items.map(t => t.titulo).join('\n')}
-                                                className={`aspect-square rounded-lg flex flex-col items-center justify-center text-[10px] relative ${hoyCel ? 'bg-emerald-600 text-white font-black' : items.length ? 'bg-emerald-500/10 text-slate-700 font-bold' : 'text-slate-400'}`}>
-                                                {d}{items.length > 0 && <span className={`w-1 h-1 rounded-full mt-0.5 ${hoyCel ? 'bg-white' : 'bg-emerald-600'}`} />}
+                                            <div key={i} title={items.length ? items.map(t => t.titulo).join('\n') : undefined}
+                                                className="flex flex-col items-center justify-center py-1">
+                                                {/* Los días sin tareas van en gris medio, no en el
+                                                    más claro: con `slate-300` el contraste era 1,48
+                                                    —medido— y el número no se leía. Un calendario
+                                                    donde no se distinguen los días no es calendario. */}
+                                                <span className={`w-6 h-6 flex items-center justify-center rounded-full text-[11.5px] tabular-nums
+                                                    ${hoyCel ? 'bg-slate-800 text-white font-semibold' : items.length ? 'text-slate-800 font-medium' : 'text-slate-500'}`}>{d}</span>
+                                                <span className={`w-1 h-1 rounded-full mt-1 ${items.length ? 'bg-emerald-600' : 'bg-transparent'}`} />
                                             </div>
                                         );
                                     })}
@@ -575,40 +719,58 @@ const CrmDashboard = ({ onCrear }) => {
                         )}
                     </div>
 
-                    {/* ===== Pipeline / Seguimiento / Productividad ===== */}
+                    {/* ===== Embudo y productividad =====
+                        El embudo era seis barras de seis colores distintos, cada
+                        una con su número en blanco encima: el color no significaba
+                        nada —no hay una escala— y la barra más corta tapaba su
+                        propia cifra. Ahora las cifras van alineadas a la derecha en
+                        columna, se leen de una pasada, y la barra queda como apoyo
+                        gris salvo la de ganados y la de perdidos, que sí importan. */}
                     {(widgets.pipeline || widgets.seguimiento || widgets.productividad) && <SectionLabel>Embudo y productividad</SectionLabel>}
-                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-3 items-stretch">
                         {widgets.pipeline && (
-                            <Card title="Pipeline comercial" icon={TrendingUp} className="xl:col-span-5">
-                                <div className="space-y-1.5">
-                                    {(m.pipeline || []).map((p, i) => (
-                                        <div key={i} className="flex items-center gap-2">
-                                            <span className="text-[10px] font-bold text-slate-500 w-24 shrink-0">{p.etapa}</span>
-                                            <div className="flex-1 h-6 bg-slate-50 rounded-md overflow-hidden">
-                                                <div className="h-full rounded-md flex items-center justify-end px-2 text-[10px] font-black text-white transition-all" style={{ width: `${Math.max(8, (p.n / maxPipe) * 100)}%`, backgroundColor: PIPE_COLOR[i] }}>{p.n}</div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {(m.pipeline || []).every(p => p.n === 0) && <p className="text-xs text-slate-400 italic text-center py-2">Aún sin datos de embudo.</p>}
-                                </div>
+                            <Card title="Embudo comercial" className="xl:col-span-5"
+                                action={<span className="text-[11px] text-slate-500 tabular-nums">{(m.pipeline || []).reduce((s, p) => s + p.n, 0)} personas</span>}>
+                                {(m.pipeline || []).every(p => p.n === 0) ? (
+                                    <p className="text-[12px] text-slate-400 py-6 text-center">Sin datos todavía.</p>
+                                ) : (
+                                    <div>
+                                        {(m.pipeline || []).map((p, i) => {
+                                            const total = (m.pipeline || []).reduce((s, x) => s + x.n, 0) || 1;
+                                            return (
+                                                <div key={i} className="flex items-center gap-3 py-[5px]">
+                                                    <span className="text-[12px] text-slate-600 w-[104px] shrink-0 truncate">{p.etapa}</span>
+                                                    <div className="flex-1 h-[7px] bg-[#f4efe6] rounded-sm overflow-hidden">
+                                                        <div className="h-full rounded-sm transition-all"
+                                                            style={{ width: `${maxPipe ? (p.n / maxPipe) * 100 : 0}%`, backgroundColor: PIPE_COLOR[i] }} />
+                                                    </div>
+                                                    <span className="text-[12.5px] font-medium text-slate-900 tabular-nums w-7 text-right shrink-0">{p.n}</span>
+                                                    <span className="text-[11px] text-slate-500 tabular-nums w-9 text-right shrink-0">{Math.round((p.n / total) * 100)}%</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </Card>
                         )}
                         {widgets.seguimiento && (
-                            <Card title="Seguimiento comercial" icon={Users} className="xl:col-span-3">
-                                <div className="flex flex-col items-center justify-center py-2">
-                                    <span className="text-4xl font-black text-slate-900">{m.sinSeguimiento || 0}</span>
-                                    <span className="text-[10px] text-slate-500 text-center mt-1">prospectos sin contacto<br />en {m.sinSeguimientoDias || 15} días</span>
-                                    <button onClick={() => navigate('/CRM?sub=prospectos')} className="mt-3 text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-3 py-1.5 hover:bg-emerald-500/20">Ver prospectos</button>
+                            <Card title="Sin contacto" className="xl:col-span-3">
+                                <div className="flex flex-col items-start">
+                                    <span className="text-[34px] leading-none font-semibold text-slate-900 tabular-nums tracking-[-0.02em]">{m.sinSeguimiento || 0}</span>
+                                    <span className="text-[12px] text-slate-500 mt-2.5 leading-relaxed">prospectos sin contacto hace más de {m.sinSeguimientoDias || 15} días</span>
+                                    <button onClick={() => navigate('/CRM?sub=prospectos')}
+                                        className="mt-3 text-[12px] font-medium text-emerald-700 hover:text-emerald-800">Ver prospectos →</button>
                                 </div>
                             </Card>
                         )}
                         {widgets.productividad && (
-                            <Card title="Productividad" icon={Award} className="xl:col-span-4">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <Mini icon={CheckCircle2} label="Tareas completadas" value={m.tareasCompletadas || 0} color="text-emerald-600" />
-                                    <Mini icon={Clock} label="Tareas pendientes" value={m.tareasPendientes || 0} color="text-blue-600" />
-                                    <Mini icon={CalendarDays} label="Reuniones realizadas" value={m.reunionesRealizadas || 0} color="text-amber-600" />
-                                    <Mini icon={Users} label="Prospectos gestionados" value={m.totalPersonas || 0} color="text-purple-600" />
+                            <Card title="Productividad" className="xl:col-span-4"
+                                action={<span className="text-[11px] text-slate-500 capitalize">{m.periodo || 'mes'}</span>}>
+                                <div className="grid grid-cols-2 gap-y-5 gap-x-4">
+                                    <Mini suelto label="Tareas cerradas" value={m.tareasCompletadas || 0} />
+                                    <Mini suelto label="Tareas abiertas" value={m.tareasPendientes || 0} />
+                                    <Mini suelto label="Reuniones" value={m.reunionesRealizadas || 0} />
+                                    <Mini suelto label="En cartera" value={m.totalPersonas || 0} />
                                 </div>
                             </Card>
                         )}
@@ -618,30 +780,46 @@ const CrmDashboard = ({ onCrear }) => {
                     {(widgets.recaudacion || (widgets.ranking && esAdmin) || widgets.actividad) && <SectionLabel>Análisis y actividad</SectionLabel>}
                     <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
                         {widgets.recaudacion && (
-                            <Card title="Recaudación (6 meses)" icon={TrendingUp} className="xl:col-span-5">
+                            <Card title="Recaudación" className="xl:col-span-5"
+                                action={<span className="text-[11px] text-slate-500">últimos 6 meses</span>}>
                                 {(m.serieRecaudado || []).some(s => s.recaudado > 0) ? (
-                                    <div style={{ height: 200 }}>
+                                    // El eje Y va SIEMPRE, aunque sea discreto: un gráfico sin
+                                    // escala es un dibujo bonito del que no se puede leer un
+                                    // monto. Además, sin YAxis declarado el área no se dibujaba.
+                                    // El dominio arranca en 0 para que las alturas sean
+                                    // comparables entre sí y no exageren las diferencias.
+                                    <div style={{ height: 195 }}>
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <AreaChart data={(m.serieRecaudado || []).map(s => ({ name: s.mes.slice(5), v: s.recaudado }))}>
-                                                <defs><linearGradient id="recG" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#10b981" stopOpacity={0.4} /><stop offset="95%" stopColor="#10b981" stopOpacity={0} /></linearGradient></defs>
-                                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} />
-                                                <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #efe8dd', backgroundColor: '#fff', fontSize: '12px' }} formatter={(v) => [fmt(v), 'Recaudado']} />
-                                                <Area type="monotone" dataKey="v" stroke="#10b981" strokeWidth={2} fill="url(#recG)" />
+                                            <AreaChart data={(m.serieRecaudado || []).map(s => ({ name: MESES[Number(s.mes.slice(5)) - 1] || s.mes.slice(5), v: s.recaudado }))}
+                                                margin={{ top: 8, right: 4, left: -8, bottom: 0 }}>
+                                                <defs><linearGradient id="recG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#059669" stopOpacity={0.3} /><stop offset="100%" stopColor="#059669" stopOpacity={0.02} /></linearGradient></defs>
+                                                <CartesianGrid vertical={false} stroke="#f0eae0" />
+                                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} dy={4} />
+                                                <YAxis axisLine={false} tickLine={false} width={46} domain={[0, 'auto']}
+                                                    tick={{ fill: '#94a3b8', fontSize: 10.5 }} tickFormatter={fmtK} />
+                                                <Tooltip cursor={{ stroke: '#cbd5e1', strokeDasharray: 3 }}
+                                                    contentStyle={{ borderRadius: '8px', border: '1px solid #e8e0d2', backgroundColor: '#fff', fontSize: '12px', boxShadow: '0 4px 12px rgba(0,0,0,.06)' }}
+                                                    labelStyle={{ color: '#64748b', fontSize: '11px' }}
+                                                    formatter={(v) => [fmt(v), 'Cobrado']} />
+                                                <Area type="monotone" dataKey="v" stroke="#059669" strokeWidth={1.75} fill="url(#recG)"
+                                                    dot={{ r: 2.5, fill: '#059669', strokeWidth: 0 }} activeDot={{ r: 4 }} />
                                             </AreaChart>
                                         </ResponsiveContainer>
                                     </div>
-                                ) : <p className="text-xs text-slate-400 italic text-center py-16">Sin recaudación registrada en el período.</p>}
+                                ) : <p className="text-[12px] text-slate-400 py-16 text-center">Sin cobros registrados en el período.</p>}
                             </Card>
                         )}
                         {widgets.ranking && esAdmin && (
-                            <Card title="Ranking del equipo" icon={Award} className="xl:col-span-3">
-                                {(m.ranking || []).length === 0 ? <p className="text-xs text-slate-400 italic text-center py-8">Sin datos.</p> : (
-                                    <div className="space-y-2">
+                            <Card title="Equipo" className="xl:col-span-3">
+                                {(m.ranking || []).length === 0 ? <p className="text-[12px] text-slate-400 py-6 text-center">Sin datos.</p> : (
+                                    <div>
                                         {m.ranking.map((r, i) => (
-                                            <div key={i} className="flex items-center gap-2 py-1 border-b border-[#efe8dd] last:border-0">
-                                                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black shrink-0 ${i === 0 ? 'bg-amber-400 text-white' : 'bg-slate-100 text-slate-500'}`}>{i + 1}</span>
-                                                <div className="min-w-0 flex-1"><p className="text-xs font-bold text-slate-900 truncate">{r.nombre}</p><p className="text-[9px] text-slate-500">{r.prospectos} prospectos · {r.conversion}% conv.</p></div>
-                                                <span className="text-xs font-black text-emerald-600 shrink-0">{r.ganados}</span>
+                                            <div key={i} className="flex items-center gap-2.5 py-2 border-b border-[#f5f0e8] last:border-0">
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-[12px] text-slate-900 truncate">{r.nombre}</p>
+                                                    <p className="text-[11px] text-slate-500 tabular-nums">{r.prospectos} prospectos · {r.conversion}% conv.</p>
+                                                </div>
+                                                <span className="text-[13px] font-semibold text-slate-900 tabular-nums shrink-0">{r.ganados}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -649,17 +827,20 @@ const CrmDashboard = ({ onCrear }) => {
                             </Card>
                         )}
                         {widgets.actividad && (
-                            <Card title="Actividad reciente" icon={Activity} className={esAdmin ? 'xl:col-span-4' : 'xl:col-span-7'}>
-                                {(m.actividad || []).length === 0 ? <p className="text-xs text-slate-400 italic text-center py-8">Sin actividad reciente.</p> : (
-                                    <div className="space-y-2.5 max-h-[280px] overflow-y-auto pr-1">
+                            <Card title="Actividad reciente" className={esAdmin ? 'xl:col-span-4' : 'xl:col-span-7'}>
+                                {(m.actividad || []).length === 0 ? <p className="text-[12px] text-slate-400 py-6 text-center">Sin actividad reciente.</p> : (
+                                    <div className="max-h-[260px] overflow-y-auto -mx-1 px-1">
                                         {m.actividad.map((a, i) => {
-                                            const cfg = ACT_ICON[a.tipo] || { i: Activity, c: 'text-slate-600 bg-slate-500/10', t: a.tipo };
+                                            const cfg = ACT_ICON[a.tipo] || { i: Activity, c: 'text-slate-500', t: a.tipo };
                                             const I = cfg.i;
                                             return (
-                                                <div key={i} className="flex items-start gap-3">
-                                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${cfg.c}`}><I size={13} /></div>
-                                                    <div className="min-w-0 flex-1"><p className="text-xs font-bold text-slate-900">{cfg.t}</p><p className="text-[10px] text-slate-500 truncate">{a.titulo}</p></div>
-                                                    <span className="text-[9px] text-slate-400 shrink-0">{relativo(a.fecha)}</span>
+                                                <div key={i} className="flex items-start gap-2.5 py-1.5">
+                                                    <I size={14} className={`${cfg.c} shrink-0 mt-0.5`} />
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-[12px] text-slate-900 truncate leading-snug">{a.titulo}</p>
+                                                        <p className="text-[11px] text-slate-500">{cfg.t}</p>
+                                                    </div>
+                                                    <span className="text-[11px] text-slate-500 shrink-0 mt-0.5">{relativo(a.fecha)}</span>
                                                 </div>
                                             );
                                         })}

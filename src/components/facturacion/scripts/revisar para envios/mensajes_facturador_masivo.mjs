@@ -198,7 +198,22 @@ export async function registrarCorreoEnLog({ folio, rut, razonSocial, correo, es
                            (SELECT e.organizacion_id
                               FROM documentos_emitidos de JOIN empresa e ON e.id = de.empresa_id
                              WHERE de.folio::text = TRIM($1) AND de.tipo_dte IN (33, 34)
-                             ORDER BY de.fecha_emision DESC LIMIT 1)
+                             ORDER BY de.fecha_emision DESC LIMIT 1),
+                           -- ÚLTIMO RESPALDO: POR EL RUT DEL CLIENTE.
+                           --
+                           -- Los dos de arriba dependen de que la factura ya esté
+                           -- guardada, y eso puede no haber pasado todavía: si el
+                           -- guardado falla —el 31-08-2026 la 1476 no llegó ni a
+                           -- documentos_emitidos ni a cobro_mensual— los dos
+                           -- devuelven NULL y la fila queda invisible en Correo
+                           -- Masivo, que filtra por organización.
+                           --
+                           -- El RUT, en cambio, se conoce desde el primer momento:
+                           -- es a quién se le está facturando. Por eso sirve de
+                           -- red cuando todo lo demás falló.
+                           (SELECT e.organizacion_id FROM empresa e
+                             WHERE e.rut_hash = encode(sha256(TRIM($2)::bytea), 'hex')
+                             LIMIT 1)
                          ))
                  ON CONFLICT (folio) DO UPDATE SET
                     rut = EXCLUDED.rut,
@@ -741,14 +756,52 @@ export async function enviarCorreoFacturaEnSesion(page, folio, datos = {}) {
         docInfo.tramo = datos.tramo || '';
         docInfo.trabajadores = datos.trabajadores || '';
 
-        const correoPDFInvalido =
-            !datosExtraidos.correo ||
-            !datosExtraidos.correo.includes('@') ||
-            datosExtraidos.correo.includes('No_encontrado') ||
-            datosExtraidos.correo.includes('Error_al_leer');
+        const esMarcador = (c) =>
+            !c || !c.includes('@') || c.includes('No_encontrado') || c.includes('Error_al_leer');
+
+        const correoPDFInvalido = esMarcador(datosExtraidos.correo);
         if (datos.correo && datos.correo.includes('@') && correoPDFInvalido) {
             console.log(`   📨 Usando correo del facturador: ${datos.correo}`);
             datosExtraidos.correo = datos.correo;
+        }
+
+        // ÚLTIMO RECURSO: BUSCAR EL CORREO EN LA FICHA DEL CLIENTE.
+        //
+        // El correo sale del PDF de la factura (la línea "CONTACTO:"). Si esa
+        // factura se emitió sin correo, el PDF no lo trae y queda el marcador
+        // `No_encontrado@falta_correo.cl`, que Gmail rechaza con un 553.
+        //
+        // Antes eso no tenía salida: aunque alguien cargara el correo en la ficha
+        // del CRM, el reenvío seguía leyendo el mismo PDF viejo y volvía a fallar
+        // contra la misma casilla mala. Le pasó a la 1476 el 01-09-2026.
+        //
+        // Se busca por el RUT del receptor, que es el dato que sí viaja siempre.
+        if (esMarcador(datosExtraidos.correo)) {
+            const rutBusca = (datos.rut || datosExtraidos.rutReceptor || '').trim();
+            if (rutBusca) {
+                try {
+                    const { rows } = await pool.query(
+                        `SELECT email_corporativo FROM empresa
+                          WHERE rut_hash = encode(sha256(TRIM($1)::bytea), 'hex')
+                            AND coalesce(trim(email_corporativo),'') <> '' LIMIT 1`,
+                        [rutBusca]);
+                    if (rows[0]?.email_corporativo) {
+                        datosExtraidos.correo = rows[0].email_corporativo.trim();
+                        console.log(`   📨 Correo tomado de la ficha del cliente: ${datosExtraidos.correo}`);
+                    }
+                } catch (e) {
+                    console.log(`   ⚠️ No se pudo leer el correo de la ficha: ${e.message}`);
+                }
+            }
+        }
+
+        // Sin una dirección válida no se intenta el envío: cuatro reintentos
+        // contra una casilla inválida son cuatro fallos garantizados y un log
+        // que no dice qué hacer. Mejor decirlo derecho.
+        if (esMarcador(datosExtraidos.correo)) {
+            throw new Error(
+                `El cliente no tiene correo cargado (folio ${folio}). ` +
+                `Ponle el correo en su ficha del CRM y reenvía.`);
         }
 
         // 6. Enviar el correo

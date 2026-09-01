@@ -172,6 +172,22 @@ export const listarTareas = async (req, res) => {
         // sigue abierto". Se resuelve acá para que el filtro de la lista y el
         // que usa el resumen de Inicio no puedan discrepar.
         if (req.query.estado === 'activas') where.push(`t.estado = ANY($${params.push(ESTADOS_ACTIVOS)})`);
+        // 'cerradas' = lo que ya no se trabaja: completadas Y canceladas.
+        //
+        // El filtro «Finalizadas» de la pantalla mandaba `estado=completada`, así
+        // que una tarea CANCELADA no salía ni en «Activas» —no es activa— ni en
+        // «Finalizadas» —no está completada—. Quedaba invisible salvo en «Todas»
+        // y en el tablero, que sí le dedica su columna. Cancelar una tarea la
+        // hacía desaparecer de la lista sin que nadie lo notara.
+        //
+        // Hoy no hay ninguna cancelada, así que el hueco no se ve: aparecería la
+        // primera vez que alguien use ese estado.
+        //
+        // `completada` se sigue aceptando y hace lo mismo: es el nombre viejo del
+        // filtro y puede venir en una URL compartida o guardada en el navegador.
+        else if (req.query.estado === 'cerradas' || req.query.estado === 'completada') {
+            where.push(`t.estado IN ('completada','cancelada')`);
+        }
 
         if (PRIORIDADES.includes(req.query.prioridad)) {
             params.push(req.query.prioridad); where.push(`t.prioridad = $${params.length}`);
@@ -221,8 +237,13 @@ export const listarTareas = async (req, res) => {
                     -- de «CREAR PLANTILLAS DE TAREAS».
                     padre.titulo AS padre_titulo,
                     COUNT(*) OVER()::int AS total_filtrado,
-                    (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id) AS subtareas_total,
-                    (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.estado='completada') AS subtareas_hechas,
+                    -- Las ARCHIVADAS no cuentan. Archivar es sacar algo de en
+                    -- medio; si siguieran sumando, una madre con una subtarea
+                    -- archivada se quedaría en «3/4» para siempre y nunca podría
+                    -- llegar a completa. Hoy no hay archivadas, así que el error
+                    -- no se ve: aparecería la primera vez que alguien archive una.
+                    (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.archivada_at IS NULL) AS subtareas_total,
+                    (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.archivada_at IS NULL AND st.estado='completada') AS subtareas_hechas,
                     (SELECT COUNT(*)::int FROM tarea_comentario tc WHERE tc.tarea_id = t.id) AS comentarios,
                     COALESCE((SELECT json_agg(json_build_object('id', cu.id, 'nombre', cu.nombre))
                               FROM tarea_colaborador tcol JOIN usuario cu ON cu.id = tcol.usuario_id
@@ -307,8 +328,9 @@ export const tareaCompleta = async (id) => {
         `SELECT t.*, u.nombre AS responsable_nombre,
                 (p.nombre || ' ' || COALESCE(p.apellidos,'')) AS persona_nombre,
                 pr.nombre AS proyecto_nombre, pr.color AS proyecto_color,
-                (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id) AS subtareas_total,
-                (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.estado='completada') AS subtareas_hechas,
+                -- Sin las archivadas, igual que en la lista (ver el comentario de arriba).
+                (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.archivada_at IS NULL) AS subtareas_total,
+                (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.archivada_at IS NULL AND st.estado='completada') AS subtareas_hechas,
                 (SELECT COUNT(*)::int FROM tarea_comentario tc WHERE tc.tarea_id = t.id) AS comentarios,
                 COALESCE((SELECT json_agg(json_build_object('id', cu.id, 'nombre', cu.nombre))
                           FROM tarea_colaborador tcol JOIN usuario cu ON cu.id = tcol.usuario_id
@@ -367,10 +389,27 @@ export const crearTarea = async (req, res) => {
         }
 
         const { rows } = await pool.query(
+            // `completed_at` se llena si la tarea NACE completada.
+            //
+            // Se puede crear una tarea ya cerrada —al importar, o al anotar algo
+            // que ya se hizo—. El INSERT aceptaba ese estado pero no escribía la
+            // fecha, así que quedaba «completada» sin saber CUÁNDO. Al 01-09-2026
+            // había 110 así, la mitad de las cerradas.
+            //
+            // No es cosmético: el resumen de Inicio cuenta las cerradas de los
+            // últimos días con `completed_at >= NOW() - INTERVAL`, y una tarea sin
+            // fecha nunca entra en esa cuenta. El trabajo se hacía y no aparecía
+            // por ningún lado. La misma columna ordena el historial y alimenta el
+            // «tareas del mes».
+            //
+            // Al actualizar ya estaba resuelto (`completedAt` más abajo); faltaba
+            // el caso de la creación.
             `INSERT INTO tarea
                 (organizacion_id, persona_id, empresa_id, titulo, descripcion, tipo, prioridad, estado,
-                 responsable_id, vence_at, origen, creado_por, proyecto_id, parent_id, visibilidad)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`,
+                 responsable_id, vence_at, origen, creado_por, proyecto_id, parent_id, visibilidad,
+                 completed_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
+                     CASE WHEN $8 = 'completada' THEN NOW() ELSE NULL END) RETURNING id`,
             [
                 req.user?.organizacionId || null,
                 personaId || null, empresaId || null,
@@ -546,12 +585,56 @@ export const archivarTarea = async (req, res) => {
     }
 };
 
+// BORRAR UNA TAREA · solo quien la creó, quien la tiene asignada, o un admin.
+//
+// Antes esto solo comprobaba la ORGANIZACIÓN: cualquiera podía borrar la tarea
+// de cualquier otro con solo mandar su id —incluidas las PRIVADAS, que esa misma
+// persona no puede ni ver en pantalla—. Y no es un borrado cualquiera: por el
+// ON DELETE CASCADE de `parent_id`, borrar una madre se lleva todas sus
+// subtareas, con sus comentarios y sus adjuntos. Sin vuelta atrás.
+//
+// Se pide una de tres cosas, que es el mismo criterio del resto del módulo:
+// haberla creado, ser su responsable, o ser Administrador.
 export const eliminarTarea = async (req, res) => {
     try {
         const { id } = req.params;
         const org = req.user?.organizacionId || null;
-        const r = await pool.query(`DELETE FROM tarea WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid RETURNING id`, [id, org]);
+        const uid = req.user?.usuarioId || null;
+        const esAdmin = req.user?.rol === 'Administrador';
+
+        // Se mira antes de borrar para poder distinguir «no existe» de «no te
+        // corresponde». Un 404 cuando la tarea sí existe deja a la persona
+        // pensando que se borró sola.
+        const { rows: previa } = await pool.query(
+            `SELECT creado_por, responsable_id, titulo,
+                    (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = tarea.id) AS subtareas
+               FROM tarea
+              WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`,
+            [id, org]);
+        if (previa.length === 0) {
+            return res.status(404).json({ success: false, message: 'Tarea no encontrada.' });
+        }
+
+        const t = previa[0];
+        const puede = esAdmin || t.creado_por === uid || t.responsable_id === uid;
+        if (!puede) {
+            return res.status(403).json({
+                success: false,
+                message: 'Solo puedes eliminar tareas que creaste o que tienes asignadas.',
+            });
+        }
+
+        const r = await pool.query(
+            `DELETE FROM tarea WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid RETURNING id`,
+            [id, org]);
         if (r.rows.length === 0) return res.status(404).json({ success: false, message: 'Tarea no encontrada.' });
+
+        // Queda en la bitácora, con las subtareas que se llevó por delante: es
+        // irreversible y conviene poder responder «quién borró esto».
+        await registrar(req, {
+            modulo: 'tareas', accion: 'eliminar', entidad: 'tarea', entidadId: id,
+            descripcion: `Eliminó «${t.titulo}»${t.subtareas ? ` y sus ${t.subtareas} subtareas` : ''}`,
+        });
         return res.json({ success: true });
     } catch (error) {
         console.error('❌ Error eliminando tarea:', error.message);
@@ -562,18 +645,59 @@ export const eliminarTarea = async (req, res) => {
 // Limpiar (borrar definitivamente) las tareas ya completadas.
 // Respeta el alcance: un usuario normal solo borra las suyas; el admin puede
 // borrar las del equipo o solo las suyas con ?scope=mias.
+// BORRADO EN LOTE · el botón «Limpiar todas» del widget de tareas del dashboard.
+//
+// Esto borraba MUCHÍSIMO más de lo que el usuario creía estar borrando.
+// Medido el 01-09-2026: un administrador en modo «Equipo» apretaba el botón y
+// se llevaba las 216 tareas completadas de la organización entera —con 356
+// comentarios y 15 adjuntos detrás, por CASCADE—, incluidas las 100 que
+// pertenecen a proyectos del módulo de Tickets y que nada tienen que ver con
+// este widget. El aviso de confirmación decía «¿Eliminar N tareas?» con el
+// número de las que se veían en pantalla, así que ni siquiera avisaba bien.
+// Es irreversible: la tabla no guarda historial.
+//
+// Ahora el lote respeta las mismas tres reglas que el borrado de una sola tarea
+// (ver eliminarTarea):
+//   · Solo lo que uno creó o tiene asignado. Ni el admin arrasa con lo ajeno:
+//     si quiere borrar la tarea de otro, la borra una por una y a conciencia.
+//   · Nunca una tarea MADRE, porque el CASCADE se llevaría a sus hijas —incluso
+//     las que siguen abiertas—. Se saltan y se informa cuántas.
+//   · Nunca las archivadas: archivar es lo contrario de borrar.
 export const eliminarTareasCompletadas = async (req, res) => {
     try {
         const org = req.user?.organizacionId || null;
         const uid = req.user?.usuarioId || null;
-        const soloMias = !esAdmin(req) || req.query.scope === 'mias';
-        const scope = soloMias ? ' AND (responsable_id = $2 OR creado_por = $2) ' : '';
-        const params = soloMias ? [org, uid] : [org];
+        if (!uid) return res.status(401).json({ success: false, message: 'Sesión no válida.' });
+
         const r = await pool.query(
-            `DELETE FROM tarea
-             WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid AND estado = 'completada' ${scope}
-             RETURNING id`, params);
-        return res.json({ success: true, eliminadas: r.rows.length });
+            `DELETE FROM tarea t
+              WHERE t.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                AND t.estado = 'completada'
+                AND t.archivada_at IS NULL
+                AND (t.creado_por = $2 OR t.responsable_id = $2)
+                AND NOT EXISTS (SELECT 1 FROM tarea h WHERE h.parent_id = t.id)
+              RETURNING id, titulo`, [org, uid]);
+
+        // Lo que quedó fuera por tener subtareas: se dice, no se esconde.
+        const { rows: [pend] } = await pool.query(
+            `SELECT COUNT(*)::int AS n FROM tarea t
+              WHERE t.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                AND t.estado = 'completada' AND t.archivada_at IS NULL
+                AND (t.creado_por = $2 OR t.responsable_id = $2)
+                AND EXISTS (SELECT 1 FROM tarea h WHERE h.parent_id = t.id)`, [org, uid]);
+
+        if (r.rows.length) {
+            await registrar(req, {
+                modulo: 'tareas', accion: 'eliminar', entidad: 'tarea',
+                descripcion: `Borró en lote ${r.rows.length} tarea(s) completada(s) desde el dashboard.`,
+                detalle: { titulos: r.rows.map(x => x.titulo).slice(0, 50) },
+            });
+        }
+        return res.json({
+            success: true,
+            eliminadas: r.rows.length,
+            conSubtareas: pend?.n || 0,
+        });
     } catch (error) {
         console.error('❌ Error limpiando tareas completadas:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudieron limpiar las tareas.' });
@@ -781,12 +905,24 @@ export const metricasDashboard = async (req, res) => {
 
         // Fragmentos de alcance (cartera propia salvo admin en modo equipo).
         const pScope = soloMias ? ' AND (p.creado_por = $2 OR p.ejecutivo_id = $2) ' : '';
-        const tScope = soloMias ? ' AND (responsable_id = $2 OR creado_por = $2) ' : '';
+        // «Mías» significa lo mismo acá que en la lista de tareas: lo que tengo
+        // encima como responsable o como colaborador (ver condicionAmbito).
+        //
+        // Antes este KPI contaba `responsable_id OR creado_por` mientras la lista
+        // de al lado pedía ámbito 'mias' —responsable o colaborador—. Como el
+        // administrador creó casi todo al importar, el número de arriba salía
+        // enorme y la lista mostraba una fracción: la pantalla decía «165 tareas
+        // pendientes» sobre una lista de 48. Dos criterios para la misma palabra.
+        const tScope = soloMias
+            ? ` AND (responsable_id = $2 OR EXISTS (
+                    SELECT 1 FROM tarea_colaborador tc
+                     WHERE tc.tarea_id = tarea.id AND tc.usuario_id = $2)) `
+            : '';
         const pParams = soloMias ? [org, uid] : [org];
 
         const [
             cobrosRes, serieRes, metaRes, convRes, nuevosRes,
-            tareasRes, pipelineRes, seguimientoRes, actividadRes, rankingRes
+            tareasRes, reunionesRes, pipelineRes, seguimientoRes, actividadRes, rankingRes
         ] = await Promise.all([
             // Indicadores de dinero (nivel firma / organización). RF-001, RF-007, RF-013
             pool.query(
@@ -797,25 +933,63 @@ export const metricasDashboard = async (req, res) => {
                     COALESCE(SUM(COALESCE(monto_facturado,monto_esperado)) FILTER (WHERE estado='PAGADA' AND fecha_pago >= $2::timestamptz AND fecha_pago <= $3::timestamptz),0)::float AS ventas_periodo,
                     -- Recaudado del MES en curso: se usa para el avance contra la meta
                     -- mensual, que siempre es mensual.
-                    COALESCE(SUM(COALESCE(monto_facturado,monto_esperado)) FILTER (WHERE date_trunc('month',periodo)=date_trunc('month',CURRENT_DATE) AND estado='PAGADA'),0)::float AS ventas_mes,
+                    --
+                    -- SE MIDE POR FECHA DE PAGO, NO POR PERÍODO DEL COBRO.
+                    --
+                    -- Antes agrupaba por el PERÍODO del cobro —el mes al que
+                    -- corresponde el servicio— y eso no es lo que entra en caja:
+                    -- el cobro de julio se
+                    -- paga en agosto. En agosto-2026 el dashboard mostraba $616.214
+                    -- cuando en caja habían entrado $4.671.956: siete veces y media
+                    -- menos. Y era peor el día 1 de cada mes: como todavía no existe
+                    -- ningún cobro con el período nuevo, el KPI marcaba $0 y la barra
+                    -- de meta 0% —y seguía en 0% todo el mes, porque los pagos de
+                    -- septiembre se registran contra el período de agosto—.
+                    --
+                    -- Con fecha de pago el número parte en 0 el día 1 y sube con cada
+                    -- pago que se registra, que es como se sigue una meta mensual de
+                    -- recaudación. Decisión de Felipe, 01-09-2026.
+                    COALESCE(SUM(COALESCE(monto_facturado,monto_esperado)) FILTER (WHERE date_trunc('month',fecha_pago)=date_trunc('month',CURRENT_DATE) AND estado='PAGADA'),0)::float AS ventas_mes,
+                    -- Por cobrar: acá SÍ manda el período, porque es lo que está
+                    -- emitido o por emitir del mes corriente y todavía nadie pagó.
                     COALESCE(SUM(monto_esperado) FILTER (WHERE date_trunc('month',periodo)=date_trunc('month',CURRENT_DATE) AND estado IN ('POR_EMITIR','PENDIENTE_PAGO')),0)::float AS ingresos_esperados,
                     COUNT(*) FILTER (WHERE estado='PENDIENTE_PAGO')::int AS facturas_pendientes,
                     COUNT(*) FILTER (WHERE estado='PENDIENTE_PAGO' AND fecha_vencimiento < CURRENT_DATE)::int AS cobros_vencidos,
                     COALESCE(SUM(COALESCE(monto_facturado,monto_esperado)) FILTER (WHERE fecha_pago::date = CURRENT_DATE AND estado='PAGADA'),0)::float AS cobrado_hoy
                  FROM cobro_mensual WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid`, [org, desde, hasta]),
             pool.query(
-                `SELECT to_char(date_trunc('month',periodo),'YYYY-MM') AS mes,
-                        COALESCE(SUM(COALESCE(monto_facturado,monto_esperado)) FILTER (WHERE estado='PAGADA'),0)::float AS recaudado
+                // Recaudación de los últimos 6 meses. Agrupa por FECHA DE PAGO por lo
+                // mismo que `ventas_mes`: agrupado por período, cada barra quedaba
+                // corrida un mes respecto de la plata que efectivamente entró, y la
+                // última siempre aparecía hundida porque a ese período todavía le
+                // faltaba casi toda la cobranza.
+                `SELECT to_char(date_trunc('month',fecha_pago),'YYYY-MM') AS mes,
+                        COALESCE(SUM(COALESCE(monto_facturado,monto_esperado)),0)::float AS recaudado
                  FROM cobro_mensual
                  WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid
-                   AND periodo >= (date_trunc('month',CURRENT_DATE) - INTERVAL '5 months')::date
-                 GROUP BY date_trunc('month',periodo) ORDER BY date_trunc('month',periodo)`, [org]),
+                   AND estado='PAGADA' AND fecha_pago IS NOT NULL
+                   AND fecha_pago >= (date_trunc('month',CURRENT_DATE) - INTERVAL '5 months')
+                 GROUP BY date_trunc('month',fecha_pago) ORDER BY date_trunc('month',fecha_pago)`, [org]),
             pool.query(`SELECT meta_mensual FROM crm_config WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid`, [org]),
             // Conteos de personas + clientes activos (empresas). RF-001, RF-013
+            //
+            // «GANADO» SE MIDE IGUAL EN TODA LA PANTALLA.
+            //
+            // La conversión contaba solo `estado='activo'` y el embudo contaba
+            // además a los marcados «Ganado» en el estado comercial. Con eso el
+            // dashboard se contradecía a sí mismo el 01-09-2026: el embudo decía
+            // «Ganados: 2» (Daniel y Eduardo, marcados Ganado pero todavía con
+            // estado 'prospecto' porque nadie los convirtió a cliente) mientras la
+            // tarjeta de arriba decía «0 de 130» y el ranking del equipo, cero
+            // ganados para los tres. Tres widgets contando lo mismo con tres
+            // criterios distintos: el usuario no sabe a cuál creerle.
+            //
+            // Ahora los tres usan la misma definición, la del embudo: ganado es
+            // quien ya es cliente O quien está marcado como ganado en su ficha.
             pool.query(
                 `SELECT
                     COUNT(*) FILTER (WHERE p.estado='prospecto')::int AS prospectos,
-                    COUNT(*) FILTER (WHERE p.estado='activo')::int AS activos,
+                    COUNT(*) FILTER (WHERE p.estado='activo' OR p.estado_comercial ILIKE '%ganad%')::int AS activos,
                     COUNT(*) FILTER (WHERE p.estado='inactivo')::int AS inactivos,
                     COUNT(*)::int AS total,
                     (SELECT COUNT(*)::int FROM empresa e WHERE e.activo AND e.en_cartera IS NOT FALSE AND e.organizacion_id IS NOT DISTINCT FROM $1::uuid) AS clientes_activos
@@ -826,32 +1000,94 @@ export const metricasDashboard = async (req, res) => {
                  WHERE p.activo AND p.organizacion_id IS NOT DISTINCT FROM $1::uuid ${pScope}
                    AND p.created_at >= $${soloMias ? 3 : 2}::timestamptz AND p.created_at <= $${soloMias ? 4 : 3}::timestamptz`,
                 soloMias ? [org, uid, desde, hasta] : [org, desde, hasta]),
-            // Tareas: pendientes, vencidas, completadas/reuniones en período, reuniones de hoy. RF-003/004/017
+            // Tareas: pendientes, vencidas, completadas en el período. RF-003/004/017
             // "Pendiente" acá significa "sin terminar", no el estado literal: con
             // los estados nuevos, una tarea en proceso o en revisión seguía sin
             // contarse en ningún lado y el tablero mostraba menos trabajo del real.
             // Las archivadas no cuentan: se archivan justamente para sacarlas.
+            //
+            // Las reuniones YA NO se cuentan acá: se contaban buscando tareas con
+            // `tipo='reunion'`, y esas tareas no existen —las 447 son de tipo
+            // 'tarea'—, así que «Reuniones hoy» y «Reuniones realizadas» marcaban
+            // cero siempre. Las reuniones de verdad viven en la tabla `reunion`,
+            // que ahora se consulta aparte (ver reunionesRes).
+            // «Completadas» se acota al período elegido por los DOS extremos. Antes
+            // solo tenía el límite de abajo, así que en un rango personalizado
+            // contaba también todo lo cerrado después del «hasta».
             pool.query(
                 `SELECT
-                    COUNT(*) FILTER (WHERE estado = ANY($${soloMias ? 4 : 3}))::int AS pendientes,
-                    COUNT(*) FILTER (WHERE estado = ANY($${soloMias ? 4 : 3}) AND vence_at < NOW())::int AS vencidas,
-                    COUNT(*) FILTER (WHERE estado='completada' AND completed_at >= $${soloMias ? 3 : 2}::timestamptz)::int AS completadas,
-                    COUNT(*) FILTER (WHERE tipo='reunion' AND estado='completada' AND completed_at >= $${soloMias ? 3 : 2}::timestamptz)::int AS reuniones_realizadas,
-                    COUNT(*) FILTER (WHERE tipo='reunion' AND estado = ANY($${soloMias ? 4 : 3}) AND vence_at::date = CURRENT_DATE)::int AS reuniones_hoy,
-                    COUNT(*) FILTER (WHERE estado = ANY($${soloMias ? 4 : 3}) AND vence_at::date = CURRENT_DATE)::int AS vencen_hoy
+                    COUNT(*) FILTER (WHERE estado = ANY($${soloMias ? 5 : 4}))::int AS pendientes,
+                    COUNT(*) FILTER (WHERE estado = ANY($${soloMias ? 5 : 4}) AND vence_at < NOW())::int AS vencidas,
+                    COUNT(*) FILTER (WHERE estado='completada'
+                                       AND completed_at >= $${soloMias ? 3 : 2}::timestamptz
+                                       AND completed_at <= $${soloMias ? 4 : 3}::timestamptz)::int AS completadas,
+                    COUNT(*) FILTER (WHERE estado = ANY($${soloMias ? 5 : 4}) AND vence_at::date = CURRENT_DATE)::int AS vencen_hoy
                  FROM tarea
                  WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid AND archivada_at IS NULL ${tScope}`,
-                soloMias ? [org, uid, desde, ESTADOS_ACTIVOS] : [org, desde, ESTADOS_ACTIVOS]),
-            // Pipeline comercial (embudo). RF-014
+                soloMias ? [org, uid, desde, hasta, ESTADOS_ACTIVOS] : [org, desde, hasta, ESTADOS_ACTIVOS]),
+            // Reuniones DE VERDAD, desde la tabla `reunion`. RF-004/017
+            //
+            // El dashboard las contaba sobre `tarea` con `tipo='reunion'` y esas
+            // tareas nunca existieron, así que los dos widgets marcaban cero.
+            // Acá se lee la tabla del módulo de Reuniones, con el mismo criterio de
+            // visibilidad que usa ese módulo: se ven las que uno creó o en las que
+            // participa. El admin en modo «Equipo» ve todas las de la organización.
+            //
+            // «Hoy» son las agendadas o en curso de la fecha de hoy —una reunión
+            // cancelada no es una reunión de hoy—, y «realizadas» son las que
+            // terminaron dentro del período elegido arriba.
             pool.query(
                 `SELECT
-                    COUNT(*) FILTER (WHERE p.estado='prospecto' AND (p.estado_comercial IS NULL OR p.estado_comercial='' OR p.estado_comercial ILIKE '%nuevo%'))::int AS prospectos,
-                    COUNT(*) FILTER (WHERE p.estado_comercial ILIKE '%contact%' OR p.estado_comercial ILIKE '%esperando%')::int AS contactados,
-                    COUNT(*) FILTER (WHERE p.estado_comercial ILIKE '%cotiz%' OR p.estado_comercial ILIKE '%propuesta%')::int AS cotizaciones,
-                    COUNT(*) FILTER (WHERE p.estado_comercial ILIKE '%negoci%' OR p.estado_comercial ILIKE '%pens%' OR p.estado_comercial ILIKE '%reuni%')::int AS negociaciones,
-                    COUNT(*) FILTER (WHERE p.estado='activo' OR p.estado_comercial ILIKE '%ganad%')::int AS ganados,
-                    COUNT(*) FILTER (WHERE p.estado='perdido' OR p.estado_comercial ILIKE '%perdid%')::int AS perdidos
-                 FROM persona p WHERE p.activo AND p.organizacion_id IS NOT DISTINCT FROM $1::uuid ${pScope}`, pParams),
+                    COUNT(*) FILTER (WHERE r.estado IN ('agendada','en_curso')
+                                       AND r.inicia_at::date = CURRENT_DATE)::int AS hoy,
+                    COUNT(*) FILTER (WHERE r.estado='terminada'
+                                       AND r.terminada_at >= $2::timestamptz
+                                       AND r.terminada_at <= $3::timestamptz)::int AS realizadas
+                 FROM reunion r
+                 WHERE r.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                 ${soloMias ? `AND (r.creado_por = $4 OR EXISTS (
+                        SELECT 1 FROM reunion_participante rp
+                         WHERE rp.reunion_id = r.id AND rp.usuario_id = $4))` : ''}`,
+                soloMias ? [org, desde, hasta, uid] : [org, desde, hasta]),
+            // Pipeline comercial (embudo). RF-014
+            //
+            // CADA PERSONA CAE EN UNA SOLA ETAPA, Y NINGUNA SE PIERDE.
+            //
+            // Antes eran seis COUNT independientes con condiciones que se pisaban
+            // entre sí: un prospecto perdido se contaba en «Perdidos» y además en
+            // «Prospectos» (porque tenía el estado comercial vacío), y en cambio
+            // «En pausa» no calzaba con ningún patrón y desaparecía del embudo.
+            // Medido el 01-09-2026: las barras sumaban 132 sobre 133 personas, con
+            // una contada dos veces. Un embudo cuyas barras no suman el total no
+            // sirve para decidir nada.
+            //
+            // Ahora se clasifica UNA vez con un CASE en cascada —gana la primera
+            // condición que calza, de abajo hacia arriba del embudo— y se cuenta esa
+            // etiqueta. Lo que no calce con nada cae en «otros», que se muestra
+            // aparte en vez de esconderse.
+            pool.query(
+                `WITH etapas AS (
+                    SELECT CASE
+                        WHEN p.estado='perdido' OR p.estado_comercial ILIKE '%perdid%' THEN 'perdidos'
+                        WHEN p.estado='activo'  OR p.estado_comercial ILIKE '%ganad%'  THEN 'ganados'
+                        WHEN p.estado_comercial ILIKE '%negoci%' OR p.estado_comercial ILIKE '%pens%'
+                          OR p.estado_comercial ILIKE '%reuni%'                        THEN 'negociaciones'
+                        WHEN p.estado_comercial ILIKE '%cotiz%' OR p.estado_comercial ILIKE '%propuesta%' THEN 'cotizaciones'
+                        WHEN p.estado_comercial ILIKE '%contact%' OR p.estado_comercial ILIKE '%esperando%' THEN 'contactados'
+                        WHEN p.estado='prospecto' AND (p.estado_comercial IS NULL OR p.estado_comercial=''
+                          OR p.estado_comercial ILIKE '%nuevo%')                        THEN 'prospectos'
+                        ELSE 'otros' END AS etapa
+                    FROM persona p WHERE p.activo AND p.organizacion_id IS NOT DISTINCT FROM $1::uuid ${pScope}
+                 )
+                 SELECT
+                    COUNT(*) FILTER (WHERE etapa='prospectos')::int    AS prospectos,
+                    COUNT(*) FILTER (WHERE etapa='contactados')::int   AS contactados,
+                    COUNT(*) FILTER (WHERE etapa='cotizaciones')::int  AS cotizaciones,
+                    COUNT(*) FILTER (WHERE etapa='negociaciones')::int AS negociaciones,
+                    COUNT(*) FILTER (WHERE etapa='ganados')::int       AS ganados,
+                    COUNT(*) FILTER (WHERE etapa='perdidos')::int      AS perdidos,
+                    COUNT(*) FILTER (WHERE etapa='otros')::int         AS otros
+                 FROM etapas`, pParams),
             // Seguimiento comercial: prospectos sin contacto en N días. RF-015
             pool.query(
                 `SELECT COUNT(*)::int AS n FROM persona p
@@ -859,12 +1095,19 @@ export const metricasDashboard = async (req, res) => {
                    AND (p.fecha_ultimo_contacto IS NULL OR p.fecha_ultimo_contacto < NOW() - ($${soloMias ? 3 : 2} || ' days')::interval)`,
                 soloMias ? [org, uid, seguimientoDias] : [org, seguimientoDias]),
             // Actividad reciente (feed unificado). RF-010
+            //
+            // Las reuniones salen de su propia tabla. Antes se intentaban sacar de
+            // `tarea` con `tipo='reunion'` —que no existe—, así que ninguna reunión
+            // aparecía nunca en el feed.
             pool.query(
                 `(SELECT 'prospecto_nuevo' AS tipo, COALESCE(NULLIF(TRIM(nombre||' '||COALESCE(apellidos,'')),''),'(sin nombre)') AS titulo, created_at AS fecha
                   FROM persona WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid ORDER BY created_at DESC LIMIT 8)
                  UNION ALL
-                 (SELECT CASE WHEN tipo='reunion' THEN 'reunion_creada' ELSE 'tarea_creada' END, titulo, created_at
+                 (SELECT 'tarea_creada', titulo, created_at
                   FROM tarea WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid ORDER BY created_at DESC LIMIT 8)
+                 UNION ALL
+                 (SELECT 'reunion_creada', titulo, created_at
+                  FROM reunion WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid ORDER BY created_at DESC LIMIT 8)
                  UNION ALL
                  (SELECT 'tarea_completada', titulo, completed_at
                   FROM tarea WHERE organizacion_id IS NOT DISTINCT FROM $1::uuid AND estado='completada' AND completed_at IS NOT NULL ORDER BY completed_at DESC LIMIT 8)
@@ -875,9 +1118,14 @@ export const metricasDashboard = async (req, res) => {
                  ORDER BY fecha DESC NULLS LAST LIMIT 12`, [org]),
             // Ranking de vendedores (solo admin). RF-016
             esAdmin(req) ? pool.query(
+                // «Ganados» con la misma definición que el embudo y la conversión
+                // (ver el comentario de convRes): cliente activo o marcado como
+                // ganado en la ficha. Antes solo miraba `estado='activo'` y el
+                // ranking mostraba cero para todo el equipo aunque el embudo de al
+                // lado dijera que había ganados.
                 `SELECT u.nombre,
                         COUNT(p.id)::int AS prospectos,
-                        COUNT(p.id) FILTER (WHERE p.estado='activo')::int AS ganados,
+                        COUNT(p.id) FILTER (WHERE p.estado='activo' OR p.estado_comercial ILIKE '%ganad%')::int AS ganados,
                         (SELECT COUNT(*)::int FROM tarea t WHERE t.responsable_id=u.id AND t.estado='completada'
                           AND t.completed_at >= date_trunc('month',CURRENT_DATE)) AS tareas_mes
                  FROM usuario u
@@ -892,6 +1140,7 @@ export const metricasDashboard = async (req, res) => {
         const meta = Number(metaRes.rows[0]?.meta_mensual) || 0;
         const c = convRes.rows[0];
         const t = tareasRes.rows[0];
+        const rn = reunionesRes.rows[0] || { hoy: 0, realizadas: 0 };
         const pl = pipelineRes.rows[0];
         const ventasMes = money.ventas_mes || 0;
         const tasaConversion = c.total > 0 ? Math.round((c.activos / c.total) * 100) : 0;
@@ -914,11 +1163,16 @@ export const metricasDashboard = async (req, res) => {
                 cobradoHoy: money.cobrado_hoy,
                 // RF-003/004/017
                 tareasPendientes: t.pendientes, tareasVencidas: t.vencidas,
-                tareasCompletadas: t.completadas, reunionesRealizadas: t.reuniones_realizadas,
-                reunionesHoy: t.reuniones_hoy, vencenHoy: t.vencen_hoy,
+                tareasCompletadas: t.completadas, vencenHoy: t.vencen_hoy,
+                // Reuniones: de la tabla `reunion`, no de tareas disfrazadas.
+                reunionesRealizadas: rn.realizadas, reunionesHoy: rn.hoy,
                 // RF-007
                 serieRecaudado: serieRes.rows.map(r => ({ mes: r.mes, recaudado: r.recaudado })),
                 // RF-014
+                // «Otros» solo aparece si de verdad hay gente ahí: son los que
+                // quedaron con un estado comercial que no calza con ninguna etapa
+                // («En pausa», por ejemplo). Se muestran en vez de esconderse, para
+                // que las barras del embudo sumen el total de personas.
                 pipeline: [
                     { etapa: 'Prospectos', n: pl.prospectos },
                     { etapa: 'Contactados', n: pl.contactados },
@@ -926,6 +1180,7 @@ export const metricasDashboard = async (req, res) => {
                     { etapa: 'Negociaciones', n: pl.negociaciones },
                     { etapa: 'Ganados', n: pl.ganados },
                     { etapa: 'Perdidos', n: pl.perdidos },
+                    ...(pl.otros > 0 ? [{ etapa: 'Otros', n: pl.otros }] : []),
                 ],
                 // RF-015
                 sinSeguimiento: seguimientoRes.rows[0].n, sinSeguimientoDias: seguimientoDias,
@@ -994,8 +1249,9 @@ export const obtenerTarea = async (req, res) => {
             pool.query(
                 `SELECT t.*, u.nombre AS responsable_nombre, NULL AS persona_nombre,
                         NULL AS proyecto_nombre, NULL AS proyecto_color,
-                        (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id) AS subtareas_total,
-                        (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.estado='completada') AS subtareas_hechas,
+                        -- Sin las archivadas, igual que en la lista.
+                        (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.archivada_at IS NULL) AS subtareas_total,
+                        (SELECT COUNT(*)::int FROM tarea st WHERE st.parent_id = t.id AND st.archivada_at IS NULL AND st.estado='completada') AS subtareas_hechas,
                         (SELECT COUNT(*)::int FROM tarea_comentario tc WHERE tc.tarea_id = t.id) AS comentarios,
                         (SELECT COUNT(*)::int FROM tarea_adjunto ta WHERE ta.tarea_id = t.id) AS adjuntos,
                         COALESCE((SELECT json_agg(json_build_object('id', cu.id, 'nombre', cu.nombre))

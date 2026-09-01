@@ -75,9 +75,27 @@ async function inyectarHistorial() {
                 const rutEncrypted = encrypt(rutOriginal);
                 const rutHash = crypto.createHash('sha256').update(rutOriginal).digest('hex');
 
+                // LA EMPRESA NACE CON ORGANIZACIÓN, SIEMPRE.
+                //
+                // Antes se creaba sin ella y eso rompía dos cosas a la vez:
+                //   · El CRM filtra por organización, así que la ficha quedaba
+                //     creada pero INVISIBLE en pantalla. Nadie podía completarla
+                //     ni saber que existía.
+                //   · La restricción de RUT único es (organizacion_id, rut_hash),
+                //     y NULL no choca con nada: la misma empresa podía volver a
+                //     crearse una y otra vez, cada vez con otra ficha.
+                //
+                // El 01-09-2026 había 3 así: AWKA, BOSQUE Y TIERRA y METALÚRGICA
+                // CASTINOX. Se les asignó a mano y se corrigió el origen acá.
+                //
+                // Se toma la organización de las empresas que ya existen: es la
+                // de la casa, la misma a la que pertenece quien está facturando.
                 const insertEmpresaQuery = `
-                    INSERT INTO empresa (razon_social, rut_encrypted, rut_hash, giro, regimen_tributario, activo)
-                    VALUES ($1, $2, $3, 'Por definir', 'Por definir', true)
+                    INSERT INTO empresa (razon_social, rut_encrypted, rut_hash, giro, regimen_tributario, activo, organizacion_id)
+                    VALUES ($1, $2, $3, 'Por definir', 'Por definir', true,
+                            (SELECT organizacion_id FROM empresa
+                              WHERE organizacion_id IS NOT NULL
+                              GROUP BY organizacion_id ORDER BY count(*) DESC LIMIT 1))
                     RETURNING id;
                 `;
                 const resultEmpresa = await client.query(insertEmpresaQuery, [nombreCliente, rutEncrypted, rutHash]);
@@ -95,31 +113,68 @@ async function inyectarHistorial() {
             const tipoDte = MAPEO_DTE[doc.documento] || 33;
             // Limpiamos montos por si vienen con puntos o vacíos
             const montoTotal = parseInt((doc.montoTotal || '0').toString().replace(/\./g, ''));
-            const montoNeto = Math.round(montoTotal / 1.19);
+
+            // EL IVA Y EL TOTAL SE GUARDAN, NO SOLO EL NETO.
+            //
+            // Antes se calculaban las dos cifras acá arriba y al INSERT solo
+            // viajaba `monto_neto`: `monto_iva` y `monto_total` quedaban en cero.
+            // Como el SII devuelve el TOTAL (con IVA incluido), el neto se saca
+            // dividiendo por 1,19 y el IVA es la diferencia —así los tres cuadran
+            // exactamente y no se pierde un peso por redondeo—.
+            //
+            // No es cosmético: el historial suma esos campos para mostrar el
+            // total facturado, y con 1.074 documentos en cero faltaban unos
+            // $9.200.000 de IVA en pantalla. Medido el 01-09-2026.
+            //
+            // Las exentas (34) y las notas de crédito exentas (41) no llevan IVA:
+            // ahí el total ES el neto.
+            const sinIva = (tipoDte === 34 || tipoDte === 41);
+            const montoNeto = sinIva ? montoTotal : Math.round(montoTotal / 1.19);
+            const montoIva  = sinIva ? 0 : (montoTotal - montoNeto);
             const folio = parseInt(doc.folio);
 
             // Insertamos con detección de duplicados real basada en la restricción SQL
             const queryInsert = `
-                INSERT INTO documentos_emitidos 
-                (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, fecha_emision, url_pdf)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                ON CONFLICT ON CONSTRAINT unique_empresa_tipo_folio DO NOTHING
+                INSERT INTO documentos_emitidos
+                (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision, url_pdf)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                ON CONFLICT ON CONSTRAINT unique_empresa_tipo_folio DO UPDATE
+                    -- Si el documento ya estaba con los montos en cero —los 1.074
+                    -- que dejó la versión anterior— se completan al volver a
+                    -- sincronizar. Solo se rellena lo vacío: un monto ya guardado
+                    -- no se pisa.
+                    SET monto_iva   = CASE WHEN documentos_emitidos.monto_iva::numeric = 0
+                                           THEN EXCLUDED.monto_iva ELSE documentos_emitidos.monto_iva END,
+                        monto_total = CASE WHEN documentos_emitidos.monto_total::numeric = 0
+                                           THEN EXCLUDED.monto_total ELSE documentos_emitidos.monto_total END
                 RETURNING id;
             `;
 
             const valores = [
-                empresaId, 
-                rutOriginal, 
-                tipoDte, 
-                folio, 
-                montoNeto, 
-                doc.fecha, 
+                empresaId,
+                rutOriginal,
+                tipoDte,
+                folio,
+                montoNeto,
+                montoIva,
+                montoTotal,
+                doc.fecha,
                 doc.enlacePdf || null
             ];
 
+            // Con `DO UPDATE` el ON CONFLICT ya no devuelve 0 filas cuando el
+            // documento existía, así que `rowCount` dejó de servir para saber si
+            // fue alta o no. Se pregunta por el id: si ya lo teníamos, es
+            // duplicado —y de paso se le completaron los montos si estaban en 0—.
+            const yaEstaba = await client.query(
+                `SELECT 1 FROM documentos_emitidos
+                  WHERE empresa_id = $1 AND tipo_dte = $2 AND folio = $3`,
+                [empresaId, tipoDte, folio]);
+            const esNuevo = yaEstaba.rowCount === 0;
+
             const res = await client.query(queryInsert, valores);
-            
-            if (res.rowCount > 0) {
+
+            if (esNuevo && res.rowCount > 0) {
                 insertados++;
                 console.log(`🧾 VENTA GUARDADA: Folio ${folio} para ${nombreCliente}`);
             } else {

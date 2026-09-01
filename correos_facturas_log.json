@@ -3787,5 +3787,61 @@
       "rut": "78068412-7",
       "correo": "talo19@gmail.com"
     }
+  },
+  {
+    "fecha": "2026-09-01T03:03:38.122Z",
+    "folio": "1476",
+    "rut": "",
+    "razonSocial": "CLIENTE EXTERNO (NUEVO)",
+    "correo": "No_encontrado@falta_correo.cl",
+    "estado": "fallido",
+    "motivo": "Falló el envío del correo (revisa el correo destino o las credenciales de Gmail).",
+    "datos": {
+      "producto": {
+        "nombre": "CONTABILIDAD EXECUTIVE",
+        "precio": "50000",
+        "unidad": "1",
+        "cantidad": "1",
+        "descripcion": "SERVICIOS CORRESPONDIENTES A AGOSTO"
+      },
+      "dvReceptor": "9",
+      "empresa_id": "EXTERNO",
+      "razonSocial": "CLIENTE EXTERNO (NUEVO)",
+      "rutReceptor": "76837993",
+      "ciudadEmisor": "Santiago",
+      "ciudadReceptor": "Santiago",
+      "telefonoEmisor": "56978278733",
+      "organizacion_id": "e5815fad-7ecb-4903-a28c-0c2188583e24",
+      "contactoReceptor": ""
+    }
+  },
+  {
+    "fecha": "2026-09-01T03:06:34.767Z",
+    "folio": "1476",
+    "rut": "76837993-9",
+    "razonSocial": "ASESORIA FINANCIERA E INMOBILIARIA SUHOUSE SPA",
+    "correo": "gponce@suhouse.cl",
+    "estado": "enviado",
+    "motivo": "",
+    "datos": {
+      "producto": {
+        "nombre": "CONTABILIDAD EXECUTIVE",
+        "precio": "50000",
+        "unidad": "1",
+        "cantidad": "1",
+        "descripcion": "SERVICIOS CORRESPONDIENTES A AGOSTO"
+      },
+      "dvReceptor": "9",
+      "empresa_id": "EXTERNO",
+      "razonSocial": "ASESORIA FINANCIERA E INMOBILIARIA SUHOUSE SPA",
+      "rutReceptor": "76837993",
+      "ciudadEmisor": "Santiago",
+      "ciudadReceptor": "Santiago",
+      "telefonoEmisor": "56978278733",
+      "organizacion_id": "e5815fad-7ecb-4903-a28c-0c2188583e24",
+      "contactoReceptor": "",
+      "rut": "76837993-9",
+      "correo": "gponce@suhouse.cl"
+    }
   }
 ]

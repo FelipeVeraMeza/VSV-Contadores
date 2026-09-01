@@ -93,8 +93,15 @@ async function inyectarCompras() {
                 const rutHash = crypto.createHash('sha256').update(rutReceptorOriginal).digest('hex');
 
                 const insertEmpresaQuery = `
-                    INSERT INTO empresa (razon_social, rut_encrypted, rut_hash, giro, regimen_tributario, activo)
-                    VALUES ($1, $2, $3, 'Por definir', 'Por definir', true)
+                    -- Con organización, igual que en subir_facturas_emitidas.mjs:
+                    -- sin ella la ficha queda invisible en el CRM (que filtra por
+                    -- organización) y además puede duplicarse, porque el RUT único
+                    -- es (organizacion_id, rut_hash) y NULL no choca con nada.
+                    INSERT INTO empresa (razon_social, rut_encrypted, rut_hash, giro, regimen_tributario, activo, organizacion_id)
+                    VALUES ($1, $2, $3, 'Por definir', 'Por definir', true,
+                            (SELECT organizacion_id FROM empresa
+                              WHERE organizacion_id IS NOT NULL
+                              GROUP BY organizacion_id ORDER BY count(*) DESC LIMIT 1))
                     RETURNING id;
                 `;
                 const resultEmpresa = await client.query(insertEmpresaQuery, [nombreReceptor, rutEncrypted, rutHash]);

@@ -46,7 +46,13 @@ const DocumentosDTE = () => {
   const esPrincipal = Boolean(selectedCompany && (selectedCompany.esPrincipal || (principal && selectedCompany.id === principal.id)));
   const [documentos, setDocumentos] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false); 
+  // El progreso vive en el SERVIDOR, no acá: por eso esto es un espejo de lo
+  // que responde /sincronizar-sii/progreso y no el estado real. Así el avance
+  // sobrevive a cambiar de sección o recargar la página.
+  const [sync, setSync] = useState({ activo: false, paso: 0, total: 2, mensaje: '', ok: null });
+  // Cuántos meses hacia atrás bajar. 1 por omisión, que es lo que se necesita a
+  // diario: lo facturado desde la última sincronización.
+  const [meses, setMeses] = useState(1);
   // Folio que se está bajando en este momento (uno a la vez: el SII no admite
   // dos sesiones simultáneas de la misma cuenta).
   const [bajando, setBajando] = useState(null);
@@ -117,63 +123,99 @@ const DocumentosDTE = () => {
   }, [cargarHistorial]);
 
   // ======================================================================
-  // 🤖 FUNCIÓN INTELIGENTE: Sincroniza TODO en cadena (Ventas -> Compras)
+  // SINCRONIZAR CON EL SII · arranca y suelta
+  // ----------------------------------------------------------------------
+  // El robot abre un navegador, entra al portal del SII y baja el historial
+  // de ventas y de compras. Eso tarda MINUTOS.
+  //
+  // Antes se esperaba la respuesta del POST con un spinner: la pantalla
+  // quedaba tomada todo ese rato, sin decir en qué iba, y si alguien cerraba
+  // la pestaña o se le caía la conexión no había forma de saber si había
+  // terminado —el robot seguía corriendo en el servidor, invisible—.
+  //
+  // Ahora el POST vuelve al toque y el avance se pregunta aparte. Se puede
+  // cambiar de sección y volver: el progreso sigue ahí, porque vive en el
+  // servidor y no en esta pantalla.
   // ======================================================================
   const handleSincronizarSII = async () => {
-    setIsSyncing(true);
-
     try {
-      // --- PASO 1: SINCRONIZAR VENTAS ---
+      const r = await fetch(`${API_BASE_URL}/sincronizar-sii`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-session-id': user?.sessionId },
+        body: JSON.stringify({ tipo: 'TODO', meses }),
+      });
+      const d = await r.json();
+      if (!d.success) {
+        // 409 = ya hay una corriendo, o el facturador masivo está usando el SII.
+        // No es un error del usuario: se le dice qué pasa y se sigue.
+        toast({ variant: "destructive", title: "No se puede sincronizar ahora", description: d.message });
+        return;
+      }
+      setSync({ activo: true, paso: 1, total: 2, mensaje: 'Preparando el robot…', ok: null, meses });
       toast({
-        title: "🤖 Robot Iniciado [1/2]",
-        description: "Extrayendo historial de VENTAS desde el SII...",
+        title: "Sincronización iniciada",
+        description: `Bajando ${meses === 1 ? 'el último mes' : `los últimos ${meses} meses`}. Puedes seguir trabajando.`,
       });
-
-      const responseVentas = await fetch(`${API_BASE_URL}/sincronizar-sii`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-session-id': user?.sessionId },
-          body: JSON.stringify({ tipo: 'VENTAS' }) 
-      });
-      const dataVentas = await responseVentas.json();
-      if (!dataVentas.success) throw new Error(dataVentas.message);
-
-
-      // --- PASO 2: SINCRONIZAR COMPRAS ---
-      toast({
-        title: "🤖 Robot Trabajando [2/2]",
-        description: "Ventas listas. Ahora extrayendo COMPRAS...",
-      });
-
-      const responseCompras = await fetch(`${API_BASE_URL}/sincronizar-sii`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-session-id': user?.sessionId },
-          body: JSON.stringify({ tipo: 'COMPRAS' }) 
-      });
-      const dataCompras = await responseCompras.json();
-      if (!dataCompras.success) throw new Error(dataCompras.message);
-
-
-      // --- FINALIZADO CON ÉXITO ---
-      toast({
-        title: "✅ Sincronización Total Exitosa",
-        description: "Ventas y Compras han sido actualizadas en la base de datos.",
-        className: "bg-emerald-600 text-white border-none",
-      });
-      
-      // Recargamos la tabla visual para mostrar lo nuevo
-      await cargarHistorial(); 
-      
     } catch (error) {
-      console.error(error);
-      toast({
-        variant: "destructive",
-        title: "Error de Sincronización",
-        description: "El robot del SII encontró un problema al extraer o subir los datos."
-      });
-    } finally {
-      setIsSyncing(false);
+      toast({ variant: "destructive", title: "Error de conexión", description: "No se pudo iniciar la sincronización." });
     }
   };
+
+  // Sigue el avance mientras hay algo corriendo. Se pregunta cada 3 segundos:
+  // el robot tarda minutos, así que preguntar más seguido solo ensucia el log
+  // del servidor sin mostrar nada nuevo.
+  useEffect(() => {
+    if (!sync.activo) return;
+    let vivo = true;
+    const consulta = setInterval(async () => {
+      try {
+        const r = await fetch(`${API_BASE_URL}/sincronizar-sii/progreso`, {
+          headers: { 'x-session-id': user?.sessionId },
+        });
+        const d = await r.json();
+        if (!vivo) return;
+        setSync({
+          activo: d.activo, paso: d.paso || 0, total: d.total || 2,
+          mensaje: d.mensaje || '', ok: d.ok, meses: d.meses,
+        });
+        if (!d.activo) {
+          clearInterval(consulta);
+          if (d.ok) {
+            toast({
+              title: "Sincronización lista",
+              description: d.mensaje || 'Ventas y compras actualizadas.',
+              className: "bg-emerald-600 text-white border-none",
+            });
+            cargarHistorial();      // recién ahora hay datos nuevos que mostrar
+          } else {
+            toast({
+              variant: "destructive",
+              title: "La sincronización falló",
+              description: d.error || d.mensaje || 'El robot no pudo terminar.',
+            });
+          }
+        }
+      } catch { /* si no responde, se reintenta en la próxima vuelta */ }
+    }, 3000);
+    return () => { vivo = false; clearInterval(consulta); };
+  }, [sync.activo, user?.sessionId]);
+
+  // Al entrar a la pantalla se pregunta si YA hay una sincronización corriendo.
+  // Sin esto, alguien que la lanzó y se fue a otra sección volvía y veía el
+  // botón como si nada estuviera pasando, y la lanzaba de nuevo.
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE_URL}/sincronizar-sii/progreso`, {
+          headers: { 'x-session-id': user?.sessionId },
+        });
+        const d = await r.json();
+        if (d?.activo) setSync({ activo: true, paso: d.paso || 0, total: d.total || 2, mensaje: d.mensaje || '', ok: null, meses: d.meses });
+      } catch { /* si falla, la pantalla queda como siempre */ }
+    })();
+    // Solo al montar: reengancharse en cada cambio dispararía consultas de más.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ======================================================================
   // 🔍 LÓGICA DE BUSCADOR PROFESIONAL (Actualizado a Búsqueda por Inicio)
@@ -363,7 +405,7 @@ const DocumentosDTE = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl border border-[#efe8dd] backdrop-blur-md shadow-xl">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-2xl border border-[#efe8dd]">
         <div className="flex items-center gap-3">
             <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-600">
                 <FileText size={20} />
@@ -409,7 +451,7 @@ const DocumentosDTE = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white p-4 rounded-2xl border border-[#efe8dd] backdrop-blur-md shadow-xl">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-white p-4 rounded-2xl border border-[#efe8dd]">
         
         {/* ========================================================== */}
         {/* BUSCADOR PROFESIONAL (DISEÑO ULTRA-MODERNO) */}
@@ -436,7 +478,7 @@ const DocumentosDTE = () => {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 5, scale: 0.98 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
-                className="absolute top-full left-0 right-0 mt-2 bg-white backdrop-blur-2xl border border-[#efe8dd] rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] z-50 overflow-hidden ring-1 ring-white/5"
+                className="absolute top-full left-0 right-0 mt-2 bg-white border border-[#efe8dd] rounded-xl shadow-lg z-50 overflow-hidden"
               >
                 <div className="px-4 py-2 border-b border-[#efe8dd] bg-slate-50">
                   <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Sugerencias</span>
@@ -450,17 +492,21 @@ const DocumentosDTE = () => {
                         setSearchTerm(ent.nombre);
                         setShowSuggestions(false);
                       }}
-                      className="group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-200 hover:bg-blue-600/30 hover:border hover:border-blue-500/50 hover:shadow-[0_0_15px_-3px_rgba(59,130,246,0.3)] border border-transparent"
+                      // El hover era del tema oscuro: fondo azul translúcido y
+                      // texto `blue-200`, que sobre blanco quedaba casi ilegible.
+                      // Un fondo suave y el texto más oscuro dicen lo mismo y se
+                      // leen.
+                      className="group flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-colors hover:bg-slate-50"
                     >
                       <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="p-1.5 bg-slate-50 border border-[#efe8dd] rounded-md group-hover:bg-blue-500/40 group-hover:border-blue-400/50 transition-colors shadow-sm">
-                          <Building2 size={14} className="text-slate-500 group-hover:text-blue-200 transition-colors" />
+                        <div className="p-1.5 bg-slate-50 border border-[#efe8dd] rounded-md group-hover:border-slate-300 transition-colors">
+                          <Building2 size={14} className="text-slate-400 group-hover:text-slate-600 transition-colors" />
                         </div>
-                        <span className="text-xs text-slate-600 group-hover:text-slate-900 font-bold tracking-tight truncate transition-colors drop-shadow-md">
+                        <span className="text-xs text-slate-600 group-hover:text-slate-900 font-medium truncate transition-colors">
                           {formatDisplay(ent.nombre)}
                         </span>
                       </div>
-                      <span className="text-[9px] text-slate-400 font-mono flex-shrink-0 ml-2 bg-slate-50 px-2 py-1 rounded-md border border-[#efe8dd] group-hover:text-blue-200 group-hover:border-blue-400/50 transition-colors group-hover:bg-blue-900/40">
+                      <span className="text-[10px] text-slate-400 font-mono tabular-nums flex-shrink-0 ml-2 group-hover:text-slate-600 transition-colors">
                         {formatDisplay(ent.rut)}
                       </span>
                     </div>
@@ -518,28 +564,80 @@ const DocumentosDTE = () => {
             <Download size={14} className="mr-2 text-emerald-600" /> Exportar Excel
           </Button>
 
-          {/* Sincronización total con el SII */}
+          {/* CUÁNTO HISTORIAL SE BAJA · se elige acá, al lado del botón.
+              Antes estaba fijo en 1 mes dentro del código: para traer marzo
+              había que editar dos archivos y volver a desplegar. Va pegado al
+              botón porque es una decisión del momento —"esta vez tráeme tres
+              meses"—, no una configuración que uno va a buscar a otra pantalla.
+
+              Cada mes extra son más páginas que recorrer en el portal del SII,
+              que es lento y corta sesiones largas; por eso el aviso en las
+              opciones grandes y por eso 1 mes sigue siendo lo normal. */}
+          <select
+            value={meses}
+            onChange={(e) => setMeses(Number(e.target.value))}
+            disabled={sync.activo}
+            title="Cuántos meses hacia atrás bajar del SII"
+            className="bg-slate-50 border border-[#efe8dd] rounded-md px-2 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-600 cursor-pointer focus:outline-none focus:border-slate-400 disabled:opacity-50"
+          >
+            <option value={1}>Último mes</option>
+            <option value={2}>2 meses</option>
+            <option value={3}>3 meses</option>
+            <option value={6}>6 meses (lento)</option>
+            <option value={12}>12 meses (muy lento)</option>
+          </select>
+
+          {/* Sincronización con el SII. Corre en el servidor: el botón solo la
+              lanza y muestra en qué va. Se puede cerrar la pantalla. */}
           <Button
             onClick={handleSincronizarSII}
-            disabled={isSyncing}
+            disabled={sync.activo}
             variant="outline"
             size="sm"
+            title={sync.activo
+              ? 'El robot está trabajando en el servidor. Puedes irte de esta pantalla.'
+              : `Baja del SII las ventas y compras de ${meses === 1 ? 'el último mes' : `los últimos ${meses} meses`}. Tarda varios minutos.`}
             className={`text-[10px] font-black uppercase tracking-widest transition-all border ${
-                isSyncing
-                ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/50 cursor-wait'
+                sync.activo
+                ? 'bg-indigo-50 text-indigo-600 border-indigo-200 cursor-wait'
                 : 'bg-slate-50 text-slate-500 hover:text-slate-900 hover:bg-slate-100 border-[#efe8dd]'
             }`}
           >
-            {isSyncing ? (
-                <><Loader2 size={14} className="mr-2 animate-spin" /> Sincronizando Todo...</>
+            {sync.activo ? (
+                <><Loader2 size={14} className="mr-2 animate-spin" /> Sincronizando {sync.paso}/{sync.total}</>
             ) : (
-                <><Globe size={14} className="mr-2 text-indigo-400" /> Sincronizar Todo el SII</>
+                <><Globe size={14} className="mr-2 text-indigo-400" /> Sincronizar el SII</>
             )}
           </Button>
         </div>
       </div>
 
-      <div ref={tableContainerRef} className="overflow-hidden rounded-2xl border border-[#efe8dd] bg-slate-50 backdrop-blur-xl shadow-2xl flex flex-col pt-2 scroll-mt-24">
+      {/* EN QUÉ VA EL ROBOT. Aparece solo mientras corre. Dice el paso y lo que
+          está haciendo, y deja claro que uno se puede ir: el trabajo es del
+          servidor, no de esta pestaña. */}
+      {sync.activo && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50">
+          <Loader2 size={15} className="animate-spin text-indigo-600 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs font-semibold text-indigo-900">
+                Sincronizando con el SII · paso {sync.paso} de {sync.total}
+                {sync.meses ? ` · ${sync.meses === 1 ? 'último mes' : `${sync.meses} meses`}` : ''}
+              </span>
+              <span className="text-[11px] text-indigo-700 truncate">{sync.mensaje}</span>
+            </div>
+            <div className="mt-1.5 h-1 bg-indigo-100 rounded-full overflow-hidden">
+              <div className="h-full bg-indigo-500 transition-all duration-500"
+                   style={{ width: `${Math.round((sync.paso / (sync.total || 2)) * 100)}%` }} />
+            </div>
+          </div>
+          <span className="text-[10px] text-indigo-600 shrink-0 hidden sm:block">
+            Puedes seguir trabajando
+          </span>
+        </div>
+      )}
+
+      <div ref={tableContainerRef} className="overflow-hidden rounded-2xl border border-[#efe8dd] bg-slate-50 flex flex-col pt-2 scroll-mt-24">
         <div className="overflow-x-auto custom-scrollbar w-full">
           <table className="w-full text-left border-collapse min-w-[900px]">
             <thead className="bg-slate-50 border-b border-[#efe8dd]">

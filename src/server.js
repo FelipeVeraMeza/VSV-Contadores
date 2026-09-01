@@ -55,6 +55,11 @@ import { cargarJSONaBD } from './components/contabilidad/scripts/subir_documento
 // 🔒 Estado del Facturador Masivo: si está activo, NO sincronizamos el SII (misma cuenta = se botan la sesión)
 import { estadoRobot } from './components/facturacion/scripts/factura_masiva.mjs';
 import { iniciarRecordatoriosReunion } from './utils/recordatorioReunion.js';
+import {
+    estadoSincronizacion, comenzarSincronizacion,
+    avanzarSincronizacion, terminarSincronizacion,
+} from './utils/estadoSincronizacion.js';
+import { mesesAtras } from './sii_core/rangoSincronizacion.mjs';
 
 // --- Inicialización del Servidor ---
 const app = express();
@@ -289,18 +294,102 @@ app.post('/api/sincronizar-sii', apiLimiter, requireSession, requireAdmin, async
         }
     }
 
-    // 2. MODO GLOBAL (El que ya tenías)
-    if (tipo !== 'VENTAS' && tipo !== 'COMPRAS') {
+    // ========================================================================
+    // 2. MODO GLOBAL · ventas + compras, EN SEGUNDO PLANO
+    // ------------------------------------------------------------------------
+    // Antes esto corría dentro de la petición: dos robots del SII en cadena,
+    // varios minutos, con el navegador esperando la respuesta. Si el usuario
+    // cerraba la pestaña o se le caía la conexión, quedaba sin saber si había
+    // terminado —el robot seguía vivo en el servidor, invisible— y con un proxy
+    // de por medio la petición se cortaba sola por timeout igual.
+    //
+    // Ahora se responde al toque y el avance se consulta en /sincronizar-sii/
+    // progreso, que es como ya funcionaba el facturador masivo.
+    // ========================================================================
+    if (tipo !== 'VENTAS' && tipo !== 'COMPRAS' && tipo !== 'TODO') {
         return res.status(400).json({ success: false, message: "Tipo inválido." });
     }
 
-    const exito = await ejecutarSincronizacion(tipo);
-
-    if (exito) {
-        res.json({ success: true, message: `Historial de ${tipo.toLowerCase()} sincronizado correctamente.` });
-    } else {
-        res.status(500).json({ success: false, message: "Falla en el robot global al sincronizar." });
+    if (estadoSincronizacion.activo) {
+        return res.status(409).json({
+            success: false,
+            message: `Ya hay una sincronización en curso${
+                estadoSincronizacion.lanzadoPor ? ` (la lanzó ${estadoSincronizacion.lanzadoPor})` : ''
+            }. Espera a que termine.`,
+        });
     }
+    // El mismo candado que ya tenía `ejecutarSincronizacion`, pero comprobado
+    // ANTES de responder: así el usuario se entera al apretar y no minutos
+    // después. Las dos cosas usan la misma cuenta del SII y se botan la sesión.
+    if (estadoRobot.activo) {
+        return res.status(409).json({
+            success: false,
+            message: 'El facturador masivo está emitiendo ahora. No se puede tocar el SII hasta que termine.',
+        });
+    }
+
+    // CUÁNTOS MESES HACIA ATRÁS · lo elige quien aprieta el botón.
+    // Viaja al robot por variable de entorno porque los orquestadores corren en
+    // OTRO proceso (`exec`), así que no se les puede pasar un argumento normal.
+    // Se valida acá igual que en rangoSincronizacion.mjs: un valor raro cae al
+    // de siempre en vez de dejar la sincronización sin correr.
+    const mesesPedidos = Number.parseInt(req.body?.meses, 10);
+    const meses = Number.isFinite(mesesPedidos) && mesesPedidos >= 1
+        ? Math.min(mesesPedidos, 24)
+        : undefined;
+
+    comenzarSincronizacion(req.user?.nombre || null);
+    res.status(202).json({
+        success: true,
+        message: 'La sincronización arrancó. Puedes seguir trabajando; el avance se ve en la pantalla.',
+    });
+
+    // A partir de acá ya se respondió: esto corre solo. Nada de lo que pase
+    // puede escribir en `res`, y por eso todo va envuelto en try/catch —una
+    // excepción suelta acá tumbaría el proceso entero.
+    (async () => {
+        const partes = tipo === 'TODO' ? ['VENTAS', 'COMPRAS'] : [tipo];
+        estadoSincronizacion.total = partes.length;
+        estadoSincronizacion.meses = meses ?? mesesAtras();
+        // El robot corre en otro proceso y lee SII_MESES_ATRAS del entorno. Se
+        // fija acá para esta corrida y se restaura al final: dejarlo cambiado
+        // afectaría a la próxima sincronización sin que nadie lo pidiera.
+        const mesesPrevios = process.env.SII_MESES_ATRAS;
+        if (meses) process.env.SII_MESES_ATRAS = String(meses);
+        try {
+            for (let i = 0; i < partes.length; i++) {
+                const parte = partes[i];
+                avanzarSincronizacion(
+                    parte.toLowerCase(), i + 1,
+                    `Extrayendo ${parte.toLowerCase()} desde el SII…`);
+                const exito = await ejecutarSincronizacion(parte);
+                if (!exito) {
+                    terminarSincronizacion(false,
+                        `Falló la extracción de ${parte.toLowerCase()}.`,
+                        'El robot no pudo completar la extracción en el portal del SII.');
+                    return;
+                }
+            }
+            terminarSincronizacion(true,
+                partes.length > 1
+                    ? 'Ventas y compras actualizadas.'
+                    : `${partes[0].charAt(0)}${partes[0].slice(1).toLowerCase()} actualizadas.`);
+        } catch (error) {
+            console.error('❌ Error en la sincronización de fondo:', error);
+            terminarSincronizacion(false, 'La sincronización se cortó por un error.', error.message);
+        } finally {
+            // Se deja el entorno como estaba, pase lo que pase.
+            if (mesesPrevios === undefined) delete process.env.SII_MESES_ATRAS;
+            else process.env.SII_MESES_ATRAS = mesesPrevios;
+        }
+    })();
+});
+
+// El avance de la sincronización. Se consulta cada pocos segundos mientras
+// corre; devuelve el estado tal cual, incluido el resultado de la última vez,
+// para que la pantalla pueda mostrarlo aunque el usuario no estuviera mirando.
+app.get('/api/sincronizar-sii/progreso', requireSession, (req, res) => {
+    res.json({ success: true, ...estadoSincronizacion });
 });
 
 // ============================================================================

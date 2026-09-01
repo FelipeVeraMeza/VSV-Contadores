@@ -470,33 +470,60 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
         const rutOriginal = `${datos.rutReceptor}-${datos.dvReceptor}`;
 
         if (empresaIdFinal === 'EXTERNO') {
-            console.log(`⚠️ Cliente externo detectado. Creando la empresa: "${razonSocialCapturadaDelSII}" en el CRM...`);
+            // «EXTERNO» significa que se facturó a alguien que no se eligió de la
+            // lista, NO que sea un cliente nuevo: puede estar en el CRM y quien
+            // factura simplemente escribió el RUT a mano.
+            //
+            // Antes se insertaba directo y, si ya existía, la base rechazaba por
+            // `empresa_rut_hash_org_key` y el catch dejaba `empresaIdFinal = null`.
+            // Eso arrastraba dos consecuencias: la factura no se guardaba en el
+            // historial y el cobro tampoco se registraba, aunque el documento ya
+            // estuviera emitido ante el SII. Pasó con la factura 1476 el 31-08-2026,
+            // facturada a ASESORIA FINANCIERA E INMOBILIARIA SUHOUSE SPA, que ya
+            // existía en el CRM.
+            //
+            // Ahora se busca primero: si está, se usa; si no, se crea.
+            const rutHash = crypto.createHash('sha256').update(rutOriginal).digest('hex');
             try {
-                const rutHash = crypto.createHash('sha256').update(rutOriginal).digest('hex');
-                const rutEncrypted = encrypt(rutOriginal);
+                const yaExiste = await client.query(
+                    `SELECT id, razon_social FROM empresa
+                      WHERE rut_hash = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`,
+                    [rutHash, datos.organizacion_id || null]);
 
-                // organizacion_id es obligatorio de facto: el CRM filtra por él,
-                // así que sin este valor la empresa quedaría creada pero invisible.
-                const insertEmpresaQuery = `
-                    INSERT INTO empresa (razon_social, rut_encrypted, rut_hash, giro, regimen_tributario, activo, organizacion_id)
-                    VALUES ($1, $2, $3, 'Por definir', 'Por definir', true, $4)
-                    RETURNING id;
-                `;
-                const resultEmpresa = await client.query(insertEmpresaQuery, [razonSocialCapturadaDelSII, rutEncrypted, rutHash, datos.organizacion_id || null]);
-                empresaIdFinal = resultEmpresa.rows[0].id;
-                console.log(`✅ ¡Cliente nuevo creado con éxito! ID: ${empresaIdFinal}`);
+                if (yaExiste.rows.length > 0) {
+                    empresaIdFinal = yaExiste.rows[0].id;
+                    console.log(`✅ El cliente ya estaba en el CRM: "${yaExiste.rows[0].razon_social}". Se usa esa ficha.`);
+                } else {
+                    console.log(`⚠️ Cliente externo detectado. Creando la empresa: "${razonSocialCapturadaDelSII}" en el CRM...`);
+                    // organizacion_id es obligatorio de facto: el CRM filtra por él,
+                    // así que sin este valor la empresa quedaría creada pero invisible.
+                    const resultEmpresa = await client.query(
+                        `INSERT INTO empresa (razon_social, rut_encrypted, rut_hash, giro, regimen_tributario, activo, organizacion_id)
+                         VALUES ($1, $2, $3, 'Por definir', 'Por definir', true, $4)
+                         RETURNING id`,
+                        [razonSocialCapturadaDelSII, encrypt(rutOriginal), rutHash, datos.organizacion_id || null]);
+                    empresaIdFinal = resultEmpresa.rows[0].id;
+                    console.log(`✅ ¡Cliente nuevo creado con éxito! ID: ${empresaIdFinal}`);
+                }
             } catch (errCreacion) {
-                console.error("❌ Error al crear la nueva empresa en la BD:", errCreacion.message);
-                empresaIdFinal = null; 
+                console.error("❌ Error al resolver la empresa en la BD:", errCreacion.message);
+                empresaIdFinal = null;
             }
         }
 
+        // LOS MONTOS SE CALCULAN FUERA DEL `if`, Y ES A PROPÓSITO.
+        // Estaban declarados con `const` DENTRO del bloque de abajo, pero el
+        // registro del cobro —que viene después y está fuera— usa `montoNeto`.
+        // Resultado: «montoNeto is not defined» y la factura quedaba emitida
+        // ante el SII sin entrar a la cobranza, así que el cliente no aparecía
+        // debiendo. Pasó con la factura 1476 el 31-08-2026.
+        const tipoDte = datos.tipo_documento ? parseInt(datos.tipo_documento) : 33;
+        const montoNeto = parseInt(datos.producto.precio);
+        // IVA y total: la factura afecta (33) lleva 19%; una exenta (34/41) no.
+        const montoIva = (tipoDte === 34 || tipoDte === 41) ? 0 : Math.round(montoNeto * 0.19);
+        const montoTotal = montoNeto + montoIva;
+
         if (empresaIdFinal) {
-            const tipoDte = datos.tipo_documento ? parseInt(datos.tipo_documento) : 33;
-            const montoNeto = parseInt(datos.producto.precio);
-            // IVA y total: la factura afecta (33) lleva 19%; una exenta (34/41) no.
-            const montoIva = (tipoDte === 34 || tipoDte === 41) ? 0 : Math.round(montoNeto * 0.19);
-            const montoTotal = montoNeto + montoIva;
             const fechaEmision = new Date().toISOString();
 
             try {
@@ -543,19 +570,32 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
         // emitir a mano una factura que estaba pendiente). Si no existe, se crea.
         try {
             paso(11, 'Registrando el cobro');
-            const periodoCobro = new Date();
-            periodoCobro.setDate(1);
-            const periodoSql = periodoCobro.toISOString().slice(0, 10);
-            // El pago vence el día 5 del mes siguiente, igual que en el ciclo normal.
-            const vence = new Date(periodoCobro);
-            vence.setMonth(vence.getMonth() + 1);
-            vence.setDate(5);
 
+            // EL PERIODO LO CALCULA POSTGRES, NO JAVASCRIPT.
+            //
+            // Antes se armaba acá con `new Date()` + `setDate(1)` y se mandaba
+            // como texto. Eso mezcla husos: el proceso corre en hora de Chile
+            // pero `toISOString()` devuelve UTC, así que a fin de mes el día 1
+            // local se convertía en el día 2 —o el mes anterior—. El resultado
+            // era un periodo `2026-08-02` cuando la convención de la tabla es
+            // que el periodo SIEMPRE es el día 1: representa un MES, no un día.
+            //
+            // No es cosmético. La pantalla de Correo Masivo elige qué mostrar
+            // con `MAX(periodo)` entre los pendientes, y esa fila con día 2 le
+            // ganaba a todas las de día 1: el 01-09-2026 mostraba 1 factura en
+            // vez de 93. Le pasó a la 1476 de ASESORIA SUHOUSE.
+            //
+            // `date_trunc('month', NOW())` lo resuelve en el mismo lugar donde
+            // se guarda, con el huso del servidor, y sin pasar por texto.
             await client.query(
                 `INSERT INTO cobro_mensual
                     (organizacion_id, empresa_id, periodo, monto_esperado, monto_facturado,
                      folio, tipo_dte, estado, fecha_emision, fecha_vencimiento)
-                 VALUES ($1,$2,$3::date,$4,$4,$5,'33','PENDIENTE_PAGO',NOW(),$6::date)
+                 VALUES ($1,$2,
+                         date_trunc('month', NOW())::date,
+                         $3,$3,$4,'33','PENDIENTE_PAGO',NOW(),
+                         -- Vence el día 5 del mes siguiente, igual que el ciclo normal.
+                         (date_trunc('month', NOW()) + INTERVAL '1 month' + INTERVAL '4 days')::date)
                  ON CONFLICT (empresa_id, periodo) DO UPDATE
                     SET folio           = EXCLUDED.folio,
                         monto_facturado = EXCLUDED.monto_facturado,
@@ -565,10 +605,10 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
                         estado          = CASE WHEN cobro_mensual.estado = 'PAGADA'
                                                THEN 'PAGADA' ELSE 'PENDIENTE_PAGO' END,
                         updated_at      = NOW()`,
-                [datos.organizacion_id || null, empresaIdFinal, periodoSql,
-                 montoNeto, String(folio), vence.toISOString().slice(0, 10)]
+                [datos.organizacion_id || null, empresaIdFinal,
+                 montoNeto, String(folio)]
             );
-            console.log(`✅ Cobro registrado: folio ${folio} por $${Number(montoNeto).toLocaleString('es-CL')}, vence el ${vence.toLocaleDateString('es-CL')}`);
+            console.log(`✅ Cobro registrado: folio ${folio} por $${Number(montoNeto).toLocaleString('es-CL')}.`);
         } catch (errCobro) {
             // La factura ya está emitida ante el SII: esto no la deshace.
             console.log(`⚠️ La factura ${folio} se emitió, pero NO quedó en la cobranza: ${errCobro.message}`);
@@ -595,7 +635,40 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
         let correoEnviado = false;
         try {
             paso(12, 'Enviando la factura al cliente');
-            await enviarCorreoFacturaEnSesion(page, folio, datos);
+
+            // SE MANDA EL NOMBRE Y EL CORREO DE VERDAD, NO LOS DEL FORMULARIO.
+            //
+            // Cuando se factura a un RUT que no está en la lista, la pantalla
+            // manda `razonSocial: 'CLIENTE EXTERNO (NUEVO)'` —un marcador, no un
+            // nombre—. Ese texto quedaba guardado en el registro de correos y
+            // salía así en Correo Masivo, donde nadie sabe de qué cliente habla.
+            // Pasó con la factura 1476 el 31-08-2026.
+            //
+            // Para entonces el robot YA sabe quién es: capturó la razón social
+            // del propio SII (`razonSocialCapturadaDelSII`) y, si la empresa
+            // estaba en el CRM, tiene su ficha. Se usa eso, y el marcador solo
+            // queda como último recurso.
+            let correoCliente = datos.contactoReceptor || null;
+            let nombreCliente = razonSocialCapturadaDelSII || datos.razonSocial || null;
+            if (empresaIdFinal) {
+                try {
+                    const { rows } = await client.query(
+                        `SELECT razon_social, email_corporativo FROM empresa WHERE id = $1`,
+                        [empresaIdFinal]);
+                    if (rows[0]) {
+                        nombreCliente = rows[0].razon_social || nombreCliente;
+                        // El correo escrito a mano manda: puede ser el de este
+                        // envío puntual, distinto al de la ficha.
+                        correoCliente = correoCliente || rows[0].email_corporativo || null;
+                    }
+                } catch { /* si falla, se usa lo que ya se tenía */ }
+            }
+
+            await enviarCorreoFacturaEnSesion(page, folio, {
+                ...datos,
+                razonSocial: nombreCliente,
+                contactoReceptor: correoCliente,
+            });
             correoEnviado = true;
             console.log(`✅ Factura ${folio} enviada a ${datos.contactoReceptor || 'el cliente'}`);
         } catch (errCorreo) {

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 
 // IMPORTACIONES EXTERNAS
 import { iniciarSesion, cerrarSesion } from '../documentos recibidos/sii_operaciones.js';
+import { fechaLimiteSii, describirRango } from '../../rangoSincronizacion.mjs';
 
 // CONFIGURACIÓN DE RUTAS
 const __filename = fileURLToPath(import.meta.url);
@@ -39,11 +40,11 @@ async function extraerTablaFoliosEmitidos(page) {
         })
     ]);
 
-    // 🧠 CONFIGURACIÓN DEL LÍMITE DE TIEMPO
-    const hoy = new Date();
-    // Día 1 del mes anterior
-    const fechaLimite = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
-    fechaLimite.setHours(0, 0, 0, 0);
+    // HASTA DÓNDE SE BAJA. Se configura con SII_MESES_ATRAS (ver
+    // src/sii_core/rangoSincronizacion.mjs); sin esa variable son 1 mes, que
+    // es lo que hacía antes. Vale igual para ventas y para compras.
+    const fechaLimite = fechaLimiteSii();
+    console.log(`📅 Bajando documentos ${describirRango()}.`);
 
     let facturasExtraidas = [];
     let paginaActual = 1;
@@ -201,7 +202,12 @@ async function ejecutarRobotAutomatico() {
         if (facturasNuevas.length > 0) {
             datosExistentes = [...datosExistentes, ...facturasNuevas];
             fs.writeFileSync(rutaArchivoJSON_Emitidos, JSON.stringify(datosExistentes, null, 2));
-            console.log(`💾 Se agregaron ${facturasNuevas.length} folios nuevos a la base de datos local.`);
+            // «archivo temporal» y no «base de datos local»: esto es un JSON en
+            // el disco del servidor, el paso intermedio entre bajar del SII y
+            // escribir en Postgres. Decirle «base de datos» hacía pensar que los
+            // documentos ya estaban guardados, y el paso [2/2] que viene después
+            // —el que sí escribe en la base— parecía redundante.
+            console.log(`💾 ${facturasNuevas.length} folios nuevos guardados en el archivo temporal (todavía no en la base).`);
         } else {
             console.log(`📊 No hay folios de venta nuevos en el portal para el periodo analizado.`);
         }

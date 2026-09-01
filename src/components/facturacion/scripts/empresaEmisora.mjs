@@ -98,14 +98,23 @@ export async function seleccionarEmpresaEmisora(page, rutEmisor = rutEmpresaEmis
 
     log(`🏢 Buscando la empresa emisora ${rutEmisor} en el desplegable del SII...`);
 
-    // OJO: esta función corre DENTRO del navegador, así que no puede usar
-    // `cuerpoRut` de arriba —no existe en ese contexto— y la lógica va repetida
-    // a propósito. Las dos tienen que decir lo mismo; si se toca una, se toca la
-    // otra. La prueba de tmp/_rut.mjs cubre exactamente estos casos.
-    const eleccion = await page.evaluate((rutObjetivo) => {
+    // TODO EN UN SOLO page.evaluate(): elegir la opción Y enviar el formulario.
+    //
+    // Es el mismo patrón que ya usa descargarDocumentoSii.mjs, que lleva meses
+    // funcionando contra este mismo formulario. Y hay una razón para no usar
+    // `page.select()` de Puppeteer acá: el 31-08 se probó y el SII devolvió
+    //     ERROR : 501 Error : ptr NULL (ESTADO) · 01.02.209.412.308.111
+    // quedándose en mipeSelEmpresa.cgi. Asignar `select.value` dentro de la
+    // página y apretar el botón en el mismo paso deja el formulario en el estado
+    // que el CGI del SII espera.
+    //
+    // La comparación va repetida acá adentro a propósito: esta función corre en
+    // el navegador y no ve `cuerpoRut` de arriba. Las dos tienen que decir lo
+    // mismo; si se toca una, se toca la otra.
+    const resultado = await page.evaluate((rutObjetivo) => {
         const sel = document.querySelector('select[name="RUT_EMP"]');
-        if (!sel) return { valor: null, disponibles: [] };
-        const opciones = [...sel.options].map(o => ({ valor: o.value, texto: o.text }));
+        if (!sel) return { estado: 'sin-select', disponibles: [] };
+
         const cuerpo = (v) => {
             const t = String(v || '');
             const m = t.match(/(\d{1,3}(?:\.\d{3}){1,2}|\d{7,8})\s*-?\s*([\dkK])?(?!\d)/);
@@ -114,24 +123,62 @@ export async function seleccionarEmpresaEmisora(page, rutEmisor = rutEmpresaEmis
             return n.length > 8 ? n.slice(0, -1) : n;
         };
         const objetivo = cuerpo(rutObjetivo);
-        const calza = opciones.find(o => cuerpo(o.valor) === objetivo || cuerpo(o.texto) === objetivo);
-        return { valor: calza ? calza.valor : null, disponibles: opciones.map(o => o.texto) };
+        const opciones = Array.from(sel.options);
+        const opt = opciones.find(o => cuerpo(o.value) === objetivo || cuerpo(o.text) === objetivo);
+        const disponibles = opciones.map(o => o.text).filter(Boolean);
+
+        if (!opt) return { estado: 'no-esta', disponibles };
+
+        // Se selecciona por índice y se avisa del cambio: algunos formularios
+        // del SII cuelgan lógica del evento `change`, y asignar `.value` a secas
+        // no lo dispara.
+        sel.selectedIndex = opt.index;
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+
+        const btn = document.querySelector(
+            'input[type="submit"], button[type="submit"], input[name="btnContinuar"], button[name="btnContinuar"]');
+        if (!btn) return { estado: 'sin-boton', disponibles, elegida: opt.text };
+
+        // El clic va DESPUÉS de una pausa, fuera de esta función: ver abajo.
+        return { estado: 'listo', disponibles, elegida: opt.text };
     }, rutBuscado);
 
-    if (!eleccion.valor) {
+    if (resultado.estado === 'no-esta') {
         throw new Error(
             `La empresa con RUT ${rutEmisor} no aparece entre las que puede emitir esta cuenta del SII. ` +
-            `El desplegable ofrecía: ${eleccion.disponibles.filter(Boolean).join(' | ') || '(vacío)'}. ` +
+            `El desplegable ofrecía: ${resultado.disponibles.join(' | ') || '(vacío)'}. ` +
             `Revisa que el RUT emisor configurado sea el correcto y que esté habilitado para facturar.`
         );
     }
+    if (resultado.estado === 'sin-boton') {
+        throw new Error(
+            `Se encontró la empresa (${resultado.elegida}) pero el formulario del SII no traía botón para continuar. ` +
+            `Suele ser que la página cargó a medias: conviene reintentar.`
+        );
+    }
+    if (resultado.estado !== 'listo') return false;
 
-    log('🏢 Empresa emisora encontrada, seleccionando...');
-    await page.select('select[name="RUT_EMP"]', eleccion.valor);
+    log(`🏢 Emitiendo como: ${resultado.elegida}`);
+
+    // LA PAUSA ANTES DEL SUBMIT NO SOBRA.
+    // El código original la tenía —300 ms en factura masiva, 500 en exenta— y al
+    // unificar los cuatro robots se me había perdido. Es el respiro entre elegir
+    // la opción y enviar el formulario; sin él, el CGI del SII puede recibir el
+    // POST antes de haber registrado la selección. Se mantienen los 500 ms, que
+    // es el mayor de los dos valores que había: es el lado seguro.
     await new Promise(r => setTimeout(r, 500));
+
+    // El clic y la espera de navegación van juntos, como en el original: si se
+    // hace el clic primero, la navegación puede terminar antes de que empecemos
+    // a esperarla y quedamos colgados hasta el timeout.
     await Promise.all([
-        page.waitForNavigation({ waitUntil: 'networkidle2' }),
-        page.evaluate(() => { document.querySelector('button[type="submit"], input[type="submit"]').click(); }),
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {}),
+        page.evaluate(() => {
+            const btn = document.querySelector(
+                'input[type="submit"], button[type="submit"], input[name="btnContinuar"], button[name="btnContinuar"]');
+            if (btn) btn.click();
+        }).catch(() => {}),
     ]);
     return true;
 }

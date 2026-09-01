@@ -1476,7 +1476,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
         // Por eso el interruptor «Con subtareas», que las trae en cualquier
         // filtro cuando uno las anda buscando.
         const esArbol = vista === 'arbol';
-        const verSubtareas = esArbol || filtroEstado === 'completada' || conSubtareas;
+        const verSubtareas = esArbol || filtroEstado === 'cerradas' || conSubtareas;
         const o = {
             ambito: modo,
             limite: String(esArbol ? POR_PAGINA_ARBOL : POR_PAGINA),
@@ -1486,7 +1486,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
         if (proyectoSel) o.proyectoId = proyectoSel;
         // El archivo es una vista aparte: o se ve lo vivo, o se ve lo archivado.
         if (filtroEstado === 'archivadas') o.archivadas = 'solo';
-        else if (filtroEstado !== 'todas') o.estado = filtroEstado;   // 'activas' | 'completada'
+        else if (filtroEstado !== 'todas') o.estado = filtroEstado;   // 'activas' | 'cerradas'
         if (filtroPrioridad) o.prioridad = filtroPrioridad;
         if (filtroResponsable) o.responsableId = filtroResponsable;
         if (busqAplicada) o.q = busqAplicada;
@@ -1750,9 +1750,24 @@ const TareasPanel = ({ modo = 'todas' }) => {
             {/* ═══ LOS FILTROS, DESPLEGADOS ═══ */}
             {panelFiltros && (
                 <div className="flex items-center gap-2 flex-wrap flex-shrink-0 bg-white border border-[#efe8dd] rounded-xl px-3 py-2.5">
-                    {(vista === 'tablero'
+                    {/* EL ÁRBOL Y EL TABLERO NO OFRECEN «ACTIVAS», Y NO ES UN OLVIDO.
+                        Las dos vistas necesitan TODOS los estados: en el tablero la
+                        columna «Finalizadas» quedaría vacía para siempre, y en el
+                        árbol un padre ya cerrado no vendría y sus hijas abiertas se
+                        dibujarían sueltas arriba, como si no tuvieran padre.
+
+                        El árbol seguía ofreciendo «Activas» igual: se podía elegir,
+                        quedaba marcado en verde… y la lista mostraba finalizadas de
+                        todos modos, porque `necesitaTodos` fuerza «todas» por
+                        detrás. Se veía como un filtro roto y era un botón que nunca
+                        debió estar. */}
+                    {(necesitaTodos(vista)
                         ? [['todas', 'Vivas'], ['archivadas', 'Archivadas']]
-                        : [['activas', 'Activas'], ['completada', 'Finalizadas'], ['todas', 'Todas'], ['archivadas', 'Archivadas']]
+                        // «Finalizadas» pide `cerradas`, no `completada`: así
+                        // incluye también las CANCELADAS, que si no quedaban
+                        // fuera de los dos filtros —no son activas, pero tampoco
+                        // están completadas— y desaparecían de la lista.
+                        : [['activas', 'Activas'], ['cerradas', 'Finalizadas'], ['todas', 'Todas'], ['archivadas', 'Archivadas']]
                     ).map(([f, label]) => (
                         <button key={f} onClick={() => setFiltroEstado(f)}
                             className={`px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors ${
@@ -1760,6 +1775,17 @@ const TareasPanel = ({ modo = 'todas' }) => {
                             {label}
                         </button>
                     ))}
+
+                    {/* Dicho en pantalla, porque si no se lee como un filtro que
+                        no funciona: en estas vistas las finalizadas aparecen a
+                        propósito. */}
+                    {necesitaTodos(vista) && filtroEstado !== 'archivadas' && (
+                        <span className="text-[11px] text-slate-400">
+                            {vista === 'arbol'
+                                ? 'incluye finalizadas: si no, las subtareas abiertas quedarían sin su tarea madre'
+                                : 'incluye finalizadas: van en su propia columna'}
+                        </span>
+                    )}
 
                     <span className="w-px h-5 bg-[#efe8dd]" />
 

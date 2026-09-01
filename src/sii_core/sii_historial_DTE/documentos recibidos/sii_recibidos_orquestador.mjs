@@ -5,7 +5,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 // IMPORTACIONES EXTERNAS
-import { iniciarSesion, cerrarSesion } from './sii_operaciones.js'; 
+import { iniciarSesion, cerrarSesion } from './sii_operaciones.js';
+import { fechaLimiteSii, describirRango } from '../../rangoSincronizacion.mjs'; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,11 +39,12 @@ async function extraerTablaFoliosRecibidos(page) {
         })
     ]);
 
-    // 🧠 CONFIGURACIÓN DEL LÍMITE DE TIEMPO
-    const hoy = new Date();
-    // Día 1 del mes anterior
-    const fechaLimite = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
-    fechaLimite.setHours(0, 0, 0, 0);
+    // HASTA DÓNDE SE BAJA. Mismo criterio que el robot de ventas: se configura
+    // con SII_MESES_ATRAS (ver src/sii_core/rangoSincronizacion.mjs). Vive en un
+    // solo lugar justamente para que ventas y compras no queden con rangos
+    // distintos por haber editado uno y olvidado el otro.
+    const fechaLimite = fechaLimiteSii();
+    console.log(`📅 Bajando documentos ${describirRango()}.`);
 
     let facturasExtraidas = [];
     let paginaActual = 1;
@@ -199,7 +201,8 @@ async function ejecutarRobotAutomatico() {
         if (facturasNuevas.length > 0) {
             datosExistentes = [...datosExistentes, ...facturasNuevas];
             fs.writeFileSync(rutaArchivoJSON_Recibidos, JSON.stringify(datosExistentes, null, 2));
-            console.log(`💾 ¡Se agregaron ${facturasNuevas.length} nuevos documentos a la base local!`);
+            // Igual que en ventas: esto es el archivo temporal, no la base.
+            console.log(`💾 ${facturasNuevas.length} documentos nuevos guardados en el archivo temporal (todavía no en la base).`);
         } else {
             console.log(`📊 No hay documentos de compra nuevos en el portal para el periodo analizado.`);
         }

@@ -1,6 +1,8 @@
 # Módulo CRM · Cómo funciona, qué tiene y qué falta
 
-**Última revisión:** 4 de agosto de 2026 · verificado contra el código y la base de datos.
+**Última revisión:** 1 de septiembre de 2026 · verificado contra el código y la base de datos.
+Lo anterior al 4 de agosto se mantiene tal cual; lo nuevo de esta revisión está en la
+sección 11 (dashboard).
 **Documento único del módulo.** Se fundieron acá y ya no existen por separado:
 `requerimientos-clientes-prospectos.md`, `crm-fase0-modelo-persona.md`,
 `crm-fase0-estudio-integraciones.md`, `bitacora-crm-2026-07-19.md`,
@@ -495,7 +497,162 @@ cuando crece · **C** = comodidad.
 
 ---
 
-## 11. Dónde vive cada cosa
+## 11. Dashboard · auditoría y corrección del 01-09-2026
+
+La pantalla de inicio del CRM nunca se había revisado contra la base. Al hacerlo
+aparecieron nueve problemas, dos de ellos graves. Todo lo que sigue se verificó
+contra producción antes y después de cada cambio.
+
+**Archivos:** `metricasDashboard` y `eliminarTareasCompletadas` en
+`crm.controllers.js`; `src/components/crm/views/CrmDashboard.jsx`.
+
+### 11.1 Las ventas del mes estaban mal medidas ⛔ → ✅
+
+El indicador principal y el gráfico de seis meses agrupaban los cobros por el
+**período** al que corresponde el servicio, no por la **fecha en que se pagaron**.
+Son cosas distintas: el cobro de julio se paga en agosto.
+
+| Mes | Mostraba | Entró en caja |
+|-----|---------:|--------------:|
+| Agosto 2026 | $616.214 | **$4.671.956** |
+
+Siete veces y media menos. El gráfico tenía el mismo desfase: cada barra corrida un
+mes, y la última siempre hundida porque a ese período le faltaba casi toda la
+cobranza.
+
+Peor era el efecto en la meta: el día 1 de cada mes el indicador caía a $0 —no existe
+aún ningún cobro con el período nuevo— y **se quedaba en 0% todo el mes**, porque los
+pagos que iban entrando se registran contra el período anterior.
+
+**Corregido.** `ventas_mes` y la serie del gráfico agrupan por `fecha_pago`. Decisión
+de negocio de Felipe: la meta mide **caja**, no devengo. Así el número parte en cero
+el día 1 y sube con cada pago.
+
+`ingresos_esperados` («Por cobrar») sigue midiéndose por período y debe seguir así:
+es lo emitido o por emitir del mes corriente que nadie ha pagado.
+
+### 11.2 «Limpiar todas» borraba el trabajo de toda la firma ⛔ → ✅
+
+El botón del widget de tareas eliminaba, para un administrador en modo «Equipo»,
+**todas las tareas completadas de la organización**:
+
+- **216 tareas** cerradas — el historial completo de trabajo terminado
+- **356 comentarios** y **15 adjuntos**, que cuelgan de `tarea` con `ON DELETE CASCADE`
+- **100** de ellas pertenecían a proyectos de Tickets, ajenos a este widget
+
+El aviso decía «¿Eliminar N tarea(s)?» con el número de las que se veían en pantalla.
+`tarea` no guarda historial: no hay vuelta atrás.
+
+**Corregido.** El lote respeta las mismas reglas que el borrado individual: solo lo
+propio, nunca una tarea madre —el CASCADE se llevaría a sus hijas abiertas—, nunca las
+archivadas. Queda en bitácora y el aviso explica qué se borra y qué no.
+
+### 11.3 Las reuniones marcaban cero desde siempre ⛔ → ✅
+
+Los dos indicadores buscaban tareas con `tipo = 'reunion'`. Esas tareas **no existen**:
+las 447 registradas son de tipo `'tarea'`. Las reuniones viven en la tabla `reunion`,
+que el dashboard nunca consultaba.
+
+**Corregido.** Los indicadores y el feed leen `reunion` con el mismo criterio de
+visibilidad del módulo (creador o participante). Pasaron de 0 a 7.
+
+El menú **Crear → Reunión / Ticket** creaba una tarea marcada con ese tipo: una
+reunión sin hora de término, sin participantes y sin aviso al cliente, guardada donde
+nadie la buscaría. Ahora llevan a su módulo.
+
+### 11.4 Tres widgets contaban «ganado» de tres maneras ⚠️ → ✅
+
+| Widget | Decía |
+|--------|-------|
+| Embudo | Ganados: **2** |
+| Conversión | **0** de 130 |
+| Ranking | **0** para los tres |
+
+Daniel Tiznado y Eduardo están marcados «Ganado» en su estado comercial pero conservan
+`estado = 'prospecto'` porque nadie los convirtió a cliente. El embudo contaba ambas
+condiciones; los otros dos, solo la primera.
+
+**Corregido.** Los tres usan la definición del embudo: cliente activo **o** marcado
+como ganado. La conversión pasó a 2%.
+
+### 11.5 El embudo perdía una persona y contaba otra dos veces ⚠️ → ✅
+
+Seis `COUNT` con condiciones que se pisaban: un prospecto perdido caía en «Perdidos» y
+también en «Prospectos» —tenía el estado comercial vacío—, mientras «En pausa» no
+calzaba con ningún patrón y desaparecía. Las barras sumaban 132 sobre 133.
+
+**Corregido.** Una sola clasificación con `CASE` en cascada; lo que no calza cae en
+«Otros», que se muestra en vez de esconderse. Las barras suman el total exacto.
+
+### 11.6 El botón «Mías / Equipo» no filtraba las tareas ⚠️ → ✅
+
+En «Mías» se enviaba `scope: ''`, que el servicio descarta por vacío y el backend
+resuelve como «todas»; en «Equipo» se enviaba `'equipo'`, que desde los integrantes por
+proyecto significa lo mismo. **Las dos posiciones devolvían la misma lista.**
+
+Además el indicador contaba `responsable_id OR creado_por` mientras la lista pedía
+responsable o colaborador. Como el administrador creó casi todo al importar, la
+pantalla decía **165 pendientes** sobre una lista de 48.
+
+**Corregido.** Ambos usan la misma definición de «mías». Indicador y lista coinciden.
+
+### 11.7 Correcciones menores ✅
+
+- Las tareas **en proceso** y **en revisión** no salían en la lista: filtraba
+  `estado === 'pendiente'` y dejaba fuera 12 que sí son trabajo abierto.
+- «Tareas completadas» no tenía tope superior: con rango personalizado contaba también
+  lo cerrado después del «hasta».
+- El basurero de cada fila **borraba sin preguntar** —está pegado al círculo de
+  completar, del mismo tamaño— y **se tragaba los errores**: si el servidor rechazaba
+  por permisos, la fila desaparecía igual.
+- Dos cobros invisibles: CASTINOX y AWKA tenían `organizacion_id` nulo en su cobro de
+  septiembre. Corregidos tomando la organización desde su empresa.
+- Código muerto: `reunionesHoyList` calculaba una lista que nadie usaba sobre un tipo
+  inexistente; `vencidas.includes()` recorría el arreglo entero por cada tarea.
+
+### 11.8 Rediseño de la pantalla
+
+El problema no era el color sino la **jerarquía**: catorce cifras del mismo tamaño,
+cada una con su marco y su círculo, todas en mayúsculas y negrita. Nada destacaba
+porque todo gritaba.
+
+Criterio: **informe de gestión, no tablero de colores.**
+
+- Tres pesos tipográficos y ninguno más; `tabular-nums` en toda cifra para que los
+  dígitos se alineen en columna.
+- El color **solo donde hay que actuar**: rojo para vencido y cobros atrasados.
+- El embudo pasó de seis colores saturados a una familia que se aclara al avanzar la
+  etapa, más verde de ganado y rojo de perdido — las etapas son una progresión, no
+  categorías sueltas. Se agregó el porcentaje junto a cada cifra.
+- Diez cifras sueltas agrupadas en dos tarjetas, separadas por reglas verticales.
+- El calendario se achicó: con el 81% de las tareas sin fecha estaba casi vacío y
+  ocupaba un tercio de la pantalla.
+- Las tres columnas de tareas comparten alto (medían 166, 346 y 311 px).
+- El gráfico recuperó su eje Y: sin él el área no se dibujaba y no se podía leer un
+  monto. Dominio desde cero, para que las alturas sean comparables.
+
+**Contraste medido, no estimado.** Se midió cada combinación de color y tamaño contra
+su fondo real: **0 fallos** en WCAG AA. Tres textos que fallaban —la pestaña
+«Cerradas» en 2.56, los días del calendario en 1.48 y los subtextos de las filas— se
+corrigieron subiendo el gris.
+
+### 11.9 Pendiente del dashboard
+
+- ⏭️ **No hay meta mensual configurada.** `crm_config` está vacía, así que la tarjeta
+  «Meta del mes» y la barra de avance salen en cero por más que las ventas ya se
+  calculen bien. Se fija desde «Definir». Referencia: los últimos seis meses promedian
+  unos $3,9M mensuales.
+- ⏭️ **«Sin contacto: 129»** es correcto pero son 129 de 130 prospectos: como alerta no
+  distingue nada. Falta un criterio de cartera.
+- ⏭️ **187 de 231 tareas activas no tienen fecha de vencimiento** (81%). Por eso el
+  calendario se ve vacío y «Vencen hoy» marca cero. No es falla del sistema: no se
+  están poniendo las fechas.
+- ⛔ **Nada de esto está en producción.** Falta desplegar y reiniciar; `config.js`
+  apunta a `localhost:4000` en vez de Railway.
+
+---
+
+## 12. Dónde vive cada cosa
 
 | | |
 |---|---|
@@ -507,6 +664,8 @@ cuando crece · **C** = comodidad.
 | Pantalla principal | `src/components/CRM.jsx` |
 | Tabla de clientes | `src/components/crm/views/CrmTableList.jsx` |
 | Ficha del cliente | `src/components/crm/modals/ClientDetailDrawer.jsx` |
+| Dashboard (pantalla) | `src/components/crm/views/CrmDashboard.jsx` |
+| Dashboard (cifras) | `metricasDashboard()` en `crm.controllers.js` |
 | Tablas | `empresa`, `persona`, `persona_empresa`, `cobro_mensual`, `empresa_servicio`, `plan`, `audita` |
 
 > ⚠️ `audita` **no es** un registro de auditoría, pese al nombre: es la tabla que
