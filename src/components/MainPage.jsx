@@ -11,7 +11,7 @@ import {
   Clock, Settings, DollarSign, Book, Umbrella, Receipt, Coins, Stethoscope,
   CalendarDays, Download, Percent, HeartPulse, ListChecks, FileSpreadsheet,
   BadgeCheck, Send, PanelLeftClose, PanelLeftOpen, Network, FolderOpen,
-  Megaphone, LayoutTemplate, Ticket as TicketIcon, Video
+  Megaphone, LayoutTemplate, Ticket as TicketIcon, Video, Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth.jsx';
@@ -21,6 +21,10 @@ import { SiiProvider } from '@/contexts/SiiContext.jsx';
 // entre ellos. Poner el proveedor acá es lo que hace que una videollamada
 // sobreviva a irse a Contabilidad y volver. Ver el archivo para el porqué.
 import { LlamadaProvider } from '@/contexts/LlamadaContext.jsx';
+// El asistente va acá por lo mismo que la llamada: MainPage no se desmonta al
+// cambiar de módulo, así que la conversación sobrevive a irse a Contabilidad y
+// volver.
+import PanelAsistente from '@/components/asistente/PanelAsistente';
 import DelayedLoader from './ui/DelayedLoader';
 import GlobalCompanySelector from '@/components/ui/GlobalCompanySelector'; // Importación del nuevo selector
 import AvisoFacturacion from '@/components/ui/AvisoFacturacion';
@@ -36,6 +40,10 @@ function MainPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedModule, setExpandedModule] = useState(null);
   const [railCollapsed, setRailCollapsed] = useState(() => { try { return localStorage.getItem('sidebarRail') === '1'; } catch { return false; } });
+  // Se recuerda si el asistente quedó abierto: quien lo usa a diario no tiene
+  // que abrirlo en cada visita, y quien no lo usa no lo ve aparecer solo.
+  const [asistenteAbierto, setAsistenteAbierto] = useState(() => { try { return localStorage.getItem('asistenteAbierto') === '1'; } catch { return false; } });
+  const alternarAsistente = () => setAsistenteAbierto(v => { const n = !v; try { localStorage.setItem('asistenteAbierto', n ? '1' : '0'); } catch { /* ignore */ } return n; });
   const toggleRail = () => setRailCollapsed(v => { const n = !v; try { localStorage.setItem('sidebarRail', n ? '1' : '0'); } catch { /* ignore */ } return n; });
 
   // Submódulos del menú de Contabilidad
@@ -351,6 +359,19 @@ function MainPage() {
             </div>
 
             <div className="flex items-center gap-1 sm:gap-4 flex-shrink-0">
+              {/* Se marca en verde cuando está abierto: sin eso, con el panel
+                  cerrado en móvil no hay forma de saber si sigue activo. */}
+              <button
+                onClick={alternarAsistente}
+                title="Asistente VSV AI"
+                className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg transition-colors ${
+                  asistenteAbierto
+                    ? 'bg-[#199b4d] text-white'
+                    : 'text-slate-400 hover:bg-slate-100 hover:text-[#199b4d]'
+                }`}
+              >
+                <Sparkles className="h-5 w-5" />
+              </button>
               <CampanaNotificaciones />
               <AvisoFacturacion />
               <div className="hidden md:block text-right mr-2">
@@ -366,11 +387,17 @@ function MainPage() {
               <SiiProvider>
                 <Suspense fallback={<DelayedLoader />}>
                   <Outlet />
-                </Suspense> 
+                </Suspense>
               </SiiProvider>
             </div>
           </main>
         </div>
+
+        {/* El asistente es hermano de la columna de contenido, no hijo: así en
+            escritorio le quita ancho al contenido —que se reacomoda— en vez de
+            taparlo. Consultarlo casi siempre es para contrastar con lo que hay
+            en pantalla, y un panel que tapa obliga a cerrarlo para comparar. */}
+        <PanelAsistente abierto={asistenteAbierto} onCerrar={alternarAsistente} />
       </div>
     </LlamadaProvider>
   );

@@ -1,6 +1,6 @@
 # Módulo de Tareas · Requerimientos
 
-**Última revisión:** 26 de agosto de 2026
+**Última revisión:** 1 de septiembre de 2026
 **Estado:** en construcción por fases (ver el final del documento)
 
 > **Lo último (26-ago-2026):** el caso «Tareas Victor» — 225 tareas importadas
@@ -641,3 +641,140 @@ esté armada la madre.
 > en «Finalizadas» o con el interruptor «Con subtareas». Es a propósito —200
 > tareas importadas dejarían la lista inservible— pero es la primera pregunta que
 > hace quien importa un lote y no lo encuentra.
+
+---
+
+## 14. Trabajo del 01-sep-2026 · auditoría del módulo y cierre de SISTEMA DE TAREAS
+
+Día largo. Se auditó el módulo completo —backend, datos y frontend—, se cerró la
+tarea madre `SISTEMA DE TAREAS` con sus 22 subtareas, y aparecieron bugs que
+llevaban tiempo sin verse.
+
+### 14.1 El bug que rompió la creación de tareas en producción
+
+**Nadie podía crear ninguna tarea, en ningún proyecto.** Lo reportó Matías desde
+la oficina: cartel rojo «No se pudo crear la tarea» al intentar abrir un ticket.
+
+La causa la introduje yo esa misma mañana, arreglando otra cosa. Al agregar
+`completed_at` a la creación escribí:
+
+```sql
+VALUES (..., $8, ..., CASE WHEN $8 = 'completada' THEN NOW() ELSE NULL END)
+```
+
+El parámetro `$8` queda usado dos veces: como valor de la columna `estado`
+(varchar) y dentro del `CASE` comparado con un literal. **Postgres deduce el tipo
+de cada parámetro por cómo se usa, sacó dos distintos y rechazó la consulta
+entera** con «inconsistent types deduced for parameter $8».
+
+Corregido fijando el tipo en **ambas** apariciones (`$8::text`). Castear solo la
+del `CASE` no alcanza — probado.
+
+> **Lo importante no es el bug, es que pasó `node --check` y `vite build` sin una
+> queja.** Un error de tipos de Postgres vive dentro del string SQL y no se ve
+> hasta ejecutar la consulta.
+
+De ahí salió el método que quedó en la memoria del proyecto: **preparar todas las
+consultas del backend contra Postgres con `PREPARE`** antes de dar por bueno un
+cambio de SQL. `PREPARE` valida sintaxis, nombres de tabla y columna, y deducción
+de tipos, sin ejecutar ni tocar datos.
+
+Corriéndolo sobre las **359 consultas estáticas** del backend aparecieron dos
+bugs más que nadie había visto:
+
+| Dónde | Qué pasaba |
+|---|---|
+| `completarAccion` (`personas.controllers.js`) | El mismo error de tipos: **marcar como hecha una acción de seguimiento de un prospecto fallaba siempre** con un 500. Anterior a esa sesión, nunca reportado |
+| `uploadAccountingExcel` | `INSERT INTO clientes` sobre una tabla **que no existe**. El comentario original decía «Asumiendo tabla clientes, ajusta el nombre» y ese ajuste nunca se hizo. Además guardaba la clave del SII **en texto plano** |
+
+El segundo no se reescribió: ninguna pantalla llama a ese endpoint y las 164
+claves cargadas entraron por otra vía. Se dejó fallando con un mensaje que
+explica qué pasa, en vez de silenciarlo — silenciarlo haría creer que las claves
+se guardaron.
+
+### 14.2 Seis bugs del módulo de Tickets
+
+| # | Bug | Gravedad |
+|---|---|---|
+| 1 | **Cualquiera podía borrar la tarea de cualquiera** — solo se comprobaba la organización. Incluso las privadas que no puede ver, arrastrando subtareas, comentarios y adjuntos | Alta |
+| 2 | **Borrar un prospecto borraba sus tickets** — `ON DELETE CASCADE` en `persona_id` | Alta |
+| 3 | **110 tareas completadas sin fecha de cierre** — no aparecían en Inicio ni en «tareas del mes» | Media |
+| 4 | **Tareas canceladas invisibles** — no salían ni en «Activas» ni en «Finalizadas» | Media |
+| 5 | 2 madres cerradas con hijas abiertas | Baja |
+| 6 | El contador de subtareas incluía las archivadas | Baja |
+
+Los números 2, 4 y 6 estaban **latentes**: no mordían ese día, pero el 2 iba a
+activarse pronto porque se acababa de agregar el campo «Cliente» al crear
+tickets. Migración `2026-09-01_tarea_persona_set_null.sql`, aplicada.
+
+### 14.3 Robustez del backend · lo que aparecía al forzarlo
+
+Probando entradas límite contra los endpoints reales:
+
+- **Una URL mal escrita tumbaba la pantalla con error 500.** `GET /tareas/no-es-uuid`
+  devolvía error de servidor en vez de «no existe». Peor: `?responsableId=algo`
+  o `?proyectoId=algo` reventaban **la lista completa** por un parámetro mal
+  formado. Un filtro sin sentido no debe caerse: ahora simplemente no filtra.
+- **Cuatro formas de crear una tarea daban 500 sin explicar nada** — todas con el
+  mismo cartel rojo. Ahora cada una responde con su motivo:
+
+| Antes | Ahora |
+|---|---|
+| Título de más de 200 caracteres | *«El título no puede pasar de 200 caracteres (tiene 247).»* |
+| Fecha inválida | *«La fecha de entrega no es una fecha válida.»* |
+| Proyecto borrado | *«El proyecto indicado ya no existe.»* |
+| Cliente borrado | *«El cliente indicado ya no existe.»* |
+
+**77 comprobaciones, 0 fallos** al terminar.
+
+### 14.4 Las dos últimas subtareas de SISTEMA DE TAREAS
+
+**TICKETS ASIGNADOS A CLIENTES.** Estaba dada por construida y **el vínculo desde
+WhatsApp se perdía siempre**: el panel mandaba `detalle.personaId` al crear el
+ticket, pero esa propiedad **nunca venía en la respuesta del servidor**. Parecía
+hecho y no lo estaba.
+
+Ahora el servidor cruza el teléfono del chat con la agenda del CRM. Se comparan
+los **últimos 8 dígitos** y no el número completo: ambos lados guardan
+`56XXXXXXXXX`, pero basta que alguien escriba uno con `+56`, con espacios o sin
+código de país para que la comparación exacta falle. Probado con seis formas del
+mismo número; las seis identifican a la persona y un número ajeno no la confunde.
+
+También apareció que **el cliente de un ticket no se podía cambiar ni quitar**:
+`actualizarTarea` nunca tocaba `persona_id` ni `empresa_id`. Si te equivocabas al
+abrir el ticket, no había forma de corregirlo desde ninguna pantalla.
+
+**CREAR PLANTILLAS DE TAREAS.** Se cerraron sus tres subtareas abiertas:
+
+- *Las plantillas pueden asignarse a un cliente* — el endpoint que usa una
+  plantilla no recibía cliente ni empresa, así que el dato se perdía. Ahora los
+  acepta y, lo importante, **las subtareas también los heredan**: los 18 pasos de
+  «Formaliza tu pyme» son del mismo cliente; sin heredarlo quedaba ligada la
+  madre y las 18 sueltas.
+- *Visualizar las plantillas de mejor forma* — la lista solo decía «18 pasos»;
+  para ver cuáles había que entrar a editar. Y dentro del editor los pasos eran
+  **texto fijo**: para arreglar una falta de ortografía en el paso 12 había que
+  borrarlo y reescribirlo, reapareciendo al final.
+- *Editar plantillas* — ya funcionaba, solo esperaba despliegue.
+
+### 14.5 Estado de los permisos
+
+Sigue en **modo permisivo**: un usuario puede editar y comentar tareas ajenas, y
+el sistema lo anota en la bitácora pero lo deja pasar. Está puesto a propósito y
+documentado en el código.
+
+**Dato para decidir:** los bloqueos registrados en la bitácora (15 al cierre) son **todos de
+las pruebas de ese día**. En semanas de uso real, el modo estricto no habría
+estorbado a nadie. Se activa con `PERMISOS_TAREA_ESTRICTO=true`.
+
+### 14.6 Estado final
+
+`SISTEMA DE TAREAS` cerrada, **22 de 22 subtareas**. Integridad verificada: cero
+referencias rotas, cero completadas sin fecha, cero madres cerradas con hijas
+abiertas, cero valores fuera de catálogo.
+
+Pendientes anotados en las tareas, ninguno bloqueante:
+
+- Falta **contenido** de plantillas: hay una sola para toda la operación.
+- Ejecutor y fecha de entrega **por paso** de plantilla — es cambio de modelo.
+- Crear ticket desde un **correo**: ese botón no existe.

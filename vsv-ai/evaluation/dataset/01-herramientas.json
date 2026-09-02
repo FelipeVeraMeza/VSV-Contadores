@@ -1,0 +1,104 @@
+{
+  "categoria": "seleccion_de_herramienta",
+  "que_mide": "Que el modelo elija la herramienta correcta y arme bien los parámetros. Es la métrica central: si elige mal, responde otra cosa.",
+  "casos": [
+    {
+      "id": "TOOL-001",
+      "pregunta": "¿Quién me debe?",
+      "herramienta": "consultar_deudas",
+      "parametros": {}
+    },
+    {
+      "id": "TOOL-002",
+      "pregunta": "Muéstrame los clientes morosos",
+      "herramienta": "consultar_deudas",
+      "parametros": {},
+      "nota": "«Moroso» implica atraso, no solo deuda pendiente. Se acepta también sin el parámetro."
+    },
+    {
+      "id": "TOOL-003",
+      "pregunta": "¿Hay alguien atrasado con los pagos?",
+      "herramienta": "consultar_deudas",
+      "parametros": {}
+    },
+    {
+      "id": "TOOL-004",
+      "pregunta": "¿Qué empresas deben más de 100 mil?",
+      "herramienta": "consultar_deudas",
+      "parametros": {},
+      "nota": "El caso que justifica usar herramientas y no consultas fijas: el filtro es un parámetro."
+    },
+    {
+      "id": "TOOL-005",
+      "pregunta": "¿Cuánto cobramos en agosto?",
+      "herramienta": "consultar_metricas",
+      "parametros": {}
+    },
+    {
+      "id": "TOOL-006",
+      "pregunta": "¿Cuánto facturamos en agosto?",
+      "herramienta": "consultar_metricas",
+      "parametros": {},
+      "nota": "La distinción cobrar/facturar es la que más se confunde. Son montos distintos: $4.671.956 vs $6.515.335."
+    },
+    {
+      "id": "TOOL-007",
+      "pregunta": "¿Cuánto entró en caja este mes?",
+      "herramienta": "consultar_metricas",
+      "parametros": {}
+    },
+    {
+      "id": "TOOL-008",
+      "pregunta": "¿Cuántas facturas emitimos en julio?",
+      "herramienta": "consultar_metricas",
+      "parametros": {}
+    },
+    {
+      "id": "TOOL-009",
+      "pregunta": "¿Qué tickets tiene Víctor abiertos?",
+      "herramienta": "consultar_tareas",
+      "parametros": {
+        "ambito": "equipo"
+      }
+    },
+    {
+      "id": "TOOL-010",
+      "pregunta": "¿Qué tareas están vencidas?",
+      "herramienta": "consultar_tareas",
+      "parametros": {}
+    },
+    {
+      "id": "TOOL-011",
+      "pregunta": "¿Cuántos clientes activos tenemos?",
+      "herramienta": "consultar_metricas",
+      "parametros": {}
+    },
+    {
+      "id": "TOOL-012",
+      "pregunta": "¿Cuántos prospectos llevan más de 15 días sin contacto?",
+      "herramienta": "consultar_metricas",
+      "parametros": {}
+    },
+    {
+      "id": "TOOL-013",
+      "pregunta": "¿Cuánto se recaudó entre junio y agosto?",
+      "herramienta": "consultar_metricas",
+      "parametros": {
+        "desde": "2026-06",
+        "hasta": "2026-08"
+      }
+    },
+    {
+      "id": "TOOL-014",
+      "pregunta": "¿COMERCIALIZADORA ROVIRA nos debe algo?",
+      "herramienta": "consultar_deudas",
+      "parametros": {}
+    },
+    {
+      "id": "TOOL-015",
+      "pregunta": "¿Cuántas notas de crédito emitimos en agosto?",
+      "herramienta": "consultar_metricas",
+      "parametros": {}
+    }
+  ]
+}

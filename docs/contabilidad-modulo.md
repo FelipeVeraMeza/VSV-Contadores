@@ -1,9 +1,10 @@
 # Módulo de Contabilidad · Estado y aislamiento
 
-**Última revisión:** 25 de agosto de 2026
+**Última revisión:** 1 de septiembre de 2026
 **Responsable del módulo:** Victor (según la tarea madre CONTABILIDAD)
 **Estado:** funcionando sobre datos reales · aislamiento por empresa **puesto el
-20-08-2026** · comprobantes **reiniciados a cero el 25-08-2026** (ver 3.9)
+20-08-2026** · comprobantes **reiniciados a cero el 25-08-2026** (ver 3.9) ·
+**cinco tareas cerradas el 01-09-2026** (ver sección 8)
 
 > ⚠️ **Las cifras de la sección 3 son del 19 y 20 de agosto y ya no describen el
 > presente.** Se dejan como están porque son el registro de qué se midió y por
@@ -476,6 +477,11 @@ Asiento, Nuevo Asiento, Nuevo Movimiento y Generador de Libro Diario).
 
 ## 4. Las tareas del módulo
 
+> **Actualizado el 01-09-2026.** La tarea madre ya no está vacía: tiene seis
+> subtareas y cinco quedaron cerradas ese día. El detalle de qué se construyó y
+> cómo se probó está en la **sección 8**, al final de este documento. Lo que
+> sigue es el estado anterior, que explica de dónde venía el módulo.
+
 Dentro del propio sistema, en el proyecto **SOFTWARE SIMPLE PYME**:
 
 **`CONTABILIDAD`** — responsable Victor · estado `en_proceso` · prioridad alta ·
@@ -666,3 +672,208 @@ en un commit propio y sea fácil de revertir.
 | Módulo de Tareas | `docs/tareas-requerimientos.md` — de ahí sale el criterio del «triple candado» y el de verificar contra la base real |
 | CRM | `docs/crm-modulo.md` |
 | Remuneraciones | `docs/remuneraciones-modulo.md` |
+
+---
+
+## 8. Lo que se construyó el 01-09-2026
+
+Sesión completa de revisión funcional del módulo, con Víctor y Matías como
+usuarios de prueba. Se partió de una pregunta concreta —«¿estas cinco tareas
+están funcionales?»— y terminó con cinco cerradas, un bug de integridad
+corregido y dos funcionalidades nuevas.
+
+**El criterio de prueba que se fijó y hay que mantener:**
+
+> Probar siempre el **componente o el endpoint real**, nunca una réplica de su
+> lógica. Se llegó a esa regla por las malas: la primera versión del QA de la
+> palomita ejercitaba una copia de la lógica en una página aparte, daba 17/17, y
+> al montar el componente de verdad aparecieron dos fallas que la copia no podía
+> mostrar.
+
+### 8.1 Resultado por tarea
+
+| Tarea | Estado | Qué pasó |
+|---|---|---|
+| ELEGIR CUENTAS CONTABLES | 🟢 Cerrada | Ya funcionaba. Probado con ambos usuarios |
+| BUG · cuenta inexistente | 🟢 Cerrada | Hallazgo nuevo. Corregido |
+| Correlativo por empresa | 🟢 Cerrada | Ya funcionaba; el diagnóstico inicial era mío y estaba mal |
+| Palomita / selección | 🟢 Cerrada | Construida |
+| APROBAR CONTABILIDAD | 🟢 Cerrada | Construida |
+| AÑADIR REMUNERACIONES | 🟡 Pendiente | Bloqueada por una definición contable, no por código |
+| NUBOX vs SP CLOUD | ⚪ No aplica | Análisis de Víctor, vence 17-09-2026 |
+
+### 8.2 El bug de integridad contable
+
+**El servidor aceptaba asientos contra cuentas que no existen.** Se probó con la
+cuenta inventada `9999-99`: respondió 200 y guardó el comprobante, con los dos
+usuarios.
+
+No era cosmético. `comprobantes_detalle.cuenta_codigo` es texto suelto sin clave
+foránea, y el libro mayor lo une al plan con `LEFT JOIN`: una cuenta fantasma no
+revienta nada, la fila aparece con el nombre en blanco y el monto queda fuera de
+toda clasificación. Los informes dejan de cuadrar y nadie sabe por qué.
+
+Por pantalla no pasaba —el selector solo ofrece cuentas válidas—, pero el código
+entra igual por la carga masiva de Excel, por el generador de asientos, o cuando
+se borra del plan una cuenta ya usada.
+
+**Corregido en `guardarComprobante`**, que ahora comprueba dos cosas antes de
+tocar la base:
+
+1. Que el código **exista** en el plan de esa empresa (o en las cuentas base).
+   Una cuenta de otra empresa no sirve.
+2. Que sea **imputable**, o sea tipo `SUBCUENTA`. Los `GRUPO`, `SUBGRUPO` y
+   `MAYOR` son títulos del plan («ACTIVOS», «DISPONIBLE»): agrupan, no reciben
+   movimientos. Cargar contra un título descuadra el balance, porque el total
+   del grupo deja de ser la suma de sus cuentas.
+
+Si falla, responde 400 **diciendo cuál es la cuenta**. Verificado 17/17 con
+ambos usuarios, incluidos los casos de dos cuentas malas a la vez y una cuenta
+de otra empresa. Se revisó el histórico antes de tocar nada: cero detalles
+apuntando a cuentas inexistentes, así que la validación no deja fuera ningún
+asiento ya guardado.
+
+### 8.3 El correlativo por empresa · una corrección de diagnóstico
+
+Se reportó como problema que la numeración fuera global. **Era un error de
+lectura mío:** vi el `nextval` en el valor por omisión de la columna y concluí
+que venía de una secuencia global, sin revisar el código que inserta.
+
+Ese `nextval` **nunca se usa**. El INSERT siempre pasa el número explícito,
+calculado por `siguienteNumeroComprobante(client, empresaId)` — `MAX+1` de esa
+empresa, con `pg_advisory_xact_lock` para que dos contabilizaciones simultáneas
+no se pisen.
+
+Probado desde cero, 7/7: empresa A → 1, 2, 3 · empresa B → 1, 2 (independiente)
+· 6 asientos **simultáneos** en la misma empresa → 4,5,6,7,8,9 sin repetir ni
+saltar. Y está reforzado en la base con el índice único
+`(empresa_id, numero_comprobante)`.
+
+### 8.4 La palomita de selección
+
+**Antes era todo o nada.** «Contabilizar todo» tomaba los pendientes del período
+completo; para dejar afuera un documento había que achicar el rango de fechas
+hasta que no lo tomara, o contabilizar y borrar el asiento después.
+
+Ahora en el panel de revisión hay una palomita por documento, «marcar todos»
+arriba con estado indeterminado en selección parcial, un contador *«N de M
+entran al lote»* y el botón dice cuántos entran de verdad.
+
+**Decisión de diseño:** se guardan las claves **desmarcadas**, no las marcadas.
+Así por omisión entran todas —lo habitual— y un documento nuevo del período no
+queda fuera por accidente.
+
+**Dos bugs que solo aparecieron al montar el componente real:**
+
+- `useEffect` escrito sin el prefijo `React.` — este archivo no importa el hook
+  suelto. Reventaba al abrir el panel, y el build no lo detecta porque es error
+  de ejecución.
+- **Las exclusiones sobrevivían al cancelar.** `cerrarPanel()` limpiaba las
+  correcciones de cuenta pero no las palomitas: desmarcar 2 de 5, cancelar y
+  reabrir dejaba 3 de 5. Se habría contabilizado menos de lo esperado, sin
+  aviso, arrastrando una decisión de otro día o de otra empresa.
+
+QA final sobre el componente real: **22/22**, con los cuatro criterios
+acordados (marcar 1 → solo ese · marcar 3 → exactamente esos · todos → todos ·
+ninguno → botón desactivado y no contabiliza aunque se fuerce el clic).
+
+### 8.5 La aprobación por contador
+
+**Antes solo existía la firma de quien contabilizó.** Eso dice a quién
+preguntarle, pero no que alguien más lo haya mirado.
+
+El circuito construido:
+
+```
+Contabilizado ──► Aprobado
+      │
+      └────────► Rechazado (+ motivo) ──► se corrige ──► Contabilizado
+```
+
+**Decisiones de negocio (Felipe):**
+
+| | |
+|---|---|
+| Quién aprueba | **Cualquiera, incluso lo propio** |
+| Mientras espera | El asiento **cuenta en los libros** desde que se contabiliza |
+| Un rechazado | **Se corrige y vuelve a la fila**, conservando número e historial |
+
+Sobre la primera: la versión inicial bloqueaba aprobar lo propio —el clásico
+control de cuatro ojos—. Se cambió el mismo día porque el equipo son tres
+personas y Víctor lleva Contabilidad: exigir que otro le apruebe cada asiento
+significaba dejar el trabajo detenido cada vez que estuviera solo. **Una regla
+que obliga a esperar a alguien que no está no se cumple: se termina buscando la
+vuelta.**
+
+Lo que se pierde, dicho claro: la aprobación deja de ser un control de dos
+personas y pasa a ser un registro de dos pasos. Lo que se conserva —y es lo que
+sirve meses después— es la **trazabilidad**: cada asiento guarda quién lo
+contabilizó y quién lo aprobó, con fecha y hora, aunque coincidan.
+
+Si el equipo crece y se quiere volver al control de dos, está anotado en el
+código cómo reactivarlo: comparar `contabilizado_por_id` con quien pide, **por
+id y no por nombre** (dos personas pueden llamarse igual y el nombre se edita).
+
+**Corregir un asiento borra su aprobación anterior.** Lo que se aprobó ya no es
+lo que dice el asiento ahora; dejar el «Aprobado por Matías» sería avalar líneas
+que Matías nunca vio. Es también el camino de vuelta del rechazo.
+
+**Migración:** `2026-09-01_comprobante_aprobacion.sql`, idempotente, aplicada.
+Agrega `aprobado_por`, `aprobado_por_id`, `aprobado_at`, `motivo_rechazo`, un
+CHECK con los tres estados válidos y un índice parcial para la bandeja de
+pendientes. Se hizo aprovechando que había **cero comprobantes**: con volumen
+habría que decidir qué estado darle a todo lo ya contabilizado sin revisar.
+
+**En pantalla** (`AsientosContables.jsx`): columna «Revisión» con los botones
+Aprobar y Rechazar. Rechazar pide el motivo antes de mandar —cancelarlo o
+dejarlo en blanco no manda nada—. Un aprobado muestra quién lo aprobó; un
+devuelto ofrece re-aprobar y muestra el motivo completo al desplegar la fila.
+
+Probado: **30/30** contra los endpoints, **13/13** en la pantalla real, **6/6**
+el camino de vuelta del rechazo.
+
+### 8.6 Tres bugs propios, todos invisibles al build
+
+Vale la pena dejarlos escritos porque son el mismo patrón:
+
+| Dónde | Qué pasaba |
+|---|---|
+| `crearTarea` (CRM) | `$8` reusado con dos contextos de tipo → **ninguna tarea se podía crear** |
+| `MovimientosContables` | `useEffect` sin el prefijo `React.` → reventaba al abrir el panel |
+| `revisarComprobante` | `registrar` sin importar → el UPDATE se aplicaba pero respondía 500 |
+
+Los tres pasaron `node --check` y el build sin una queja. **El build no prueba
+nada de lo que importa:** valida JavaScript, no lo que ocurre al ejecutar ni lo
+que dice Postgres.
+
+De ahí salió el método que quedó anotado en la memoria del proyecto: preparar
+todas las consultas del backend contra Postgres con `PREPARE` antes de dar por
+bueno un cambio de SQL, y montar el componente real antes de dar por buena una
+pantalla.
+
+### 8.7 Lo que sigue pendiente
+
+**AÑADIR REMUNERACIONES A LA CONTABILIDAD** — no hay ningún flujo. Hay una
+liquidación cargada en `rem_liquidacion`, pero ninguna pantalla ni endpoint la
+convierte en asiento.
+
+El bloqueo **no es técnico**: falta definir contra qué cuenta del plan va cada
+concepto. El asiento típico sería algo así, pero los códigos exactos los tiene
+que decir el contador:
+
+```
+Gastos de remuneraciones .... DEBE
+Leyes sociales .............. DEBE
+    Sueldos por pagar ............ HABER
+    AFP por pagar ................ HABER
+    Salud por pagar .............. HABER
+    Impuesto único por pagar ..... HABER
+```
+
+Sin ese mapeo el sistema no puede adivinar contra qué cuenta va cada concepto.
+
+**Un dato que cambia la prioridad de todo lo demás:** al 01-09-2026 hay **cero
+comprobantes** en la base y **solo 1 empresa de 99** tiene plan de cuentas —la
+propia VOLLAIRE & OLIVOS—. El módulo está construido y probado, pero todavía no
+se usa. Antes de refinar nada más, las empresas necesitan su plan de cuentas:
+sin eso no se puede contabilizar a nadie.

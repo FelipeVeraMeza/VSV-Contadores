@@ -44,6 +44,7 @@ import cobrosRoutes from "./routes/cobros.routes.js";
 import whatsappRoutes from "./routes/whatsapp.routes.js";
 import correosRoutes from "./routes/correos.routes.js";
 import bajaRoutes from "./routes/baja.routes.js";
+import asistenteRoutes from "./routes/asistente.routes.js";
 import { cerrarCampanasZombi } from "./controllers/correos.controllers.js";
 import { reconectarSesionesGuardadas } from "./services/whatsapp/whatsappBot.js";
 
@@ -141,6 +142,14 @@ app.use('/api/correos', apiLimiter, requireSession, requireModulo('crm'), correo
 // en el sistema; un enlace de baja que exige iniciar sesión no sirve de nada.
 // La protección está en la firma del token, no en la sesión.
 app.use('/api/baja', apiLimiter, bajaRoutes);
+
+// VSV AI · el asistente. Este backend hace de PUENTE hacia el servicio de IA,
+// que corre en su propio contenedor porque está en Python.
+//
+// Así el frontend tiene una sola dirección que configurar, y el asistente queda
+// detrás de la misma autenticación que todo lo demás. Ver
+// asistente.controllers.js para el porqué de la separación.
+app.use('/api/asistente', apiLimiter, asistenteRoutes);
 
 // ============================================================================
 // 🤖 MOTOR CENTRAL DE SINCRONIZACIÓN (Bóveda Global)

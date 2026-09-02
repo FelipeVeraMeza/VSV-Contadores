@@ -1,0 +1,16 @@
+# VSV AI · dependencias
+#
+# El núcleo (core, models, tools, security, memory) funciona SOLO con la
+# biblioteca estándar. Eso es deliberado: el benchmark y las pruebas corren sin
+# instalar nada, y una dependencia rota no puede bloquear la evaluación.
+#
+# Lo de acá abajo es únicamente para servir la API.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+
+# Fase 5 · RAG. Todavía no se usan; van comentadas para que el despliegue no
+# arrastre 2 GB de PyTorch antes de que haga falta.
+# sentence-transformers==3.3.1
+# chromadb==0.6.3

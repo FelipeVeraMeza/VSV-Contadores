@@ -1,0 +1,22 @@
+# Lo que NO va a la imagen de Railway.
+#
+# Sin esto se copian los __pycache__ del desarrollo —compilados para OTRA
+# versión de Python— y los informes del benchmark, que pueden pesar más que el
+# código.
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# El benchmark y sus resultados no se ejecutan en producción.
+evaluation/reports/
+tests/
+
+# Configuración local: en Railway las variables las inyecta la plataforma.
+.env
+.env.*
+iniciar.py
+
+.git/
+.gitignore
+*.md

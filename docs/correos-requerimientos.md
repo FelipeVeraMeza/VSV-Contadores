@@ -1,6 +1,6 @@
 # Envío de correos a clientes — Requerimientos y estado real
 
-**Fecha:** 16-ago-2026
+**Fecha:** 16-ago-2026 · **última revisión:** 01-sep-2026 (ver sección 9)
 **Alcance:** el módulo de envío de correos personalizados (CRM → pestaña Correo),
 más todo lo que lo rodea: el remitente, las plantillas, las firmas y el registro.
 
@@ -618,3 +618,104 @@ imagen incluida— en vez de que la plantilla se la pise.
 
 Verificada contra la planilla real: las 7 marcas existen como columna, los 46
 clientes quedan dentro y a cada uno le tocan sus cifras.
+
+---
+
+## 9. Interfaz de Correo · 01-sep-2026
+
+Se cerraron las tareas `COMUNICACIONES` y `CORREO`, con sus cinco subtareas. El
+pedido de fondo era «el desplazamiento dentro de la sección es poco amigable, en
+particular en la sección Correo», y tenía una causa concreta y medible.
+
+### 9.1 El desplazamiento incómodo · dos barras de scroll anidadas
+
+El editor del texto tenía `maxHeight: 460` con `overflow-y-auto`, y vivía dentro
+del panel de Redactar, **que también scrollea**. Con un correo un poco largo
+quedaban dos barras a pocos píxeles una de otra: la rueda del mouse movía una u
+otra según dónde estuviera el puntero, y el texto se escapaba mientras se
+escribía.
+
+Se quitó el tope: el editor **crece con el texto** y scrollea una sola
+superficie, la del panel. La barra de formato quedó **pegada arriba** (`sticky`),
+porque sin eso, en un correo largo, había que subir hasta el principio para poner
+una palabra en negrita.
+
+> Detalle que costó: el `overflow-hidden` del marco anulaba el `sticky` — un
+> ancestro con overflow recortado se convierte en el contenedor de
+> desplazamiento y el sticky deja de pegarse. Se cambió por `isolate`, con
+> `rounded-t-xl` en la barra para que la esquina siga limpia.
+
+**Medido en el navegador con 40 líneas de texto:** 1 superficie con scroll donde
+antes había 2. El editor creció de 260 a 824 px sin scrollear por dentro, y la
+barra de formato sigue visible al llegar al final.
+
+### 9.2 Las plantillas · de tira de pastillas a listado
+
+Eran pastillas en línea que se envolvían en varias filas: con cinco o seis
+empujaban todo el formulario hacia abajo y había que scrollear para llegar al
+asunto — parte del mismo problema. Además, con los nombres cortados no se
+distinguía una de otra.
+
+Ahora ocupan **una sola línea** y se despliega la lista, mostrando el nombre **y
+el asunto** de cada una, que es lo que permite distinguir dos parecidas; antes el
+asunto solo aparecía pasando el mouse por encima. Se conservan el candado (mía),
+las dos personas (la ve el equipo), la marca de cuál está cargada, las veces que
+se usó y el botón de eliminar.
+
+### 9.3 «Planilla» → «Contactos»
+
+El botón decía «Planilla», que nombra el **archivo** y no la acción; puesto al
+lado de «Cartera» no se entendía que ahí se suben contactos de afuera.
+
+Quedó como **«Contactos»**, no «Cargar contactos», y por una razón medida: en el
+panel real de 288 px el texto completo en mayúsculas se cortaba en
+`CARGAR CONTAC…`, que se lee peor que el nombre corto. El verbo quedó en el globo
+de ayuda y en la zona de abajo, que ya explica el paso.
+
+### 9.4 Aviso del resultado en la campana
+
+El envío masivo corre en el **servidor** y sigue aunque se cierre el navegador.
+Solo había un mensaje en pantalla, que se pierde al cambiar de página: si la
+persona se iba a otra cosa —lo normal en un envío de minutos— nunca se enteraba
+de cuántos salieron ni de si algo falló.
+
+Ahora queda un aviso permanente en la campana, con el texto adaptado a tres
+casos: todo bien, con fallos, o **se cortó** (que es justamente lo que hay que
+avisar: sin esto el envío moría en silencio).
+
+> **Detalle que costó encontrar:** `notificar()` descarta el aviso cuando quien
+> actúa es el mismo destinatario —pensado para no avisarte de lo que tú mismo
+> hiciste—. Como acá hay que avisarle justamente a quien lanzó el envío, se llama
+> **sin `actor`**. Probado: los 3 casos crean el aviso, aparece sin leer en la
+> campana, y con `actor` = destinatario se descarta (7/7).
+
+Una **prueba** no genera aviso: es un correo a uno mismo para revisar cómo quedó.
+
+### 9.5 El formulario queda en limpio tras enviar
+
+Antes seguía todo puesto: asunto, texto, adjuntos y destinatarios marcados. Para
+escribir otra cosa había que ir borrando campo por campo, y **el riesgo real era
+pulsar «Enviar» de nuevo sobre la misma lista** y mandarles el correo dos veces.
+
+Se limpian asunto, cuerpo, adjuntos, selección, vista previa, plantilla cargada,
+búsqueda y —si venía de un Excel— la planilla, porque esos contactos ya
+recibieron el correo. Para eso el servidor ahora informa si el envío era de
+prueba: **una prueba no limpia nada**.
+
+### 9.6 El dominio `vsv.cl` no existe
+
+Aparte del pedido, se corrigió el dominio inexistente en tres lugares. Uno era
+grave: **la pantalla de login decía «contacta a soporte@vsv.cl para resetear tu
+clave»** — un correo que no recibe a nadie, dejando a la persona esperando sin
+poder entrar. Ahora indica pedírsela al administrador. Los otros dos eran
+ejemplos en formularios (`ejemplo@vsv.cl` → `ejemplo@vsvconsultores.com`).
+
+### 9.7 Sobre el aviso rojo del pantallazo
+
+En la captura adjunta a la tarea estaba marcado «REPARAR ESTO» sobre el aviso
+rojo *«No configuraste el tuyo: sale desde el correo por omisión»*.
+
+**No es un error**: informa que todavía no se ha puesto un remitente propio y el
+correo saldrá desde la dirección de la casa. Se arregla desde «Mi correo y
+firma», en la misma pantalla. Si se quiere que deje de aparecer, hay que
+configurar el remitente de cada usuario; no hay nada que corregir en el código.

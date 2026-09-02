@@ -1,0 +1,97 @@
+{
+  "categoria": "memoria_conversacional",
+  "que_mide": "Que mantenga el hilo. «¿Y julio?» no significa nada sin recordar que la pregunta anterior era sobre facturación de agosto. Sin esto es un buscador, no un asistente.",
+  "casos": [
+    {
+      "id": "CTX-001",
+      "turnos": [
+        {
+          "usuario": "¿Cuánto facturamos en agosto?",
+          "herramienta": "consultar_metricas",
+          "parametros": {}
+        },
+        {
+          "usuario": "¿Y julio?",
+          "herramienta": "consultar_metricas",
+          "parametros": {}
+        }
+      ],
+      "nota": "El caso base: hereda la herramienta, cambia el período."
+    },
+    {
+      "id": "CTX-002",
+      "turnos": [
+        {
+          "usuario": "¿Cuánto cobramos en agosto?",
+          "herramienta": "consultar_metricas",
+          "parametros": {}
+        },
+        {
+          "usuario": "¿Y en julio?",
+          "herramienta": "consultar_metricas",
+          "parametros": {}
+        },
+        {
+          "usuario": "¿Entonces subimos?",
+          "herramienta": null,
+          "debe_contener": [
+            "sí",
+            "agosto"
+          ]
+        }
+      ],
+      "nota": "El tercer turno NO llama herramienta: compara los datos que ya tiene. Agosto $4.671.956 vs julio $4.102.280."
+    },
+    {
+      "id": "CTX-003",
+      "turnos": [
+        {
+          "usuario": "¿Quién me debe?",
+          "herramienta": "consultar_deudas"
+        },
+        {
+          "usuario": "¿Y de esos, cuáles están vencidos?",
+          "herramienta": "consultar_deudas",
+          "parametros": {}
+        }
+      ],
+      "nota": "Refina la consulta anterior agregando un filtro."
+    },
+    {
+      "id": "CTX-004",
+      "turnos": [
+        {
+          "usuario": "¿Qué tareas tiene Víctor?",
+          "herramienta": "consultar_tareas",
+          "parametros": {
+            "ambito": "equipo"
+          }
+        },
+        {
+          "usuario": "¿Y Matías?",
+          "herramienta": "consultar_tareas",
+          "parametros": {
+            "ambito": "equipo"
+          }
+        }
+      ],
+      "nota": "Cambia solo el responsable."
+    },
+    {
+      "id": "CTX-005",
+      "turnos": [
+        {
+          "usuario": "¿Cuánto facturamos en agosto?",
+          "herramienta": "consultar_metricas",
+          "parametros": {}
+        },
+        {
+          "usuario": "¿Y cuánto cobramos ese mes?",
+          "herramienta": "consultar_metricas",
+          "parametros": {}
+        }
+      ],
+      "nota": "Cambia de herramienta pero conserva el período. Es el caso que distingue facturar de cobrar."
+    }
+  ]
+}

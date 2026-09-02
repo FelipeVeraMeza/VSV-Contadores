@@ -1,0 +1,79 @@
+{
+  "categoria": "espanol_real",
+  "que_mide": "Que entienda cómo se pregunta de verdad: sin tildes, con modismos chilenos, mal escrito, informal. Un modelo que solo entiende preguntas bien redactadas no sirve — nadie escribe así al apuro.",
+  "casos": [
+    {
+      "id": "ESP-001",
+      "pregunta": "quien me debe",
+      "herramienta": "consultar_deudas",
+      "nota": "Sin tildes ni signos. Es lo más común."
+    },
+    {
+      "id": "ESP-002",
+      "pregunta": "cuanto cobramos este mes",
+      "herramienta": "consultar_metricas"
+    },
+    {
+      "id": "ESP-003",
+      "pregunta": "hay clientes atrasados?",
+      "herramienta": "consultar_deudas",
+      "parametros": {}
+    },
+    {
+      "id": "ESP-004",
+      "pregunta": "muestrame los que no han pagado",
+      "herramienta": "consultar_deudas"
+    },
+    {
+      "id": "ESP-005",
+      "pregunta": "qué onda con las facturas de agosto",
+      "herramienta": "consultar_metricas",
+      "parametros": {},
+      "nota": "Modismo chileno. «Qué onda con X» = «cómo va X»."
+    },
+    {
+      "id": "ESP-006",
+      "pregunta": "quién me debe más de 100 lucas",
+      "herramienta": "consultar_deudas",
+      "parametros": {},
+      "nota": "«Luca» = mil pesos. 100 lucas = $100.000. Si el modelo no lo sabe, el prompt tiene que enseñárselo."
+    },
+    {
+      "id": "ESP-007",
+      "pregunta": "cuanta plata entro en agosto",
+      "herramienta": "consultar_metricas",
+      "parametros": {},
+      "nota": "«Plata» = dinero en Chile."
+    },
+    {
+      "id": "ESP-008",
+      "pregunta": "q tareas quedan pendientes",
+      "herramienta": "consultar_tareas",
+      "nota": "Abreviatura de mensajería."
+    },
+    {
+      "id": "ESP-009",
+      "pregunta": "cuantos clientes tenemos",
+      "herramienta": "consultar_metricas",
+      "parametros": {}
+    },
+    {
+      "id": "ESP-010",
+      "pregunta": "quien tiene mas pega pendiente",
+      "herramienta": "consultar_tareas",
+      "nota": "«Pega» = trabajo en Chile."
+    },
+    {
+      "id": "ESP-011",
+      "pregunta": "dame el resumen de la cobranza",
+      "herramienta": "consultar_deudas"
+    },
+    {
+      "id": "ESP-012",
+      "pregunta": "necesito saber cuánto se facturó el mes pasado",
+      "herramienta": "consultar_metricas",
+      "parametros": {},
+      "nota": "Fecha relativa: hoy es septiembre, «el mes pasado» es agosto."
+    }
+  ]
+}

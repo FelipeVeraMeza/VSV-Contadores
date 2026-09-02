@@ -4,6 +4,11 @@
 **Para qué sirve:** retomar el trabajo sin tener que reconstruir el contexto.
 Qué existe de verdad, qué está simulado, qué está decidido y qué falta decidir.
 
+> ⚠️ **Este documento es de agosto y varias partes envejecieron.** Para lo más
+> reciente, ver `docs/sesion-01-09-2026.md`: resume la jornada del 1 de
+> septiembre —Contabilidad, Tickets, CRM y Correo— y, sobre todo, lista **qué
+> falta para desplegar**, que es lo que bloquea que todo eso sirva.
+
 > Todo lo que dice este documento está medido contra el código y la base de
 > datos, no contra la impresión que da la pantalla. Donde hay una suposición, se
 > dice que lo es.
