@@ -272,7 +272,8 @@ export const usarPlantilla = async (req, res) => {
             `SELECT titulo, detalle, dias_plazo FROM tarea_plantilla_item
               WHERE plantilla_id = $1 ORDER BY orden ASC`, [id]);
 
-        const { titulo, venceAt, responsableId, proyectoId, prioridad, visibilidad } = req.body || {};
+        const { titulo, venceAt, responsableId, proyectoId, prioridad, visibilidad,
+                personaId, empresaId } = req.body || {};
 
         // `!== undefined` y no `||`: mandar responsable en blanco a propósito
         // tiene que poder dejar la tarea sin responsable, y con `||` se colaría
@@ -286,29 +287,64 @@ export const usarPlantilla = async (req, res) => {
             : visibilidad === 'proyecto' ? 'proyecto'
             : (p.visibilidad || 'proyecto');
 
+        // A QUIÉN ES ESTE TRABAJO · lo que pedía «LAS PLANTILLAS PUEDEN ASIGNARSE
+        // A UNA NUEVA EMPRESA, UN CLIENTE O UN PROSPECTO».
+        //
+        // Una plantilla describe un procedimiento —«Formaliza tu pyme»— y se usa
+        // una vez por cada cliente. Sin poder decir de quién es al usarla, había
+        // que crear la tarea y después editarla una por una; y las 18 subtareas
+        // que genera quedaban todas sin dueño, que es justo donde se pierde el
+        // rastro meses después.
+        //
+        // La plantilla NO guarda cliente (sería absurdo: se reutiliza para todos),
+        // así que esto viene siempre del formulario.
+        const persFinal = personaId || null;
+        const empFinal  = empresaId || null;
+
         const { rows: ins } = await pool.query(
             `INSERT INTO tarea
                 (organizacion_id, titulo, descripcion, tipo, prioridad, estado,
-                 responsable_id, vence_at, origen, creado_por, proyecto_id, visibilidad)
-             VALUES ($1,$2,$3,'tarea',$4,'pendiente',$5,$6,'manual',$7,$8,$9) RETURNING id`,
+                 responsable_id, vence_at, origen, creado_por, proyecto_id, visibilidad,
+                 persona_id, empresa_id)
+             VALUES ($1,$2,$3,'tarea',$4,'pendiente',$5,$6,'manual',$7,$8,$9,$10,$11) RETURNING id`,
+            // Orden del título: lo que escribió el usuario, luego el título propio
+            // de la plantilla, y solo como ÚLTIMO recurso su nombre.
+            //
+            // Ese último recurso es lo que la subtarea «EL NOMBRE DE LA TAREA, NO
+            // DEBE SER EL DE LA PLANTILLA» pedía evitar: con él, tres altas desde
+            // la misma plantilla quedaban con el mismo nombre en la lista. Ya no
+            // pasa por pantalla —el formulario exige un título antes de guardar y
+            // dejó de sugerir el nombre—, pero el endpoint se puede llamar solo, y
+            // una tarea sin título sería peor que una con título repetido.
+            //
+            // Las plantillas anteriores al arreglo tienen `titulo` en NULL y caen
+            // acá: conviene abrirlas y darles un título propio.
             [org, (titulo?.trim() || p.titulo || p.nombre).slice(0, 200), p.detalle,
              PRIORIDADES.includes(prioridad) ? prioridad : (p.prioridad || 'media'),
-             respFinal, vence, req.user?.usuarioId || null, proyFinal, visFinal]
+             respFinal, vence, req.user?.usuarioId || null, proyFinal, visFinal,
+             persFinal, empFinal]
         );
         const tareaId = ins[0].id;
 
-        // Las subtareas heredan proyecto y visibilidad de la principal —la misma
-        // regla que al crearlas a mano— y usan su propio plazo si la plantilla
-        // lo definió; si no, vencen con la tarea.
+        // Las subtareas heredan proyecto, visibilidad Y CLIENTE de la principal
+        // —la misma regla que al crearlas a mano— y usan su propio plazo si la
+        // plantilla lo definió; si no, vencen con la tarea.
+        //
+        // El cliente se hereda porque los 18 pasos de «Formaliza tu pyme» son
+        // todos del MISMO cliente: sin heredarlo, la madre quedaba ligada y las
+        // subtareas sueltas, y al buscar «todo lo de este cliente» aparecía una
+        // sola fila de dieciocho.
         for (const paso of pasos) {
             await pool.query(
                 `INSERT INTO tarea
                     (organizacion_id, titulo, descripcion, tipo, prioridad, estado,
-                     responsable_id, vence_at, origen, creado_por, proyecto_id, parent_id, visibilidad)
-                 VALUES ($1,$2,$3,'tarea',$4,'pendiente',$5,$6,'manual',$7,$8,$9,$10)`,
+                     responsable_id, vence_at, origen, creado_por, proyecto_id, parent_id, visibilidad,
+                     persona_id, empresa_id)
+                 VALUES ($1,$2,$3,'tarea',$4,'pendiente',$5,$6,'manual',$7,$8,$9,$10,$11,$12)`,
                 [org, paso.titulo, paso.detalle, p.prioridad || 'media', respFinal,
                  Number.isInteger(paso.dias_plazo) ? desdeDias(paso.dias_plazo) : vence,
-                 req.user?.usuarioId || null, proyFinal, tareaId, visFinal]
+                 req.user?.usuarioId || null, proyFinal, tareaId, visFinal,
+                 persFinal, empFinal]
             );
         }
 
@@ -333,6 +369,18 @@ export const usarPlantilla = async (req, res) => {
 
         return res.status(201).json({ success: true, tarea: full, subtareas: pasos.length });
     } catch (error) {
+        // Un cliente, empresa o proyecto que ya no existe es un dato equivocado
+        // del pedido, no una falla del servidor: se dice cuál, con 400. Antes
+        // salía un 500 con «No se pudo crear la tarea desde la plantilla» y a
+        // adivinar qué campo estaba mal.
+        if (error.code === '23503') {
+            const campo = /proyecto/.test(error.detail || '') ? 'proyecto'
+                        : /persona/.test(error.detail || '')  ? 'cliente'
+                        : /empresa/.test(error.detail || '')  ? 'empresa'
+                        : /usuario|responsable/.test(error.detail || '') ? 'responsable'
+                        : 'dato relacionado';
+            return res.status(400).json({ success: false, message: `El ${campo} indicado ya no existe.` });
+        }
         console.error('❌ Error usando plantilla:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo crear la tarea desde la plantilla.' });
     }

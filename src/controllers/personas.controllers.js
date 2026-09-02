@@ -1055,8 +1055,19 @@ export const completarAccion = async (req, res) => {
         const nuevo = req.body?.estado === 'pendiente' ? 'pendiente' : 'completada';
         await client.query('BEGIN');
         const { rows } = await client.query(
+            // LOS DOS ::text SON OBLIGATORIOS.
+            //
+            // $2 se usa dos veces: como valor de la columna estado (varchar) y en
+            // la comparación del CASE. Postgres deduce un tipo por cada uso, saca
+            // dos distintos y rechaza la consulta con «inconsistent types deduced
+            // for parameter $2» — así que marcar una acción como completada
+            // fallaba SIEMPRE, con un 500 y el mensaje genérico de más abajo.
+            //
+            // Castear solo el del CASE no alcanza: hay que fijar el tipo en ambas
+            // apariciones. Detectado el 01-09-2026 preparando todas las consultas
+            // del backend contra Postgres, a raíz del mismo error en crearTarea.
             `UPDATE persona_accion
-                SET estado = $2, completed_at = CASE WHEN $2 = 'completada' THEN NOW() ELSE NULL END
+                SET estado = $2::text, completed_at = CASE WHEN $2::text = 'completada' THEN NOW() ELSE NULL END
               WHERE id = $1 RETURNING persona_id`,
             [accionId, nuevo]);
         if (!rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ success: false, message: 'Acción no encontrada.' }); }

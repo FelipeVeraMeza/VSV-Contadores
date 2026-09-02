@@ -89,6 +89,44 @@ const AsientosContables = ({ empresaId, mes: mesProp, anio: anioProp, setMes: se
     return acc;
   }, { debe: 0, haber: 0 }), [comprobantes]);
 
+  // ── REVISIÓN DE UN ASIENTO · aprobar o rechazar ─────────────────────
+  //
+  // Cualquiera puede revisar cualquier asiento, incluido el que hizo él mismo.
+  // El equipo son tres personas y Víctor lleva Contabilidad: exigir que otro le
+  // apruebe cada asiento dejaría el trabajo detenido cada vez que esté solo.
+  //
+  // Lo que importa es que quede el RASTRO: quién lo contabilizó y quién lo
+  // aprobó, con fecha y hora, aunque coincidan. La regla de verdad vive en el
+  // servidor (ver revisarComprobante); acá solo se dibujan los botones.
+  const [revisandoId, setRevisandoId] = useState(null);
+
+  const revisar = async (comp, decision) => {
+    let motivo = '';
+    if (decision === 'rechazar') {
+      // El motivo es obligatorio: sin él, quien lo hizo no sabe qué corregir.
+      // El servidor también lo exige; acá se pide para no ir y volver.
+      motivo = (window.prompt(`¿Por qué devuelves el comprobante #${comp.numeroComprobante ?? comp.numero_comprobante}?`) || '').trim();
+      if (!motivo) return;
+    }
+    setRevisandoId(comp.id);
+    try {
+      const res = await fetchWithAuth(`/accounting/comprobantes/${comp.id}/revision`, user.sessionId, {
+        method: 'PATCH', body: { decision, motivo },
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.message || 'No se pudo registrar la revisión.');
+      toast({
+        title: decision === 'aprobar' ? '✅ Asiento aprobado' : '↩️ Asiento devuelto',
+        description: decision === 'aprobar'
+          ? `El #${d.numero} queda firme a tu nombre.`
+          : `El #${d.numero} vuelve a quien lo hizo, con tu motivo.`,
+      });
+      queryClient.invalidateQueries(['comprobantes-libro']);
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'No se pudo revisar', description: e.message });
+    } finally { setRevisandoId(null); }
+  };
+
   const handleEliminar = async (id, glosa) => {
     if (!confirm(`¿Eliminar el comprobante "${glosa}"?`)) return;
     setDeletingId(id);
@@ -175,9 +213,12 @@ const AsientosContables = ({ empresaId, mes: mesProp, anio: anioProp, setMes: se
           </div>
         ) : (
           <>
-            {/* Header tabla */}
-            <div className="grid grid-cols-[60px_100px_80px_1fr_100px_60px_40px] bg-slate-50 border-b border-[#efe8dd] px-5 py-3">
-              {['N°','Fecha','Tipo','Glosa','Monto','Estado',''].map((h,i) => (
+            {/* Header tabla.
+                Se agregó la columna «Revisión»: la de «Estado» solo decía si el
+                asiento cuadraba, que es otra cosa. Un asiento puede estar
+                perfectamente cuadrado y no haberlo revisado nadie. */}
+            <div className="grid grid-cols-[60px_100px_80px_1fr_100px_60px_130px_40px] bg-slate-50 border-b border-[#efe8dd] px-5 py-3">
+              {['N°','Fecha','Tipo','Glosa','Monto','Cuadra','Revisión',''].map((h,i) => (
                 <span key={i} className="text-[10px] font-black uppercase tracking-widest text-slate-500">{h}</span>
               ))}
             </div>
@@ -198,7 +239,7 @@ const AsientosContables = ({ empresaId, mes: mesProp, anio: anioProp, setMes: se
                   <div key={comp.id}>
                     {/* Fila principal */}
                     <div
-                      className="grid grid-cols-[60px_100px_80px_1fr_100px_60px_40px] items-center px-5 py-3 hover:bg-white cursor-pointer transition-colors group"
+                      className="grid grid-cols-[60px_100px_80px_1fr_100px_60px_130px_40px] items-center px-5 py-3 hover:bg-white cursor-pointer transition-colors group"
                       onClick={() => toggleExpanded(comp.id)}
                     >
                       <span className="font-mono text-xs text-slate-400 font-bold">#{comp.numeroComprobante ?? comp.numero_comprobante ?? '—'}</span>
@@ -211,6 +252,52 @@ const AsientosContables = ({ empresaId, mes: mesProp, anio: anioProp, setMes: se
                       <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border w-fit ${cuadrado ? 'text-emerald-600 bg-emerald-500/10 border-emerald-500/20' : 'text-amber-600 bg-amber-500/10 border-amber-500/20'}`}>
                         {cuadrado ? '✓' : '!'}
                       </span>
+
+                      {/* ── REVISIÓN ──
+                          Aprobar deja el asiento firme; rechazar lo devuelve con
+                          un motivo. Cualquiera puede hacerlo, también sobre lo
+                          propio: lo que queda registrado es quién contabilizó y
+                          quién aprobó, con fecha y hora. */}
+                      <div onClick={e => e.stopPropagation()} className="flex items-center gap-1">
+                        {comp.estado === 'Aprobado' ? (
+                          <span title={`Aprobado por ${comp.aprobadoPor || comp.aprobado_por || '—'}`}
+                            className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded border w-fit text-emerald-700 bg-emerald-500/10 border-emerald-500/20 truncate">
+                            ✓ {(comp.aprobadoPor || comp.aprobado_por || '').split(' ')[0] || 'Aprobado'}
+                          </span>
+                        ) : comp.estado === 'Rechazado' ? (
+                          // Rechazado vuelve a ofrecer los botones: es el camino
+                          // de vuelta. Se corrige el asiento y se aprueba, o se
+                          // devuelve otra vez con un motivo nuevo.
+                          <>
+                            {/* Dice «Devuelto» y no solo «✕»: un símbolo suelto no
+                                se entiende, y esta es la fila que alguien tiene
+                                que atender. */}
+                            <span title={`Devuelto por ${comp.aprobadoPor || comp.aprobado_por || '—'}`
+                                   + (comp.motivoRechazo || comp.motivo_rechazo ? ` · ${comp.motivoRechazo || comp.motivo_rechazo}` : '')}
+                              className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded border w-fit text-red-700 bg-red-500/10 border-red-500/20">
+                              Devuelto
+                            </span>
+                            <button onClick={() => revisar(comp, 'aprobar')} disabled={revisandoId === comp.id}
+                              title="Ya se corrigió: aprobarlo"
+                              className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded border text-emerald-700 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20 disabled:opacity-40">
+                              {revisandoId === comp.id ? '…' : 'Aprobar'}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => revisar(comp, 'aprobar')} disabled={revisandoId === comp.id}
+                              title="Aprobar este asiento"
+                              className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded border text-emerald-700 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20 disabled:opacity-40">
+                              {revisandoId === comp.id ? '…' : 'Aprobar'}
+                            </button>
+                            <button onClick={() => revisar(comp, 'rechazar')} disabled={revisandoId === comp.id}
+                              title="Devolverlo con un motivo"
+                              className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded border text-red-600 bg-red-500/10 border-red-500/30 hover:bg-red-500/20 disabled:opacity-40">
+                              Rechazar
+                            </button>
+                          </>
+                        )}
+                      </div>
                       <button
                         onClick={e => { e.stopPropagation(); handleEliminar(comp.id, comp.glosa); }}
                         disabled={deletingId === comp.id}
@@ -223,6 +310,20 @@ const AsientosContables = ({ empresaId, mes: mesProp, anio: anioProp, setMes: se
                     {/* Líneas expandidas */}
                     {isExp && (
                       <div className="bg-slate-50 border-t border-[#efe8dd] px-10 py-3">
+                        {/* POR QUÉ SE DEVOLVIÓ, escrito completo.
+                            En la fila solo cabe la marca «✕», y el motivo quedaba
+                            escondido en el globo de ayuda: quien tiene que
+                            corregir el asiento no puede adivinar que hay texto
+                            ahí. Acá se lee entero, junto a las líneas que hay
+                            que arreglar. */}
+                        {comp.estado === 'Rechazado' && (comp.motivoRechazo || comp.motivo_rechazo) && (
+                          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                            <p className="text-[9px] font-black uppercase tracking-widest text-red-700">
+                              Devuelto por {(comp.aprobadoPor || comp.aprobado_por || 'alguien').split(' ')[0]}
+                            </p>
+                            <p className="text-[11px] text-red-900 mt-0.5">{comp.motivoRechazo || comp.motivo_rechazo}</p>
+                          </div>
+                        )}
                         <div className="grid grid-cols-[1fr_120px_120px] gap-2 mb-1.5 px-1">
                           <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Cuenta</span>
                           <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest text-right">Debe</span>

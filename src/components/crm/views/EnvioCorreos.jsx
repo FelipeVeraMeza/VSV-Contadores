@@ -22,6 +22,7 @@ import {
     X, ChevronLeft, ChevronRight, FlaskConical, Building2, Sparkles,
     LayoutTemplate, Save, Trash2, Check, PenLine, Users2, Lock,
     Paperclip, Square, FileSpreadsheet, Upload, Table2, History, Settings2,
+    ChevronDown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
@@ -321,6 +322,13 @@ const EnvioCorreos = () => {
     // una copia cada vez que se corrige una coma.
     const [plantillas, setPlantillas] = useState([]);
     const [plantillaId, setPlantillaId] = useState(null);
+    // Si la lista de plantillas está desplegada. Cerrada por omisión: ocupa una
+    // sola línea hasta que se pide ver.
+    const [listaPlantillas, setListaPlantillas] = useState(false);
+    // La plantilla cargada, si hay una. Se calculaba suelto en dos lugares.
+    const plantillaActual = useMemo(
+        () => plantillas.find(p => p.id === plantillaId) || null,
+        [plantillas, plantillaId]);
     // El administrador de plantillas, abierto encima del correo que se está
     // escribiendo. Es la MISMA pantalla de Comunicaciones › Plantillas, no una
     // segunda versión: dos editores de lo mismo se van separando con el tiempo.
@@ -507,11 +515,37 @@ const EnvioCorreos = () => {
                         description: `Enviados: ${d.enviados} · Fallidos: ${d.fallidos}`,
                         duration: 12000,
                     });
+                    // EL FORMULARIO QUEDA EN LIMPIO para el próximo envío.
+                    //
+                    // Antes seguía todo puesto: el asunto, el texto, los adjuntos y
+                    // los destinatarios marcados. Para escribir otra cosa había que
+                    // ir borrando campo por campo, y el riesgo real era pulsar
+                    // «Enviar» de nuevo sobre la misma lista y mandarles el correo
+                    // dos veces. Pedido de la subtarea «AL ENVIAR CORREO BORRAR LO
+                    // CREADO PARA ENVIAR ALGO DESDE 0».
+                    //
+                    // La PRUEBA no limpia nada: es justamente para revisar el correo
+                    // antes de mandarlo, y vaciarlo ahí sería absurdo.
+                    if (!d.soloPrueba) {
+                        setAsunto('');
+                        setCuerpo('');
+                        setAdjuntos([]);
+                        setSeleccion([]);
+                        setPrevia(null);
+                        setPlantillaId(null);
+                        setBusqueda('');
+                        // La planilla cargada también se suelta: sus contactos ya
+                        // recibieron el correo.
+                        if (modo === 'planilla') quitarPlanilla();
+                    }
                 }
             } catch { /* solo es el indicador */ }
         }, 2000);
         return () => clearInterval(id);
-    }, [enviando]);
+        // `modo` va en las dependencias porque el vaciado lo consulta: sin él, el
+        // efecto se quedaría con el valor que tenía al empezar a enviar y la
+        // planilla no se soltaría si se cambió de pestaña mientras tanto.
+    }, [enviando, modo]);
 
     // ---- lista filtrada ----
     const lista = useMemo(() => {
@@ -777,16 +811,31 @@ const EnvioCorreos = () => {
                 </div>
 
                 {/* DE DÓNDE SALEN LOS DATOS.
-                    «Cartera» los saca del CRM. «Planilla» los saca de un Excel, y
-                    es para los envíos cuyas cifras no están en el sistema: el
-                    resumen del F29 se calcula aparte y vive en una planilla. */}
+                    «Cartera» los saca del CRM. «Cargar contactos» los saca de un
+                    Excel, y es para los envíos cuyas cifras no están en el sistema:
+                    el resumen del F29 se calcula aparte y vive en una planilla.
+                    El botón decía «Planilla», que nombra el ARCHIVO y no la acción;
+                    puesto al lado de «Cartera» no se entendía que ahí se suben
+                    contactos de afuera. Renombrado por pedido de la tarea CORREO. */}
                 <div className="p-2 border-b border-[#efe8dd] grid grid-cols-2 gap-1.5">
-                    {[['cartera', 'Cartera', Users], ['planilla', 'Planilla', FileSpreadsheet]].map(([id, texto, Icono]) => (
+                    {/* `tracking-wide` y no `widest`: «CARGAR CONTACTOS» es el doble
+                        de largo que «PLANILLA» y con el espaciado anterior se salía
+                        del panel de 288 px. `truncate` + `min-w-0` lo cubren si el
+                        panel se angosta todavía más. */}
+                    {/* Dice «Contactos» y no «Cargar contactos»: medido en el panel
+                        real de 288 px, el texto completo en mayúsculas se cortaba en
+                        «CARGAR CONTAC…», que se lee peor que el nombre corto. El
+                        verbo queda en el `title` y en la zona de abajo, donde se
+                        explica que se sube un Excel. Lo que importaba era dejar de
+                        decir «Planilla», que nombra el ARCHIVO en vez de a quién se
+                        le va a escribir. */}
+                    {[['cartera', 'Cartera', Users], ['planilla', 'Contactos', FileSpreadsheet]].map(([id, texto, Icono]) => (
                         <button key={id} onClick={() => { setModo(id); setBusqueda(''); setPrevia(null); }}
-                            className={`text-[10px] font-black uppercase tracking-widest rounded-lg py-1.5 border transition-colors inline-flex items-center justify-center gap-1.5 ${
+                            title={id === 'planilla' ? 'Subir un Excel con los contactos a los que enviar' : 'Elegir clientes del CRM'}
+                            className={`text-[10px] font-black uppercase tracking-wide rounded-lg py-1.5 px-1 border transition-colors inline-flex items-center justify-center gap-1 min-w-0 ${
                                 modo === id ? 'bg-emerald-600 border-emerald-500 text-white'
                                             : 'bg-slate-50 border-[#efe8dd] text-slate-500 hover:border-emerald-500/60'}`}>
-                            <Icono size={12} /> {texto}
+                            <Icono size={12} className="shrink-0" /> <span className="truncate">{texto}</span>
                         </button>
                     ))}
                 </div>
@@ -1052,40 +1101,71 @@ const EnvioCorreos = () => {
                                 title="Guardar lo que escribiste para reusarlo"
                                 className="text-[9px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700 disabled:opacity-40 flex items-center gap-1">
                                 {guardando ? <Loader2 size={10} className="animate-spin" /> : <Save size={10} />}
-                                {plantillas.find(p => p.id === plantillaId) ? 'Guardar cambios' : 'Guardar como plantilla'}
+                                {plantillaActual ? 'Guardar cambios' : 'Guardar como plantilla'}
                             </button>
                         </div>
+                        {/* LAS PLANTILLAS SE ELIGEN DE UNA LISTA, NO DE UNA TIRA.
+                            Eran pastillas en línea que se envolvían en varias filas:
+                            con cinco o seis empujaban todo el formulario hacia abajo
+                            y había que scrollear para llegar al asunto —parte del
+                            «desplazamiento poco amigable» de la tarea—. Además, con
+                            los nombres cortados no se distinguía una de otra.
+                            Ahora ocupan una sola línea y se despliega la lista, con
+                            el asunto de cada una a la vista. Pedido de la subtarea
+                            PLANTILLAS: «deben visualizarse como un listado». */}
                         {plantillas.length === 0 ? (
                             <p className="text-[10px] text-slate-400 italic border border-dashed border-[#efe8dd] rounded-lg py-2 text-center">
                                 Aún no hay plantillas. Escribe un correo y guárdalo.
                             </p>
                         ) : (
-                            <div className="flex gap-1.5 flex-wrap">
-                                {plantillas.map(p => {
-                                    const activa = plantillaId === p.id;
-                                    return (
-                                        <button key={p.id} onClick={() => usarPlantilla(p)}
-                                            title={`${p.asunto}${p.vecesUsada ? ` · usada ${p.vecesUsada} ${p.vecesUsada === 1 ? 'vez' : 'veces'}` : ''}`}
-                                            className={`group text-[10px] font-bold px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 ${
-                                                activa ? 'bg-emerald-600 border-emerald-500 text-white'
-                                                       : 'bg-slate-50 border-[#efe8dd] text-slate-600 hover:border-emerald-500/60'}`}>
-                                            {activa && <Check size={10} />}
-                                            {/* De un vistazo: candado = mía, dos personas =
-                                                la ve todo el equipo. */}
-                                            {p.compartida
-                                                ? <Users2 size={9} className={activa ? 'text-emerald-100' : 'text-slate-400'} />
-                                                : <Lock size={9} className={activa ? 'text-emerald-100' : 'text-slate-400'} />}
-                                            {p.nombre}
-                                            {p.vecesUsada > 0 && (
-                                                <span className={activa ? 'text-emerald-100' : 'text-slate-400'}>· {p.vecesUsada}</span>
-                                            )}
-                                            <span onClick={(e) => borrarPlantilla(p, e)} title="Eliminar"
-                                                className={`opacity-0 group-hover:opacity-100 ${activa ? 'hover:text-red-200' : 'hover:text-red-500'}`}>
-                                                <Trash2 size={10} />
-                                            </span>
-                                        </button>
-                                    );
-                                })}
+                            <div className="relative">
+                                <button onClick={() => setListaPlantillas(v => !v)}
+                                    className="w-full flex items-center gap-2 bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 hover:border-emerald-500/60 transition-colors text-left">
+                                    <LayoutTemplate size={12} className="text-slate-400 shrink-0" />
+                                    <span className={`text-[11px] flex-1 truncate ${plantillaActual ? 'text-slate-800 font-bold' : 'text-slate-400'}`}>
+                                        {plantillaActual ? plantillaActual.nombre : `Elegir una de ${plantillas.length}…`}
+                                    </span>
+                                    <ChevronDown size={12} className={`text-slate-400 shrink-0 transition-transform ${listaPlantillas ? 'rotate-180' : ''}`} />
+                                </button>
+                                {listaPlantillas && (
+                                    <>
+                                        {/* Capa para cerrar al hacer clic afuera. */}
+                                        <div className="fixed inset-0 z-20" onClick={() => setListaPlantillas(false)} />
+                                        <div className="absolute z-30 left-0 right-0 mt-1 bg-white border border-[#efe8dd] rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                                            {plantillas.map(p => {
+                                                const activa = plantillaId === p.id;
+                                                return (
+                                                    <div key={p.id}
+                                                        className={`group flex items-start gap-2 px-2.5 py-1.5 border-b border-[#f5f0e8] last:border-0 cursor-pointer transition-colors ${
+                                                            activa ? 'bg-emerald-500/10' : 'hover:bg-slate-50'}`}
+                                                        onClick={() => { usarPlantilla(p); setListaPlantillas(false); }}>
+                                                        {/* De un vistazo: candado = mía, dos personas =
+                                                            la ve todo el equipo. */}
+                                                        <span className="mt-0.5 shrink-0">
+                                                            {activa ? <Check size={11} className="text-emerald-600" />
+                                                                : p.compartida ? <Users2 size={11} className="text-slate-400" />
+                                                                : <Lock size={11} className="text-slate-400" />}
+                                                        </span>
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className={`text-[11px] truncate ${activa ? 'font-bold text-emerald-800' : 'text-slate-800'}`}>{p.nombre}</p>
+                                                            {/* El asunto es lo que distingue dos plantillas
+                                                                con nombres parecidos. Antes solo se veía
+                                                                pasando el mouse por encima. */}
+                                                            {p.asunto && <p className="text-[10px] text-slate-400 truncate">{p.asunto}</p>}
+                                                        </div>
+                                                        {p.vecesUsada > 0 && (
+                                                            <span className="text-[10px] text-slate-400 shrink-0 mt-0.5 tabular-nums" title={`Usada ${p.vecesUsada} ${p.vecesUsada === 1 ? 'vez' : 'veces'}`}>{p.vecesUsada}</span>
+                                                        )}
+                                                        <button onClick={(e) => borrarPlantilla(p, e)} title="Eliminar"
+                                                            className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 shrink-0 mt-0.5">
+                                                            <Trash2 size={11} />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>

@@ -12,6 +12,7 @@ import {
     getComprobantes,
     getDocumentosAfectables,
     eliminarComprobante,
+    revisarComprobante,
     crearCuenta,
     editarCuenta,
     eliminarCuenta
@@ -34,6 +35,10 @@ router.post('/comprobantes',        guardarComprobante);
 router.get('/comprobantes',         getComprobantes);
 router.get('/documentos-afectables', getDocumentosAfectables);
 router.delete('/comprobantes/:id',  eliminarComprobante);
+// Aprobar o rechazar. Es PATCH y no PUT: cambia el estado de la revisión, no
+// reemplaza el comprobante. Quién puede hacerlo lo decide el controlador —nadie
+// revisa lo suyo—, no la ruta.
+router.patch('/comprobantes/:id/revision', revisarComprobante);
 
 // Plan de Cuentas CRUD
 router.post('/plan-cuentas',       crearCuenta);

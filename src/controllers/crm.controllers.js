@@ -23,6 +23,12 @@ const ESTADOS = ['pendiente', 'en_proceso', 'en_revision', 'completada', 'cancel
 // dada por buena), y 'cancelada' no cuenta para ningún lado.
 const ESTADOS_ACTIVOS = ['pendiente', 'en_proceso', 'en_revision'];
 
+// Un id que no tiene forma de UUID no llega al SQL: Postgres responde «invalid
+// input syntax for type uuid» y el controlador lo convierte en un 500, así que
+// un parámetro mal escrito en la URL tumbaba la pantalla entera.
+const ES_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_TITULO = 200;   // igual que tarea.titulo en la base
+
 // Orden de la lista: primero lo vivo, después lo cerrado; dentro de eso, por
 // fecha de entrega y por prioridad. Se repite en varias consultas.
 const ORDEN_TAREAS = `
@@ -157,7 +163,7 @@ export const listarTareas = async (req, res) => {
         }
         if (estado && ESTADOS.includes(estado)) { params.push(estado); where.push(`t.estado = $${params.length}`); }
         if (tipo && TIPOS.includes(tipo)) { params.push(tipo); where.push(`t.tipo = $${params.length}`); }
-        if (personaId) { params.push(personaId); where.push(`t.persona_id = $${params.length}`); }
+        if (personaId && ES_UUID.test(String(personaId))) { params.push(personaId); where.push(`t.persona_id = $${params.length}`); }
         if (desde) { params.push(desde); where.push(`t.vence_at >= $${params.length}::timestamptz`); }
         if (hasta) { params.push(hasta); where.push(`t.vence_at <= $${params.length}::timestamptz`); }
 
@@ -192,7 +198,12 @@ export const listarTareas = async (req, res) => {
         if (PRIORIDADES.includes(req.query.prioridad)) {
             params.push(req.query.prioridad); where.push(`t.prioridad = $${params.length}`);
         }
-        if (req.query.responsableId) {
+        // Los filtros por id se ignoran si no son UUID. Antes pasaban tal cual al
+        // SQL y Postgres devolvía «invalid input syntax for type uuid», que el
+        // controlador convertía en un 500: la lista completa se caía por un
+        // parámetro mal escrito en la URL. Un filtro sin sentido no debe tumbar
+        // la pantalla; simplemente no filtra.
+        if (req.query.responsableId && ES_UUID.test(String(req.query.responsableId))) {
             params.push(req.query.responsableId); where.push(`t.responsable_id = $${params.length}`);
         }
 
@@ -208,7 +219,7 @@ export const listarTareas = async (req, res) => {
                          OR u.nombre ILIKE $${i} OR pr.nombre ILIKE $${i})`);
         }
         // Filtros del módulo de tareas.
-        if (req.query.proyectoId) { params.push(req.query.proyectoId); where.push(`t.proyecto_id = $${params.length}`); }
+        if (req.query.proyectoId && ES_UUID.test(String(req.query.proyectoId))) { params.push(req.query.proyectoId); where.push(`t.proyecto_id = $${params.length}`); }
         if (req.query.soloRaiz === '1') where.push(`t.parent_id IS NULL`);
 
         // ARCHIVADAS · por defecto NO se ven. Se archiva justamente para sacarlas
@@ -346,11 +357,42 @@ export const tareaCompleta = async (id) => {
 // ------------------------------------------------------------
 // CREAR TAREA
 // ------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// VALIDACIÓN DE ENTRADA · que el error lo explique el servidor, no Postgres
+// ---------------------------------------------------------------------------
+// Sin esto, cualquier dato con mala pinta llegaba hasta el INSERT y reventaba
+// con un 500 y el mensaje inútil «No se pudo crear la tarea». El usuario veía
+// «ERROR» en rojo sin saber qué corregir. Casos medidos el 01-09-2026:
+//   · un título de más de 200 caracteres (el largo de la columna)
+//   · una fecha que no es fecha («no-es-fecha», «2026-13-45»)
+//   · un id de proyecto, cliente o colaborador que no es un UUID
+// Ahora se contestan con 400 y un texto que dice qué pasa.
+
+// Devuelve el mensaje del primer problema, o null si está todo bien.
+const revisarDatosTarea = ({ titulo, venceAt, proyectoId, parentId, personaId, empresaId, responsableId, colaboradores }) => {
+    if (titulo !== undefined && titulo !== null && titulo.trim().length > MAX_TITULO)
+        return `El título no puede pasar de ${MAX_TITULO} caracteres (tiene ${titulo.trim().length}).`;
+    if (venceAt && Number.isNaN(new Date(venceAt).getTime()))
+        return 'La fecha de entrega no es una fecha válida.';
+    for (const [campo, valor] of [['proyecto', proyectoId], ['tarea principal', parentId],
+                                  ['cliente', personaId], ['empresa', empresaId], ['responsable', responsableId]]) {
+        if (valor && !ES_UUID.test(String(valor)))
+            return `El ${campo} indicado no es válido.`;
+    }
+    if (colaboradores !== undefined && colaboradores !== null) {
+        if (!Array.isArray(colaboradores)) return 'Los colaboradores deben venir como lista.';
+        if (colaboradores.some(c => c && !ES_UUID.test(String(c)))) return 'Hay un colaborador con identificador inválido.';
+    }
+    return null;
+};
+
 export const crearTarea = async (req, res) => {
     try {
         const { titulo, descripcion, tipo, prioridad, personaId, empresaId, responsableId, venceAt, origen,
             proyectoId, parentId, colaboradores, estado, visibilidad } = req.body;
         if (!titulo?.trim()) return res.status(400).json({ success: false, message: 'El título es obligatorio.' });
+        const problema = revisarDatosTarea(req.body);
+        if (problema) return res.status(400).json({ success: false, message: problema });
 
         // Una subtarea pertenece al mismo proyecto que su tarea principal, y no
         // puede colgar de otra subtarea de segundo nivel: dos niveles es el tope.
@@ -456,6 +498,18 @@ export const crearTarea = async (req, res) => {
 
         return res.status(201).json({ success: true, tarea: full });
     } catch (error) {
+        // Un id con forma de UUID pero que no existe (un proyecto borrado, un
+        // cliente que ya no está) rompe la clave foránea. Eso NO es un fallo del
+        // servidor: es un dato equivocado, y el usuario merece saber cuál. Antes
+        // devolvía 500 con «No se pudo crear la tarea» y a adivinar.
+        if (error.code === '23503') {
+            const campo = /proyecto/.test(error.detail || '') ? 'proyecto'
+                        : /persona/.test(error.detail || '')  ? 'cliente'
+                        : /empresa/.test(error.detail || '')  ? 'empresa'
+                        : /usuario|responsable/.test(error.detail || '') ? 'responsable'
+                        : 'dato relacionado';
+            return res.status(400).json({ success: false, message: `El ${campo} indicado ya no existe.` });
+        }
         console.error('❌ Error creando tarea:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo crear la tarea.' });
     }
@@ -477,11 +531,29 @@ export const actualizarTarea = async (req, res) => {
         const antes = chk.rows[0];
 
         const { titulo, descripcion, tipo, prioridad, estado, responsableId, venceAt, proyectoId,
-                colaboradores, visibilidad, cascadaResponsable } = req.body;
+                colaboradores, visibilidad, cascadaResponsable, personaId, empresaId } = req.body;
+        // Las mismas comprobaciones que al crear: un título más largo que la
+        // columna, una fecha que no es fecha o un id que no es UUID reventaban
+        // con un 500 y el mensaje «No se pudo actualizar», sin decir qué corregir.
+        const problema = revisarDatosTarea(req.body);
+        if (problema) return res.status(400).json({ success: false, message: problema });
         const completedAt = estado === 'completada' ? 'NOW()' : (estado ? 'NULL' : 'completed_at');
         // La descripción necesita poder BORRARSE, no solo cambiarse: con COALESCE
         // nunca se podía dejar en blanco. Vale para tareas y subtareas por igual.
         const tocaDescripcion = Object.hasOwn(req.body, 'descripcion');
+        // EL CLIENTE Y LA EMPRESA SE PUEDEN CAMBIAR Y QUITAR.
+        //
+        // Antes este UPDATE no los tocaba: se fijaban al crear la tarea y quedaban
+        // así para siempre. Si te equivocabas de cliente al abrir el ticket, no
+        // había forma de corregirlo desde ninguna pantalla.
+        //
+        // Van con el mismo criterio que la descripción —`Object.hasOwn` y no
+        // `COALESCE`— porque mandar `null` a propósito tiene que poder DESLIGAR el
+        // ticket. Con COALESCE, un null se interpreta como «no lo cambies» y
+        // desvincular sería imposible. Si el campo no viene en el pedido, no se
+        // toca.
+        const tocaPersona = Object.hasOwn(req.body, 'personaId');
+        const tocaEmpresa = Object.hasOwn(req.body, 'empresaId');
         await pool.query(
             `UPDATE tarea SET
                 titulo = COALESCE($2, titulo),
@@ -493,6 +565,8 @@ export const actualizarTarea = async (req, res) => {
                 vence_at = COALESCE($9, vence_at),
                 proyecto_id = COALESCE($10, proyecto_id),
                 visibilidad = COALESCE($11, visibilidad),
+                persona_id = CASE WHEN $12::boolean THEN $13::uuid ELSE persona_id END,
+                empresa_id = CASE WHEN $14::boolean THEN $15::uuid ELSE empresa_id END,
                 completed_at = ${completedAt}
              WHERE id = $1`,
             [
@@ -503,6 +577,8 @@ export const actualizarTarea = async (req, res) => {
                 (estado && ESTADOS.includes(estado)) ? estado : null,
                 responsableId || null, venceAt || null, proyectoId || null,
                 ['proyecto', 'privada'].includes(visibilidad) ? visibilidad : null,
+                tocaPersona, personaId || null,
+                tocaEmpresa, empresaId || null,
             ]
         );
         if (Array.isArray(colaboradores)) await setColaboradores(id, colaboradores);
@@ -549,6 +625,16 @@ export const actualizarTarea = async (req, res) => {
 
         return res.json({ success: true, tarea: actualizada, subtareasReasignadas });
     } catch (error) {
+        // Igual que al crear: un id válido que ya no existe es un dato malo del
+        // pedido, no una falla del servidor. Se dice cuál.
+        if (error.code === '23503') {
+            const campo = /proyecto/.test(error.detail || '') ? 'proyecto'
+                        : /persona/.test(error.detail || '')  ? 'cliente'
+                        : /empresa/.test(error.detail || '')  ? 'empresa'
+                        : /usuario|responsable/.test(error.detail || '') ? 'responsable'
+                        : 'dato relacionado';
+            return res.status(400).json({ success: false, message: `El ${campo} indicado ya no existe.` });
+        }
         console.error('❌ Error actualizando tarea:', error.message);
         return res.status(500).json({ success: false, message: 'No se pudo actualizar la tarea.' });
     }

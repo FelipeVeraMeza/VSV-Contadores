@@ -24,6 +24,7 @@
 // ============================================================================
 import { pool } from '../database/db.js';
 import { registrar } from '../utils/bitacora.js';
+import { notificar } from '../utils/notificaciones.js';
 import { enviarCorreo, correoConfigurado } from '../utils/mailer.js';
 import { decrypt } from '../utils/crypto.js';
 import {
@@ -1055,7 +1056,8 @@ export const eliminarPlantillaCorreo = async (req, res) => {
 // ----------------------------------------------------------------------------
 export const estadoCampana = {
     activo: false, total: 0, actual: 0, enviados: 0, fallidos: 0,
-    empresaActual: null, finalizado: false, errores: [], iniciadoPor: null, iniciadoAt: null,
+    empresaActual: null, finalizado: false, errores: [], iniciadoPor: null,
+    iniciadoPorId: null, organizacionId: null, soloPrueba: false, iniciadoAt: null,
     campanaId: null,
     // Bandera de pánico: la pone `detenerCampana` y el bucle la mira antes de
     // cada correo. No se puede "matar" un for a la fuerza; sí se le puede pedir
@@ -1475,6 +1477,15 @@ export const enviarCampana = async (req, res) => {
             activo: true, total: lista.length, actual: 0,
             enviados: 0, fallidos: 0, empresaActual: null, finalizado: false, errores: [],
             iniciadoPor: req.user?.nombre || null, iniciadoAt: new Date().toISOString(),
+            // Quién lo lanzó, para avisarle en la campana cuando termine. El envío
+            // corre en el servidor y sigue aunque se cierre el navegador, así que
+            // el aviso en pantalla no alcanza: si la persona se fue a otra cosa,
+            // nunca se entera de cuántos salieron ni de si algo falló.
+            iniciadoPorId: req.user?.usuarioId || null,
+            organizacionId: req.user?.organizacionId || null,
+            // La pantalla lo necesita para saber si vaciar el formulario al
+            // terminar: una PRUEBA no debe borrar el correo que se está revisando.
+            soloPrueba: !!soloPrueba,
             campanaId, detener: false,
         });
 
@@ -1579,6 +1590,33 @@ export const enviarCampana = async (req, res) => {
             estadoCampana.empresaActual = null;
             console.log(`✅ [CAMPAÑA] ${estadoCampana.detener ? 'DETENIDA' : 'Terminada'}. `
                 + `Enviados: ${estadoCampana.enviados} · Fallidos: ${estadoCampana.fallidos}`);
+
+            // AVISO EN LA CAMPANA · pedido de la subtarea NOTIFICACIÓN.
+            //
+            // El envío corre en el servidor y puede tardar minutos: quien lo lanzó
+            // se va a hacer otra cosa y el mensajito en pantalla se pierde con el
+            // cambio de página. Acá queda un aviso permanente con el resultado.
+            //
+            // Va SIN `actor` a propósito: `notificar()` descarta el aviso cuando el
+            // actor es el mismo destinatario, y justamente hay que avisarle a quien
+            // lo lanzó.
+            const { enviados, fallidos, detener } = estadoCampana;
+            // Una prueba es un correo a uno mismo para revisar cómo quedó: no
+            // merece un aviso en la campana.
+            if (!estadoCampana.soloPrueba) await notificar({
+                para: estadoCampana.iniciadoPorId,
+                organizacionId: estadoCampana.organizacionId,
+                tipo: 'correo_masivo',
+                titulo: detener
+                    ? `Envío detenido · ${enviados} enviados`
+                    : fallidos > 0
+                        ? `Envío terminado con ${fallidos} ${fallidos === 1 ? 'fallo' : 'fallos'}`
+                        : `Envío terminado · ${enviados} ${enviados === 1 ? 'correo' : 'correos'}`,
+                descripcion: fallidos > 0
+                    ? `Salieron ${enviados} y fallaron ${fallidos}. Revisa el detalle en Enviados.`
+                    : `Salieron los ${enviados} correos sin problemas.`,
+                entidad: 'correo_campana', entidadId: campanaId,
+            });
         })().catch(async err => {
             estadoCampana.activo = false;
             estadoCampana.finalizado = true;
@@ -1587,6 +1625,16 @@ export const enviarCampana = async (req, res) => {
                 await pool.query(`UPDATE correo_campana SET estado='fallida', terminada_at=now() WHERE id=$1`,
                     [campanaId]).catch(() => {});
             }
+            // Que se corte a mitad es JUSTAMENTE lo que hay que avisar: sin esto,
+            // el envío moría en silencio y solo se notaba al ver que no llegó nada.
+            await notificar({
+                para: estadoCampana.iniciadoPorId,
+                organizacionId: estadoCampana.organizacionId,
+                tipo: 'correo_masivo',
+                titulo: 'El envío masivo se cortó',
+                descripcion: `Alcanzaron a salir ${estadoCampana.enviados}. Motivo: ${err.message}`,
+                entidad: 'correo_campana', entidadId: campanaId,
+            }).catch(() => { /* el aviso no puede tumbar el cierre */ });
         });
 
     } catch (error) {

@@ -152,11 +152,23 @@ export const upsertComprobante = async (client, {
     let compId, numero, accion;
 
     if (existente) {
+        // CORREGIR UN ASIENTO BORRA SU APROBACIÓN ANTERIOR.
+        //
+        // Vuelve a 'Contabilizado', o sea a la fila de espera: lo que se aprobó
+        // antes ya no es lo que dice el asiento ahora. Si se conservara el
+        // «Aprobado por Matías», quedaría avalando líneas que Matías nunca vio.
+        //
+        // Es también el camino de vuelta del rechazo: se corrige lo que se
+        // observó y el asiento queda pendiente otra vez, conservando su número
+        // y su historial en la bitácora. Por eso se limpia `motivo_rechazo`:
+        // el reproche viejo ya fue atendido y dejarlo colgado confunde.
         await client.query(
             `UPDATE comprobantes
                 SET fecha = $1, glosa = $2, tipo = $3, estado = 'Contabilizado',
                     ref_folio = $4, ref_tipo_dte = $5, ref_razon = $6,
-                    contabilizado_por = $7, contabilizado_por_id = $8, contabilizado_at = NOW()
+                    contabilizado_por = $7, contabilizado_por_id = $8, contabilizado_at = NOW(),
+                    aprobado_por = NULL, aprobado_por_id = NULL, aprobado_at = NULL,
+                    motivo_rechazo = NULL
               WHERE id = $9`,
             [fechaFinal, glosa, tipoDb, refFolioN, refTipoDteN, refRazon,
              usuario.nombre || null, usuario.usuarioId || null, existente.id]

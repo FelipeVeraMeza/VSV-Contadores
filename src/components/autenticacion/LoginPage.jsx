@@ -195,8 +195,12 @@ const LoginPage = ({ onLogin }) => {
                     Regístrate aquí
                   </Link>
                 </p>
+                {/* El dominio vsv.cl NO EXISTE: quien escribiera a «soporte@vsv.cl»
+                    mandaba su pedido al vacío y se quedaba esperando respuesta, sin
+                    poder entrar. Se apunta al administrador de la oficina, que es
+                    quien de verdad puede reponer una clave. */}
                 <button
-                  onClick={() => toast({ title: "Recuperación", description: "Contacta a soporte@vsv.cl para resetear tu clave." })}
+                  onClick={() => toast({ title: "Recuperación de clave", description: "Pídele al administrador del sistema que te reponga la clave desde Administración › Usuarios." })}
                   className="block w-full text-slate-400 hover:text-slate-600 text-[10px] font-bold uppercase tracking-widest transition-colors"
                 >
                   ¿Olvidaste tus credenciales?

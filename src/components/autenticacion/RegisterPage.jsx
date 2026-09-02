@@ -185,7 +185,7 @@ const RegisterPage = ({ onRegister }) => {
                   <Input 
                     id="email" 
                     type="email" 
-                    placeholder="ejemplo@vsv.cl" 
+                    placeholder="ejemplo@vsvconsultores.com" 
                     value={formData.email} 
                     onChange={handleChange} 
                     className="pl-12 !bg-white !border-[#e5ddd0] !text-slate-900 placeholder:!text-slate-400 h-12 rounded-xl focus:!border-[#199b4d] transition-all" 

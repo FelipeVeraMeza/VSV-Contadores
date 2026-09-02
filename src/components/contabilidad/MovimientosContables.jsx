@@ -152,7 +152,8 @@ const calcLineasDefault = (doc, tipo) => generarLineasAsiento(doc, tipo);
 // props se mantienen iguales entre renders — de ahí que `getNombre` y los dos
 // manejadores estén con `useCallback`, y que `conEdicion` devuelva el mismo
 // objeto cuando el asiento no se tocó.
-const AsientoRevision = React.memo(({ r, plan = [], getNombre, onCambiarCuenta, onDeshacer }) => {
+const AsientoRevision = React.memo(({ r, plan = [], getNombre, onCambiarCuenta, onDeshacer,
+                                      marcado = true, onAlternar }) => {
   const { doc, tipoMov, lineas, esNotaDoc, editada } = r;
   const esCompra = tipoMov === 'compras';
 
@@ -180,9 +181,20 @@ const AsientoRevision = React.memo(({ r, plan = [], getNombre, onCambiarCuenta, 
   const cuadra = Math.abs(debe - haber) <= 1;
 
   return (
-    <div className="rounded-xl border border-[#efe8dd] bg-white overflow-hidden">
+    // Un documento desmarcado se apaga: se sigue viendo y se puede revisar, pero
+    // queda claro de un vistazo que NO va a entrar al lote.
+    <div className={`rounded-xl border bg-white overflow-hidden transition-opacity ${
+      marcado === false ? 'border-[#efe8dd] opacity-45' : 'border-[#efe8dd]'}`}>
       <div className="flex items-center justify-between gap-2 px-3 py-2 bg-slate-50 border-b border-[#efe8dd] flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
+          {/* La palomita. Va primero y con área de clic grande: es la decisión
+              de si este documento entra o no, y se toma antes de mirar nada más. */}
+          {onAlternar && (
+            <input type="checkbox" checked={marcado !== false}
+              onChange={() => onAlternar(r.clave)}
+              title={marcado !== false ? 'Quitar del lote' : 'Volver a incluir'}
+              className="h-3.5 w-3.5 shrink-0 accent-emerald-600 cursor-pointer" />
+          )}
           <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded border whitespace-nowrap ${
             esCompra ? 'bg-red-500/10 text-red-600 border-red-500/20' : 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'}`}>
             {TIPO_DTE_MAP[doc.tipo_dte] || `Tipo ${doc.tipo_dte}`}
@@ -790,6 +802,28 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   // elige el período y se ve cuántos documentos entran antes de confirmar.
   const [panelContab, setPanelContab] = useState(false);
 
+  // ── QUÉ DOCUMENTOS ENTRAN, UNO POR UNO ──────────────────────────
+  //
+  // Antes era todo o nada: el período completo se contabilizaba entero, sin
+  // forma de dejar afuera una factura que estaba en revisión, un documento
+  // repetido o algo que todavía no correspondía imputar. Para excluir UNO había
+  // que achicar el rango de fechas hasta que no lo tomara, o contabilizar y
+  // borrar el asiento después.
+  //
+  // Se guardan las claves DESMARCADAS, no las marcadas: por omisión entran
+  // todas —que es lo que se hace el 95% de las veces— y la lista arranca vacía.
+  // Si se guardaran las marcadas habría que rellenarla cada vez que cambia el
+  // período, y un documento nuevo entraría por accidente sin haber sido visto.
+  const [excluidos, setExcluidos] = useState(() => new Set());
+
+  const alternarDocumento = useCallback((clave) => {
+    setExcluidos(prev => {
+      const s = new Set(prev);
+      if (s.has(clave)) s.delete(clave); else s.add(clave);
+      return s;
+    });
+  }, []);
+
   // ── QUÉ PERÍODO ENTRA AL LOTE ───────────────────────────────────
   //
   // Tres opciones, todas ACOTADAS. Ya no existe «todo lo pendiente»: con la
@@ -970,6 +1004,25 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
 
   const totalAlcance = docsDelAlcance.ventas.length + docsDelAlcance.compras.length;
 
+  // Las claves de TODO lo del período, para poder desmarcar de una sola vez.
+  const clavesDelAlcance = useMemo(() => [
+    ...docsDelAlcance.ventas.map(d => claveDeDocumento(d, 'ventas')),
+    ...docsDelAlcance.compras.map(d => claveDeDocumento(d, 'compras')),
+  ], [docsDelAlcance]);
+
+  // Cuántos van a entrar de verdad al lote.
+  const marcadosTotal = useMemo(
+    () => clavesDelAlcance.filter(k => !excluidos.has(k)).length,
+    [clavesDelAlcance, excluidos]);
+
+  // Al cambiar de período se limpian las exclusiones: son de los documentos que
+  // se estaban mirando, no del nuevo tramo. Si se conservaran, una clave que
+  // coincidiera dejaría fuera un documento sin que nadie lo hubiera desmarcado.
+  // `React.useEffect` y no `useEffect` a secas: este archivo no importa el hook
+  // suelto, y usarlo así reventaba al abrir el panel («useEffect is not
+  // defined»). No lo detecta el build: es un error de ejecución.
+  React.useEffect(() => { setExcluidos(new Set()); }, [rangoAlcance.desde, rangoAlcance.hasta]);
+
   // ── LO QUE SE VA A REVISAR ANTES DE APRETAR ─────────────────────
   //
   // TODOS los documentos, ventas y compras, sin muestra.
@@ -1019,6 +1072,15 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
     setPanelContab(false);
     setPasoPanel('config');
     setEdicionRevision({});
+    // Y las palomitas, por la misma razón que las correcciones de cuenta: son
+    // de la sesión de revisión que se está cerrando.
+    //
+    // Sin esto, cancelar dejaba las exclusiones puestas: al reabrir el panel
+    // —incluso al día siguiente, o para otra empresa— seguían desmarcados los
+    // documentos de la vez anterior y el lote salía incompleto sin que nadie lo
+    // hubiera pedido. Medido en la prueba del componente real: se desmarcaban 2
+    // de 5, se cancelaba, y al volver a abrir seguían marcados solo 3.
+    setExcluidos(new Set());
   };
 
   // Sin parámetro `auto`: la confirmación es SIEMPRE obligatoria.
@@ -1028,11 +1090,21 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
   // parámetro en vez de solo dejar de pasarlo, para que nadie pueda reactivar el
   // atajo sin darse cuenta.
   const handleContabilizarTodo = async () => {
-    const ventasPend  = docsDelAlcance.ventas;
-    const comprasPend = docsDelAlcance.compras;
+    // Solo lo MARCADO. Un documento desmarcado no se contabiliza: queda
+    // pendiente y se puede tomar en otro lote, cuando corresponda.
+    const marcado = (d, tipoMov) => !excluidos.has(claveDeDocumento(d, tipoMov));
+    const ventasPend  = docsDelAlcance.ventas.filter(d => marcado(d, 'ventas'));
+    const comprasPend = docsDelAlcance.compras.filter(d => marcado(d, 'compras'));
     const total = ventasPend.length + comprasPend.length;
     if (total === 0) {
-      toast({ title: 'Todo contabilizado', description: 'No hay documentos pendientes en lo seleccionado.' });
+      // Se distingue «no hay nada pendiente» de «los desmarcaste todos»: son
+      // dos situaciones distintas y el aviso genérico dejaba pensando que el
+      // sistema no había encontrado los documentos.
+      const habia = docsDelAlcance.ventas.length + docsDelAlcance.compras.length;
+      toast(habia > 0
+        ? { variant: 'destructive', title: 'No hay nada marcado',
+            description: `Marca al menos un documento: los ${formatNum(habia)} del período están desmarcados.` }
+        : { title: 'Todo contabilizado', description: 'No hay documentos pendientes en el período elegido.' });
       return;
     }
     // El `confirm()` del navegador se reemplazó por el panel: ahí se ve el
@@ -1324,14 +1396,38 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
             {pasoPanel === 'revision' && revisionBase && (
               <div className="p-5 space-y-4 overflow-y-auto custom-scrollbar">
 
+                {/* MARCAR Y DESMARCAR TODO, con la cuenta de lo que va a entrar.
+                    Sin este contador habría que ir sumando a ojo cuáles quedaron
+                    marcados en una lista de ochenta. */}
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-[#efe8dd] bg-white px-4 py-2.5">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                    <input type="checkbox" checked={excluidos.size === 0}
+                      // Indeterminado cuando hay algunos marcados y otros no: es
+                      // el estado real de la lista, y decir «marcado» o «vacío»
+                      // en ese caso sería mentir.
+                      ref={el => { if (el) el.indeterminate = excluidos.size > 0 && marcadosTotal > 0; }}
+                      onChange={() => setExcluidos(excluidos.size === 0 ? new Set(clavesDelAlcance) : new Set())}
+                      className="h-4 w-4 accent-emerald-600 cursor-pointer" />
+                    <span className="text-[11px] font-bold text-slate-700">
+                      {excluidos.size === 0 ? 'Todos marcados' : 'Marcar todos'}
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-slate-600 tabular-nums">
+                    <b className={marcadosTotal === 0 ? 'text-red-600' : 'text-slate-900'}>{formatNum(marcadosTotal)}</b>
+                    {' '}de {formatNum(totalAlcance)} entran al lote
+                  </p>
+                </div>
+
                 {/* Quién firma. Va ARRIBA y no en la letra chica del pie: el
                     asiento queda con nombre y apellido en la base, así que
                     quien aprieta tiene que saber que está firmando. */}
                 <div className="flex items-center gap-2.5 rounded-xl border border-[#efe8dd] bg-slate-50 px-4 py-2.5">
                   <Award className="h-4 w-4 text-slate-400 shrink-0" />
                   <p className="text-[11px] text-slate-600 leading-tight">
-                    Los {formatNum(totalAlcance)} asientos van a quedar a nombre de{' '}
-                    <b className="text-slate-900">{user?.nombre || 'tu usuario'}</b>, con la fecha y hora de ahora.
+                    {marcadosTotal === 0
+                      ? <>No hay ningún documento marcado: no se va a contabilizar nada.</>
+                      : <>Los {formatNum(marcadosTotal)} asientos marcados van a quedar a nombre de{' '}
+                         <b className="text-slate-900">{user?.nombre || 'tu usuario'}</b>, con la fecha y hora de ahora.</>}
                   </p>
                 </div>
 
@@ -1359,7 +1455,8 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                     <div className="space-y-2">
                       {revisionBase.ventas.map(base => { const r = conEdicion(base); return (
                         <AsientoRevision key={r.clave} r={r} plan={plan} getNombre={getNombre}
-                          onCambiarCuenta={cambiarCuentaRevision} onDeshacer={deshacerRevision} />
+                          onCambiarCuenta={cambiarCuentaRevision} onDeshacer={deshacerRevision}
+                          marcado={!excluidos.has(r.clave)} onAlternar={alternarDocumento} />
                       ); })}
                     </div>
                   </div>
@@ -1385,7 +1482,8 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                     <div className="space-y-2">
                       {revisionBase.compras.map(base => { const r = conEdicion(base); return (
                         <AsientoRevision key={r.clave} r={r} plan={plan} getNombre={getNombre}
-                          onCambiarCuenta={cambiarCuentaRevision} onDeshacer={deshacerRevision} />
+                          onCambiarCuenta={cambiarCuentaRevision} onDeshacer={deshacerRevision}
+                          marcado={!excluidos.has(r.clave)} onAlternar={alternarDocumento} />
                       ); })}
                     </div>
                   </div>
@@ -1571,10 +1669,15 @@ const MovimientosContables = ({ empresaId, onGenerarBorrador, mes: mesProp, anio
                     className="text-xs font-bold text-slate-500 bg-slate-50 hover:bg-slate-100 h-10 rounded-xl px-4 whitespace-nowrap shrink-0">
                     <ChevronLeft className="h-4 w-4 mr-1" /> Volver
                   </Button>
-                  <Button onClick={handleContabilizarTodo} disabled={totalAlcance === 0}
+                  {/* El botón dice cuántos van a entrar DE VERDAD, no cuántos hay
+                      en el período, y se apaga si no queda ninguno marcado. */}
+                  <Button onClick={handleContabilizarTodo} disabled={marcadosTotal === 0}
+                    title={marcadosTotal === 0 ? 'Marca al menos un documento' : undefined}
                     className="bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-white text-xs font-bold h-10 rounded-xl px-4 whitespace-nowrap shrink-0 flex-1 sm:flex-none">
                     <Bot className="h-4 w-4 mr-2" />
-                    Está bien, contabilizar {formatNum(totalAlcance)}
+                    {marcadosTotal === 0
+                      ? 'Marca al menos uno'
+                      : `Está bien, contabilizar ${formatNum(marcadosTotal)}`}
                   </Button>
                 </>
               )}

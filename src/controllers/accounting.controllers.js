@@ -4,6 +4,7 @@ import PDFDocument from 'pdfkit';
 import { decrypt } from '../utils/crypto.js';
 import { clienteSinEmpresa, empresaPermitida, empresasVisibles, empresaEsValida, veSoloAsignadas } from '../utils/scope.js';
 import { registrarMovimientoCaja } from '../utils/caja.js';
+import { registrar } from '../utils/bitacora.js';
 import {
     upsertComprobante, construirGlosa, buscarDocumentosAfectables,
     normalizarClase, normalizarTipoDte, normalizarFolio, esNota, TIPO_DTE_LABEL,
@@ -206,6 +207,110 @@ export const eliminarComprobante = async (req, res) => {
     }
 };
 
+// ============================================================================
+// APROBAR O RECHAZAR UN COMPROBANTE · el segundo par de ojos
+// ----------------------------------------------------------------------------
+// Hasta ahora un comprobante solo guardaba la firma de QUIEN LO HIZO. Eso dice
+// a quién preguntarle, pero no que alguien más lo haya mirado.
+//
+// El circuito, decidido por Felipe el 01-09-2026:
+//
+//     Contabilizado ──► Aprobado
+//           │
+//           └────────► Rechazado (+ motivo) ──► se corrige ──► Contabilizado
+//
+// LA REGLA QUE DA SENTIDO A TODO: NADIE APRUEBA LO SUYO. Los tres usuarios son
+// Administrador, así que no hay un rol que separe; la separación es esta regla,
+// y va en el SERVIDOR. Si estuviera solo en la pantalla, una llamada directa la
+// saltaría —que es exactamente lo que demostró el bug de la cuenta 9999-99—.
+//
+// Lo que NO hace: frenar los libros. El asiento suma al balance desde que se
+// contabiliza; aprobar es revisión posterior. Si el balance mostrara solo lo
+// aprobado, un fin de semana sin nadie dejaría los informes incompletos.
+// ============================================================================
+export const revisarComprobante = async (req, res) => {
+    const { id } = req.params;
+    const { decision, motivo } = req.body || {};
+    const usuario = req.user || {};
+
+    if (!['aprobar', 'rechazar'].includes(decision)) {
+        return res.status(400).json({ message: 'La decisión debe ser «aprobar» o «rechazar».' });
+    }
+    // Un rechazo sin motivo no sirve de nada: quien lo hizo no sabe qué
+    // corregir y el asiento queda dando vueltas.
+    const motivoLimpio = String(motivo || '').trim();
+    if (decision === 'rechazar' && !motivoLimpio) {
+        return res.status(400).json({ message: 'Escribe por qué lo rechazas: sin el motivo, quien lo hizo no sabe qué corregir.' });
+    }
+
+    let comp;
+    try {
+        ({ rows: [comp] } = await pool.query(
+            `SELECT id, empresa_id, estado, numero_comprobante, glosa,
+                    contabilizado_por, contabilizado_por_id
+               FROM comprobantes WHERE id = $1`, [id]));
+    } catch {
+        return res.status(404).json({ message: 'Comprobante no encontrado.' });
+    }
+    if (!comp) return res.status(404).json({ message: 'Comprobante no encontrado.' });
+
+    const negado = await puedeVerEmpresa(req, comp.empresa_id);
+    if (negado) return sinAcceso(res, negado);
+
+    // CUALQUIERA PUEDE REVISAR, INCLUSO LO PROPIO. Decisión de Felipe,
+    // 01-09-2026, cambiando el criterio del mismo día.
+    //
+    // La primera versión bloqueaba aprobar lo que uno mismo contabilizó —el
+    // clásico «cuatro ojos»—. Se sacó porque el equipo son tres personas y
+    // Víctor lleva Contabilidad: exigir que otro le apruebe cada asiento
+    // significaba dejar el trabajo detenido cada vez que estuviera solo, que es
+    // la mayor parte del tiempo. Una regla que obliga a esperar a alguien que no
+    // está no se cumple: se termina buscando la vuelta.
+    //
+    // Lo que se conserva es la TRAZABILIDAD, que es lo que de verdad sirve
+    // después: cada asiento guarda quién lo contabilizó y quién lo aprobó, con
+    // fecha y hora, aunque sean la misma persona. Al leer el libro meses después
+    // se ve el recorrido completo.
+    //
+    // Si algún día el equipo crece y se quiere volver al control de dos
+    // personas, se reactiva comparando `contabilizado_por_id` con el usuario que
+    // pide —por id y no por nombre: dos personas pueden llamarse igual y el
+    // nombre se puede editar—.
+
+    // Un asiento ya aprobado no se vuelve a tocar: es el punto donde queda
+    // firme. Rechazar algo aprobado sería deshacer una revisión ya hecha sin
+    // dejar rastro de por qué.
+    if (comp.estado === 'Aprobado') {
+        return res.status(409).json({ message: `El comprobante #${comp.numero_comprobante} ya está aprobado.` });
+    }
+
+    const nuevoEstado = decision === 'aprobar' ? 'Aprobado' : 'Rechazado';
+    try {
+        await pool.query(
+            `UPDATE comprobantes
+                SET estado = $2::text,
+                    aprobado_por = $3, aprobado_por_id = $4, aprobado_at = NOW(),
+                    -- El motivo se limpia al aprobar: si el asiento venía
+                    -- rechazado y se corrigió, dejar el reproche viejo colgado
+                    -- confundiría a quien lo lea después.
+                    motivo_rechazo = CASE WHEN $2::text = 'Rechazado' THEN $5 ELSE NULL END
+              WHERE id = $1`,
+            [id, nuevoEstado, usuario.nombre || null, usuario.usuarioId || null, motivoLimpio || null]);
+
+        await registrar(req, {
+            modulo: 'contabilidad', accion: decision, entidad: 'comprobante', entidadId: id,
+            descripcion: `${nuevoEstado} el comprobante #${comp.numero_comprobante}`
+                + ` (lo contabilizó ${comp.contabilizado_por || 'alguien'})`
+                + (motivoLimpio ? `: ${motivoLimpio}` : ''),
+        });
+
+        return res.json({ success: true, estado: nuevoEstado, numero: comp.numero_comprobante });
+    } catch (error) {
+        console.error('❌ Error revisando comprobante:', error.message);
+        return res.status(500).json({ message: 'No se pudo registrar la revisión.' });
+    }
+};
+
 export const guardarComprobante = async (req, res) => {
     const {
         empresaId, tipo, clase, tipoDte, fecha, glosa, lineas, folio, rutAsociado,
@@ -243,6 +348,57 @@ export const guardarComprobante = async (req, res) => {
     const totalHaber = lineas.reduce((s, l) => s + (Number(l.haber) || 0), 0);
     if (Math.abs(totalDebe - totalHaber) > 1) {
         return res.status(400).json({ message: `Asiento descuadrado: Debe ${totalDebe} ≠ Haber ${totalHaber}` });
+    }
+
+    // ── LA CUENTA TIENE QUE EXISTIR, Y TIENE QUE SER IMPUTABLE ───────────────
+    //
+    // `comprobantes_detalle.cuenta_codigo` es texto suelto: no hay clave foránea
+    // contra el plan, y hasta ahora nadie comprobaba nada. En el QA del
+    // 01-09-2026 se guardó un asiento con la cuenta inventada 9999-99 y el
+    // servidor respondió 200: quedó cuadrado, firmado y apuntando a una cuenta
+    // que no existe.
+    //
+    // No es un detalle cosmético. El libro mayor y el balance unen el detalle
+    // con el plan por LEFT JOIN, así que una cuenta fantasma no revienta: la
+    // fila aparece con el nombre en blanco y el monto se queda fuera de toda
+    // clasificación. Los informes dejan de cuadrar y nadie sabe por qué.
+    //
+    // POR QUÉ VA EN EL SERVIDOR Y NO ALCANZA EL SELECTOR DE LA PANTALLA:
+    // por pantalla no pasa —el desplegable solo ofrece cuentas válidas—, pero
+    // el código entra igual por la carga masiva de Excel, por el generador de
+    // asientos, o cuando alguien borra del plan una cuenta ya usada. La
+    // pantalla es una comodidad; la regla se cumple acá.
+    //
+    // IMPUTABLE = tipo SUBCUENTA. GRUPO, SUBGRUPO y MAYOR son títulos del plan
+    // («ACTIVOS», «DISPONIBLE»): agrupan, no reciben movimientos. Cargar contra
+    // un título descuadra el balance, porque el total del grupo deja de ser la
+    // suma de sus cuentas.
+    const codigos = [...new Set(lineas.map(l => String(l.cuenta || '').trim()).filter(Boolean))];
+    if (codigos.length !== 0) {
+        const { rows: validas } = await pool.query(
+            `SELECT codigo, tipo_cuenta, descripcion FROM plan_cuentas
+              WHERE codigo = ANY($1::text[])
+                AND (empresa_id = $2::uuid OR empresa_id IS NULL)`,
+            [codigos, empId]);
+        const porCodigo = new Map(validas.map(v => [v.codigo, v]));
+
+        const inexistentes = codigos.filter(c => !porCodigo.has(c));
+        if (inexistentes.length) {
+            return res.status(400).json({
+                message: inexistentes.length === 1
+                    ? `La cuenta ${inexistentes[0]} no existe en el plan de esta empresa.`
+                    : `Estas cuentas no existen en el plan de esta empresa: ${inexistentes.join(', ')}.`,
+            });
+        }
+        const titulos = codigos.filter(c => porCodigo.get(c).tipo_cuenta !== 'SUBCUENTA');
+        if (titulos.length) {
+            const det = titulos.map(c => `${c} (${porCodigo.get(c).descripcion})`).join(', ');
+            return res.status(400).json({
+                message: titulos.length === 1
+                    ? `La cuenta ${det} es un título del plan y no recibe movimientos. Elige una subcuenta.`
+                    : `Estas son títulos del plan y no reciben movimientos: ${det}. Elige subcuentas.`,
+            });
+        }
     }
 
     // `clase` (venta/compra/honorario) y `tipoDte` (33/61/…) son datos distintos:
@@ -377,7 +533,11 @@ export const getComprobantes = async (req, res) => {
     try {
         const { rows } = await pool.query(
             `SELECT c.id, c.numero_comprobante, c.fecha, c.tipo, c.glosa, c.estado, c.created_at,
-                    c.contabilizado_por, c.contabilizado_at,
+                    c.contabilizado_por, c.contabilizado_por_id, c.contabilizado_at,
+                    -- Quién lo revisó y, si lo devolvió, por qué. Sin esto la
+                    -- pantalla no puede mostrar el estado de la revisión ni
+                    -- saber a quién ocultarle el botón de aprobar.
+                    c.aprobado_por, c.aprobado_at, c.motivo_rechazo,
                     c.clase, c.tipo_dte, c.folio, c.rut_contraparte,
                     c.ref_folio, c.ref_tipo_dte, c.ref_razon,
                     json_agg(json_build_object(
@@ -789,13 +949,33 @@ export const uploadAccountingExcel = async (req, res) => {
             try {
                 await client.query('BEGIN');
                 for (const item of validos) {
-                    // Asumiendo tabla 'clientes'. Ajusta el nombre de la tabla y columnas según tu DB real.
-                    // ON CONFLICT actualiza la clave si el RUT ya existe.
-                    await client.query(
-                        `INSERT INTO clientes (rut, password) VALUES ($1, $2) 
-                         ON CONFLICT (rut) DO UPDATE SET password = $2`,
-                        [item.rut, item.clave]
+                    // ⛔ ESTO NUNCA FUNCIONÓ Y NO SE DEBE ACTIVAR ASÍ COMO ESTÁ.
+                    //
+                    // La tabla `clientes` NO EXISTE en la base. El comentario
+                    // original decía «Asumiendo tabla 'clientes'. Ajusta el nombre
+                    // según tu DB real» y ese ajuste nunca se hizo, así que
+                    // cualquier importación revienta con «relation "clientes" does
+                    // not exist». Detectado el 01-09-2026 preparando todas las
+                    // consultas del backend contra Postgres.
+                    //
+                    // Hoy no se nota porque NINGUNA pantalla llama a este endpoint
+                    // (POST /accounting/importar-excel), y las 164 claves cargadas
+                    // entraron por otra vía.
+                    //
+                    // Además guardaba la clave EN TEXTO PLANO. El destino correcto
+                    // es `empresa_credenciales.sii_password_encrypted`, que es texto
+                    // cifrado y va por `empresa_id`, no por RUT suelto — hay que
+                    // resolver el RUT a su empresa antes de escribir.
+                    //
+                    // Se deja fallar a propósito, con un mensaje que explica qué
+                    // pasa: silenciarlo haría creer que las claves se guardaron.
+                    throw new Error(
+                        'La importación de claves por Excel está sin terminar: escribía en una tabla ' +
+                        'inexistente y en texto plano. Las claves del SII se cargan desde la ficha de ' +
+                        'cada empresa, que las guarda cifradas.'
                     );
+                    // eslint-disable-next-line no-unreachable
+                    void item;
                 }
                 await client.query('COMMIT');
             } catch (err) {

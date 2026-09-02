@@ -250,7 +250,7 @@ const UserFormModal = ({ isOpen, onClose, onSave, user, companies = [] }) => {
                       value={formData.email} 
                       onChange={handleChange} 
                       required 
-                      placeholder="ejemplo@vsv.cl"
+                      placeholder="ejemplo@vsvconsultores.com"
                       className="pl-10 bg-slate-50 border-[#efe8dd] rounded-xl h-12 text-slate-700" 
                     />
                   </div>

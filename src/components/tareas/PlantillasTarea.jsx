@@ -154,6 +154,17 @@ const FormPlantilla = ({ inicial, proyectos, usuarios, onGuardado, onCancelar })
 
     const guardar = async () => {
         if (!f.nombre.trim()) { toast({ variant: 'destructive', title: 'Falta el nombre' }); return; }
+        // Un paso que quedó en blanco se avisa, no se descarta en silencio. El
+        // servidor los ignora igual, pero borrar el texto de un paso sin querer y
+        // ver que desaparece al guardar —sin que nadie lo dijera— es peor que un
+        // aviso: se pierde un paso del procedimiento y nadie se entera.
+        const vacios = pasos.filter(t => !t.trim()).length;
+        if (vacios > 0) {
+            toast({ variant: 'destructive',
+                title: vacios === 1 ? 'Hay un paso sin texto' : `Hay ${vacios} pasos sin texto`,
+                description: 'Escríbelos o quítalos antes de guardar.' });
+            return;
+        }
         setGuardando(true);
         const dias = f.diasPlazo === '' ? null : Number.parseInt(f.diasPlazo, 10);
         const datos = {
@@ -161,7 +172,7 @@ const FormPlantilla = ({ inicial, proyectos, usuarios, onGuardado, onCancelar })
             diasPlazo: Number.isInteger(dias) && dias >= 0 ? dias : null,
             proyectoId: f.proyectoId || null,
             responsableId: f.responsableId || null,
-            pasos: pasos.map(t => ({ titulo: t })),
+            pasos: pasos.map(t => ({ titulo: t.trim() })),
         };
         try {
             const r = inicial
@@ -241,7 +252,11 @@ const FormPlantilla = ({ inicial, proyectos, usuarios, onGuardado, onCancelar })
                 <div className="space-y-1 mb-1.5">
                     {pasos.map((p, i) => (
                         <div
-                            key={`${p}-${i}`}
+                            // La clave es la POSICIÓN, no el texto. Con el texto en la
+                            // clave, cada letra que se escribe cambia la clave, React
+                            // desmonta la fila y monta otra, y el cursor se pierde tras
+                            // el primer carácter.
+                            key={i}
                             draggable
                             onDragStart={() => setArrastrando(i)}
                             onDragEnd={() => { setArrastrando(null); setEncima(null); }}
@@ -255,7 +270,23 @@ const FormPlantilla = ({ inicial, proyectos, usuarios, onGuardado, onCancelar })
                         >
                             <GripVertical size={11} className="text-slate-300 shrink-0" />
                             <span className="text-[9px] font-black text-slate-300 tabular-nums w-4">{i + 1}</span>
-                            <span className="text-xs text-slate-700 flex-1 truncate">{p}</span>
+                            {/* EL PASO SE ESCRIBE ENCIMA, no hay que borrarlo y rehacerlo.
+                                Antes era un texto fijo: para arreglar una falta de
+                                ortografía en el paso 12 de 18 había que quitarlo y
+                                volver a escribirlo, y reaparecía al final de la lista,
+                                así que además tocaba subirlo doce veces. */}
+                            <input
+                                value={p}
+                                onChange={(e) => {
+                                    const v = e.target.value;
+                                    setPasos(prev => prev.map((x, k) => (k === i ? v : x)));
+                                }}
+                                // Sin esto el navegador arrastra la SELECCIÓN de texto en
+                                // vez de la fila, y no se puede escribir con comodidad.
+                                draggable={false}
+                                onDragStart={(e) => e.preventDefault()}
+                                className="text-xs text-slate-700 flex-1 min-w-0 bg-transparent outline-none
+                                           rounded px-1 py-0.5 focus:bg-white focus:ring-1 focus:ring-emerald-500 cursor-text" />
                             {/* Subir/bajar además del arrastre: en una pantalla táctil
                                 arrastrar no funciona, y con dos pasos es más rápido. */}
                             <button type="button" onClick={() => mover(i, i - 1)} disabled={i === 0}
@@ -294,6 +325,10 @@ const FormPlantilla = ({ inicial, proyectos, usuarios, onGuardado, onCancelar })
 
 export const PlantillasModal = ({ plantillas, proyectos, usuarios, onClose, onCambio }) => {
     const [editando, setEditando] = useState(null);   // null | 'nueva' | plantilla
+    // Qué plantilla tiene los pasos a la vista. La lista solo decía «18 pasos» y
+    // para saber CUÁLES eran había que entrar a editarla: se abría el formulario
+    // completo, con el riesgo de tocar algo sin querer, solo para mirar.
+    const [abierta, setAbierta] = useState(null);
 
     const borrar = async (p) => {
         if (!window.confirm(
@@ -342,33 +377,65 @@ export const PlantillasModal = ({ plantillas, proyectos, usuarios, onClose, onCa
                             </p>
                         ) : (
                             <div className="space-y-1.5">
-                                {plantillas.map(p => (
-                                    <div key={p.id} className="border border-[#efe8dd] rounded-xl px-3 py-2 flex items-start gap-2 group hover:border-emerald-500/40">
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-xs font-bold text-slate-900 truncate">{p.nombre}</p>
-                                            {p.descripcion && <p className="text-[10px] text-slate-400 truncate">{p.descripcion}</p>}
-                                            <div className="flex items-center gap-2 flex-wrap mt-1">
-                                                <span className="text-[9px] text-slate-500 flex items-center gap-0.5">
-                                                    <ListChecks size={9} /> {p.pasos.length} {p.pasos.length === 1 ? 'paso' : 'pasos'}
-                                                </span>
-                                                <span className="text-[9px] text-slate-500">{plazoTexto(p.diasPlazo)}</span>
-                                                {p.proyectoNombre && <span className="text-[9px] text-emerald-700 font-bold">● {p.proyectoNombre}</span>}
-                                                {p.vecesUsada > 0 && (
-                                                    <span className="text-[9px] text-slate-400">usada {p.vecesUsada} {p.vecesUsada === 1 ? 'vez' : 'veces'}</span>
-                                                )}
-                                            </div>
+                                {plantillas.map(p => {
+                                    const desplegada = abierta === p.id;
+                                    return (
+                                    <div key={p.id} className="border border-[#efe8dd] rounded-xl group hover:border-emerald-500/40">
+                                        <div className="px-3 py-2 flex items-start gap-2">
+                                            {/* La fila entera despliega los pasos: el objetivo es
+                                                MIRAR sin entrar a editar. */}
+                                            <button type="button" onClick={() => setAbierta(desplegada ? null : p.id)}
+                                                title={desplegada ? 'Ocultar los pasos' : 'Ver los pasos'}
+                                                className="min-w-0 flex-1 text-left">
+                                                <p className="text-xs font-bold text-slate-900 truncate flex items-center gap-1">
+                                                    <ChevronDown size={12} className={`text-slate-400 shrink-0 transition-transform ${desplegada ? '' : '-rotate-90'}`} />
+                                                    {p.nombre}
+                                                </p>
+                                                {p.descripcion && <p className="text-[10px] text-slate-400 truncate pl-4">{p.descripcion}</p>}
+                                                <div className="flex items-center gap-2 flex-wrap mt-1 pl-4">
+                                                    <span className="text-[9px] text-slate-500 flex items-center gap-0.5">
+                                                        <ListChecks size={9} /> {p.pasos.length} {p.pasos.length === 1 ? 'paso' : 'pasos'}
+                                                    </span>
+                                                    <span className="text-[9px] text-slate-500">{plazoTexto(p.diasPlazo)}</span>
+                                                    {p.proyectoNombre && <span className="text-[9px] text-emerald-700 font-bold">● {p.proyectoNombre}</span>}
+                                                    {p.vecesUsada > 0 && (
+                                                        <span className="text-[9px] text-slate-400">usada {p.vecesUsada} {p.vecesUsada === 1 ? 'vez' : 'veces'}</span>
+                                                    )}
+                                                </div>
+                                            </button>
+                                            {/* Editar SIEMPRE visible. Existía desde antes, pero
+                                                escondido tras `opacity-0` hasta pasar el mouse por
+                                                encima: en la práctica nadie sabía que se podía
+                                                editar una plantilla. Eliminar sí se queda oculto,
+                                                porque no tiene vuelta atrás. */}
+                                            <button onClick={() => setEditando(p)} title="Editar la plantilla"
+                                                className="text-slate-400 hover:text-emerald-600 shrink-0"><Pencil size={13} /></button>
+                                            <button onClick={() => borrar(p)} title="Eliminar"
+                                                className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={13} /></button>
                                         </div>
-                                        {/* Editar SIEMPRE visible. Existía desde antes, pero
-                                            escondido tras `opacity-0` hasta pasar el mouse por
-                                            encima: en la práctica nadie sabía que se podía
-                                            editar una plantilla. Eliminar sí se queda oculto,
-                                            porque no tiene vuelta atrás. */}
-                                        <button onClick={() => setEditando(p)} title="Editar la plantilla"
-                                            className="text-slate-400 hover:text-emerald-600 shrink-0"><Pencil size={13} /></button>
-                                        <button onClick={() => borrar(p)} title="Eliminar"
-                                            className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0"><Trash2 size={13} /></button>
+                                        {desplegada && (
+                                            <div className="border-t border-[#efe8dd] px-3 py-2">
+                                                {p.pasos.length === 0 ? (
+                                                    <p className="text-[10px] text-slate-400 italic">Esta plantilla no tiene pasos.</p>
+                                                ) : (
+                                                    <ol className="space-y-0.5">
+                                                        {p.pasos.map((s, i) => (
+                                                            <li key={i} className="flex items-start gap-2 text-[11px] text-slate-600">
+                                                                <span className="text-[9px] font-black text-slate-300 tabular-nums w-4 shrink-0 pt-0.5">{i + 1}</span>
+                                                                <span className="flex-1">{s.titulo || s}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ol>
+                                                )}
+                                                <button onClick={() => setEditando(p)}
+                                                    className="mt-2 text-[10px] font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1">
+                                                    <Pencil size={10} /> Editar los pasos
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </>

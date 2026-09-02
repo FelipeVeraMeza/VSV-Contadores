@@ -134,10 +134,19 @@ const EditorRico = forwardRef(({ value, onChange, placeholder = '', minAlto = 26
         emitir();
     };
 
+    // `overflow-hidden` NO va en el marco de abajo: anula el `sticky` de la barra
+    // de formato —un ancestro con overflow recortado se convierte en el contenedor
+    // de desplazamiento y el sticky deja de pegarse—. Se usa `isolate`, y la barra
+    // lleva su propio `rounded-t-xl` para que la esquina siga limpia.
     return (
-        <div className="border border-[#efe8dd] rounded-xl overflow-hidden bg-white focus-within:border-emerald-500/60 transition-colors">
-            {/* ── barra de formato ── */}
-            <div className="flex items-center gap-0.5 px-2 py-1.5 border-b border-[#efe8dd] bg-slate-50/70 flex-wrap relative">
+        <div className="border border-[#efe8dd] rounded-xl isolate bg-white focus-within:border-emerald-500/60 transition-colors">
+            {/* ── barra de formato ──
+                Queda PEGADA ARRIBA mientras se escribe. Ahora que el editor crece
+                con el texto en vez de scrollear por dentro, un correo largo dejaba
+                la barra fuera de la pantalla: para poner una palabra en negrita
+                había que subir, marcar y volver a bajar. `sticky` la mantiene a la
+                vista sin sacarla del flujo. */}
+            <div className="sticky top-0 z-10 flex items-center gap-0.5 px-2 py-1.5 border-b border-[#efe8dd] bg-slate-50 rounded-t-xl flex-wrap relative shadow-[0_1px_0_0_rgba(0,0,0,0.03)]">
                 <Boton onClick={() => cmd('undo')} title="Deshacer"><Undo2 size={14} /></Boton>
                 <Boton onClick={() => cmd('redo')} title="Rehacer"><Redo2 size={14} /></Boton>
                 <Separador />
@@ -178,6 +187,18 @@ const EditorRico = forwardRef(({ value, onChange, placeholder = '', minAlto = 26
                         {placeholder}
                     </p>
                 )}
+                {/* EL EDITOR CRECE, NO SCROLLEA POR DENTRO.
+
+                    Antes tenía `maxHeight: 460` y `overflow-y-auto`, así que al
+                    pasar de esa altura le salía SU PROPIA barra de scroll —dentro
+                    del panel de redactar, que ya scrollea—. Dos barras anidadas a
+                    pocos píxeles una de otra: la rueda del mouse mueve una u otra
+                    según dónde esté el puntero, el texto se escapa mientras se
+                    escribe y hay que perseguirlo. Es el «desplazamiento poco
+                    amigable» que reportó la tarea MEJORAR INTERFAZ.
+
+                    Sin tope, el editor crece con el texto y scrollea UNA sola
+                    superficie: la del panel. */}
                 <div
                     ref={caja}
                     contentEditable
@@ -187,10 +208,10 @@ const EditorRico = forwardRef(({ value, onChange, placeholder = '', minAlto = 26
                     onKeyUp={recordar}
                     onMouseUp={recordar}
                     onPaste={pegarPlano}
-                    className="px-3 py-3 text-xs text-slate-800 leading-relaxed outline-none overflow-y-auto
+                    className="px-3 py-3 text-xs text-slate-800 leading-relaxed outline-none
                                [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5
                                [&_a]:text-emerald-700 [&_a]:underline [&_p]:mb-2"
-                    style={{ minHeight: minAlto, maxHeight: 460 }}
+                    style={{ minHeight: minAlto }}
                 />
             </div>
         </div>

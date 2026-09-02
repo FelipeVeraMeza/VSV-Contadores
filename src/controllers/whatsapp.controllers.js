@@ -1,5 +1,40 @@
 import * as bot from '../services/whatsapp/whatsappBot.js'
 import * as repo from '../services/whatsapp/whatsappRepo.js'
+import { pool } from '../database/db.js'
+
+// ---------------------------------------------------------------------------
+// ¿DE QUIÉN ES ESTE NÚMERO?
+// ---------------------------------------------------------------------------
+// La conversación de WhatsApp guarda el teléfono, no el cliente. Se cruza con
+// la agenda del CRM por el número para poder decir «este chat es de Fulano», y
+// así el ticket que se abra desde el chat nace ligado a él.
+//
+// Se comparan los ÚLTIMOS 8 DÍGITOS y no el número completo: los dos lados
+// guardan 56XXXXXXXXX, pero basta que alguien haya escrito uno con +56, con un
+// 9 de más o con espacios para que la comparación exacta falle. Ocho dígitos
+// son el número chileno sin prefijo ni código de país: suficiente para
+// identificar y corto para tolerar cómo esté escrito.
+const clienteDelTelefono = async (telefono, org) => {
+  const digitos = String(telefono || '').replace(/\D/g, '')
+  if (digitos.length < 8) return { personaId: null, personaNombre: null, empresaId: null }
+  try {
+    const { rows } = await pool.query(
+      `SELECT p.id, TRIM(CONCAT_WS(' ', p.nombre, p.apellidos)) AS nombre,
+              (SELECT pe.empresa_id FROM persona_empresa pe WHERE pe.persona_id = p.id LIMIT 1) AS empresa_id
+         FROM persona_telefono pt
+         JOIN persona p ON p.id = pt.persona_id
+        WHERE p.activo AND p.organizacion_id IS NOT DISTINCT FROM $2::uuid
+          AND RIGHT(REGEXP_REPLACE(pt.telefono_norm, '\\D', '', 'g'), 8) = RIGHT($1, 8)
+        LIMIT 1`,
+      [digitos, org || null])
+    if (!rows.length) return { personaId: null, personaNombre: null, empresaId: null }
+    return { personaId: rows[0].id, personaNombre: rows[0].nombre || null, empresaId: rows[0].empresa_id || null }
+  } catch (e) {
+    // Que no se pueda identificar al cliente no debe dejar sin chat a nadie.
+    console.warn('⚠️ No se pudo cruzar el teléfono con el CRM:', e.message)
+    return { personaId: null, personaNombre: null, empresaId: null }
+  }
+}
 
 // ----------------------------------------------------------------
 // Helpers de autorización
@@ -160,11 +195,19 @@ export const getMensajes = async (req, res) => {
   if (!auth) return
   const mensajes = await repo.listarMensajes(req.params.convId)
   await repo.marcarLeido(req.params.convId)
+  // Quién es este número en el CRM. Va acá para que el ticket que se abra desde
+  // el chat nazca ligado al cliente: antes el panel mandaba `detalle.personaId`
+  // y esa propiedad NUNCA venía en la respuesta, así que el vínculo se perdía
+  // siempre y había que buscar el cliente a mano después.
+  const cliente = await clienteDelTelefono(auth.conv.telefono, req.user?.organizacionId)
   res.json({
     id: auth.conv.id,
     nombre: auth.conv.nombre_contacto || auth.conv.telefono,
     telefono: auth.conv.telefono,
     autoIa: auth.conv.auto_ia,
+    personaId: cliente.personaId,
+    personaNombre: cliente.personaNombre,
+    empresaId: auth.conv.empresa_id || cliente.empresaId,
     mensajes: mensajes.map((m) => ({
       id: m.id,
       direccion: m.direccion,

@@ -206,6 +206,17 @@ const AccionesRapidas = ({ detalle, authSid }) => {
             ) : (
                 <div className="space-y-2">
                     <input className={inp} value={form.titulo} onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))} autoFocus />
+                    {/* A quién va a quedar ligado. Se dice ANTES de crear, porque
+                        después no hay pantalla que lo muestre: si el número no
+                        está en el CRM, conviene saberlo ahora y no descubrirlo
+                        meses más tarde buscando «todo lo de este cliente». */}
+                    <div className={`text-[10px] rounded-lg px-2.5 py-1.5 border ${detalle?.personaId
+                        ? 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30'
+                        : 'text-amber-700 bg-amber-500/10 border-amber-500/30'}`}>
+                        {detalle?.personaId
+                            ? <>Queda ligado a <span className="font-bold">{detalle.personaNombre}</span></>
+                            : 'Este número no está en el CRM: quedará sin cliente.'}
+                    </div>
                     <select className={`${inp} cursor-pointer`} value={form.prioridad} onChange={e => setForm(p => ({ ...p, prioridad: e.target.value }))}>
                         <option value="alta">Prioridad alta</option><option value="media">Prioridad media</option><option value="baja">Prioridad baja</option>
                     </select>

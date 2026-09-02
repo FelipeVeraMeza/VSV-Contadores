@@ -111,8 +111,18 @@ export const permisosSobreTarea = async (usuario, tareaId) => {
  * Middleware. `accion` es 'ver' | 'editar' | 'eliminar'.
  * En modo permisivo deja pasar y solo deja constancia.
  */
+// Un id que no tiene forma de UUID ni siquiera llega a la base: Postgres
+// responde «invalid input syntax for type uuid», el catch de abajo lo daba por
+// error genérico y dejaba pasar la petición al controlador, que terminaba
+// reventando con un 500. Una URL mal escrita —o alguien probando a mano— debe
+// dar 404, no un error de servidor.
+const ES_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const exigirPermisoTarea = (accion) => async (req, res, next) => {
     try {
+        if (!ES_UUID.test(String(req.params.id || ''))) {
+            return res.status(404).json({ success: false, message: 'La tarea no existe.' });
+        }
         const p = await permisosSobreTarea(req.user, req.params.id);
 
         if (!p.existe) return res.status(404).json({ success: false, message: p.motivo });
