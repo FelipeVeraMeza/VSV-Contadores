@@ -125,7 +125,34 @@ export async function obtenerDestinatariosRecordatorio({ periodo = null, soloAct
     const lista = Array.isArray(folios)
         ? folios.map(f => String(f).trim()).filter(Boolean)
         : null;
-    const filtroFolios = lista?.length ? `AND TRIM(c.folio) = ANY($3::text[])` : '';
+
+    // Con folios marcados la consulta no usa el periodo, así que ese parámetro
+    // desaparece y los números se corren. Se calculan en vez de escribirlos: si
+    // se dejaran fijos, Postgres rechazaría la consulta por un parámetro
+    // declarado y nunca usado.
+    const conFolios = Boolean(lista?.length);
+    const valores = conFolios ? [organizacionId, lista] : [periodo, organizacionId];
+    const pOrg = conFolios ? '$1' : '$2';
+    const filtroFolios = conFolios ? 'AND TRIM(c.folio) = ANY($2::text[])' : '';
+
+    // ⚠️ NO SE ADIVINA UN MES. Sin periodo explícito se cobra TODO lo pendiente.
+    //
+    // Este filtro cambió dos veces y las dos fallaron, porque el problema no era
+    // cuál mes elegir sino que se eligiera uno:
+    //
+    //   · Mes en curso → el 01-08-2026 buscaba cobros de agosto, que aún no
+    //     existían, con 81 deudores de julio a la vista en la pantalla.
+    //   · MAX(periodo) → el 02-09-2026 eligió septiembre —4 cobros recién
+    //     generados— y dejó fuera los 71 de agosto, que son los que de verdad
+    //     había que perseguir.
+    //   · MIN(periodo) sería el mismo error al revés: elegiría julio (5 cobros)
+    //     e ignoraría los otros 76.
+    //
+    // Con deuda en julio, agosto Y septiembre a la vez, cualquier mes único deja
+    // fuera a la mayoría. Para acotar, se pasa `periodo` o se marcan los folios.
+    const filtroPeriodo = conFolios
+        ? 'TRUE'
+        : '($1::date IS NULL OR c.periodo = $1::date)';
 
     const { rows } = await pool.query(
         `SELECT e.razon_social       AS "razonSocial",
@@ -163,31 +190,13 @@ export async function obtenerDestinatariosRecordatorio({ periodo = null, soloAct
                  ORDER BY f.fecha DESC
                  LIMIT 1
            ) cf ON true
-          WHERE c.periodo = COALESCE(
-                    $1::date,
-                    -- Sin periodo explícito: EL ÚLTIMO QUE TIENE DEUDA, no el mes
-                    -- en curso.
-                    --
-                    -- El cobro de un mes se persigue al mes siguiente: el de julio
-                    -- vence el 5 de agosto. Tomando el mes en curso a secas,
-                    -- el 1 de agosto el recordatorio se ponía a buscar cobros de
-                    -- agosto —que todavía no existen— y respondía "sin
-                    -- destinatarios" teniendo 81 clientes con deuda de julio a la
-                    -- vista en la pantalla. Pasó el 03-08-2026.
-                    --
-                    -- Así se corrige solo: cuando se generen los cobros de agosto y
-                    -- julio quede saldado, el periodo avanza sin tocar nada.
-                    (SELECT MAX(c2.periodo)
-                       FROM cobro_mensual c2
-                      WHERE c2.estado = 'PENDIENTE_PAGO'
-                        AND c2.organizacion_id IS NOT DISTINCT FROM $2::uuid)
-                )
+          WHERE ${filtroPeriodo}
             AND c.estado = 'PENDIENTE_PAGO'
-            AND c.organizacion_id IS NOT DISTINCT FROM $2::uuid
+            AND c.organizacion_id IS NOT DISTINCT FROM ${pOrg}::uuid
             ${filtroCartera}
             ${filtroFolios}
           ORDER BY e.razon_social`,
-        lista?.length ? [periodo, organizacionId, lista] : [periodo, organizacionId]
+        valores
     );
 
     // Sin correo no hay a quién escribirle. Se devuelven aparte para que la
