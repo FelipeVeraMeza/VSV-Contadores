@@ -86,6 +86,14 @@ export const enviarRecordatorios     = (folios) => dteFetch('/enviar-recordatori
 export const getProgresoRecordatorios = ()      => dteFetch('/recordatorios/progreso');
 
 // ---------------------------------------------------------------------
+// Facturas emitidas que la cobranza no persigue
+// ---------------------------------------------------------------------
+// NO recibe periodo a propósito: la gracia es ver TODAS de una vez. La pantalla
+// filtra por mes, y por eso el problema se veía repartido —10 en agosto, 1 en
+// septiembre— sin que nadie viera el total.
+export const getFacturasSinCobro = (meses = 6) => dteFetch(`/facturas-sin-cobro?meses=${meses}`);
+
+// ---------------------------------------------------------------------
 // Compatibilidad: lo usaba GuiaDespachoModal antes de este archivo.
 // ---------------------------------------------------------------------
 export async function enviarDteABackend(dteJson) {

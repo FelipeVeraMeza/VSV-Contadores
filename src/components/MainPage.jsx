@@ -29,6 +29,7 @@ import DelayedLoader from './ui/DelayedLoader';
 import GlobalCompanySelector from '@/components/ui/GlobalCompanySelector'; // Importación del nuevo selector
 import AvisoFacturacion from '@/components/ui/AvisoFacturacion';
 import CampanaNotificaciones from '@/components/ui/CampanaNotificaciones';
+import QuienEstaConectado from '@/components/ui/QuienEstaConectado';
 import { subRRHH } from '@/config/rrhhNav';
 
 function MainPage() {
@@ -372,6 +373,7 @@ function MainPage() {
               >
                 <Sparkles className="h-5 w-5" />
               </button>
+              <QuienEstaConectado />
               <CampanaNotificaciones />
               <AvisoFacturacion />
               <div className="hidden md:block text-right mr-2">

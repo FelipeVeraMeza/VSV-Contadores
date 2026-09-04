@@ -12,6 +12,7 @@ import { cerrarNavegador, cerrarCliente } from './cerrarNavegador.mjs';
 // Elegir con qué empresa se emite. Vive aparte porque los cuatro robots lo
 // necesitan y copiado se corrige en uno y se olvida en los otros tres.
 import { seleccionarEmpresaEmisora } from './empresaEmisora.mjs';
+import { asegurarCobroDeFactura } from '../../../utils/cobroDeFactura.js';
 
 const { Client } = pkg;
 dotenv.config();
@@ -539,9 +540,24 @@ export async function emitirFacturaPuppeteer(datos, credSii = credencialesDelSis
                     `;
                     const valores = [empresaIdFinal, rutOriginal, tipoDte, folio, montoNeto, montoIva, montoTotal, fechaEmision, rutaPdf];
                     const resDB = await client.query(queryInsert, valores);
-                    
+
                     if (resDB.rowCount > 0) {
                         console.log(`✅ ¡Factura ${folio} guardada exitosamente en el historial!`);
+
+                        // Toda factura emitida necesita un cobro que la persiga:
+                        // sin él no vence el día 5 ni sale en el recordatorio de
+                        // pago. Pasó con 24 facturas por $2.132.080 (auditoría
+                        // del 03-09-2026). La función es idempotente y nunca
+                        // lanza: la factura ya está en el SII.
+                        const cobro = await asegurarCobroDeFactura(client, {
+                            empresaId: empresaIdFinal, folio, montoTotal, montoNeto,
+                            tipoDte, fechaEmision,
+                        });
+                        if (cobro.creado) {
+                            console.log(`   → cobro creado para el folio ${folio}`);
+                        } else if (cobro.motivo && !cobro.motivo.includes('ya exist')) {
+                            console.warn(`   ⚠️ sin cobro para el folio ${folio}: ${cobro.motivo}`);
+                        }
                     }
                 } else {
                     console.log(`⚠️ La factura ${folio} ya existía en la BD. Omitiendo duplicado.`);

@@ -329,6 +329,18 @@ export const generarCobros = async (req, res) => {
         );
 
         await client.query('COMMIT');
+
+        // Generar el ciclo del mes crea ~100 cobros de una vez y define a quién
+        // se le va a facturar. Sin registro, un mes con cobros de más o de
+        // menos no se puede rastrear hasta quién apretó el botón ni cuándo.
+        await registrar(req, {
+            modulo: 'cobros', accion: 'generar_ciclo',
+            entidad: 'periodo', entidadId: null,
+            descripcion: `Ciclo del mes generado: ${ins.rowCount} cobro(s) creado(s)`
+                       + (del.rowCount ? `, ${del.rowCount} depurado(s) por baja del cliente` : ''),
+            detalle: { generados: ins.rowCount, removidos: del.rowCount },
+        });
+
         return res.json({
             success: true,
             generados: ins.rowCount,
@@ -374,6 +386,16 @@ export const recalcularMontos = async (req, res) => {
                AND cm.periodo = COALESCE($1::date, date_trunc('month', CURRENT_DATE)::date)`,
             [per]
         );
+        // Recalcular reescribe el monto de todos los cobros sin emitir del mes.
+        // Es una acción masiva sobre dinero: tiene que quedar quién la hizo.
+        if (rowCount) {
+            await registrar(req, {
+                modulo: 'cobros', accion: 'recalcular_montos',
+                entidad: 'periodo', entidadId: null,
+                descripcion: `${rowCount} monto(s) recalculado(s) desde el plan y el tramo`,
+                detalle: { actualizados: rowCount, periodo: per },
+            });
+        }
         return res.json({ success: true, actualizados: rowCount, message: `${rowCount} montos recalculados.` });
     } catch (err) {
         console.error('❌ Error recalculando montos:', err.message);
@@ -393,14 +415,32 @@ export const editarMontoCobro = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Monto no válido.' });
         }
 
+        // El monto ANTERIOR se captura en el mismo UPDATE con una subconsulta:
+        // sin él la bitácora diría «cambió el monto a $50.000» sin decir desde
+        // cuánto, que es justo el dato que se necesita cuando un cliente
+        // reclama que le cobraron de más.
         const { rows } = await pool.query(
-            `UPDATE cobro_mensual
+            `UPDATE cobro_mensual c
              SET monto_esperado = $2, updated_at = NOW()
-             WHERE id = $1 AND ($3::uuid IS NULL OR organizacion_id = $3)
-             RETURNING id`,
+             FROM (SELECT id, monto_esperado AS antes FROM cobro_mensual WHERE id = $1) v
+             WHERE c.id = v.id AND ($3::uuid IS NULL OR c.organizacion_id = $3)
+             RETURNING c.id, c.empresa_id, c.periodo, v.antes`,
             [id, monto, organizacionId]
         );
         if (!rows.length) return res.status(404).json({ success: false, message: 'Cobro no encontrado.' });
+
+        const previo = Number(rows[0].antes || 0);
+        const { rows: [empresa] } = await pool.query(
+            'SELECT razon_social FROM empresa WHERE id = $1', [rows[0].empresa_id]);
+        await registrar(req, {
+            modulo: 'cobros', accion: 'editar_monto',
+            entidad: 'cobro', entidadId: id,
+            descripcion: `Monto de ${empresa?.razon_social || 'un cobro'} cambiado de `
+                       + `$${previo.toLocaleString('es-CL')} a $${monto.toLocaleString('es-CL')}`,
+            detalle: { antes: previo, despues: monto, diferencia: monto - previo,
+                       empresaId: rows[0].empresa_id, periodo: rows[0].periodo },
+        });
+
         return res.json({ success: true, message: 'Monto actualizado.' });
     } catch (err) {
         console.error('❌ Error editando monto:', err.message);
@@ -425,7 +465,7 @@ export const emitirCobro = async (req, res) => {
                  updated_at = NOW()
              WHERE id = $1
                AND ($5::uuid IS NULL OR organizacion_id = $5)
-             RETURNING id, monto_esperado, monto_facturado`,
+             RETURNING id, empresa_id, periodo, monto_esperado, monto_facturado`,
             [id, folio || null, montoFacturado ?? null, tipoDte || null, organizacionId]
         );
         if (!rows.length) return res.status(404).json({ success: false, message: 'Cobro no encontrado.' });
@@ -433,6 +473,42 @@ export const emitirCobro = async (req, res) => {
         const r = rows[0];
         const coincide = r.monto_facturado !== null &&
                          parseFloat(r.monto_facturado) === parseFloat(r.monto_esperado);
+
+        // ────────────────────────────────────────────────────────────────────
+        // QUIÉN EMITIÓ ESTA FACTURA
+        // ────────────────────────────────────────────────────────────────────
+        // Emitir es la acción más grave del módulo: genera un documento
+        // tributario real ante el SII y no se puede deshacer, solo anular con
+        // nota de crédito.
+        //
+        // Hasta el 03-09-2026 NO se registraba. Se detectó buscando quién había
+        // emitido dos facturas a empresas dadas de baja (folios 1478 y 1482) y
+        // no había forma de saberlo: la bitácora anotaba los cambios de estado
+        // pero no la emisión.
+        //
+        // Se guarda el desajuste de monto en el detalle: una factura emitida
+        // por un monto distinto al esperado es lo primero que se busca cuando
+        // un cliente reclama.
+        const { rows: [empresa] } = await pool.query(
+            'SELECT razon_social FROM empresa WHERE id = $1', [r.empresa_id]);
+        await registrar(req, {
+            modulo: 'cobros', accion: 'emitir_factura',
+            entidad: 'cobro', entidadId: id,
+            descripcion: `Factura ${folio ? `N°${folio}` : '(sin folio)'} emitida a `
+                       + `${empresa?.razon_social || 'empresa desconocida'} por `
+                       + `$${Number(r.monto_facturado || 0).toLocaleString('es-CL')}`
+                       + (coincide ? '' : ' ⚠️ monto distinto al esperado'),
+            detalle: {
+                folio: folio || null,
+                tipoDte: tipoDte || null,
+                empresaId: r.empresa_id,
+                periodo: r.periodo,
+                montoEsperado: r.monto_esperado,
+                montoFacturado: r.monto_facturado,
+                montoCoincide: coincide,
+            },
+        });
+
         return res.json({
             success: true,
             montoCoincide: coincide,
@@ -797,6 +873,30 @@ export const facturarCobrosMasivo = async (req, res) => {
         const noIncluidas = pendientesBD
             .filter(c => !enviados.has(c.id) && !morosos.has(c.empresa_id))
             .map(c => c.razon_social);
+
+        // ────────────────────────────────────────────────────────────────────
+        // QUIÉN LANZÓ LA FACTURACIÓN MASIVA
+        // ────────────────────────────────────────────────────────────────────
+        // Un solo clic emite decenas de documentos tributarios irreversibles.
+        // Se registra ANTES de disparar el robot: si el proceso se cae a mitad,
+        // igual queda constancia de quién lo lanzó y con qué alcance.
+        //
+        // Van también las bloqueadas y las desviadas: son las decisiones que el
+        // sistema tomó por su cuenta, y hay que poder explicarlas después.
+        await registrar(req, {
+            modulo: 'cobros', accion: 'facturacion_masiva',
+            entidad: 'periodo', entidadId: null,
+            descripcion: `Facturación masiva de ${mesNombre}: ${facturas.length} factura(s)`
+                       + (bloqueadas.length ? `, ${bloqueadas.length} bloqueada(s) por deuda vencida` : '')
+                       + (omitidas ? `, ${omitidas} omitida(s)` : ''),
+            detalle: {
+                total: facturas.length,
+                omitidas,
+                bloqueadas,
+                desviadas,
+                noIncluidas,
+            },
+        });
 
         // Respondemos de inmediato y disparamos el robot en segundo plano.
         res.json({

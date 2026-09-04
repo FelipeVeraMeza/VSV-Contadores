@@ -576,14 +576,14 @@ está asignada a **Mati** con aviso en la campana.
 
 ### 10.5 Lo que se puede hacer sin preguntarle a nadie
 
-Pendiente al cierre del 14-ago:
+Pendiente al cierre del 14-ago, **los tres cerrados el 04-09-2026** (ver §15):
 
-1. **Bug:** una subtarea finalizada que se vuelve a marcar como activa no se
-   puede abrir.
-2. **Pop-up de tarea asignada con su urgencia.** La campana y el sonido están; el
-   pop-up del pedido original nunca se hizo.
-3. **Vista "Tareas de hoy"** en Inicio. Hay contador de "vencen hoy" pero no
-   lista. Estaba pedido en un comentario y se cerró sin hacerlo.
+1. ~~**Bug:** una subtarea finalizada que se vuelve a marcar como activa no se
+   puede abrir.~~ ✅
+2. ~~**Pop-up de tarea asignada con su urgencia.** La campana y el sonido están; el
+   pop-up del pedido original nunca se hizo.~~ ✅
+3. ~~**Vista "Tareas de hoy"** en Inicio. Hay contador de "vencen hoy" pero no
+   lista. Estaba pedido en un comentario y se cerró sin hacerlo.~~ ✅
 
 ### 10.6 Estado de los datos al 14-ago-2026
 
@@ -778,3 +778,296 @@ Pendientes anotados en las tareas, ninguno bloqueante:
 - Falta **contenido** de plantillas: hay una sola para toda la operación.
 - Ejecutor y fecha de entrega **por paso** de plantilla — es cambio de modelo.
 - Crear ticket desde un **correo**: ese botón no existe.
+
+---
+
+## 15. Trabajo del 04-09-2026 · los tres pendientes de §10.5
+
+Los tres puntos que quedaron anotados el 14-ago como «se pueden hacer sin
+preguntarle a nadie» y que llevaban tres semanas sin hacerse.
+
+### 15.1 La lista «Vencen hoy» en Inicio
+
+**Lo que pasaba.** La tarjeta «Vencen hoy» daba el número desde el primer día,
+pero no había lista: las tareas de hoy se dibujaban dentro de «Próximas a
+vencer», mezcladas con las de los otros seis días. Uno leía «3» y no tenía
+dónde ver cuáles eran esas tres — que es justo lo que uno quiere saber a las
+09:00.
+
+**Lo que se hizo.** Un cuarto grupo, `hoy`, entre `vencida` y `proxima`. Se
+agrega en las dos expresiones `CASE` de la consulta (la que etiqueta y la que
+numera dentro de cada grupo), así que los cuatro grupos siguen siendo
+excluyentes: ninguna tarea puede caer en dos y contarse dos veces. La pantalla
+pasó de tres bloques a cuatro.
+
+**Y un defecto que apareció de paso.** El filtro de la lista comparaba el
+INSTANTE (`vence_at <= NOW() + INTERVAL '7 days'`) mientras el contador de
+arriba cortaba por DÍA. Una tarea que vencía el séptimo día a las 18:00 la
+contaba la tarjeta y no la mostraba la lista, si uno miraba la pantalla por la
+mañana. Ahora los dos cortan por día.
+
+### 15.2 Reabrir una subtarea
+
+**Lo que pasaba.** Las subtareas no salen sueltas en la lista —las esconde
+`soloRaiz`, porque se ven dentro de su madre—, así que la única lista que las
+muestra por su cuenta es «Finalizadas». Al reabrir una, dejaba de calzar con
+ese filtro y salía de ahí; en la lista normal tampoco aparecía. Quedaba viva
+pero sin ningún lugar donde encontrarla, salvo saber que existe el interruptor
+«Con subtareas» o entrar por el árbol.
+
+**Lo que se hizo.** El interruptor ya estaba desde el 26-ago; lo que faltaba
+era que alguien lo dijera. Ahora, al reabrir una subtarea, un aviso explica
+dónde quedó y trae un botón «Mostrarla» que enciende ese interruptor. Vale para
+los dos caminos: la casilla de la lista de subtareas y los botones de estado
+del panel de detalle.
+
+Se comprobó además que la tarea **nunca dejó de ser alcanzable por su id**
+—`?tarea=<id>`, que es el camino de la campana y del enlace directo—, así que
+el problema era de visibilidad, no de acceso.
+
+### 15.3 El pop-up con la urgencia
+
+**Lo que pasaba.** La campana y el sonido se hicieron; el pop-up no. Y la
+campana no distingue: una tarea crítica y una de prioridad baja encienden el
+mismo punto rojo de 16 píxeles en una esquina. La urgencia era la mitad del
+pedido y era la mitad que faltaba.
+
+**Por qué hacía falta tocar la base.** El aviso no sabía qué tan urgente era lo
+que estaba avisando. Sin ese dato, el pop-up tendría que ir a buscar la tarea
+para saber de qué color pintarse: un viaje más por cada aviso, y nada que
+dibujar si la tarea se borró. Se guarda en el aviso la prioridad que la tarea
+tenía **cuando se asignó**.
+
+| | |
+|---|---|
+| Migración | `2026-09-04_notificacion_prioridad.sql` |
+| Columna | `notificacion.prioridad`, opcional, con `CHECK` del catálogo |
+
+**Cómo se comporta.** El pop-up sale solo con `tarea_asignada` —si saltara con
+todo, en una semana nadie lo miraría— y dice la urgencia con color **y con
+palabra**, porque el color solo obliga a saberse el código. Lo crítico no se
+cierra solo; lo bajo se va a los diez segundos.
+
+| Urgencia | Cuánto dura |
+|---|---|
+| Crítica | hasta que la cierres |
+| Alta | 30 s |
+| Media | 15 s |
+| Baja | 10 s |
+
+**Lo que NO hace:** no pide permisos del navegador ni manda notificaciones del
+sistema operativo. Eso es otra cosa y hay que pedirle permiso al usuario; esto
+funciona dentro de la pestaña, que es donde la persona ya está.
+
+### 15.4 Pruebas
+
+`qa/casos/tareas.test.mjs`, 15 pruebas. Cubren que los cuatro grupos de Inicio
+sean excluyentes, que la lista de hoy cuadre con su contador, el ciclo completo
+de reabrir una subtarea, y que la urgencia viaje con el aviso y la base rechace
+una prioridad inventada.
+
+Las consultas nuevas se validaron con `PREPARE` contra Postgres antes de darlas
+por buenas: `node --check` no ve los errores que están dentro del SQL.
+
+---
+
+## 16. Trabajo del 04-09-2026 (tarde) · los ocho pedidos del equipo
+
+Vinieron con captura desde la tarea «SISTEMA DE TAREAS» (22/30). Siete son
+correcciones de lo que ya existía y uno es nuevo.
+
+| # | Pedido | Qué se hizo |
+|---|---|---|
+| 1 | Quitar el método de selección y estandarizar | `SelectorPersonas`: un desplegable con buscador y casillas |
+| 2 | No se pueden editar colaboradores | Ahora se editan en el detalle, con el mismo desplegable |
+| 3 | Descripción adaptable | `CampoDescripcion`: crece con lo escrito, con tope y scroll |
+| 4 | Imágenes en la descripción | Se dibujan dentro del texto, no en un bloque aparte |
+| 5 | No se pueden crear subtareas desde «+ Tarea» | Se escriben en el formulario y se crean con la madre |
+| 6 | Separar «mis tareas» de «donde colaboro» | Dos ámbitos nuevos y pestañas en la sección |
+| 7 | El filtro «Activas» muestra subtareas finalizadas | La lista de subtareas del detalle respeta el filtro |
+| 8 | Nueva sección «Mis últimos tickets creados» | Bloque propio en Inicio |
+
+### 16.1 El desplegable, y por qué reemplaza a la parrilla (1 y 2)
+
+Los colaboradores se elegían de una parrilla de botones —uno por usuario, todos
+dibujados a la vez— donde lo elegido se distinguía de lo no elegido **solo por
+el color de fondo**. Con cuatro personas se entiende; con veinte hay que leer
+una por una para saber quién está dentro.
+
+`SelectorPersonas` lo reemplaza: se abre, se busca escribiendo, se marca con una
+casilla, y lo elegido se ve arriba como fichas con su «×». Un mismo componente
+para los dos lados —crear y editar—, que es la parte de «estandarizar».
+
+**Y editar era imposible.** En el detalle, los colaboradores eran texto plano:
+se fijaban al crear la tarea y no había ninguna pantalla donde cambiarlos. El
+servidor ya lo aceptaba (`setColaboradores` en `actualizarTarea`); faltaba
+solamente el control.
+
+### 16.2 La descripción (3 y 4)
+
+Tenía alto fijo de dos o tres líneas. Un ticket de veinte líneas se leía por una
+rendija, y agrandarlo pedía arrastrar una esquina — que, como dice el pedido, no
+es intuitivo. Ahora crece sola hasta **320 px** y de ahí en adelante hace scroll
+adentro, para no empujar los comentarios y los adjuntos fuera de la pantalla.
+
+Las imágenes se guardan como marcas `[img:<id>]` dentro del texto. Se dibujaban
+en un bloque **debajo** del campo, lejos del párrafo que las explica. Ahora el
+campo tiene dos caras: mientras se escribe es un textarea —hay que poder editar
+las marcas—; al soltarlo se dibuja el texto con sus imágenes en su lugar. Un
+clic vuelve a editar.
+
+### 16.3 Subtareas al crear (5)
+
+El botón «+ Tarea» creaba la tarea y había que abrirla para desglosarla. Pero
+uno sabe los pasos **justo cuando está escribiendo la tarea**, no después. Se
+escriben en el formulario y se crean enseguida colgando de la recién nacida.
+
+Si alguna falla, la madre igual quedó creada y el aviso dice cuántas se pudieron:
+no se pierde el trabajo escrito.
+
+### 16.4 «Mis tareas», en dos (6)
+
+> «Separar tareas mías de tareas en las cuales tengo colaboración y no están
+> asignadas directamente a mí.»
+
+No es lo mismo lo que uno **debe hacer** que aquello de lo que uno **está al
+tanto**. Mezcladas, la lista propia miente sobre cuánto trabajo hay encima.
+
+Dos ámbitos nuevos en el servidor, `asignadas` y `colaboro`. La segunda excluye
+a propósito aquello de lo que uno es responsable: sin esa exclusión, lo mío
+aparecería en las dos listas y separarlas no habría servido de nada.
+
+Medido al implementarlo: **290 asignadas + 5 donde colaboro = 295 «mías»**. Las
+dos mitades suman exactamente el total, sin perder ni duplicar a nadie — y hay
+una prueba que lo verifica en cada corrida.
+
+Van como pestañas dentro de «Mis tareas», no como dos secciones nuevas del menú:
+es la misma pregunta mirada de dos formas, y partir el menú por eso lo alarga
+sin que nadie lo pida.
+
+### 16.5 El filtro «Activas» y las subtareas finalizadas (7)
+
+La lista de afuera **sí** respetaba el filtro; se comprobó contra la API (0
+subtareas cerradas con `estado=activas`). El que no lo respetaba era **la lista
+de subtareas dentro del detalle**, que mostraba todas siempre. Con el filtro en
+«Activas» seguían viéndose las finalizadas, que es lo de la captura.
+
+Ahora esa lista sigue el mismo criterio que la de afuera, con un interruptor
+—«Ver N finalizadas»— para cuando se quieran revisar.
+
+### 16.6 Mis últimos tickets creados (8)
+
+Los cuatro bloques de Inicio responden «¿qué me toca?». Este responde la otra
+pregunta, la de quien **reporta**: de lo que yo abrí, ¿en qué va y quién lo
+tiene? Sin esto, quien crea un ticket y se lo asigna a otro lo pierde de vista
+en el momento mismo de crearlo.
+
+Muestra el estado y el responsable —no el vencimiento— y la fecha es la de
+creación. **Incluye lo ya cerrado a propósito:** «lo que abrí ayer y ya está
+listo» es justamente lo que uno quiere ver; filtrándolo, un ticket resuelto
+desaparecería sin que quien lo abrió se entere de que se resolvió.
+
+### 16.7 Pruebas
+
+`qa/casos/tareas-ux.test.mjs`, 15 pruebas: los dos ámbitos y la regla de que sus
+mitades sumen el total, el ciclo completo de editar colaboradores (agregar,
+quitar, no duplicar), las subtareas creadas junto con la madre, y que «mis
+últimos» traiga solo lo que uno creó, ordenado y sin archivadas.
+
+El SQL nuevo se validó con `PREPARE` contra Postgres, y la maqueta de Inicio se
+midió en el navegador: cuatro columnas alineadas arriba, la sección nueva a lo
+ancho debajo, sin scroll horizontal.
+
+### 16.8 Verificación uno por uno · 04-09-2026
+
+Se revisó cada pedido contra el sistema real antes de darlo por cerrado.
+
+| # | Pedido | Cómo se verificó | Estado |
+|---|---|---|---|
+| 1 | Quitar el método de selección | Cero usos de la parrilla en todo el repo. El modal de Integrantes ya usaba `<select>` | ✅ |
+| 2 | Editar colaboradores | Ciclo completo por API: agregar, quitar, no duplicar | ✅ |
+| 3 | Descripción adaptable | Medida en el navegador: 56 px → 204 px al escribir; tope 320 px; `overflow-y: auto` pasado el tope | ✅ |
+| 4 | Imágenes en la descripción | Se dibujan dentro del texto (`CampoDescripcion`) | ✅ |
+| 5 | Subtareas desde «+ Tarea» | Tres pasos creados junto con la madre y contados por ella | ✅ |
+| 6 | Separar «mis tareas» | Las mitades suman el total en los 3 usuarios reales | ✅ |
+| 7 | El filtro «Activas» | **223 subtareas cerradas** dejaron de mostrarse | ✅ |
+| 8 | Mis últimos tickets creados | Solo lo propio, ordenado, sin archivadas | ✅ |
+
+**Los componentes se probaron en un navegador de verdad**, montados con Vite y
+manejados con Puppeteer — no leídos: se abrió el desplegable, se buscó, se marcó
+y se quitó una persona, y se midió el alto del campo al escribir. Once
+comprobaciones, todas en verde y sin errores de JavaScript.
+
+Nota de lo medido en el punto 1: al abrir el desplegable el buscador aparece
+solo con más de seis personas, el responsable queda excluido de la lista de
+colaboradores, y cada clic guarda **una sola vez** (se comprobó que el contador
+suba exactamente uno, no dos).
+
+**Suite completa: 14 suites, 217 pruebas, todo en verde.** Sin regresiones en
+seguridad, roles, API, CRM, comunicaciones, cobranza ni auditoría.
+
+---
+
+## 17. Quién está conectado · 04-09-2026
+
+> «Añadir quién está conectado, pero solo de la organización: si hay clientes,
+> yo no sé quién está conectado — solo de la organización en la que esté.»
+
+Un indicador en el encabezado, al lado de la campana: cuántos del equipo están
+en línea, y quiénes. Sirve para saber si a quien le vas a asignar algo está al
+otro lado, o si le estás dejando un ticket que no verá hasta mañana.
+
+### 17.1 El aislamiento es el requisito, no un detalle
+
+El filtro sale de `organizacion_id` **de la sesión**, nunca de un parámetro: un
+id que llega por la URL es un id que alguien puede cambiar. Esto expone hábitos
+de trabajo —a qué hora entra cada quien, cuánto lleva conectado— y eso no cruza
+la frontera entre despachos.
+
+Se prueba creando un usuario real de OTRA organización con sesión viva y
+comprobando que **no aparece**, incluso forzando `?organizacionId=`, `?org=` y
+`?organizacion_id=` en la URL. Una fuga acá no se vería como un error: se vería
+como una lista un poco más larga.
+
+### 17.2 Hizo falta una columna nueva
+
+Para decir «está conectado» hay que saber cuándo fue la última señal de vida, y
+con lo que había **no se podía deducir**:
+
+- `created_at` es cuándo entró. Alguien que entró hace 58 horas y cerró el
+  navegador enseguida figuraría igual que quien está trabajando.
+- `expires_at` tampoco: la renovación deslizante solo lo mueve cuando quedan
+  menos de 12 h. Medido el 04-09-2026, había sesiones «renovadas hace 480
+  minutos» de gente que podía haber estado activa hace un minuto.
+
+Migración `2026-09-04_sessions_last_seen.sql`. El middleware la refresca **como
+mucho una vez por minuto**: escribir en cada petición sería un UPDATE por cada
+clic de cada persona, y para un semáforo de presencia un minuto de resolución
+sobra.
+
+### 17.3 Conectado es una ventana, no un interruptor
+
+Nadie avisa al cerrar el navegador: se cierra la pestaña y ya.
+
+| Última señal | Cómo se ve |
+|---|---|
+| menos de 5 min | **En línea** (punto verde) |
+| 5 a 30 min | **Inactivo**, con cuánto hace (punto ámbar) |
+| más de 30 min | no se muestra |
+
+Prometer «está ahí» cuando la persona pudo irse a almorzar es peor que no decir
+nada; de ahí los dos estados en vez de un binario.
+
+**Una fila por persona, no por sesión.** Alguien con el sistema abierto en el
+computador y en el teléfono tiene dos sesiones vivas y es una sola persona.
+
+**Si no hay nadie más conectado, el indicador no se dibuja:** un «1» que siempre
+eres tú es ruido permanente en el encabezado.
+
+### 17.4 Pruebas
+
+`qa/casos/conectados.test.mjs`, 13 pruebas: el aislamiento (incluido el intento
+por parámetro), los tres tramos de la ventana, que una sesión vencida no cuente
+aunque la señal sea reciente, que un usuario desactivado desaparezca, que dos
+dispositivos sean una fila, y que la respuesta **no exponga** RUT, correo,
+clave ni identificadores de sesión — presencia es nombre y estado, nada más.

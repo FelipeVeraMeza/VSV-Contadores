@@ -14,6 +14,7 @@ import {
     progresoReenvioController,
     getCorreosLogController,
     previewRecordatoriosController,
+    facturasSinCobro,
     enviarRecordatoriosController,
     getProgresoRecordatoriosController,
     emitirExentaManualController,
@@ -124,6 +125,10 @@ dteRoutes.get('/correos-log', getCorreosLogController);
 
 // 📢 Recordatorios de pago (módulo aparte)
 dteRoutes.get('/recordatorios/preview', soloAdmin, previewRecordatoriosController);
+
+// Facturas emitidas al SII que la cobranza no persigue. NO filtra por mes a
+// propósito: el problema se veía repartido entre meses y nadie veía el total.
+dteRoutes.get('/facturas-sin-cobro', soloAdmin, facturasSinCobro);
 dteRoutes.post('/enviar-recordatorios', soloAdmin, envioMasivoLimiter, enviarRecordatoriosController);
 dteRoutes.get('/recordatorios/progreso', soloAdmin, getProgresoRecordatoriosController);
 

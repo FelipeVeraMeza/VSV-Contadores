@@ -11,6 +11,7 @@ import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.j
 import { seleccionarEmpresaEmisora } from './empresaEmisora.mjs';
 // La descarga del PDF deja de depender de que el correo salga bien.
 import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
+import { asegurarCobroDeFactura } from '../../../utils/cobroDeFactura.js';
 
 const { Client } = pkg;
 dotenv.config();
@@ -773,6 +774,14 @@ export async function emitirLotePuppeteer(facturasFront, credSii = credencialesD
                                     const netoMasivo = parseInt(f.producto.precio) || 0;
                                     const ivaMasivo = Math.round(netoMasivo * 0.19);
                                     await dbClient.query(`INSERT INTO documentos_emitidos (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision) VALUES ($1, $2, 33, $3, $4, $5, $6, $7)`, [empresaIdFinal, rutOriginal, folio, netoMasivo, ivaMasivo, netoMasivo + ivaMasivo, new Date().toISOString()]);
+
+                                    // El cobro que la persigue. Sin esto la
+                                    // factura no vence el día 5 ni sale en el
+                                    // recordatorio. Ver cobroDeFactura.js.
+                                    await asegurarCobroDeFactura(dbClient, {
+                                        empresaId: empresaIdFinal, folio, tipoDte: 33,
+                                        montoTotal: netoMasivo + ivaMasivo, montoNeto: netoMasivo,
+                                    });
                                     console.log(`✅ Guardado en Bóveda Historial.`);
                                 }
                             }

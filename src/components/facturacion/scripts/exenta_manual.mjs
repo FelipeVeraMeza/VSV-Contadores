@@ -8,6 +8,7 @@ import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.j
 import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
 import { cerrarNavegador, cerrarCliente } from './cerrarNavegador.mjs';
 import { seleccionarEmpresaEmisora } from './empresaEmisora.mjs';
+import { asegurarCobroDeFactura } from '../../../utils/cobroDeFactura.js';
 
 const { Client } = pkg;
 dotenv.config();
@@ -326,6 +327,19 @@ export async function emitirExentaPuppeteer(datos, credSii = credencialesDelSist
                     
                     if (resDB.rowCount > 0) {
                         console.log(`✅ ¡Factura Exenta ${folio} guardada exitosamente en el historial!`);
+
+                        // El cobro que la persigue. Ver cobroDeFactura.js: sin
+                        // él la factura no vence el día 5 ni entra al
+                        // recordatorio de pago.
+                        const cobro = await asegurarCobroDeFactura(client, {
+                            empresaId: empresaIdFinal, folio, montoTotal, montoNeto,
+                            tipoDte, fechaEmision,
+                        });
+                        if (cobro.creado) {
+                            console.log(`   → cobro creado para el folio ${folio}`);
+                        } else if (cobro.motivo && !cobro.motivo.includes('ya exist')) {
+                            console.warn(`   ⚠️ sin cobro para el folio ${folio}: ${cobro.motivo}`);
+                        }
                     }
                 } else {
                     console.log(`⚠️ La Factura Exenta ${folio} ya existía en la BD. Omitiendo duplicado.`);

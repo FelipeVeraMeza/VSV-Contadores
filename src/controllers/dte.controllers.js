@@ -784,3 +784,69 @@ export const getHistorialController = async (req, res) => {
 export const obtenerProgresoMasivoController = (req, res) => {
     res.status(200).json(estadoRobot);
 };
+
+
+// ============================================================================
+// FACTURAS EMITIDAS SIN COBRO QUE LAS PERSIGA
+// ----------------------------------------------------------------------------
+// Una factura que existe en el SII pero no en `cobro_mensual` es invisible para
+// la cobranza: no vence el día 5, no sale en el recordatorio de pago y no
+// cuenta en «por cobrar». Está facturada y nadie la persigue.
+//
+// El endpoint NO filtra por mes a propósito. La pantalla de Correo Masivo sí lo
+// hace, y por eso el problema se veía repartido —10 en agosto, 1 en septiembre—
+// sin que nadie viera las 24 juntas por $2.132.080 (auditoría del 03-09-2026).
+//
+// Desde el 04-09-2026 las facturas nuevas crean su cobro solas
+// (src/utils/cobroDeFactura.js). Esto queda como control: si el número vuelve a
+// subir, algún camino de facturación se saltó ese paso.
+// ============================================================================
+export const facturasSinCobro = async (req, res) => {
+    try {
+        const meses = Math.min(Math.max(parseInt(req.query.meses, 10) || 6, 1), 24);
+        const { rows } = await pool.query(
+            `SELECT d.folio,
+                    d.fecha_emision::date                       AS "fechaEmision",
+                    d.monto_total                               AS "montoTotal",
+                    d.tipo_dte                                  AS "tipoDte",
+                    COALESCE(e.razon_social, d.razon_social_cliente, '(sin vincular)') AS "razonSocial",
+                    e.id                                        AS "empresaId",
+                    (e.activo AND e.en_cartera IS NOT FALSE)    AS "empresaActiva",
+                    e.email_corporativo                         AS "correo",
+                    -- El día 5 del mes siguiente, la misma regla del ciclo.
+                    (date_trunc('month', d.fecha_emision) + INTERVAL '1 month'
+                                                          + INTERVAL '4 days')::date AS "vence",
+                    -- Si ese mes YA tenía un cobro con otro folio, esta factura
+                    -- es trabajo EXTRA: el dato cambia qué hacer con ella.
+                    EXISTS (SELECT 1 FROM cobro_mensual c
+                             WHERE c.empresa_id = d.empresa_id
+                               AND c.periodo = date_trunc('month', d.fecha_emision)::date)
+                                                                AS "esExtra"
+               FROM documentos_emitidos d
+               LEFT JOIN empresa e ON e.id = d.empresa_id
+              WHERE d.tipo_dte IN (33, 34)
+                AND d.fecha_emision >= CURRENT_DATE - ($1 || ' months')::interval
+                AND NOT EXISTS (SELECT 1 FROM cobro_mensual c
+                                 WHERE TRIM(c.folio) = d.folio::text)
+                -- Una anulada con nota de crédito no se persigue, con razón.
+                AND NOT EXISTS (SELECT 1 FROM documentos_emitidos nc
+                                 WHERE nc.tipo_dte = 61
+                                   AND nc.folio_ref::text = d.folio::text)
+              ORDER BY d.fecha_emision DESC`,
+            [String(meses)]
+        );
+
+        const total = rows.reduce((a, r) => a + Number(r.montoTotal || 0), 0);
+        return res.json({
+            ok: true,
+            total: rows.length,
+            monto: total,
+            vencidas: rows.filter(r => new Date(r.vence) < new Date()).length,
+            deActivas: rows.filter(r => r.empresaActiva).length,
+            facturas: rows,
+        });
+    } catch (error) {
+        console.error('❌ Error listando facturas sin cobro:', error.message);
+        return res.status(500).json({ ok: false, error: 'No se pudo cargar el listado.' });
+    }
+};

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireSession, requireAdmin, requireModulo } from '../middleware/auth.js';
+import { uuidValido } from '../middleware/uuid.middleware.js';
 import {
   listarCobros, resumenCobros, generarCobros, emitirCobro, cambiarEstadoCobro,
   recalcularMontos, editarMontoCobro,
@@ -16,13 +17,13 @@ router.get('/', listarCobros);                     // ?periodo=YYYY-MM&estado=..
 router.get('/resumen', resumenCobros);             // KPIs + aviso del día 26
 router.post('/generar', generarCobros);            // crea los POR_EMITIR del mes
 router.post('/recalcular', recalcularMontos);      // recalcula montos desde el plan
-router.put('/:id/emitir', emitirCobro);            // registra folio + monto emitido
-router.put('/:id/estado', cambiarEstadoCobro);     // PAGADA | PENDIENTE_RECIBO | PENDIENTE_PAGO
-router.put('/:id/monto', editarMontoCobro);        // corrige el monto a mano
+router.put('/:id/emitir', uuidValido('id'), emitirCobro);            // registra folio + monto emitido
+router.put('/:id/estado', uuidValido('id'), cambiarEstadoCobro);     // PAGADA | PENDIENTE_RECIBO | PENDIENTE_PAGO
+router.put('/:id/monto', uuidValido('id'), editarMontoCobro);        // corrige el monto a mano
 
 // Registrar el pago de un cliente completo, desde el CRM. Con ?soloVencidos=1
 // salda únicamente los meses ya vencidos y deja lo que aún está en plazo.
-router.put('/empresa/:empresaId/pagar', registrarPagoCliente);
+router.put('/empresa/:empresaId/pagar', uuidValido('empresaId'), registrarPagoCliente);
 
 // Conciliar el mes contra la planilla de cobranza: los que vienen en la
 // planilla deben, el resto queda pagado. Arranca en modo SIMULACIÓN: sin

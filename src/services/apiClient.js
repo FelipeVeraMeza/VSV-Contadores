@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '../../config.js';
 import { mapperToCamel } from '../lib/mappers.js';
+import { sesionCaducada } from './sesionCaducada.js';
 
 export const fetchWithAuth = async (endpoint, sessionId, options = {}, empresaId = null) => {
 
@@ -22,8 +23,17 @@ export const fetchWithAuth = async (endpoint, sessionId, options = {}, empresaId
         headers,
     });
 
+    // UN 401 NO SE DEJA PASAR.
+    //
+    // Antes esto solo escribía en la consola y devolvía la respuesta, así que
+    // la pantalla se quedaba con los datos viejos y sin avisar: uno seguía
+    // pulsando y no pasaba nada, o salían listas vacías que parecían datos
+    // borrados. Había que cerrar sesión a mano para enterarse.
+    //
+    // Ahora se limpia y se vuelve al login diciendo por qué. Ver
+    // `sesionCaducada`, que es el único sitio donde se decide esto.
     if (res.status === 401) {
-        console.warn("🔐 Sesión expirada o denegada. El búnker ha bloqueado el acceso.");
+        sesionCaducada();
     }
 
     const originalJson = res.json.bind(res);

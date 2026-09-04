@@ -56,6 +56,7 @@ import { cargarJSONaBD } from './components/contabilidad/scripts/subir_documento
 // 🔒 Estado del Facturador Masivo: si está activo, NO sincronizamos el SII (misma cuenta = se botan la sesión)
 import { estadoRobot } from './components/facturacion/scripts/factura_masiva.mjs';
 import { iniciarRecordatoriosReunion } from './utils/recordatorioReunion.js';
+import { iniciarLimpiezaSesiones } from './utils/limpiezaSesiones.js';
 import {
     estadoSincronizacion, comenzarSincronizacion,
     avanzarSincronizacion, terminarSincronizacion,
@@ -424,6 +425,8 @@ app.get('/api/sincronizar-sii/progreso', requireSession, (req, res) => {
 // devuelve algo, solo escribe una notificación interna—. Y a mano no serviría:
 // el sentido del aviso es que llegue 15 minutos antes sin que nadie lo pida.
 iniciarRecordatoriosReunion();
+// Las sesiones vencidas no las borraba nadie: 599 de 604 filas al 04-09-2026.
+iniciarLimpiezaSesiones();
 
 // --- Archivos Estáticos ---
 app.use('/static', express.static(path.join(process.cwd(), 'tmp')));

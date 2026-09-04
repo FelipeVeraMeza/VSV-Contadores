@@ -23,6 +23,7 @@ export async function requireSession(req, res, next) {
   try {
     const query = `
       SELECT s.usuario_id, u.rol, u.nombre, u.organizacion_id, s.expires_at,
+             s.last_seen_at,
              u.ve_solo_empresas_asignadas
       FROM sessions s
       JOIN usuario u ON s.usuario_id = u.id
@@ -48,6 +49,21 @@ export async function requireSession(req, res, next) {
         const newExpiry = new Date(now + 1000 * 60 * 60 * 24);
         pool.query("UPDATE sessions SET expires_at = $1 WHERE session_id = $2", [newExpiry, sessionId])
             .catch(err => console.error("⚠️ Error silencioso extendiendo sesión:", err));
+    }
+
+    // SEÑAL DE VIDA · para saber quién está conectado ahora mismo.
+    //
+    // No se escribe en cada petición: eso sería un UPDATE por cada clic de cada
+    // persona, y abrir una pantalla dispara varias llamadas a la vez. Con un
+    // minuto de resolución sobra para un semáforo de presencia, y el ahorro es
+    // de dos órdenes de magnitud.
+    //
+    // Va sin `await` y con el error tragado a propósito: es un dato accesorio y
+    // no puede demorar —ni menos tumbar— la petición que lo provocó.
+    const ultimaSenal = session.last_seen_at ? new Date(session.last_seen_at).getTime() : 0;
+    if (now - ultimaSenal > 1000 * 60) {
+        pool.query("UPDATE sessions SET last_seen_at = NOW() WHERE session_id = $1", [sessionId])
+            .catch(() => { /* dato accesorio: si falla, no se rompe nada */ });
     }
 
     req.user = {

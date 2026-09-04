@@ -43,8 +43,44 @@ const SECCIONES = {
   inicio:    { titulo: 'Inicio',     bajada: 'Tu resumen del día: lo que vence, lo que va atrasado y lo que cerraste' },
   proyectos: { titulo: 'Proyectos',  bajada: 'Los proyectos de la organización, su avance y quién responde por cada uno' },
   todas:     { titulo: 'Tareas',     bajada: 'Todas las tareas en las que participas' },
-  mias:      { titulo: 'Mis tareas', bajada: 'Solo lo que tienes asignado o donde colaboras' },
+  mias:      { titulo: 'Mis tareas', bajada: 'Lo asignado a ti, separado de aquello donde solo colaboras' },
   equipo:    { titulo: 'Equipo',     bajada: 'Todas las tareas de la organización' },
+};
+
+// MIS TAREAS, EN DOS.
+//
+// «Separar tareas mías de tareas en las cuales tengo colaboración y no están
+// asignadas directamente a mí». No es lo mismo lo que uno DEBE hacer que
+// aquello de lo que uno está al tanto: mezcladas, la lista propia miente sobre
+// cuánto trabajo tiene uno encima.
+//
+// Van como pestañas dentro de la misma sección y no como dos secciones nuevas
+// del menú: es la misma pregunta —«¿qué tengo yo?»— mirada de dos formas, y
+// partir el menú por eso lo alarga sin que nadie lo pida.
+const MisTareas = () => {
+  const [vista, setVista] = useState('asignadas');
+  const PESTANAS = [
+    ['asignadas', 'Asignadas a mí', 'Las que tienes que hacer tú'],
+    ['colaboro',  'Donde colaboro', 'Participas, pero el responsable es otro'],
+    ['mias',      'Todo lo mío',    'Las dos juntas'],
+  ];
+  return (
+    <div className="flex-1 min-h-0 flex flex-col gap-2">
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {PESTANAS.map(([v, label, ayuda]) => (
+          <button key={v} onClick={() => setVista(v)} title={ayuda}
+            className={`px-2.5 py-1 rounded-md text-[12px] font-medium transition-colors ${
+              vista === v ? 'bg-emerald-600 text-white' : 'bg-[#f6f3ee] text-slate-600 hover:text-slate-900'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {/* La `key` remonta el panel al cambiar de pestaña: si no, se quedaría
+          mostrando las tareas del alcance anterior hasta que llegue la nueva
+          respuesta. */}
+      <TareasPanel key={vista} modo={vista} />
+    </div>
+  );
 };
 
 // Segundo candado de "Equipo": el menú ya la esconde, pero la URL sigue
@@ -78,7 +114,7 @@ const Tareas = () => {
       case 'inicio':    return <InicioPanel modo="todas" />;
       case 'proyectos': return <ProyectosPanel />;
       case 'equipo':    return esAdmin ? <TareasPanel modo="equipo" /> : <SinPermiso />;
-      case 'mias':      return <TareasPanel modo="mias" />;
+      case 'mias':      return <MisTareas />;
       default:          return <TareasPanel modo="todas" />;
     }
   };

@@ -51,7 +51,12 @@ const ORDEN_TAREAS = `
 // Antes ninguno de los dos miraba `tarea_colaborador`: un colaborador no veía
 // en su lista las tareas donde lo habían sumado (RF-TA-13 lo pide explícito).
 // ---------------------------------------------------------------------------
-const AMBITOS = ['todas', 'mias', 'equipo'];
+// 'asignadas' y 'colaboro' parten «mías» en dos. El pedido: «separar tareas
+// mías de tareas en las cuales tengo colaboración y no están asignadas
+// directamente a mí» — no es lo mismo lo que uno debe hacer que aquello de lo
+// que uno está al tanto, y mezclarlas hace que la lista propia mienta.
+// 'mias' se mantiene y sigue siendo la suma de las dos.
+const AMBITOS = ['todas', 'mias', 'equipo', 'asignadas', 'colaboro'];
 
 // ---------------------------------------------------------------------------
 // QUIÉN PUEDE VER UNA TAREA · el modelo que pidió el negocio el 05-08-2026
@@ -123,6 +128,14 @@ const puedeVerTarea = (i) => `(
 
 const condicionAmbito = (ambito, indiceUsuario) => {
     const colabora = `EXISTS (SELECT 1 FROM tarea_colaborador tc WHERE tc.tarea_id = t.id AND tc.usuario_id = $${indiceUsuario})`;
+    // Lo que me toca a MÍ: soy el responsable, sin más.
+    if (ambito === 'asignadas') return `t.responsable_id = $${indiceUsuario}`;
+    // Donde colaboro SIN ser el responsable. La segunda mitad es la que
+    // importa: si no se excluye al responsable, todo lo mío aparecería en las
+    // dos listas y separarlas no habría servido de nada.
+    if (ambito === 'colaboro') {
+        return `(${colabora} AND (t.responsable_id IS DISTINCT FROM $${indiceUsuario}))`;
+    }
     // "Mías" sigue siendo lo que tengo encima: responsable o colaborador. No
     // incluye lo que solo veo por pertenecer al proyecto.
     if (ambito === 'mias') return `(t.responsable_id = $${indiceUsuario} OR ${colabora})`;
@@ -492,6 +505,10 @@ export const crearTarea = async (req, res) => {
                 actor: req.user, tipo: 'tarea_asignada',
                 titulo: `${req.user?.nombre || 'Alguien'} te asignó: ${full.titulo}`,
                 descripcion: full.proyectoNombre ? `En el proyecto ${full.proyectoNombre}` : null,
+                // La urgencia viaja con el aviso para que el pop-up pueda
+                // distinguir una tarea crítica de una cualquiera sin volver a
+                // consultar la tarea. Ver la migración de notificacion.prioridad.
+                prioridad: full.prioridad || null,
                 entidad: 'tarea', entidadId: nuevaId,
             }
         );
@@ -619,6 +636,7 @@ export const actualizarTarea = async (req, res) => {
                 descripcion: subtareasReasignadas
                     ? `Con sus ${subtareasReasignadas} subtareas`
                     : (actualizada.proyectoNombre ? `En el proyecto ${actualizada.proyectoNombre}` : null),
+                prioridad: actualizada.prioridad || null,
                 entidad: 'tarea', entidadId: id,
             });
         }
@@ -816,6 +834,80 @@ export const canalDeAvisos = (req, res) => {
     // Sin return de respuesta: la petición queda viva a propósito.
 };
 
+// ============================================================
+// QUIÉN ESTÁ CONECTADO
+// ------------------------------------------------------------
+// SOLO DE TU ORGANIZACIÓN. Es la misma regla que rige todo el sistema y acá
+// importa más que en otros lados: esto expone hábitos de trabajo —a qué hora
+// entra cada quien, cuánto lleva conectado—, y eso no puede cruzar la frontera
+// entre despachos. Si mañana hay clientes de otra organización en la misma
+// base, no tienen por qué verse entre ellos ni verte a ti.
+//
+// El filtro va por `organizacion_id` y NO se acepta por parámetro: se toma de
+// la sesión. Un id de organización que llega por la URL es un id que alguien
+// puede cambiar.
+//
+// «CONECTADO» ES UNA VENTANA, NO UN INTERRUPTOR.
+// Nadie manda un aviso al cerrar el navegador: la mayoría cierra la pestaña y
+// ya. Así que se mira la última señal de vida (`last_seen_at`, que el
+// middleware refresca como mucho una vez por minuto):
+//
+//   · en línea   — dio señales hace menos de 5 minutos
+//   · inactivo   — entre 5 y 30 minutos: sigue con sesión, pero no está mirando
+//   · (fuera)    — más de 30 minutos: no se muestra
+//
+// UNA FILA POR PERSONA, NO POR SESIÓN. Alguien con el sistema abierto en el
+// computador y en el teléfono tiene dos sesiones vivas y es una sola persona;
+// listarlo dos veces haría creer que hay más gente trabajando de la que hay.
+const MIN_EN_LINEA = 5;
+const MIN_INACTIVO = 30;
+
+export const quienEstaConectado = async (req, res) => {
+    try {
+        const org = req.user?.organizacionId || null;
+        const yo = req.user?.usuarioId || null;
+
+        const { rows } = await pool.query(
+            `SELECT u.id, u.nombre, u.rol::text AS rol,
+                    MAX(s.last_seen_at) AS visto,
+                    COUNT(*)::int AS sesiones
+               FROM sessions s
+               JOIN usuario u ON u.id = s.usuario_id
+              WHERE s.expires_at > NOW()
+                AND u.activo = true
+                AND u.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                AND s.last_seen_at > NOW() - INTERVAL '${MIN_INACTIVO} minutes'
+              GROUP BY u.id, u.nombre, u.rol
+              ORDER BY MAX(s.last_seen_at) DESC`, [org]);
+
+        const ahora = Date.now();
+        const conectados = rows.map(r => {
+            const minutos = Math.max(0, Math.round((ahora - new Date(r.visto).getTime()) / 60000));
+            return {
+                id: r.id,
+                nombre: r.nombre,
+                rol: r.rol,
+                estado: minutos < MIN_EN_LINEA ? 'en_linea' : 'inactivo',
+                minutos,
+                // Para que la pantalla pueda decir «tú» en vez de repetir tu nombre.
+                soyYo: r.id === yo,
+                // Solo informativo: dos sesiones = dos dispositivos abiertos.
+                sesiones: r.sesiones,
+            };
+        });
+
+        return res.json({
+            success: true,
+            conectados,
+            enLinea: conectados.filter(c => c.estado === 'en_linea').length,
+            umbrales: { enLinea: MIN_EN_LINEA, inactivo: MIN_INACTIVO },
+        });
+    } catch (error) {
+        console.error('❌ Error listando conectados:', error.message);
+        return res.status(500).json({ success: false, message: 'No se pudo saber quién está conectado.' });
+    }
+};
+
 export const listarNotificaciones = async (req, res) => {
     try {
         const uid = req.user?.usuarioId;
@@ -830,6 +922,7 @@ export const listarNotificaciones = async (req, res) => {
             notificaciones: lista.map(n => ({
                 id: n.id, tipo: n.tipo, titulo: n.titulo, descripcion: n.descripcion,
                 entidad: n.entidad, entidadId: n.entidad_id, actor: n.actor_nombre,
+                prioridad: n.prioridad || null,
                 leida: !!n.leida_at, fecha: n.created_at,
             })),
         });
@@ -875,6 +968,16 @@ const TOPE_LISTA = 8;      // por grupo; la pantalla es un resumen, no un listad
 // de ayer para atrás.
 const ATRASADA = `t.vence_at::date < CURRENT_DATE`;
 
+// Y su contraparte: lo que vence HOY. Existía como contador desde el principio
+// —la tarjeta "Vencen hoy"— pero no como lista: las tareas de hoy caían dentro
+// de "Próximas a vencer", mezcladas con las de los otros seis días. La tarjeta
+// decía "3" y no había dónde ver cuáles eran esas tres.
+//
+// Se separa con el MISMO corte por día que ATRASADA, así que los tres grupos
+// —atrasada / hoy / próxima— son excluyentes y ninguna tarea se cuenta dos
+// veces. Pedido en un comentario del 14-ago-2026 y cerrado sin hacerse.
+const VENCE_HOY = `t.vence_at::date = CURRENT_DATE`;
+
 export const resumenInicio = async (req, res) => {
     try {
         const org = req.user?.organizacionId || null;
@@ -902,14 +1005,46 @@ export const resumenInicio = async (req, res) => {
                         AND t.archivada_at IS NULL
                         AND t.parent_id IS NULL ${alcance}`;
 
-        const [conteos, listas] = await Promise.all([
+        // MIS ÚLTIMOS TICKETS CREADOS.
+        //
+        // Lo que uno abrió, no lo que le tocó. Son dos preguntas distintas y el
+        // resumen solo respondía la segunda: quien reporta un problema y lo
+        // asigna a otro perdía de vista su propio ticket en cuanto lo creaba.
+        //
+        // Va aparte de las otras listas a propósito: aquellas salen de una sola
+        // consulta porque comparten el mismo filtro de vencimiento, y esta no
+        // tiene nada que ver con vencer — se ordena por cuándo se creó y no
+        // excluye lo ya cerrado, porque «lo que abrí ayer y ya está listo» es
+        // justamente lo que uno quiere ver.
+        const mios = uid
+            ? pool.query(
+                `SELECT t.*, u.nombre AS responsable_nombre,
+                        pr.nombre AS proyecto_nombre, pr.color AS proyecto_color,
+                        NULL AS persona_nombre,
+                        (SELECT COUNT(*)::int FROM tarea st
+                          WHERE st.parent_id = t.id AND st.archivada_at IS NULL) AS subtareas_total,
+                        (SELECT COUNT(*)::int FROM tarea st
+                          WHERE st.parent_id = t.id AND st.archivada_at IS NULL
+                            AND st.estado = 'completada') AS subtareas_hechas,
+                        0 AS comentarios, '[]'::json AS colaboradores
+                   FROM tarea t
+                   LEFT JOIN usuario u ON u.id = t.responsable_id
+                   LEFT JOIN proyecto pr ON pr.id = t.proyecto_id
+                  WHERE t.organizacion_id IS NOT DISTINCT FROM $1::uuid
+                    AND t.archivada_at IS NULL
+                    AND t.creado_por = $2
+                  ORDER BY t.created_at DESC
+                  LIMIT ${TOPE_LISTA}`, [org, uid])
+            : Promise.resolve({ rows: [] });
+
+        const [conteos, listas, ultimosMios] = await Promise.all([
             pool.query(
                 `SELECT
                     COUNT(*) FILTER (WHERE ${activa})::int AS activas,
                     COUNT(*) FILTER (WHERE ${activa} AND ${ATRASADA})::int AS vencidas,
                     COUNT(*) FILTER (WHERE ${activa} AND t.vence_at::date = CURRENT_DATE)::int AS vencen_hoy,
                     COUNT(*) FILTER (WHERE ${activa} AND t.vence_at::date >= CURRENT_DATE
-                        AND t.vence_at <= NOW() + INTERVAL '${DIAS_PROXIMAS} days')::int AS proximas,
+                        AND t.vence_at::date <= CURRENT_DATE + ${DIAS_PROXIMAS})::int AS proximas,
                     COUNT(*) FILTER (WHERE t.estado = 'completada'
                         AND t.completed_at >= NOW() - INTERVAL '${DIAS_RECIENTES} days')::int AS recientes,
                     COUNT(*) FILTER (WHERE ${activa} AND t.prioridad = 'critica')::int AS criticas
@@ -926,12 +1061,14 @@ export const resumenInicio = async (req, res) => {
                            CASE
                              WHEN t.estado = 'completada' THEN 'reciente'
                              WHEN ${ATRASADA} THEN 'vencida'
+                             WHEN ${VENCE_HOY} THEN 'hoy'
                              ELSE 'proxima'
                            END AS grupo,
                            ROW_NUMBER() OVER (
                              PARTITION BY CASE
                                WHEN t.estado = 'completada' THEN 'reciente'
                                WHEN ${ATRASADA} THEN 'vencida'
+                               WHEN ${VENCE_HOY} THEN 'hoy'
                                ELSE 'proxima' END
                              ORDER BY
                                CASE WHEN t.estado = 'completada' THEN t.completed_at END DESC,
@@ -944,12 +1081,20 @@ export const resumenInicio = async (req, res) => {
                       AND t.archivada_at IS NULL
                       AND t.parent_id IS NULL ${alcance}
                       AND (
+                        -- Por DÍA, igual que ATRASADA y VENCE_HOY. Comparando
+                        -- el instante (NOW mas 7 dias) el ultimo dia
+                        -- entraba a medias: una tarea que vence el día 7 a las
+                        -- 18:00 quedaba fuera si uno miraba la pantalla a las
+                        -- 09:00, aunque el contador de arriba —que sí corta por
+                        -- día— la estuviera contando. La tarjeta decía un
+                        -- número y la lista mostraba otro.
                         (${activa} AND t.vence_at IS NOT NULL
-                         AND t.vence_at <= NOW() + INTERVAL '${DIAS_PROXIMAS} days')
+                         AND t.vence_at::date <= CURRENT_DATE + ${DIAS_PROXIMAS})
                         OR (t.estado = 'completada'
                             AND t.completed_at >= NOW() - INTERVAL '${DIAS_RECIENTES} days')
                       )
                  ) q WHERE q.n <= ${TOPE_LISTA}`, params),
+            mios,
         ]);
 
         const porGrupo = (g) => listas.rows.filter(r => r.grupo === g).map(mapTarea);
@@ -958,6 +1103,8 @@ export const resumenInicio = async (req, res) => {
             success: true,
             resumen: { ...conteos.rows[0], diasProximas: DIAS_PROXIMAS, diasRecientes: DIAS_RECIENTES },
             vencidas: porGrupo('vencida'),
+            hoy: porGrupo('hoy'),
+            misUltimos: (ultimosMios.rows || []).map(mapTarea),
             proximas: porGrupo('proxima'),
             recientes: porGrupo('reciente'),
         });

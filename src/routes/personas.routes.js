@@ -7,6 +7,7 @@ import {
 } from '../controllers/personas.controllers.js';
 import { previsualizarImportacion, importarProspectos } from '../controllers/importarProspectos.controllers.js';
 import { requireSession } from '../middleware/auth.js';
+import { uuidValido } from '../middleware/uuid.middleware.js';
 
 const router = Router();
 
@@ -22,23 +23,23 @@ router.get('/catalogos', requireSession, catalogosCRM);
 router.post('/catalogos/servicio', requireSession, crearServicioCRM);   // crear servicio al vuelo (#4)
 router.get('/empresas-lista', requireSession, empresasLista);
 
-router.patch('/notas/:notaId', requireSession, editarNotaPersona);
-router.delete('/notas/:notaId', requireSession, eliminarNotaPersona);
+router.patch('/notas/:notaId', requireSession, uuidValido('notaId'), editarNotaPersona);
+router.delete('/notas/:notaId', requireSession, uuidValido('notaId'), eliminarNotaPersona);
 
 // Agenda de acciones del prospecto (#5/#6/#7). Las de :accionId van antes de /:id.
-router.patch('/acciones/:accionId', requireSession, completarAccion);
-router.delete('/acciones/:accionId', requireSession, eliminarAccion);
+router.patch('/acciones/:accionId', requireSession, uuidValido('accionId'), completarAccion);
+router.delete('/acciones/:accionId', requireSession, uuidValido('accionId'), eliminarAccion);
 
-router.get('/:id', requireSession, obtenerPersona);
-router.put('/:id', requireSession, actualizarPersona);
-router.post('/:id/notas', requireSession, agregarNotaPersona);
-router.get('/:id/acciones', requireSession, listarAcciones);
-router.post('/:id/acciones', requireSession, crearAccion);
-router.put('/:id/estado', requireSession, cambiarEstadoPersona);
-router.delete('/:id', requireSession, eliminarPersona);
-router.post('/:id/empresas', requireSession, asociarEmpresa);
-router.post('/:id/empresas/nueva', requireSession, crearEmpresaParaPersona);
-router.delete('/:id/empresas/:empresaId', requireSession, desasociarEmpresa);
-router.post('/:id/fusionar', requireSession, fusionarPersona);
+router.get('/:id', requireSession, uuidValido('id'), obtenerPersona);
+router.put('/:id', requireSession, uuidValido('id'), actualizarPersona);
+router.post('/:id/notas', requireSession, uuidValido('id'), agregarNotaPersona);
+router.get('/:id/acciones', requireSession, uuidValido('id'), listarAcciones);
+router.post('/:id/acciones', requireSession, uuidValido('id'), crearAccion);
+router.put('/:id/estado', requireSession, uuidValido('id'), cambiarEstadoPersona);
+router.delete('/:id', requireSession, uuidValido('id'), eliminarPersona);
+router.post('/:id/empresas', requireSession, uuidValido('id'), asociarEmpresa);
+router.post('/:id/empresas/nueva', requireSession, uuidValido('id'), crearEmpresaParaPersona);
+router.delete('/:id/empresas/:empresaId', requireSession, uuidValido('id', 'empresaId'), desasociarEmpresa);
+router.post('/:id/fusionar', requireSession, uuidValido('id'), fusionarPersona);
 
 export default router;

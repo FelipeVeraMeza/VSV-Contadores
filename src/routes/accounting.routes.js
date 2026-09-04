@@ -18,6 +18,7 @@ import {
     eliminarCuenta
 } from '../controllers/accounting.controllers.js';
 import { requireSession, requireModulo } from "../middleware/auth.js";
+import { uuidValido } from "../middleware/uuid.middleware.js";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -34,15 +35,15 @@ router.post('/importar-excel',   upload.single('archivo'), uploadAccountingExcel
 router.post('/comprobantes',        guardarComprobante);
 router.get('/comprobantes',         getComprobantes);
 router.get('/documentos-afectables', getDocumentosAfectables);
-router.delete('/comprobantes/:id',  eliminarComprobante);
+router.delete('/comprobantes/:id', uuidValido('id'),  eliminarComprobante);
 // Aprobar o rechazar. Es PATCH y no PUT: cambia el estado de la revisión, no
 // reemplaza el comprobante. Quién puede hacerlo lo decide el controlador —nadie
 // revisa lo suyo—, no la ruta.
-router.patch('/comprobantes/:id/revision', revisarComprobante);
+router.patch('/comprobantes/:id/revision', uuidValido('id'), revisarComprobante);
 
 // Plan de Cuentas CRUD
 router.post('/plan-cuentas',       crearCuenta);
-router.put('/plan-cuentas/:id',    editarCuenta);
-router.delete('/plan-cuentas/:id', eliminarCuenta);
+router.put('/plan-cuentas/:id', uuidValido('id'),    editarCuenta);
+router.delete('/plan-cuentas/:id', uuidValido('id'), eliminarCuenta);
 
 export default router;

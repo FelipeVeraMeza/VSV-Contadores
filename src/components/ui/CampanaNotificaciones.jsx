@@ -17,6 +17,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Bell, Check, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { listarNotificacionesApi, marcarNotificacionesApi } from '@/services/crmService';
+import { avisarTareaAsignada } from '@/components/tareas/avisoTareaAsignada';
 import { API_BASE_URL } from '../../../config.js';
 
 // Un "tin" corto generado acá mismo: sin archivo externo que cargar ni que
@@ -52,6 +53,10 @@ const CampanaNotificaciones = () => {
     const [pendientes, setPendientes] = useState(0);
     const [cargando, setCargando] = useState(false);
     const caja = useRef(null);
+    // Los ids ya avisados en esta sesión de pantalla, para no sonar ni saltar
+    // dos veces por el mismo aviso (el canal en vivo y la consulta de respaldo
+    // pueden traerlo los dos).
+    const vistos = useRef(new Set());
 
     const cargar = useCallback(async () => {
         const s = getSessionId();
@@ -83,11 +88,31 @@ const CampanaNotificaciones = () => {
         canal.addEventListener('aviso', (e) => {
             try {
                 const aviso = JSON.parse(e.data);
+                // Si ya lo teníamos (la consulta de respaldo pudo haberlo
+                // traído primero) no se vuelve a contar ni a avisar: si no, el
+                // mismo aviso suena y salta dos veces.
+                //
+                // La marca va en un ref y NO se deduce dentro de `setAvisos`:
+                // React puede ejecutar el actualizador más de una vez por
+                // cambio, así que decidir ahí dentro si sonar o no es decidirlo
+                // un número de veces que no controlamos.
+                if (vistos.current.has(aviso.id)) return;
+                vistos.current.add(aviso.id);
+
                 setAvisos(prev => prev.some(a => a.id === aviso.id) ? prev : [aviso, ...prev].slice(0, 30));
                 setPendientes(p => p + 1);
                 // Un sonido corto: si estás mirando otra pestaña del sistema,
                 // el número rojo solo no se nota.
                 try { new Audio(TIN).play().catch(() => {}); } catch { /* sin sonido */ }
+
+                // Y el pop-up, solo para lo que te asignaron a ti. Un aviso de
+                // comentario o de proyecto se queda en la campana: si TODO
+                // saltara en pantalla, en una semana nadie lo miraría.
+                // Es el punto 2 de §10.5 de docs/tareas-requerimientos.md.
+                if (aviso.tipo === 'tarea_asignada') {
+                    avisarTareaAsignada(aviso, (id) =>
+                        navigate(`/tareas?sub=todas&tarea=${encodeURIComponent(id)}`));
+                }
             } catch { /* si viene mal formado se ignora */ }
         });
 
@@ -95,7 +120,7 @@ const CampanaNotificaciones = () => {
         canal.onerror = () => { /* EventSource reintenta solo */ };
 
         return () => canal.close();
-    }, []);
+    }, [navigate]);
 
     // Cerrar al pulsar fuera: si no, el panel queda abierto tapando la pantalla.
     useEffect(() => {

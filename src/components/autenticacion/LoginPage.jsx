@@ -8,13 +8,14 @@ import {
   EyeOff, 
   Loader2, 
   ShieldCheck,
-  ArrowRight
+  ArrowRight,
+  Clock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/components/ui/use-toast';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 const LoginPage = ({ onLogin }) => {
   const navigate = useNavigate();
@@ -22,6 +23,12 @@ const LoginPage = ({ onLogin }) => {
     identificador: '',
     clave: ''
   });
+  // ¿Se llegó acá porque caducó la sesión? El sistema ya redirigía con
+  // `?expired=true` desde antes, pero NADIE lo leía: uno aparecía en el login
+  // sin explicación, como si hubiera cerrado sesión solo. Decirlo cuesta una
+  // línea y evita la duda de «¿me echó el sistema o me equivoqué en algo?».
+  const [params] = useSearchParams();
+  const sesionExpiro = params.get('expired') === 'true';
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -116,6 +123,16 @@ const LoginPage = ({ onLogin }) => {
                   Sistema de Gestión Central
                 </p>
               </div>
+
+              {sesionExpiro && (
+                <div className="mb-5 flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5">
+                  <Clock className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-800 leading-snug">
+                    <b>Tu sesión expiró.</b> Por seguridad se cierra sola tras un rato
+                    sin usarla. Vuelve a entrar para seguir donde ibas.
+                  </p>
+                </div>
+              )}
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">

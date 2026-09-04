@@ -16,9 +16,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
     Loader2, AlertTriangle, Clock, CheckCircle2, ListChecks, Flame,
-    Plus, FolderPlus, CalendarDays, User, ArrowRight, Circle,
+    Plus, FolderPlus, CalendarDays, User, ArrowRight, Circle, PenLine,
 } from 'lucide-react';
-import { PRIO_BARRA } from '@/components/tareas/estilos';
+import { PRIO_BARRA, ESTADO_PUNTO } from '@/components/tareas/estilos';
 import { resumenInicioApi } from '@/services/crmService';
 
 const getUser = () => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } };
@@ -86,6 +86,50 @@ const FilaTarea = ({ t, atrasada, onAbrir }) => {
             </div>
             <span className={`text-[10px] font-bold shrink-0 w-20 text-right ${atrasada ? 'text-red-600' : 'text-slate-500'}`}>
                 {cuandoTexto(hecha ? t.completedAt : t.venceAt)}
+            </span>
+        </div>
+    );
+};
+
+// FILA DE «MIS ÚLTIMOS TICKETS».
+// Se parece a la otra pero responde otra pregunta: de lo que YO abrí, ¿en qué
+// va y quién lo tiene? Por eso muestra el estado y el responsable, y la fecha
+// es la de creación —«lo abrí hace dos días»— y no la de vencimiento.
+const FilaMio = ({ t, onAbrir }) => {
+    const hecha = t.estado === 'completada';
+    return (
+        <div
+            onClick={() => onAbrir(t.id)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrir(t.id); } }}
+            title="Abrir el ticket"
+            className="flex items-center gap-2.5 px-3 py-2 border-b border-[#f5f0e8] last:border-0 cursor-pointer hover:bg-slate-50 transition-colors"
+        >
+            <span className={`w-[3px] h-4 rounded-full shrink-0 ${PRIO_BARRA[t.prioridad] || PRIO_BARRA.media}`}
+                  title={`Prioridad ${t.prioridad || 'media'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ESTADO_PUNTO[t.estado] || 'bg-slate-300'}`}
+                  title={String(t.estado || '').replace('_', ' ')} />
+            <div className="min-w-0 flex-1">
+                <p className={`text-xs font-bold truncate ${hecha ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                    {t.titulo}
+                </p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {t.proyectoNombre && (
+                        <span className="text-[9px] font-bold" style={{ color: t.proyectoColor || '#199b4d' }}>● {t.proyectoNombre}</span>
+                    )}
+                    {/* A quién se lo pasé: es la mitad de la pregunta «¿en qué va
+                        lo que abrí?». */}
+                    <span className="text-[9px] text-slate-500 flex items-center gap-0.5">
+                        <User size={9} /> {t.responsableNombre || 'sin asignar'}
+                    </span>
+                    {t.subtareasTotal > 0 && (
+                        <span className="text-[9px] text-slate-400">{t.subtareasHechas}/{t.subtareasTotal}</span>
+                    )}
+                </div>
+            </div>
+            <span className="text-[10px] font-bold shrink-0 w-20 text-right text-slate-500">
+                {cuandoTexto(t.createdAt)}
             </span>
         </div>
     );
@@ -196,14 +240,57 @@ const InicioPanel = ({ modo = 'todas' }) => {
                     tono={{ borde: 'border-[#efe8dd]', icono: 'text-emerald-500', numero: 'text-emerald-600' }} />
             </div>
 
-            {/* Las tres listas */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 flex-1 min-h-0">
+            {/* Las cuatro listas.
+                «Vencen hoy» se agregó el 04-09-2026. La tarjeta de arriba daba
+                el número desde el principio, pero las tareas de hoy se
+                dibujaban dentro de «Próximas a vencer», mezcladas con las de
+                los otros seis días: uno veía el 3 y no tenía dónde ver cuáles
+                eran esas tres. Va en segundo lugar, entre lo atrasado y lo que
+                viene, que es el orden en que se decide qué hacer ahora. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 items-start">
                 <Bloque titulo="Atrasadas" icono={AlertTriangle} tono="text-red-500" atrasadas
-                    tareas={data.vencidas} vacio="Nada atrasado." onVerTodas={() => irA({})} onAbrir={abrirTarea} />
+                    tareas={data.vencidas} vacio="Nada atrasado." onVerTodas={() => irA({})} onAbrir={abrirTarea} />
+                <Bloque titulo="Vencen hoy" icono={CalendarDays} tono="text-amber-500"
+                    tareas={data.hoy || []} vacio="Nada vence hoy." onVerTodas={() => irA({})} onAbrir={abrirTarea} />
                 <Bloque titulo="Próximas a vencer" icono={Clock} tono="text-blue-500"
-                    tareas={data.proximas} vacio={`Nada vence en los próximos ${r.diasProximas} días.`} onVerTodas={() => irA({})} onAbrir={abrirTarea} />
+                    tareas={data.proximas} vacio={`Nada vence en los próximos ${r.diasProximas} días.`} onVerTodas={() => irA({})} onAbrir={abrirTarea} />
                 <Bloque titulo="Cerradas hace poco" icono={CheckCircle2} tono="text-emerald-500"
-                    tareas={data.recientes} vacio="Todavía no cierras nada esta semana." onAbrir={abrirTarea} />
+                    tareas={data.recientes} vacio="Todavía no cierras nada esta semana." onAbrir={abrirTarea} />
+            </div>
+
+            {/* MIS ÚLTIMOS TICKETS CREADOS.
+                Los cuatro bloques de arriba responden «¿qué me toca?». Este
+                responde la otra pregunta, la de quien REPORTA: de lo que yo
+                abrí, ¿en qué va y quién lo tiene? Sin esto, quien crea un
+                ticket y se lo asigna a otro lo pierde de vista en el momento
+                mismo de crearlo.
+                Va abajo y a lo ancho: es seguimiento, no la lista del día. */}
+            <div className="bg-white border border-[#efe8dd] rounded-2xl overflow-hidden flex-shrink-0">
+                <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-[#efe8dd]">
+                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
+                        <PenLine size={13} className="text-violet-500" /> Mis últimos tickets creados
+                        {(data.misUltimos || []).length > 0 && (
+                            <span className="text-slate-400">({data.misUltimos.length})</span>
+                        )}
+                    </span>
+                    {(data.misUltimos || []).length > 0 && (
+                        <button onClick={() => irA({})}
+                            className="text-[9px] font-black text-emerald-600 hover:text-emerald-700 uppercase tracking-widest flex items-center gap-0.5">
+                            Ver todas <ArrowRight size={10} />
+                        </button>
+                    )}
+                </div>
+                {/* En dos columnas: son ocho filas cortas y a lo ancho de la
+                    pantalla una sola columna deja medio bloque en blanco. */}
+                <div className="grid grid-cols-1 lg:grid-cols-2">
+                    {(data.misUltimos || []).length === 0
+                        ? <p className="text-[11px] text-slate-400 italic px-3.5 py-5 text-center lg:col-span-2">
+                              Todavía no has creado ningún ticket.
+                          </p>
+                        : data.misUltimos.map(t => (
+                            <FilaMio key={t.id} t={t} onAbrir={abrirTarea} />
+                        ))}
+                </div>
             </div>
         </div>
     );

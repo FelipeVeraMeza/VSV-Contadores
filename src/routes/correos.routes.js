@@ -15,6 +15,7 @@ import {
     listarEnviados, detalleEnviado,
 } from '../controllers/bandeja.controllers.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { uuidValido } from '../middleware/uuid.middleware.js';
 import { envioMasivoLimiter } from '../config/security.js';
 
 const router = Router();
@@ -40,9 +41,9 @@ router.post('/campana/detener', requireAdmin, detenerCampanaController);
 
 // Registro: qué se envió, a quién y con qué resultado.
 router.get('/campanas', requireAdmin, historialCampanas);
-router.get('/campanas/:id', requireAdmin, detalleCampana);
+router.get('/campanas/:id', requireAdmin, uuidValido('id'), detalleCampana);
 // «¿le llegó a este cliente?» — la pregunta que motivó todo el registro.
-router.get('/empresa/:empresaId/envios', requireAdmin, enviosDeEmpresa);
+router.get('/empresa/:empresaId/envios', requireAdmin, uuidValido('empresaId'), enviosDeEmpresa);
 
 // Quiénes tienen facturas sin pagar. Para marcarlas de una en vez de buscarlas
 // a mano entre toda la cartera, que es donde se cuela el «le cobré a uno que ya
@@ -61,8 +62,8 @@ router.put('/mi-perfil', requireAdmin, guardarPerfilCorreo);
 // Plantillas. Cada uno ve LAS SUYAS más las que el equipo compartió.
 router.get('/plantillas', requireAdmin, listarPlantillasCorreo);
 router.post('/plantillas', requireAdmin, guardarPlantillaCorreo);
-router.put('/plantillas/:id', requireAdmin, guardarPlantillaCorreo);
-router.delete('/plantillas/:id', requireAdmin, eliminarPlantillaCorreo);
+router.put('/plantillas/:id', requireAdmin, uuidValido('id'), guardarPlantillaCorreo);
+router.delete('/plantillas/:id', requireAdmin, uuidValido('id'), eliminarPlantillaCorreo);
 
 // ---------------------------------------------------------------------------
 // BANDEJA DE ENTRADA · lo que contestan los clientes, leído por IMAP
@@ -76,15 +77,15 @@ router.delete('/plantillas/:id', requireAdmin, eliminarPlantillaCorreo);
 router.get('/bandeja', requireAdmin, listarBandeja);
 router.get('/bandeja/progreso', requireAdmin, progresoBandeja);
 router.post('/bandeja/sincronizar', requireAdmin, sincronizarBandejaController);
-router.get('/bandeja/:id', requireAdmin, detalleCorreoRecibido);
-router.patch('/bandeja/:id', requireAdmin, marcarCorreoRecibido);
+router.get('/bandeja/:id', requireAdmin, uuidValido('id'), detalleCorreoRecibido);
+router.patch('/bandeja/:id', requireAdmin, uuidValido('id'), marcarCorreoRecibido);
 // Responder y reenviar. Sale por la misma vía y con el remitente de quien
 // contesta, para que la respuesta no quede fuera del sistema.
-router.post('/bandeja/:id/responder', requireAdmin, responderCorreoRecibido);
+router.post('/bandeja/:id/responder', requireAdmin, uuidValido('id'), responderCorreoRecibido);
 
 // Enviados, en lista plana: una fila por correo en vez de agrupados por
 // campaña. La vista por campaña sigue en `/campanas`.
 router.get('/enviados', requireAdmin, listarEnviados);
-router.get('/enviados/:id', requireAdmin, detalleEnviado);
+router.get('/enviados/:id', requireAdmin, uuidValido('id'), detalleEnviado);
 
 export default router;

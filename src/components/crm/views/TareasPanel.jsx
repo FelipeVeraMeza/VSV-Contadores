@@ -10,7 +10,9 @@ import { PRIO, PRIO_BARRA, ESTADO_PUNTO, iniciales, soyColaborador } from '@/com
 import TableroTareas from '@/components/tareas/TableroTareas';
 import ArbolTareas from '@/components/tareas/ArbolTareas';
 import { usePlantillas, SelectorPlantillas, PlantillasModal } from '@/components/tareas/PlantillasTarea';
-import { avisarFinalizada } from '@/components/tareas/deshacer';
+import { avisarFinalizada, avisarSubtareaReabierta } from '@/components/tareas/deshacer';
+import SelectorPersonas from '@/components/tareas/SelectorPersonas';
+import CampoDescripcion from '@/components/tareas/CampoDescripcion';
 import { toast } from '@/components/ui/use-toast';
 import {
     listarTareasApi, crearTareaApi, actualizarTareaApi, eliminarTareaApi,
@@ -104,6 +106,10 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
         visibilidad: 'proyecto',
     });
     const [saving, setSaving] = useState(false);
+    // Los pasos que se escriben al crear. Viven como texto suelto hasta que la
+    // tarea madre existe: una subtarea necesita un `parentId` y todavía no hay.
+    const [subtareas, setSubtareas] = useState([]);
+    const agregarSubtarea = () => setSubtareas(prev => [...prev, '']);
 
     // ---- CLIENTE DE LA TAREA ----
     // La base y la API ya lo aceptaban (tarea.persona_id); lo que faltaba era
@@ -145,7 +151,6 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
     const [plantilla, setPlantilla] = useState(null);
     const [verPlantillas, setVerPlantillas] = useState(false);
     const set = (k) => (e) => setForm(p => ({ ...p, [k]: e.target.value }));
-    const toggleColab = (id) => setForm(p => ({ ...p, colaboradores: p.colaboradores.includes(id) ? p.colaboradores.filter(x => x !== id) : [...p.colaboradores, id] }));
 
     // Elegir una plantilla llena el formulario, no lo reemplaza: lo que la
     // persona ya escribió se respeta, y todo queda editable antes de crear.
@@ -191,6 +196,26 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
             // pueden mandar en la misma llamada. Se suben acá, enseguida, para
             // que quien los eligió no note los dos pasos. Si alguno falla, la
             // tarea igual quedó creada: se dice cuál falló y no se pierde nada.
+            // LAS SUBTAREAS ESCRITAS EN EL FORMULARIO.
+            // Van después y en orden, porque cada una necesita el id de la madre.
+            // Si alguna falla, la tarea madre igual quedó creada: se dice cuántas
+            // se pudieron y no se pierde el trabajo.
+            let subsCreadas = 0, subsFallidas = 0;
+            const pasos = subtareas.map(t => t.trim()).filter(Boolean);
+            if (nuevaId && pasos.length) {
+                for (const titulo of pasos) {
+                    try {
+                        const rs = await crearTareaApi(getSessionId(), {
+                            titulo, parentId: nuevaId,
+                            proyectoId: form.proyectoId || null,
+                            responsableId: form.responsableId || null,
+                        });
+                        const ds = await rs.json();
+                        if (ds.success) subsCreadas++; else subsFallidas++;
+                    } catch { subsFallidas++; }
+                }
+            }
+
             let subidos = 0, fallados = [];
             if (nuevaId && archivos.length) {
                 for (const f of archivos) {
@@ -212,6 +237,8 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
                 title: 'Tarea creada',
                 description: [
                     d.subtareas ? `Con ${d.subtareas} subtareas de «${plantilla.nombre}».` : null,
+                    subsCreadas ? `Con ${subsCreadas} subtarea${subsCreadas > 1 ? 's' : ''}.` : null,
+                    subsFallidas ? `${subsFallidas} subtarea(s) no se pudieron crear.` : null,
                     subidos ? `${subidos} archivo${subidos > 1 ? 's' : ''} adjunto${subidos > 1 ? 's' : ''}.` : null,
                     fallados.length ? `No se pudo subir: ${fallados.join(', ')}.` : null,
                 ].filter(Boolean).join(' ') || undefined,
@@ -247,7 +274,21 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
                     <SelectorPlantillas plantillas={plantillas} elegida={plantilla}
                         onElegir={elegirPlantilla} onAdministrar={() => setVerPlantillas(true)} />
                     <input className={inp} placeholder="Nombre de la tarea *" value={form.titulo} onChange={set('titulo')} autoFocus />
-                    <textarea className={`${inp} resize-none`} rows={2} placeholder="Descripción" value={form.descripcion} onChange={set('descripcion')} />
+                    {/* Crece con lo escrito, igual que en el detalle: con alto
+                        fijo, una descripción larga se escribía por una rendija. */}
+                    <textarea
+                        className={`${inp} resize-none block`}
+                        placeholder="Descripción"
+                        value={form.descripcion}
+                        onChange={set('descripcion')}
+                        onInput={(e) => {
+                            e.target.style.height = 'auto';
+                            const alto = Math.min(Math.max(e.target.scrollHeight, 44), 240);
+                            e.target.style.height = `${alto}px`;
+                            e.target.style.overflowY = e.target.scrollHeight > 240 ? 'auto' : 'hidden';
+                        }}
+                        style={{ minHeight: 44 }}
+                    />
                     <div className="grid grid-cols-2 gap-2">
                         <label className="block"><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Responsable</span>
                             <select className={`${inp} cursor-pointer`} value={form.responsableId} onChange={set('responsableId')}>
@@ -375,16 +416,54 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
                             </div>
                         </div>
                     )}
+                    {/* SUBTAREAS AL CREAR.
+                        Antes no se podían: el botón «+ Tarea» creaba la tarea y
+                        había que abrirla para desglosarla. Pero uno sabe los
+                        pasos JUSTO cuando está escribiendo la tarea, no después.
+                        Se escriben acá y se crean enseguida, colgando de la
+                        recién nacida (ver `guardar`). */}
+                    <div>
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Subtareas</span>
+                        <div className="mt-1 space-y-1">
+                            {subtareas.map((t, i) => (
+                                <div key={i} className="flex items-center gap-1.5">
+                                    <span className="w-1 h-4 rounded-full bg-slate-200 shrink-0" />
+                                    <input
+                                        value={t}
+                                        onChange={(e) => setSubtareas(prev => prev.map((x, j) => j === i ? e.target.value : x))}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') { e.preventDefault(); agregarSubtarea(); }
+                                        }}
+                                        placeholder={`Paso ${i + 1}`}
+                                        className={`${inp} flex-1`} />
+                                    <button type="button" onClick={() => setSubtareas(prev => prev.filter((_, j) => j !== i))}
+                                        title="Quitar este paso"
+                                        className="text-slate-300 hover:text-red-500 shrink-0 p-1">
+                                        <Trash2 size={12} />
+                                    </button>
+                                </div>
+                            ))}
+                            <button type="button" onClick={agregarSubtarea}
+                                className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-emerald-600 hover:text-emerald-700 px-1 py-1">
+                                <Plus size={11} /> Añadir subtarea
+                            </button>
+                        </div>
+                    </div>
+
                     {usuarios.length > 0 && (
                         <div>
                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Colaboradores</span>
-                            <div className="flex flex-wrap gap-1.5 mt-1">
-                                {usuarios.map(u => (
-                                    <button type="button" key={u.id} onClick={() => toggleColab(u.id)}
-                                        className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${form.colaboradores.includes(u.id) ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-50 border-[#efe8dd] text-slate-500'}`}>
-                                        {u.nombre}
-                                    </button>
-                                ))}
+                            <div className="mt-1">
+                                {/* Desplegable, no una parrilla de botones: con
+                                    veinte personas la parrilla obliga a leer una
+                                    por una para saber quién está dentro. */}
+                                <SelectorPersonas
+                                    usuarios={usuarios}
+                                    valor={form.colaboradores}
+                                    excluir={form.responsableId ? [form.responsableId] : []}
+                                    placeholder="Sin colaboradores"
+                                    onChange={(ids) => setForm(p => ({ ...p, colaboradores: ids }))}
+                                />
                             </div>
                         </div>
                     )}
@@ -523,7 +602,7 @@ const ImagenAdjunta = ({ adjunto, onVer }) => {
 // ---------------------------------------------------------------
 // Una subtarea ES una tarea (misma tabla, con parent_id), así que este mismo
 // panel sirve para las dos. `onAbrir` permite entrar a una subtarea y volver.
-const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
+const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir, onMostrarSubtareas, filtroEstado }) => {
     const [data, setData] = useState(null);
     const [subs, setSubs] = useState([]);
     const [coms, setComs] = useState([]);
@@ -565,6 +644,40 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
         catch { toast({ variant: 'destructive', title: 'No se pudo guardar' }); cargar(); }
     };
 
+    // Las finalizadas se ocultan cuando el filtro de la lista dice «Activas»:
+    // es el mismo criterio de afuera aplicado adentro. En los demás filtros se
+    // muestran, que es lo que uno espera al pedir «Todas» o «Finalizadas».
+    const [verSubsHechas, setVerSubsHechas] = useState(filtroEstado !== 'activas');
+    useEffect(() => { setVerSubsHechas(filtroEstado !== 'activas'); }, [filtroEstado, tareaId]);
+
+    const esCerrada = (x) => x.estado === 'completada' || x.estado === 'cancelada';
+    const subsHechas = subs.filter(esCerrada).length;
+    const subsVisibles = verSubsHechas ? subs : subs.filter(x => !esCerrada(x));
+
+    // COLABORADORES · se guardan enteros, no de a uno.
+    //
+    // El servidor reemplaza la lista completa (`setColaboradores`), así que se
+    // le manda el conjunto final. Se pinta primero y se manda después para que
+    // la ficha aparezca al instante; si falla, se recarga y vuelve a lo que
+    // dice la base en vez de quedar mostrando algo que no se guardó.
+    const guardarColaboradores = async (ids) => {
+        const antes = data.colaboradores || [];
+        setData(p => ({
+            ...p,
+            colaboradores: ids
+                .map(id => usuarios.find(u => u.id === id))
+                .filter(Boolean)
+                .map(u => ({ id: u.id, nombre: u.nombre })),
+        }));
+        try {
+            await actualizarTareaApi(getSessionId(), tareaId, { colaboradores: ids });
+            onChanged();
+        } catch {
+            setData(p => ({ ...p, colaboradores: antes }));
+            toast({ variant: 'destructive', title: 'No se pudo guardar los colaboradores' });
+        }
+    };
+
     // CAMBIAR EL RESPONSABLE DE UNA TAREA CON SUBTAREAS.
     //
     // Pasarle la tarea a otro y dejarle las subtareas al anterior parte el
@@ -597,6 +710,12 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
             if (estado === 'completada' && anterior !== 'completada') {
                 avisarFinalizada(data.titulo, () => cambiarEstado(anterior));
             }
+            // El caso inverso, y solo si ESTA es una subtarea: al reabrirla sale
+            // de «Finalizadas» y la lista normal no la muestra suelta. Se dice
+            // dónde quedó en vez de dejar que se busque.
+            else if (anterior === 'completada' && estado !== 'completada' && data.parentId) {
+                avisarSubtareaReabierta(data.titulo, onMostrarSubtareas);
+            }
             onChanged();
         }
         catch { toast({ variant: 'destructive', title: 'Error' }); cargar(); }
@@ -620,7 +739,17 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
     const toggleSub = async (s) => {
         const nuevo = s.estado === 'completada' ? 'pendiente' : 'completada';
         setSubs(prev => prev.map(x => x.id === s.id ? { ...x, estado: nuevo } : x));
-        try { await actualizarTareaApi(getSessionId(), s.id, { estado: nuevo }); cargar(); onChanged(); }
+        try {
+            await actualizarTareaApi(getSessionId(), s.id, { estado: nuevo });
+            // Al REABRIRLA se avisa dónde quedó: sale de «Finalizadas» —la única
+            // lista que muestra subtareas sueltas— y la lista normal la esconde
+            // por `soloRaiz`. Sin este aviso desaparece de la vista sin
+            // explicación. Ver `avisarSubtareaReabierta`.
+            if (nuevo !== 'completada' && s.estado === 'completada') {
+                avisarSubtareaReabierta(s.titulo, onMostrarSubtareas);
+            }
+            cargar(); onChanged();
+        }
         catch { cargar(); }
     };
     const delSub = async (s) => {
@@ -972,9 +1101,19 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                             className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-2 py-1 text-xs text-slate-700 outline-none focus:border-emerald-500"
                         />
                     </div>
-                    <div>
+                    {/* COLABORADORES · editables.
+                        Antes esto era texto plano: se fijaban al crear la tarea y
+                        no había ninguna pantalla donde cambiarlos. Si te olvidabas
+                        de alguien, la única salida era rehacer la tarea. */}
+                    <div className="col-span-2">
                         <span className="text-[9px] text-slate-400 uppercase block mb-0.5">Colaboradores</span>
-                        <span className="text-slate-700 block pt-1">{(data.colaboradores || []).map(c => c.nombre).join(', ') || '—'}</span>
+                        <SelectorPersonas
+                            usuarios={usuarios}
+                            valor={(data.colaboradores || []).map(c => c.id)}
+                            excluir={data.responsableId ? [data.responsableId] : []}
+                            placeholder="Sin colaboradores"
+                            onChange={(ids) => guardarColaboradores(ids)}
+                        />
                     </div>
                 </div>
                 {/* DESCRIPCIÓN · editable, y también en las subtareas.
@@ -982,25 +1121,17 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                     nacida solo con título no había forma de describirla nunca. */}
                 <div>
                     <span className="text-[9px] text-slate-400 uppercase block mb-1">Descripción</span>
-                    <textarea
-                        key={data.id}
-                        data-imagen-inline="descripcion"
-                        defaultValue={data.descripcion || ''}
-                        onBlur={(e) => {
-                            const v = e.target.value.trim();
-                            if (v !== (data.descripcion || '')) guardarCampo('descripcion', v);
-                        }}
-                        rows={data.descripcion ? 3 : 2}
-                        placeholder="Escribe de qué se trata...  (puedes pegar una imagen con Ctrl+V)"
-                        className="w-full bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-emerald-500 resize-y"
+                    {/* Crece con lo escrito hasta un tope, y las imágenes se
+                        dibujan DENTRO del texto y no en un bloque aparte más
+                        abajo. Ver CampoDescripcion. */}
+                    <CampoDescripcion
+                        idCampo={data.id}
+                        valor={data.descripcion || ''}
+                        hayImagenes={tieneImagenes(data.descripcion)}
+                        onGuardar={(v) => guardarCampo('descripcion', v)}
+                        vista={<TextoConImagenes texto={data.descripcion} onVer={setVerArchivo}
+                                   className="text-xs text-slate-700" />}
                     />
-                    {/* Vista de la descripción con sus imágenes. El textarea guarda
-                        el texto con marcas `[img:…]`, que sin dibujar no se ven
-                        como imágenes; acá abajo se muestran de verdad. */}
-                    {tieneImagenes(data.descripcion) && (
-                        <TextoConImagenes texto={data.descripcion} onVer={setVerArchivo}
-                            className="mt-1.5 text-xs text-slate-700" />
-                    )}
                 </div>
 
                 {/* QUIÉN LA VE · solo aplica si está dentro de un proyecto. */}
@@ -1028,13 +1159,32 @@ const DetalleTarea = ({ tareaId, onClose, onChanged, usuarios, onAbrir }) => {
                     vuelva un árbol ilegible; el tercero lo rechaza el servidor. */}
                 {data.puedeTenerSubtareas !== false && (
                 <div>
-                    <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5 mb-2"><ListChecks size={13} /> Subtareas ({subs.filter(s => s.estado === 'completada').length}/{subs.length})</span>
+                    {/* EL FILTRO «ACTIVAS» TAMBIÉN MANDA ACÁ DENTRO.
+                        La lista de afuera respeta el filtro, pero esta lista de
+                        subtareas mostraba TODAS siempre: con el filtro puesto en
+                        «Activas» seguían viéndose las finalizadas, que es lo que
+                        se reportó. Ahora se ocultan y se dice cuántas hay, con un
+                        interruptor para verlas cuando se quiera. */}
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
+                            <ListChecks size={13} /> Subtareas ({subsHechas}/{subs.length})
+                        </span>
+                        {subsHechas > 0 && (
+                            <button type="button" onClick={() => setVerSubsHechas(v => !v)}
+                                title={verSubsHechas ? 'Ocultar las finalizadas' : 'Mostrar las finalizadas'}
+                                className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-700">
+                                {verSubsHechas
+                                    ? 'Ocultar finalizadas'
+                                    : `Ver ${subsHechas} finalizada${subsHechas > 1 ? 's' : ''}`}
+                            </button>
+                        )}
+                    </div>
                     {/* Cada subtarea muestra lo mismo que se ve de una tarea en la
                         lista: quién responde, para cuándo, con qué prioridad y si
                         trae cosas dentro. Antes solo se veía el título, así que
                         había que abrirlas una por una para saber de qué iban. */}
                     <div className="space-y-0.5">
-                        {subs.map(s => {
+                        {subsVisibles.map(s => {
                             const vencida = s.venceAt && new Date(s.venceAt) < new Date() && s.estado !== 'completada';
                             const hecha = s.estado === 'completada';
                             return (
@@ -2114,7 +2264,7 @@ const TareasPanel = ({ modo = 'todas' }) => {
                 </div>
 
                 {/* Detalle */}
-                {selId && <DetalleTarea tareaId={selId} onClose={cerrarDetalle} onChanged={refrescar} usuarios={usuarios} onAbrir={setSelId} />}
+                {selId && <DetalleTarea tareaId={selId} onClose={cerrarDetalle} onChanged={refrescar} usuarios={usuarios} onAbrir={setSelId} onMostrarSubtareas={() => setConSubtareas(true)} filtroEstado={filtroEstado} />}
             </div>
 
             {crear && <CrearTareaModal onClose={cerrarCrear}

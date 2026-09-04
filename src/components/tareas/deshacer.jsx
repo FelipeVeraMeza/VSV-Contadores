@@ -43,3 +43,33 @@ export const avisarFinalizada = (titulo, deshacer) => toast({
           </ToastAction>
         : undefined,
 });
+
+/**
+ * Avisa que una SUBTAREA volvió a estar activa, y dice dónde quedó.
+ *
+ * POR QUÉ EXISTE
+ * Reabrir una subtarea finalizada la hacía desaparecer de la pantalla. El
+ * camino es este: las subtareas no salen sueltas en la lista —las esconde
+ * `soloRaiz`, porque se ven dentro de su madre—, así que la ÚNICA lista que las
+ * muestra por su cuenta es «Finalizadas». Al marcarla como activa deja de
+ * calzar con ese filtro, sale de ahí, y en la lista normal tampoco aparece.
+ * Queda viva pero sin ningún lugar donde encontrarla, salvo que uno sepa que
+ * existe el interruptor «Con subtareas» o entre por el árbol.
+ *
+ * El interruptor ya estaba; lo que faltaba era que alguien lo dijera. Un aviso
+ * que explica dónde quedó la tarea cuesta menos que descubrirlo buscándola, y
+ * el botón lleva directo a la lista que sí la muestra.
+ *
+ * @param {string} titulo   el título de la subtarea
+ * @param {() => void} verla  qué hacer para mostrarla (encender «Con subtareas»)
+ */
+export const avisarSubtareaReabierta = (titulo, verla) => toast({
+    title: 'Subtarea reabierta',
+    description: `«${titulo}» volvió a estar activa. Se ve dentro de su tarea madre, o en la lista con «Con subtareas» encendido.`,
+    action: verla
+        ? <ToastAction altText="Mostrarla en la lista" onClick={verla}
+              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50">
+              Mostrarla
+          </ToastAction>
+        : undefined,
+});

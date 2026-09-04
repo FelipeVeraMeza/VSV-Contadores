@@ -141,7 +141,11 @@ export const exigirPermisoTarea = (accion) => async (req, res, next) => {
         await registrar(req, {
             modulo: 'tareas', accion: 'permiso_habria_bloqueado',
             entidad: 'tarea', entidadId: req.params.id,
-            descripcion: `Habría bloqueado "${accion}" sobre «${p.titulo}»: ${p.motivo}`,
+            // El motivo puede venir vacío. Sin este guardia la bitácora guarda
+            // «...: null», que parece información y no lo es: quien la lea
+            // después no sabe si el motivo faltaba o si «null» era el motivo.
+            descripcion: `Habría bloqueado "${accion}" sobre «${p.titulo}»`
+                       + (p.motivo ? `: ${p.motivo}` : ''),
             resultado: 'parcial',
             detalle: { accion, motivo: p.motivo, modo: 'permisivo' },
         });

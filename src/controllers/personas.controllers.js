@@ -368,6 +368,7 @@ export const listarPersonas = async (req, res) => {
         );
 
         const term = (q || '').trim().toLowerCase();
+        const digitos = term.replace(/\D/g, '');
         const personas = result.rows.map(r => {
             const nombreCompleto = [r.nombre, r.segundo_nombre, r.apellidos].filter(Boolean).join(' ');
             return {
@@ -403,7 +404,13 @@ export const listarPersonas = async (req, res) => {
                 (p.necesidad || '').toLowerCase().includes(term) ||
                 (p.rubro || '').toLowerCase().includes(term) ||
                 p.correos.some(c => c.toLowerCase().includes(term)) ||
-                p.telefonos.some(t => t.replace(/\D/g, '').includes(term.replace(/\D/g, '')))
+                // Los dígitos del término, para buscar «56 9 1234» escrito como
+                // «5691234». Si el término NO trae dígitos, esta comparación se
+                // SALTA: sin el guardia, term.replace(/\D/g,'') queda vacío y
+                // «cualquier teléfono».includes('') es SIEMPRE true — la
+                // búsqueda devolvía las 133 personas para todo texto sin
+                // números. Encontrado en QA el 03-09-2026.
+                (digitos !== '' && p.telefonos.some(t => t.replace(/\D/g, '').includes(digitos)))
             );
         });
 

@@ -1,0 +1,72 @@
+# ============================================================================
+# QA AUTOMÁTICO
+# ----------------------------------------------------------------------------
+# Corre en cada push y en cada pull request. Lo que atrapa acá no llega a
+# producción.
+#
+# NO corre la suite de rendimiento en CI: los tiempos de un runner compartido
+# no se parecen a los de Railway, y un caso que falla por la máquina y no por
+# el código enseña a la gente a ignorar el rojo.
+# ============================================================================
+name: QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Sintaxis primero: es lo más rápido y ya atrapó bugs reales que ni el
+      # build ni las pruebas veían.
+      - name: Sintaxis del backend
+        run: |
+          # IFS= y -r: hay carpetas con espacios en el nombre
+          # («revisar para envios/»). Sin esto, el shell parte cada ruta en
+          # tres y todos los archivos de esa carpeta fallan sin motivo.
+          fallos=0
+          find src qa -name '*.js' -o -name '*.mjs' | while IFS= read -r f; do
+            node --check "$f" || { echo "::error file=$f::error de sintaxis"; fallos=1; }
+          done
+          exit $fallos
+
+      - name: Compilar el frontend
+        run: npm run build
+
+      # Las suites necesitan base de datos. Sin secretos configurados se saltan
+      # en vez de fallar: un fork o un PR externo no tiene acceso a Supabase.
+      - name: Suite de QA
+        if: ${{ secrets.DBS_HOST != '' }}
+        env:
+          DBS_HOST: ${{ secrets.DBS_HOST }}
+          DBS_PORT: ${{ secrets.DBS_PORT }}
+          DBS_USER: ${{ secrets.DBS_USER }}
+          DBS_PASSWORD: ${{ secrets.DBS_PASSWORD }}
+          DBS_DATABASE: ${{ secrets.DBS_DATABASE }}
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          ENCRYPTION_IV: ${{ secrets.ENCRYPTION_IV }}
+        run: |
+          node src/server.js &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:4000/api/crm/metricas -o /dev/null -w '' && break
+            curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4000/api/crm/metricas | grep -q 401 && break
+            sleep 2
+          done
+          node qa/correr.mjs --rapido
+
+      - name: Aviso si no hay base configurada
+        if: ${{ secrets.DBS_HOST == '' }}
+        run: echo "::warning::Sin secretos de base de datos: la suite de QA no se ejecutó."

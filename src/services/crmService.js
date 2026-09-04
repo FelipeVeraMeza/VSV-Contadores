@@ -139,6 +139,10 @@ export const listarTareasApi = (sessionId, filtros = {}) => {
   return fetchWithAuth(`/crm/tareas${qs ? `?${qs}` : ''}`, sessionId);
 };
 
+// Quién está conectado ahora mismo, solo de mi organización.
+export const conectadosApi = (sessionId) =>
+  fetchWithAuth('/crm/conectados', sessionId);
+
 // Resumen de la pantalla Inicio: conteos + las tres listas, en una llamada.
 export const resumenInicioApi = (sessionId, ambito = 'todas') =>
   fetchWithAuth(`/crm/tareas/inicio?ambito=${encodeURIComponent(ambito)}`, sessionId);

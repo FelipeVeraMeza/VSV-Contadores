@@ -12,7 +12,10 @@
     "excel:extract": "node ./AgregarDatosExcel/agregarDatos.mjs",
     "excel:insert": "node ./AgregarDatosExcel/insertarEmpresas.mjs",
     "start:all": "concurrently \"npm run server:watch\" \"npm run dev\"",
-    "server:watch": "node --watch ./src/server.js"
+    "server:watch": "node --watch ./src/server.js",
+    "qa": "node qa/correr.mjs",
+    "qa:rapido": "node qa/correr.mjs --rapido",
+    "qa:seguridad": "node qa/correr.mjs seguridad"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",

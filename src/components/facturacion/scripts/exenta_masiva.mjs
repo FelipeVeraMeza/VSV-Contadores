@@ -10,6 +10,7 @@ import { credencialesDelSistema } from '../../../utils/credencialesFacturacion.j
 import { seleccionarEmpresaEmisora } from './empresaEmisora.mjs';
 // Bajar el PDF del documento emitido, igual que la factura.
 import { descargarDocumentoSii } from './descargarDocumentoSii.mjs';
+import { asegurarCobroDeFactura } from '../../../utils/cobroDeFactura.js';
 
 const { Client } = pkg;
 dotenv.config();
@@ -387,6 +388,13 @@ export async function emitirLoteExentaPuppeteer(facturasFront, credSii = credenc
                                 if (checkRes.rows.length === 0) {
                                     // Exenta: IVA 0 y total = neto (se reutiliza $4).
                                     await dbClient.query(`INSERT INTO documentos_emitidos (empresa_id, rut_cliente, tipo_dte, folio, monto_neto, monto_iva, monto_total, fecha_emision) VALUES ($1, $2, 34, $3, $4, 0, $4, $5)`, [empresaIdFinal, rutOriginal, folio, parseInt(f.producto.precio), new Date().toISOString()]);
+
+                                    // La exenta no lleva IVA: total = neto.
+                                    await asegurarCobroDeFactura(dbClient, {
+                                        empresaId: empresaIdFinal, folio, tipoDte: 34,
+                                        montoTotal: parseInt(f.producto.precio),
+                                        montoNeto: parseInt(f.producto.precio),
+                                    });
                                     console.log(`✅ Guardado en Bóveda Historial (Exenta 34).`);
                                 }
                             }

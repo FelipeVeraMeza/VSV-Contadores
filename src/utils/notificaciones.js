@@ -91,20 +91,28 @@ const avisarPorCorreo = async (usuarioId, { tipo, titulo, descripcion }) => {
  * Crea un aviso para alguien.
  * Nadie se notifica a sí mismo: si me asigno una tarea, ya lo sé.
  */
+// Las cuatro del catálogo de tareas. Cualquier otra cosa viaja como NULL: la
+// columna tiene un CHECK y un valor inventado tumbaría el aviso entero, que es
+// justo lo que `notificar` no puede hacer (ver la regla de oro de arriba).
+const PRIORIDADES = new Set(['baja', 'media', 'alta', 'critica']);
+
 export const notificar = async ({ para, actor, tipo, titulo, descripcion = null,
-                                  entidad = null, entidadId = null, organizacionId = null }) => {
+                                  entidad = null, entidadId = null, organizacionId = null,
+                                  prioridad = null }) => {
     if (!para || !tipo || !titulo) return null;
     if (actor?.usuarioId && actor.usuarioId === para) return null;
+
+    const prio = PRIORIDADES.has(prioridad) ? prioridad : null;
 
     return seguro(async () => {
         const { rows } = await pool.query(
             `INSERT INTO notificacion
-                (organizacion_id, usuario_id, actor_id, actor_nombre, tipo, titulo, descripcion, entidad, entidad_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-             RETURNING id, tipo, titulo, descripcion, entidad, entidad_id, actor_nombre, created_at`,
+                (organizacion_id, usuario_id, actor_id, actor_nombre, tipo, titulo, descripcion, entidad, entidad_id, prioridad)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+             RETURNING id, tipo, titulo, descripcion, entidad, entidad_id, actor_nombre, prioridad, created_at`,
             [organizacionId || actor?.organizacionId || null, para,
              actor?.usuarioId || null, actor?.nombre || null,
-             tipo, titulo, descripcion, entidad, entidadId]
+             tipo, titulo, descripcion, entidad, entidadId, prio]
         );
 
         // Y se lo empujamos AHORA si está conectado, para que no tenga que
@@ -114,7 +122,7 @@ export const notificar = async ({ para, actor, tipo, titulo, descripcion = null,
         empujarAviso(para, {
             id: n.id, tipo: n.tipo, titulo: n.titulo, descripcion: n.descripcion,
             entidad: n.entidad, entidadId: n.entidad_id, actorNombre: n.actor_nombre,
-            fecha: n.created_at, leida: false,
+            prioridad: n.prioridad, fecha: n.created_at, leida: false,
         });
         // Y por correo, sin esperar (no debe demorar la respuesta de la acción).
         avisarPorCorreo(para, { tipo, titulo, descripcion });
@@ -132,7 +140,7 @@ export const notificarA = async (personas, datos) => {
 export const misNotificaciones = async (usuarioId, { soloPendientes = false, limite = 30 } = {}) =>
     seguro(async () => {
         const { rows } = await pool.query(
-            `SELECT id, tipo, titulo, descripcion, entidad, entidad_id, actor_nombre, leida_at, created_at
+            `SELECT id, tipo, titulo, descripcion, entidad, entidad_id, actor_nombre, prioridad, leida_at, created_at
                FROM notificacion
               WHERE usuario_id = $1 ${soloPendientes ? 'AND leida_at IS NULL' : ''}
               ORDER BY created_at DESC

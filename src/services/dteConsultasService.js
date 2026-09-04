@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../../config.js";
+import { sesionCaducada } from './sesionCaducada.js';
 
 // Estos endpoints devuelven los documentos tal cual vienen de la BD (snake_case),
 // así que se llaman con fetch directo en vez de fetchWithAuth (que convierte las
@@ -9,7 +10,13 @@ const pedir = async (ruta, sessionId) => {
     const res = await fetch(`${API_BASE_URL}${ruta}`, {
         headers: { 'Content-Type': 'application/json', 'x-session-id': sessionId || '' },
     });
-    if (res.status === 401) return { ok: false, error: 'Sesión expirada', documentos: [] };
+    // Este servicio llama a `fetch` directo, así que no hereda el arreglo de
+    // `fetchWithAuth`: hay que cerrar la sesión acá también. Si no, sería la
+    // única pantalla que se queda muda ante un 401.
+    if (res.status === 401) {
+        sesionCaducada();
+        return { ok: false, error: 'Sesión expirada', documentos: [] };
+    }
     if (res.status === 403) {
         const data = await res.json().catch(() => ({}));
         return { ok: false, error: data.error || 'Sin acceso a esos documentos', documentos: [] };

@@ -32,6 +32,12 @@ import {
 } from '../utils/htmlCorreo.js';
 import crypto from 'node:crypto';
 
+// Los identificadores de campaña, empresa y plantilla son UUID. Un valor con
+// otra forma hacía que Postgres lanzara «invalid input syntax for type uuid» y
+// la respuesta fuera un 500 —«el servidor se rompió»— cuando lo que estaba mal
+// era la petición. Además llenaba los registros de errores que no lo eran.
+const ES_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // ============================================================================
 // DESUSCRIPCIÓN · el enlace de baja al pie de cada correo
 // ----------------------------------------------------------------------------
@@ -942,6 +948,11 @@ export const listarPlantillasCorreo = async (req, res) => {
 export const guardarPlantillaCorreo = async (req, res) => {
     try {
         const { id } = req.params;
+        // Sin id se está creando una plantilla nueva, que es válido. Con un id
+        // que no es UUID, en cambio, la consulta reventaría con un 500.
+        if (id && !ES_UUID.test(String(id))) {
+            return res.status(404).json({ success: false, message: 'Esa plantilla no existe.' });
+        }
         const { nombre, descripcion, asunto, cuerpo: cuerpoCrudo, firma, firmaImagen,
                 compartida, marcasExtra } = req.body || {};
         if (!nombre?.trim())  return res.status(400).json({ success: false, message: 'Falta el nombre de la plantilla.' });
@@ -1032,6 +1043,9 @@ export const guardarPlantillaCorreo = async (req, res) => {
 
 export const eliminarPlantillaCorreo = async (req, res) => {
     try {
+        if (!ES_UUID.test(String(req.params?.id || ''))) {
+            return res.status(404).json({ success: false, message: 'Esa plantilla no existe.' });
+        }
         const { rows } = await pool.query(
             `DELETE FROM correo_plantilla
               WHERE id=$1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid
@@ -1168,6 +1182,9 @@ export const historialCampanas = async (req, res) => {
 // El detalle de una campaña: a quién le llegó y a quién no.
 export const detalleCampana = async (req, res) => {
     try {
+        if (!ES_UUID.test(String(req.params?.id || ''))) {
+            return res.status(404).json({ success: false, message: 'Esa campaña no existe.' });
+        }
         const { rows } = await pool.query(
             // Va el `cuerpo_final` porque es lo que responde la pregunta que
             // motivó todo el registro: «¿qué decía EXACTAMENTE el correo que le
@@ -1194,6 +1211,9 @@ export const detalleCampana = async (req, res) => {
 // La pregunta que motivó todo el registro. Se consulta por empresa.
 export const enviosDeEmpresa = async (req, res) => {
     try {
+        if (!ES_UUID.test(String(req.params?.empresaId || ''))) {
+            return res.status(404).json({ success: false, message: 'Esa empresa no existe.' });
+        }
         const { rows } = await pool.query(
             `SELECT e.destinatario, e.asunto_final, e.estado, e.motivo, e.enviado_at,
                     u.nombre AS autor
@@ -1260,13 +1280,33 @@ export const listarBajas = async (req, res) => {
 // enlace del correo. Darse de baja tiene que ser fácil; volver, deliberado.
 export const quitarBaja = async (req, res) => {
     try {
-        await pool.query(
+        // Sin correo no hay nada que reactivar. Antes se ejecutaba el DELETE con
+        // una cadena vacía —que no borra nada—, se respondía `success: true` y
+        // se escribía en la bitácora «Reactivó los correos para undefined». El
+        // usuario creía haber reactivado a alguien y la bitácora guardaba un
+        // registro falso.
+        const correo = String(req.body?.correo || '').trim();
+        if (!correo) {
+            return res.status(400).json({ success: false, message: 'Falta el correo a reactivar.' });
+        }
+
+        const { rowCount } = await pool.query(
             `DELETE FROM correo_baja
               WHERE lower(correo) = lower($1) AND organizacion_id IS NOT DISTINCT FROM $2::uuid`,
-            [req.body?.correo || '', req.user?.organizacionId || null]);
+            [correo, req.user?.organizacionId || null]);
+
+        // Un correo que no estaba dado de baja tampoco se puede reactivar. Decirlo
+        // evita que alguien lo intente tres veces creyendo que no funciona.
+        if (!rowCount) {
+            return res.status(404).json({
+                success: false,
+                message: `${correo} no está en la lista de bajas.`,
+            });
+        }
+
         await registrar(req, {
             modulo: 'correos', accion: 'editar', entidad: 'baja_correo', entidadId: null,
-            descripcion: `Reactivó los correos para ${req.body?.correo}`,
+            descripcion: `Reactivó los correos para ${correo}`,
         });
         return res.json({ success: true });
     } catch (error) {
@@ -1324,6 +1364,36 @@ export const enviarCampana = async (req, res) => {
         const problemaAdjuntos = validarAdjuntos(adjuntos);
         if (problemaAdjuntos) {
             return res.status(400).json({ success: false, message: problemaAdjuntos });
+        }
+
+        // ------------------------------------------------------------------
+        // MARCAS INVENTADAS · se corta acá, no solo en la vista previa
+        // ------------------------------------------------------------------
+        // La previa YA avisaba de las marcas mal escritas, pero era solo un
+        // aviso: nada impedía enviar igual. El 02-09-2026 se encontró una
+        // campaña ya enviada con el asunto «FACTURA N°{{numero_factura}} -
+        // IMPAGA»: siete clientes recibieron la marca literal en el asunto. La
+        // marca correcta es {{factura}}.
+        //
+        // Una marca desconocida no se puede reemplazar por nada sensato —por eso
+        // `combinar` la deja tal cual, para que salte en la previa—, así que
+        // enviar con una es siempre un error, nunca una decisión.
+        //
+        // Las campañas desde planilla usan las COLUMNAS del Excel como marcas, y
+        // esas no están en CAMPOS. Se aceptan igual: es el mismo caso que ya se
+        // había resuelto al guardar plantillas.
+        const marcasDePlanilla = new Set(
+            (Array.isArray(filas) && filas.length ? Object.keys(filas[0] || {}) : [])
+                .map(normalizarMarca));
+        const marcasMalas = marcasDesconocidas(asunto, cuerpo)
+            .filter(m => !marcasDePlanilla.has(normalizarMarca(m)));
+        if (marcasMalas.length) {
+            return res.status(400).json({
+                success: false,
+                message: `Estos datos no existen: ${marcasMalas.map(m => `{{${m}}}`).join(', ')}. `
+                       + 'Corrígelos antes de enviar: se enviarían tal cual al cliente.',
+                marcasDesconocidas: marcasMalas,
+            });
         }
 
         const org = req.user?.organizacionId || null;

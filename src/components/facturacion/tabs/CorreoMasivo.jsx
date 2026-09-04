@@ -15,7 +15,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Mail, Loader2, CheckCircle2, AlertCircle, RefreshCw, Send,
-  Search, X, Upload, FileSpreadsheet,
+  Search, X, Upload, FileSpreadsheet, AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -83,6 +83,13 @@ const CorreoMasivo = () => {
   // revisar los envíos de meses anteriores.
   const [periodo, setPeriodo] = useState('');
 
+  // ── Facturas emitidas que la cobranza no persigue ────────────────────────
+  // Vive APARTE del listado de correos porque no depende del mes elegido: son
+  // facturas que existen en el SII y no en `cobro_mensual`, así que no vencen
+  // el día 5 ni salen en el recordatorio. Se veían repartidas entre meses —10
+  // en agosto, 1 en septiembre— y nadie veía el total. Auditoría del 03-09-2026.
+  const [sinCobroGlobal, setSinCobroGlobal] = useState(null);
+
   // Los últimos 12 meses para el desplegable. Se arman en el cliente en vez de
   // pedirlos: la lista de meses con envíos cambia poco y no vale una consulta.
   const mesesDisponibles = useMemo(() => {
@@ -147,6 +154,15 @@ const CorreoMasivo = () => {
   // Recarga al cambiar de mes. `periodo` vacío = el mes que se está cobrando,
   // que es el criterio por omisión del backend.
   useEffect(() => { if (user?.sessionId) cargarCorreosLog(periodo); }, [user?.sessionId, periodo]);
+
+  // Se consulta una vez al entrar, no en cada cambio de mes: el dato es global.
+  useEffect(() => {
+    if (!user?.sessionId) return;
+    apiDTE.getFacturasSinCobro(6)
+      .then(r => r.json())
+      .then(d => { if (d?.ok) setSinCobroGlobal(d); })
+      .catch(() => { /* el aviso simplemente no aparece */ });
+  }, [user?.sessionId]);
 
   // Si al entrar hay un reenvío corriendo en el servidor, se retoma su
   // seguimiento: el proceso vive en el backend y sigue aunque uno cambie de
@@ -630,6 +646,29 @@ const CorreoMasivo = () => {
           </Button>
         </div>
       </div>
+
+      {/* ═══ AVISO · facturas sin cobro ═══════════════════════════════════
+          Va ARRIBA y en rojo, no como una pestaña más: es plata facturada que
+          nadie está persiguiendo, y el resto de la pantalla no la muestra
+          porque filtra por mes. Aparece solo cuando hay algo que avisar. */}
+      {sinCobroGlobal?.total > 0 && (
+        <div className="mb-2 flex-shrink-0 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5">
+          <AlertTriangle size={16} className="text-red-500 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[11px] font-black uppercase tracking-widest text-red-700">
+              {sinCobroGlobal.total} factura{sinCobroGlobal.total === 1 ? '' : 's'} emitida
+              {sinCobroGlobal.total === 1 ? '' : 's'} sin cobro que la
+              {sinCobroGlobal.total === 1 ? '' : 's'} persiga · ${Number(sinCobroGlobal.monto).toLocaleString('es-CL')}
+            </p>
+            <p className="text-[11px] text-red-600/90 leading-snug mt-0.5">
+              Están en el SII pero no en la cobranza: no vencen el día 5 ni entran al
+              recordatorio de pago.
+              {sinCobroGlobal.vencidas > 0 && ` ${sinCobroGlobal.vencidas} ya pasaron su vencimiento.`}
+              {' '}Últimos 6 meses, todos los periodos.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filtro por estado de pago: para ver a quién le corresponde el cobro
           ANTES de mandar nada. */}
