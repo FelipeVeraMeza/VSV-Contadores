@@ -1,9 +1,21 @@
 # Reuniones · Requerimientos
 
 **Creado:** 26 de agosto de 2026
+**Última revisión:** 5 de septiembre de 2026 · verificado contra el código, uno por uno
 **Módulo:** Comunicaciones → Reuniones (estuvo en Tickets hasta el 27-08-2026) · Ver también `docs/reuniones-modulo.md` (arquitectura)
 
 Estado: ✅ hecho · 🟡 a medias · ❌ falta
+
+> **Revisión del 05-09-2026.** Siete requerimientos figuraban como ❌ y ya
+> estaban hechos: agregar y quitar invitados (RF-RE-11), copiar el enlace
+> (RF-RE-12), editar la nota después de cerrada (RF-RE-59), la vista de
+> calendario (RF-RE-75) y cambiar la hora (RF-RE-82); convocar y ver reuniones
+> desde una ficha (RF-RE-06 y RF-RE-74) funcionan para personas pero no para
+> empresas, así que quedaron 🟡.
+>
+> En sentido contrario, RF-RE-83 sigue pendiente y conviene no confundirlo con
+> RF-RE-82: `reagendar` cambia **solo la fecha y la duración**. El título, los
+> temas y el cliente de una reunión ya creada no se pueden editar.
 
 ---
 
@@ -38,7 +50,7 @@ Los primeros tres son de horas de trabajo. Los otros dos son de un día.
 | RF-RE-03 | Ponerle título y temas a tratar | ✅ |
 | RF-RE-04 | Asociarla a un cliente del CRM, buscándolo por nombre o RUT | ✅ |
 | RF-RE-05 | Asociarla a un ticket (la tabla lo soporta; falta el botón en la pantalla del ticket) | 🟡 |
-| RF-RE-06 | Convocar desde la ficha del cliente | ❌ |
+| RF-RE-06 | Convocar desde la ficha del cliente | 🟡 en la ficha de una PERSONA sí (botón «Reunión»); en la ficha de una EMPRESA no |
 | RF-RE-07 | Convocar desde un ticket | ❌ |
 | RF-RE-08 | Reuniones que se repiten (semanal, mensual) | ❌ |
 
@@ -47,8 +59,8 @@ Los primeros tres son de horas de trabajo. Los otros dos son de un día.
 | ID | Requerimiento | Estado |
 |---|---|---|
 | RF-RE-10 | Invitar usuarios del sistema al crear la reunión | ✅ |
-| RF-RE-11 | **Agregar o quitar invitados después de creada** | ❌ |
-| RF-RE-12 | **Copiar el enlace de la sala** para mandarlo por fuera | ❌ |
+| RF-RE-11 | **Agregar o quitar invitados después de creada** | ✅ |
+| RF-RE-12 | **Copiar el enlace de la sala** para mandarlo por fuera | ✅ |
 | RF-RE-13 | **Invitar a alguien sin cuenta (cliente) con un enlace público** | ❌ |
 | RF-RE-14 | Que ese enlace público caduque con la reunión y no sirva después | ❌ |
 | RF-RE-15 | Que el invitado externo entre con su nombre, y quede registrado quién fue | ❌ |
@@ -106,7 +118,7 @@ Los primeros tres son de horas de trabajo. Los otros dos son de un día.
 | RF-RE-56 | **Que la nota aparezca en la ficha del cliente** | ❌ |
 | RF-RE-57 | Que la nota aparezca en el ticket asociado | ❌ |
 | RF-RE-58 | Convertir un acuerdo de la nota en una tarea, con un clic | ❌ |
-| RF-RE-59 | Editar la nota después de cerrada la reunión | ❌ |
+| RF-RE-59 | Editar la nota después de cerrada la reunión | ✅ |
 | RF-RE-60 | Adjuntar archivos a la reunión (lo que se mostró en pantalla) | ❌ |
 
 ### Consultar
@@ -117,8 +129,8 @@ Los primeros tres son de horas de trabajo. Los otros dos son de un día.
 | RF-RE-71 | Ver el historial de las pasadas, con sus notas | ✅ |
 | RF-RE-72 | Ver quién está dentro de una sala en curso, antes de entrar | ✅ |
 | RF-RE-73 | Buscar reuniones por cliente | 🟡 (la API filtra; falta el filtro en pantalla) |
-| RF-RE-74 | Ver las reuniones de un cliente dentro de su ficha | ❌ |
-| RF-RE-75 | Vista de calendario (semana / mes) | ❌ |
+| RF-RE-74 | Ver las reuniones de un cliente dentro de su ficha | 🟡 en la ficha de una PERSONA sí; en la de una EMPRESA no |
+| RF-RE-75 | Vista de calendario (semana / mes) | ✅ vista de mes |
 | RF-RE-76 | Que aparezcan en el Inicio de Tickets junto a lo que vence hoy | ❌ |
 
 ### Administrar
@@ -127,8 +139,8 @@ Los primeros tres son de horas de trabajo. Los otros dos son de un día.
 |---|---|---|
 | RF-RE-80 | Cancelar una reunión, avisando a los invitados | ✅ |
 | RF-RE-81 | Que cancelar no borre: queda en el historial como cancelada | ✅ |
-| RF-RE-82 | Cambiar la hora de una reunión agendada | ❌ |
-| RF-RE-83 | Editar título, temas o cliente después de creada | ❌ |
+| RF-RE-82 | Cambiar la hora de una reunión agendada | ✅ |
+| RF-RE-83 | Editar título, temas o cliente después de creada | ❌ reagendar solo cambia fecha y duración |
 | RF-RE-84 | Cerrar una reunión que quedó abierta por olvido | 🟡 (solo entrando de nuevo y colgando) |
 
 ---

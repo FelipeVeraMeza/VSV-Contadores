@@ -143,7 +143,11 @@ HERRAMIENTAS: list[Herramienta] = [
                 tipo="string",
                 descripcion="Filtra por estado: pendiente, en_progreso, completada.",
             ),
-            "busqueda": Parametro(
+            # "q", no "busqueda": es el nombre que lee el endpoint. Con otro
+            # nombre el filtro se ignora en silencio y devuelve TODO —medido el
+            # 04-09-2026: 100 tareas en vez de las 29 que coincidían—. El modelo
+            # entonces resume sobre datos sin filtrar y responde cualquier cosa.
+            "q": Parametro(
                 tipo="string",
                 descripcion="Texto a buscar en el título de la tarea.",
             ),
@@ -159,7 +163,9 @@ HERRAMIENTAS: list[Herramienta] = [
             "cuántos clientes o prospectos hay, usa consultar_metricas."
         ),
         parametros={
-            "busqueda": Parametro(
+            # Mismo caso que arriba: con "busqueda" el servidor devolvía las
+            # 133 personas en vez de las 118 que coincidían.
+            "q": Parametro(
                 tipo="string", descripcion="Nombre o parte del nombre a buscar.",
             ),
             "tipo": Parametro(
@@ -169,6 +175,49 @@ HERRAMIENTAS: list[Herramienta] = [
         },
         endpoint="GET /api/personas",
         devuelve="{ personas: [{ id, nombre, tipo, estado, ultimo_contacto }], total }",
+    ),
+    # ── Agregadas el 04-09-2026 ──────────────────────────────────────────────
+    # Medido: preguntar «¿cuánto le cobro a ELECTROPROYECT?» respondía «no lo
+    # encuentro». El problema era que `consultar_personas` busca en /personas,
+    # que son PROSPECTOS: las empresas ya dadas de alta viven en otra lista y no
+    # había forma de llegar a ellas.
+    Herramienta(
+        nombre="buscar_empresa",
+        descripcion=(
+            "Buscar una EMPRESA CLIENTE por su nombre o RUT, y ver su plan, "
+            "cuánto se le cobra al mes, si debe algo y cuándo se le facturó por "
+            "última vez. Úsala cuando pregunten por un cliente del despacho por "
+            "su nombre —«cuánto le cobro a X», «X está al día»—. Para prospectos "
+            "que todavía no son clientes, usa consultar_personas."
+        ),
+        parametros={
+            # El nombre TIENE que ser "q": es el que lee el endpoint. Con
+            # cualquier otro la URL sale bien formada, el servidor responde 200
+            # y devuelve una lista vacía — o sea, falla en silencio y el modelo
+            # concluye que la empresa no existe.
+            "q": Parametro(
+                tipo="string",
+                descripcion="Nombre de la empresa o su RUT. Basta una parte del nombre.",
+            ),
+        },
+        endpoint="GET /api/clientes/crm/buscar",
+        devuelve="{ empresas: [{ id, razonSocial, rut, activo }] }",
+    ),
+    Herramienta(
+        nombre="consultar_catalogo",
+        descripcion=(
+            "Ver los PLANES que ofrece el despacho y cuánto cuesta cada uno, "
+            "incluidos sus tramos de precio según el nivel de facturación del "
+            "cliente, y los servicios disponibles. Úsala cuando pregunten qué "
+            "planes hay, cuánto cuesta un plan, o qué servicios se ofrecen."
+        ),
+        parametros={},
+        endpoint="GET /api/clientes/catalogo",
+        devuelve=(
+            "{ planes: [{ nombre, precioBase, empresas, "
+            "tramos: [{ min, max, precioNeto, rrhhGratis }] }], "
+            "servicios: [{ nombre, categoria, activo }] }"
+        ),
     ),
 ]
 

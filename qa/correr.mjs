@@ -19,7 +19,7 @@ const API = process.env.QA_API || 'http://127.0.0.1:4000/api';
 
 // Orden deliberado: seguridad primero. Si el aislamiento está roto, el resto
 // de los resultados importa poco.
-const ORDEN = ['seguridad', 'sesion', 'conectados', 'roles', 'api', 'funcional', 'crm', 'tareas', 'tareas-ux', 'comunicaciones',
+const ORDEN = ['seguridad', 'sesion', 'conectados', 'roles', 'api', 'funcional', 'crm', 'catalogo', 'contactos', 'prospectos', 'documentacion', 'tareas', 'tareas-ux', 'comunicaciones',
                'cobro-de-factura', 'integracion', 'auditoria', 'rendimiento',
                'e2e', 'regresion'];
 

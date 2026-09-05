@@ -16,6 +16,7 @@ import InteraccionesPanel from './crm/views/InteraccionesPanel';
 import CrearClienteModal from './crm/modals/CrearClienteModal';
 import CrearEmpresaModal from './crm/modals/CrearEmpresaModal';
 import PersonasPanel from './crm/views/PersonasPanel';
+import CatalogoPanel from './crm/views/CatalogoPanel';
 import CrmDashboard from './crm/views/CrmDashboard';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -213,10 +214,30 @@ const CRM = () => {
           const termDigits = term.replace(/\D/g, '');
           const telDigits = String(tel || '').replace(/\D/g, '');
 
+          // Los RUT se comparan SIN puntos ni guion, y también sin el dígito
+          // verificador: uno los escribe de las dos formas —«77835246-K» y
+          // «77835246»— y ninguna debería fallar. `rutRep` ya se leía acá arriba
+          // pero no entraba en la búsqueda: buscar por el RUT del representante
+          // no encontraba nada, aunque el dato estuviera cargado.
+          const soloRut = (v) => String(v || '').replace(/[.\s-]/g, '').toUpperCase();
+          const termRut = soloRut(term);
+          const rutEmpresaLimpio = soloRut(rut);
+          const rutRepLimpio = soloRut(rutRep);
+
+          // Quien pagó, y las personas de contacto de la empresa. Es lo que
+          // permite «busco por quien me pagó»: los nombres vienen concatenados
+          // desde el servidor para no traer otra tabla entera a la pantalla.
+          const pagadores = c.pagadores || '';
+          const contactos = c.contactosNombres || '';
+
           const matchSearch =
               term === '' ||
               cleanStr(razonSocial).includes(termClean) ||
+              cleanStr(pagadores).includes(termClean) ||
+              cleanStr(contactos).includes(termClean) ||
               rut.includes(term) ||
+              (termRut !== '' && rutEmpresaLimpio.includes(termRut)) ||
+              (termRut !== '' && rutRepLimpio.includes(termRut)) ||
               cleanStr(correo).includes(termClean) ||
               cleanStr(rep).includes(termClean) ||
               cleanStr(giro).includes(termClean) ||
@@ -231,6 +252,13 @@ const CRM = () => {
               matchStatus = esMoroso(c);
           } else if (statusFilter === 'F29 Pendientes') {
               matchStatus = f29 === 'PENDIENTE';
+          } else if (statusFilter === 'Precio descalzado') {
+              // Los que cobran distinto a lo que dice su tramo de facturación.
+              // Se ignoran diferencias menores a $1.000: hay precios históricos
+              // con centavos y marcarlos enseñaría a ignorar el aviso.
+              const sug = c.precioSugerido ?? null;
+              const cobra = Number(c.precioMensual) || 0;
+              matchStatus = sug !== null && cobra > 0 && Math.abs(sug - cobra) >= 1000;
           } else if (statusFilter === 'Al Día') {
               matchStatus = !esMoroso(c);
           }
@@ -473,6 +501,12 @@ const CRM = () => {
           funcionando —los hay en marcadores y en pantallas que navegan acá—. */}
       {activeTab === 'whatsapp' && <Navigate to="/comunicaciones?sub=whatsapp" replace />}
       {activeTab === 'correo'   && <Navigate to="/comunicaciones?sub=correo" replace />}
+
+      {activeTab === 'catalogo' && (
+        <div className="flex-1 min-h-0">
+          <CatalogoPanel />
+        </div>
+      )}
 
       {activeTab === 'interacciones' && (
         <div className="flex-1 min-h-0">

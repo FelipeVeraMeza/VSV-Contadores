@@ -31,10 +31,26 @@ const MAX_TITULO = 200;   // igual que tarea.titulo en la base
 
 // Orden de la lista: primero lo vivo, después lo cerrado; dentro de eso, por
 // fecha de entrega y por prioridad. Se repite en varias consultas.
+//
+// EL DESEMPATE DEL FINAL NO ES ADORNO.
+// Los tres primeros criterios dejan muchísimos empates: hoy 29 de 56 tareas
+// comparten estado, fecha y prioridad con alguna otra —el 55% no tiene fecha
+// de vencimiento y el 57% tiene prioridad «media», así que caen todas al mismo
+// casillero—. Sin un criterio que las separe, Postgres puede devolverlas en
+// CUALQUIER orden: no está obligado a ser consistente entre dos consultas
+// iguales, y de hecho cambia cuando cambia el plan de ejecución.
+//
+// El efecto para quien mira la pantalla es que las tareas «bailan»: se recarga
+// la lista y las de abajo aparecen en otro orden sin que nadie haya tocado
+// nada. Con created_at DESC, dentro de un empate manda lo más nuevo primero,
+// que además es un orden que se entiende. El id va de último por si dos tareas
+// se crearon en el mismo instante.
 const ORDEN_TAREAS = `
     CASE t.estado WHEN 'pendiente' THEN 0 WHEN 'en_proceso' THEN 1 WHEN 'en_revision' THEN 2 ELSE 3 END,
     t.vence_at ASC NULLS LAST,
-    CASE t.prioridad WHEN 'critica' THEN 0 WHEN 'alta' THEN 1 WHEN 'media' THEN 2 ELSE 3 END`;
+    CASE t.prioridad WHEN 'critica' THEN 0 WHEN 'alta' THEN 1 WHEN 'media' THEN 2 ELSE 3 END,
+    t.created_at DESC,
+    t.id`;
 
 // ---------------------------------------------------------------------------
 // ÁMBITO DE UNA CONSULTA DE TAREAS · las tres secciones del módulo
@@ -548,7 +564,8 @@ export const actualizarTarea = async (req, res) => {
         const antes = chk.rows[0];
 
         const { titulo, descripcion, tipo, prioridad, estado, responsableId, venceAt, proyectoId,
-                colaboradores, visibilidad, cascadaResponsable, personaId, empresaId } = req.body;
+                colaboradores, visibilidad, cascadaResponsable, personaId, empresaId,
+                parentId } = req.body;
         // Las mismas comprobaciones que al crear: un título más largo que la
         // columna, una fecha que no es fecha o un id que no es UUID reventaban
         // con un 500 y el mensaje «No se pudo actualizar», sin decir qué corregir.
@@ -571,6 +588,56 @@ export const actualizarTarea = async (req, res) => {
         // toca.
         const tocaPersona = Object.hasOwn(req.body, 'personaId');
         const tocaEmpresa = Object.hasOwn(req.body, 'empresaId');
+
+        // ------------------------------------------------------------------
+        // RECOLGAR UNA TAREA DE OTRA MADRE · `parentId`
+        // ------------------------------------------------------------------
+        // Antes no se podía: el campo no se leía y el UPDATE devolvía 200 sin
+        // haber movido nada. Se descubrió el 04-09-2026 al intentar meter una
+        // tarea suelta dentro de su módulo — el servidor decía que sí y la
+        // tarea seguía donde estaba.
+        //
+        // Mover una tarea NO es como cambiarle el título: hay tres formas de
+        // dejar el árbol roto, y las tres se comprueban acá.
+        const tocaParent = Object.hasOwn(req.body, 'parentId');
+        if (tocaParent && parentId) {
+            // 1. Una tarea no puede colgar de sí misma.
+            if (String(parentId) === String(id)) {
+                return res.status(400).json({ success: false, message: 'Una tarea no puede ser su propia madre.' });
+            }
+            const { rows: madre } = await pool.query(
+                `SELECT id, parent_id FROM tarea
+                  WHERE id = $1 AND organizacion_id IS NOT DISTINCT FROM $2::uuid`,
+                [parentId, org]);
+            if (!madre.length) {
+                return res.status(400).json({ success: false, message: 'La tarea madre no existe.' });
+            }
+            // 2. El tope de profundidad, con el MISMO criterio que `crearTarea`:
+            //    se permite hasta la nieta y se rechaza la bisnieta. Acá estaba
+            //    más estricto —rechazaba ya la nieta— y eso hacía que mover una
+            //    tarea fuera imposible donde crearla sí se podía. Dos reglas
+            //    distintas para lo mismo terminan en «a veces deja y a veces no».
+            if (madre[0].parent_id) {
+                const { rows: abuelo } = await pool.query(
+                    `SELECT parent_id FROM tarea WHERE id = $1`, [madre[0].parent_id]);
+                if (abuelo[0]?.parent_id) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Se permiten hasta dos niveles de subtareas. Muévela a un nivel más arriba.',
+                    });
+                }
+            }
+            // 3. Y no puede colgar de una de SUS PROPIAS hijas: eso deja un
+            //    ciclo, y cualquier consulta que recorra el árbol se cuelga.
+            const { rows: ciclo } = await pool.query(
+                `SELECT 1 FROM tarea WHERE id = $1 AND parent_id = $2`, [parentId, id]);
+            if (ciclo.length) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No se puede: esa tarea es una subtarea de esta.',
+                });
+            }
+        }
         await pool.query(
             `UPDATE tarea SET
                 titulo = COALESCE($2, titulo),
@@ -584,6 +651,7 @@ export const actualizarTarea = async (req, res) => {
                 visibilidad = COALESCE($11, visibilidad),
                 persona_id = CASE WHEN $12::boolean THEN $13::uuid ELSE persona_id END,
                 empresa_id = CASE WHEN $14::boolean THEN $15::uuid ELSE empresa_id END,
+                parent_id = CASE WHEN $16::boolean THEN $17::uuid ELSE parent_id END,
                 completed_at = ${completedAt}
              WHERE id = $1`,
             [
@@ -596,6 +664,7 @@ export const actualizarTarea = async (req, res) => {
                 ['proyecto', 'privada'].includes(visibilidad) ? visibilidad : null,
                 tocaPersona, personaId || null,
                 tocaEmpresa, empresaId || null,
+                tocaParent, parentId || null,
             ]
         );
         if (Array.isArray(colaboradores)) await setColaboradores(id, colaboradores);
@@ -1072,7 +1141,16 @@ export const resumenInicio = async (req, res) => {
                                ELSE 'proxima' END
                              ORDER BY
                                CASE WHEN t.estado = 'completada' THEN t.completed_at END DESC,
-                               t.vence_at ASC
+                               t.vence_at ASC,
+                               -- Desempate estable. Acá importa más que en la
+                               -- lista general: este ROW_NUMBER se recorta con
+                               -- un tope más abajo, así que un empate no solo
+                               -- cambia el orden — decide QUÉ tarea entra en el
+                               -- resumen del día y cuál no aparece. Sin esto,
+                               -- dos tareas que vencen el mismo día se turnan
+                               -- el último cupo entre una carga y la siguiente.
+                               t.created_at DESC,
+                               t.id
                            ) AS n
                     FROM tarea t
                     LEFT JOIN usuario u ON u.id = t.responsable_id
@@ -1236,7 +1314,18 @@ export const metricasDashboard = async (req, res) => {
                     COUNT(*) FILTER (WHERE p.estado='activo' OR p.estado_comercial ILIKE '%ganad%')::int AS activos,
                     COUNT(*) FILTER (WHERE p.estado='inactivo')::int AS inactivos,
                     COUNT(*)::int AS total,
-                    (SELECT COUNT(*)::int FROM empresa e WHERE e.activo AND e.en_cartera IS NOT FALSE AND e.organizacion_id IS NOT DISTINCT FROM $1::uuid) AS clientes_activos
+                    -- Clientes activos = los que la LISTA del CRM muestra como
+                    -- activos. Desde el 04-09-2026 estar fuera de la planilla ya
+                    -- no esconde la ficha, así que tampoco puede descontar del
+                    -- número: si no, el panel diría 99 y la lista mostraría 102.
+                    --
+                    -- OJO: esto NO es lo mismo que «a quién se le factura». El
+                    -- cobro del mes sigue exigiendo en_cartera IS NOT FALSE
+                    -- (ver SQL_EMPRESA_FACTURABLE en cobros.controllers.js), a
+                    -- propósito: sacar a alguien de la planilla es justamente
+                    -- dejar de cobrarle. Son dos preguntas distintas y desde
+                    -- ahora pueden dar números distintos.
+                    (SELECT COUNT(*)::int FROM empresa e WHERE e.activo AND e.organizacion_id IS NOT DISTINCT FROM $1::uuid) AS clientes_activos
                  FROM persona p WHERE p.activo AND p.organizacion_id IS NOT DISTINCT FROM $1::uuid ${pScope}`, pParams),
             // Prospectos nuevos en el período. RF-013
             pool.query(

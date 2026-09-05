@@ -1,6 +1,6 @@
 # Módulo de Tareas · Requerimientos
 
-**Última revisión:** 1 de septiembre de 2026
+**Última revisión:** 5 de septiembre de 2026
 **Estado:** en construcción por fases (ver el final del documento)
 
 > **Lo último (26-ago-2026):** el caso «Tareas Victor» — 225 tareas importadas
@@ -572,7 +572,7 @@ está asignada a **Mati** con aviso en la campana.
 | Tarea | Qué falta |
 |---|---|
 | **Plantillas predeterminadas de los productos** | La lista de productos, sus pasos, los días de cada paso y el responsable. Es conocimiento de la oficina: una plantilla con pasos inventados es peor que no tenerla. |
-| **Plantillas asignables a empresa / cliente / prospecto** | Decisión de alcance. La base ya aguanta (`tarea.persona_id` y `empresa_id` existen y `crearTarea` los acepta), pero `usarPlantilla` no los recibe y `/personas/catalogos` no devuelve empresas ni personas. |
+| **Plantillas asignables a empresa / cliente / prospecto** | Decisión de alcance. **Actualizado el 05-09-2026:** el backend ya NO es el freno — `usarPlantilla` sí recibe `personaId` y `empresaId` y los guarda en los dos INSERT (`plantillas.controllers.js:301-347`). Lo que falta es la pantalla: `/personas/catalogos` devuelve etiquetas, ejecutivos, servicios, estados y acciones, pero **no** empresas ni personas, así que no hay de dónde elegir a quién asignarla. |
 
 ### 10.5 Lo que se puede hacer sin preguntarle a nadie
 
@@ -1071,3 +1071,70 @@ por parámetro), los tres tramos de la ventana, que una sesión vencida no cuent
 aunque la señal sea reciente, que un usuario desactivado desaparezca, que dos
 dispositivos sean una fila, y que la respuesta **no exponga** RUT, correo,
 clave ni identificadores de sesión — presencia es nombre y estado, nada más.
+
+---
+
+## 18. Trabajo del 05-09-2026 · el orden del tablero
+
+### 18.1 El síntoma
+
+«¿Por qué están desordenadas?», mirando la lista de Tareas. La pregunta era
+buena: el orden estaba mal, aunque no de la forma que parece.
+
+### 18.2 Qué pasaba
+
+`ORDEN_TAREAS` ordenaba por tres criterios: estado, fecha de vencimiento
+(`NULLS LAST`) y prioridad. El problema no es ninguno de los tres, sino lo que
+pasa cuando **empatan**:
+
+| Dato | Medición del 05-09-2026 |
+|---|---|
+| Tareas raíz activas | 56 |
+| Sin fecha de vencimiento | 31 (55%) |
+| Con prioridad «media» | 32 (57%) |
+| **Empatadas en los tres criterios** | **29 de 56** |
+| Grupo empatado más grande | 9 tareas |
+
+Más de la mitad de las tareas caían en el mismo casillero. Y cuando el
+`ORDER BY` no distingue dos filas, **Postgres no está obligado a devolverlas
+siempre en el mismo orden**: depende del plan de ejecución y del orden físico
+de lectura, que cambia cada vez que se inserta, actualiza o archiva algo.
+
+### 18.3 Por qué no se veía en una prueba simple
+
+Dos llamadas seguidas a la API devolvían el mismo orden, así que a primera
+vista parecía estable. No lo era: era estable *por casualidad*, porque con 56
+filas Postgres elegía siempre el mismo plan.
+
+La forma de demostrarlo fue leer las mismas filas en otro orden físico —lo que
+ocurre solo en producción a medida que se trabaja—. Ahí el listado viejo cambió
+de orden y el nuevo se mantuvo idéntico.
+
+### 18.4 El arreglo
+
+Un desempate estable al final de los dos `ORDER BY` del módulo:
+
+    t.created_at DESC,
+    t.id
+
+En dos lugares:
+
+1. **`ORDEN_TAREAS`** (`crm.controllers.js`), la lista general.
+2. **El `ROW_NUMBER()` del panel Inicio.** Acá importa más: ese cálculo se
+   recorta con un tope, así que un empate no solo cambiaba el orden — decidía
+   **qué tarea entraba en el resumen del día y cuál no aparecía**. Dos tareas
+   que vencen el mismo día se turnaban el último cupo entre una carga y la
+   siguiente.
+
+Dentro de un empate manda lo más nuevo primero, que además es un orden que se
+entiende al mirarlo. El `id` va de último por si dos tareas se crearon en el
+mismo instante.
+
+### 18.5 Lo que NO se cambió
+
+El orden en sí. Estado → fecha → prioridad sigue siendo el criterio, y es el
+correcto. Lo que faltaba era el desempate, no otro criterio.
+
+**El 55% de las tareas sin fecha de vencimiento no es un problema de código**,
+y no se puede arreglar desde acá: si nadie le pone fecha a una tarea, el sistema
+no tiene con qué ordenarla. Es lo que hace que tantas caigan juntas al final.

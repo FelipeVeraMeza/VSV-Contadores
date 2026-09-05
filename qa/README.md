@@ -25,6 +25,9 @@ lo dice y se detiene en vez de dar 78 fallos que no significan nada.
 | `api` | 19 | Contrato de las respuestas, códigos HTTP, validación de entrada |
 | `funcional` | 11 | Que las cifras del panel cuadren con la base; límites de correos y cuota |
 | `crm` | 21 | Cartera, pipeline, tareas, recaudación; ciclo completo de una tarea |
+| `contactos` | 22 | Personas de la empresa, quién pagó cada factura, últimas facturas y tickets vinculados |
+| `prospectos` | 11 | El buscador (que dejaba de filtrar) y la agenda de contacto |
+| `documentacion` | 22 | El módulo de documentación y que no se pueda leer cualquier archivo del servidor |
 | `tareas` | 15 | Los tres pendientes de §10.5: lista «vencen hoy», reabrir subtareas, urgencia en el aviso |
 | `tareas-ux` | 15 | «Mis tareas» en dos, colaboradores editables, subtareas al crear, últimos tickets |
 | `comunicaciones` | 19 | Bandeja, enviados, perfil de remitente, ciclo de plantillas, protecciones del envío masivo |

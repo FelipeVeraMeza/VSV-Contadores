@@ -110,9 +110,23 @@ export const getClientesCRM = async (req, res) => {
         // inalcanzable y había que crearlo de nuevo, duplicándolo.
         //
         // Con `?enCartera=fuera` se ven justamente esas, y con `todas` se ve todo.
+        //
+        // CAMBIO DEL 04-09-2026 · «fuera de cartera no va, eso es activo».
+        // Estar fuera de la planilla de trabajo dejó de esconder la ficha: si la
+        // empresa está ACTIVA se ve, esté o no en cartera. Lo que decide si
+        // aparece es el estado del cliente, que es como se piensa en la oficina
+        // —activo o de baja— y no un detalle de cómo se arma la planilla.
+        //
+        // Medido al hacer el cambio: de 92 empresas fuera de cartera, 89 ya
+        // estaban de baja (siguen saliendo en «De baja») y solo 3 estaban
+        // activas — esas 3 eran invisibles y ahora se ven donde corresponde.
+        //
+        // El parámetro se mantiene para quien necesite mirar expresamente un
+        // conjunto u otro; lo que cambió es lo que se hace SIN parámetro.
         const cartera = req.query.enCartera;
         if (cartera === 'fuera') whereClauses.push('e.en_cartera = FALSE');
-        else if (cartera !== 'todas') whereClauses.push('e.en_cartera IS NOT FALSE');
+        else if (cartera === 'vigente') whereClauses.push('e.en_cartera IS NOT FALSE');
+        // Sin parámetro (y con 'todas'): no se filtra por cartera.
 
         // Solo las empresas asignadas, en dos casos:
         //
@@ -187,7 +201,58 @@ export const getClientesCRM = async (req, res) => {
               (SELECT min(cm.fecha_vencimiento) FROM cobro_mensual cm
                WHERE cm.empresa_id = e.id
                  AND cm.estado = 'PENDIENTE_PAGO'
-                 AND cm.fecha_vencimiento >= CURRENT_DATE) AS proximo_vencimiento`;
+                 AND cm.fecha_vencimiento >= CURRENT_DATE) AS proximo_vencimiento,
+              -- ÚLTIMA FACTURA · folio y fecha, para verlo en la lista sin abrir
+              -- la ficha. Se ordena por fecha de emisión y no por período: una
+              -- empresa puede tener varias facturas del mismo mes (trabajos
+              -- extra), y la última es la más reciente en el tiempo, no la del
+              -- período más alto.
+              (SELECT cm.folio FROM cobro_mensual cm
+                WHERE cm.empresa_id = e.id AND cm.folio IS NOT NULL
+                ORDER BY cm.fecha_emision DESC NULLS LAST LIMIT 1) AS ultimo_folio,
+              (SELECT cm.fecha_emision FROM cobro_mensual cm
+                WHERE cm.empresa_id = e.id AND cm.folio IS NOT NULL
+                ORDER BY cm.fecha_emision DESC NULLS LAST LIMIT 1) AS ultima_emision,
+              -- Cuántas facturas lleva este mes: si es más de una, en la lista se
+              -- dice, porque el folio solo mostraría una de ellas.
+              (SELECT COUNT(*)::int FROM cobro_mensual cm
+                WHERE cm.empresa_id = e.id AND cm.folio IS NOT NULL
+                  AND date_trunc('month', cm.fecha_emision) = date_trunc('month', CURRENT_DATE)) AS facturas_del_mes,
+              -- QUIÉN PAGÓ · los nombres de quienes pagaron facturas de esta
+              -- empresa, y los contactos cargados. Van juntos en un solo texto
+              -- para que el buscador del CRM pueda encontrar por ahí sin tener
+              -- que traer otra tabla entera a la pantalla.
+              (SELECT string_agg(DISTINCT cm.pagado_por_nombre, ' | ')
+                 FROM cobro_mensual cm
+                WHERE cm.empresa_id = e.id AND cm.pagado_por_nombre IS NOT NULL) AS pagadores,
+              (SELECT string_agg(DISTINCT ec.nombre, ' | ')
+                 FROM empresa_contacto ec
+                WHERE ec.empresa_id = e.id AND ec.activo) AS contactos_nombres,
+              -- El nombre de quien pagó la ÚLTIMA factura: es lo que se muestra
+              -- en la ficha sin tener que abrir el detalle de cobranza.
+              (SELECT cm.pagado_por_nombre FROM cobro_mensual cm
+                WHERE cm.empresa_id = e.id AND cm.pagado_por_nombre IS NOT NULL
+                ORDER BY cm.fecha_pago DESC NULLS LAST LIMIT 1) AS ultimo_pagador,
+              -- PRECIO SUGERIDO POR SU TRAMO DE FACTURACIÓN.
+              --
+              -- El plan no cobra lo mismo a todos: cobra según cuánto factura la
+              -- empresa (ver plan_precio_tramo). Este es el precio que le
+              -- correspondería HOY, dado lo que facturó.
+              --
+              -- Se calcula acá y no en el navegador porque la ficha ya lo hacía
+              -- —y bien—, pero solo de a un cliente: para saber cuáles están
+              -- descalzados había que abrir los 102 uno por uno. Medido el
+              -- 04-09-2026: 32 empresas cobran distinto a su tramo, 16 de menos
+              -- y 16 de más.
+              --
+              -- Un plan SIN tramos (precio único) devuelve NULL: no hay nada que
+              -- comparar, y marcarlo como descalce sería una falsa alarma.
+              (SELECT t.precio_neto FROM plan_precio_tramo t
+                WHERE t.plan_id = e.plan_id AND t.activo
+                  AND e.ventas_mensuales IS NOT NULL
+                  AND e.ventas_mensuales >= t.tramo_min
+                  AND e.ventas_mensuales <  t.tramo_max
+                LIMIT 1) AS precio_sugerido`;
 
         const clientesQuery = `
             SELECT
@@ -514,6 +579,16 @@ export const getClientesCRM = async (req, res) => {
                 venceMasAntiguo: cliente.vence_mas_antiguo || null,
                 deudaTotal: parseFloat(cliente.deuda_total) || 0,
                 proximoVencimiento: cliente.proximo_vencimiento || null,
+                ultimoFolio: cliente.ultimo_folio || null,
+                ultimaEmision: cliente.ultima_emision || null,
+                facturasDelMes: cliente.facturas_del_mes ?? 0,
+                pagadores: cliente.pagadores || null,
+                contactosNombres: cliente.contactos_nombres || null,
+                ultimoPagador: cliente.ultimo_pagador || null,
+                // El precio que le tocaría por su tramo, y si calza con lo que
+                // se le cobra. `null` en los dos cuando el plan no tiene tramos.
+                precioSugerido: cliente.precio_sugerido !== null && cliente.precio_sugerido !== undefined
+                    ? Number(cliente.precio_sugerido) : null,
                 // Monto mensual: NETO negociado → precio del plan → 0.
                 // Ojo: precio_mensual puede venir NULL (cliente que no está en la planilla);
                 // en ese caso NO es gratis, se cae al precio de su plan.

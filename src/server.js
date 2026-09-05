@@ -45,6 +45,7 @@ import whatsappRoutes from "./routes/whatsapp.routes.js";
 import correosRoutes from "./routes/correos.routes.js";
 import bajaRoutes from "./routes/baja.routes.js";
 import asistenteRoutes from "./routes/asistente.routes.js";
+import documentacionRoutes from "./routes/documentacion.routes.js";
 import { cerrarCampanasZombi } from "./controllers/correos.controllers.js";
 import { reconectarSesionesGuardadas } from "./services/whatsapp/whatsappBot.js";
 
@@ -151,6 +152,10 @@ app.use('/api/baja', apiLimiter, bajaRoutes);
 // detrás de la misma autenticación que todo lo demás. Ver
 // asistente.controllers.js para el porqué de la separación.
 app.use('/api/asistente', apiLimiter, asistenteRoutes);
+
+// DOCUMENTACION · lo que hoy vive en docs/*.md, servido dentro de la pagina
+// para que el equipo pueda consultarlo sin preguntar. Solo lectura.
+app.use('/api/documentacion', apiLimiter, documentacionRoutes);
 
 // ============================================================================
 // 🤖 MOTOR CENTRAL DE SINCRONIZACIÓN (Bóveda Global)

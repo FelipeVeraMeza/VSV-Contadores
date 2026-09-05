@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Calculator, Users, FileText,
-  Landmark, ShieldCheck, FileBarChart, LogOut, Menu, X, Package,
+  Landmark, ShieldCheck, FileBarChart, LogOut, Menu, X, Package, BookOpen,
   ChevronDown, ShoppingCart, TrendingUp, UserCheck,
   Wallet, CreditCard, BookCopy, ArrowRightLeft,
   Building2, UserPlus, MessageCircle, Mail, Activity, PieChart, UserCircle,
@@ -74,6 +74,9 @@ function MainPage() {
     { id: 'list',          name: 'Clientes',      icon: Building2 },
     { id: 'prospectos',    name: 'Prospectos',    icon: UserPlus },
     { id: 'interacciones', name: 'Interacciones', icon: Activity },
+    // El catálogo va acá y no en Administración: los planes y servicios se
+    // consultan justo cuando se está dando de alta o revisando un cliente.
+    { id: 'catalogo',      name: 'Catálogo',      icon: Package },
     { id: 'analytics',     name: 'Métricas',      icon: PieChart },
   ];
 
@@ -198,6 +201,9 @@ function MainPage() {
     { id: 'operacionRenta', path: '/operacion-renta', name: 'Operación Renta', icon: FileBarChart, color: 'from-teal-500 to-cyan-600' },
     { id: 'bancos', path: '/bancos', name: 'Bancos', icon: Landmark, color: 'from-indigo-500 to-blue-600' },
     { id: 'admin', path: '/admin', name: 'Administración', icon: ShieldCheck, color: 'from-yellow-500 to-amber-500' },
+    // DOCUMENTACION · como funciona cada modulo. Va antes de Mi Perfil y
+    // despues de Administracion: es referencia, no operacion diaria.
+    { id: 'documentacion', path: '/documentacion', name: 'Documentación', icon: BookOpen, color: 'from-slate-500 to-slate-700' },
     { id: 'perfil', path: '/perfil', name: 'Mi Perfil', icon: UserCircle, color: 'from-cyan-500 to-blue-600' },
   ];
 

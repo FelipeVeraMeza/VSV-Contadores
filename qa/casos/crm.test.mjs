@@ -29,10 +29,51 @@ describe('Cartera · los conteos cuadran', () => {
     assert.equal(m.prospectos, b.prospectos, 'prospectos no cuadra');
     assert.equal(m.totalPersonas, b.total, 'total de personas no cuadra');
 
+    // Desde el 04-09-2026 estar fuera de la planilla ya NO esconde la ficha ni
+    // descuenta del número: la lista y el panel cuentan lo mismo, que es lo
+    // activo. Antes esta prueba exigía `en_cartera IS NOT FALSE` y por eso
+    // falló al hacer el cambio — el panel decía 102 y ella esperaba 99.
+    //
+    // Ojo: «activo» y «facturable» dejaron de ser lo mismo a propósito. Lo
+    // segundo lo vigila la prueba de más abajo.
     const { rows: [e] } = await pool.query(
       `SELECT COUNT(*)::int AS n FROM empresa
-        WHERE activo AND en_cartera IS NOT FALSE AND es_principal = false`);
+        WHERE activo AND es_principal = false`);
     assert.equal(m.clientesActivos, e.n, 'clientes activos no cuadra');
+  });
+
+  test('estar fuera de la planilla no esconde una empresa activa', async () => {
+    // El 04-09-2026 se sacó el botón «Fuera de cartera» de la pantalla. Si el
+    // servidor siguiera filtrando por eso, esas fichas quedarían inalcanzables
+    // —que es el bug que el botón había venido a tapar—.
+    const { rows } = await pool.query(
+      `SELECT id, razon_social FROM empresa
+        WHERE es_principal = false AND activo AND en_cartera = false`);
+    if (!rows.length) return;
+
+    const r = await pedir('/clientes/crm');
+    if (r.estado !== 200) return;
+    const ids = new Set((r.datos.clients || []).map(c => c.id));
+    const invisibles = rows.filter(x => !ids.has(x.id));
+    assert.equal(invisibles.length, 0,
+      `${invisibles.length} empresa(s) activas no aparecen en la lista: ` +
+      invisibles.map(x => x.razon_social).join(', '));
+  });
+
+  test('pero SÍ las deja fuera del cobro del mes', async () => {
+    // La otra mitad de la decisión: se ven, no se facturan. Sacar a alguien de
+    // la planilla es justamente dejar de cobrarle, y eso no cambió.
+    const { rows: [b] } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM empresa
+        WHERE es_principal = false AND activo AND en_cartera = false`);
+    if (!b.n) return;
+    const { rows: [f] } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM empresa
+        WHERE es_principal = false AND activo IS NOT FALSE AND en_cartera IS NOT FALSE`);
+    const { rows: [t] } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM empresa WHERE es_principal = false AND activo`);
+    assert.equal(f.n, t.n - b.n,
+      'las empresas fuera de cartera se colaron en el conjunto facturable');
   });
 
   test('el pipeline no pierde ni duplica a nadie', async () => {

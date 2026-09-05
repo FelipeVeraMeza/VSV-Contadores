@@ -23,6 +23,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from typing import Any
+from core.resumir import resumir_para_modelo
 
 TURNOS_MAXIMOS = 12       # 6 intercambios; suficiente para un hilo de trabajo.
 DATOS_MAXIMOS = 4         # resultados de herramienta que se recuerdan
@@ -63,7 +64,15 @@ class Conversacion:
 
     # ── Datos de herramientas ────────────────────────────────────────────────
     def recordar_dato(self, herramienta: str, parametros: dict, resultado: Any) -> None:
-        self.datos.append(DatoConsultado(herramienta, parametros, resultado))
+        # Se guarda YA RESUMIDO, no entero. La memoria se inyecta en el prompt de
+        # cada turno siguiente, así que un resultado grande no pesa una vez: pesa
+        # en todos los turnos que vengan después.
+        #
+        # Medido el 04-09-2026: con los resultados completos, la tercera pregunta
+        # de una conversación ya iba en 50.416 tokens contra un límite de 7.000.
+        self.datos.append(
+            DatoConsultado(herramienta, parametros, resumir_para_modelo(resultado))
+        )
         if len(self.datos) > DATOS_MAXIMOS:
             self.datos = self.datos[-DATOS_MAXIMOS:]
 

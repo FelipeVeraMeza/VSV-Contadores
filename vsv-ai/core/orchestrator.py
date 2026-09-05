@@ -31,6 +31,7 @@ from typing import Any, Protocol
 log = logging.getLogger("vsv-ai.orquestador")
 
 from core.prompts import VERSION as VERSION_PROMPT, prompt_sistema
+from core.resumir import resumir_para_modelo
 from memory.conversation import Conversacion, Memoria
 from models import provider
 from security import validation
@@ -152,10 +153,16 @@ class Orquestador:
                 conversacion.recordar_dato(
                     invocacion.herramienta, invocacion.parametros, resultado.datos
                 )
+                # Los datos se RESUMEN antes de mandarlos al modelo. Medido el
+                # 04-09-2026: pasarlos enteros llegaba a 93.719 tokens contra un
+                # límite de 7.000, y la mitad de las preguntas fallaba con «el
+                # asistente no está respondiendo». Ver core/resumir.py.
                 observacion = (
                     f"Resultado de {invocacion.herramienta}:\n"
-                    f"{json.dumps(resultado.datos, ensure_ascii=False)}\n\n"
-                    "Redacta la respuesta usando SOLO estos datos. Si falta algo, dilo."
+                    f"{resumir_para_modelo(resultado.datos)}\n\n"
+                    "Redacta la respuesta usando SOLO estos datos. Si falta algo, dilo. "
+                    "Si el resultado trae «_total», ese es el número real: úsalo, "
+                    "no cuentes los elementos que ves."
                 )
             elif resultado.sin_acceso:
                 # Se distingue a propósito: el modelo tiene que decir «no tienes

@@ -230,3 +230,96 @@ describe('Mis últimos tickets creados', () => {
       `${archivadas.length} ticket(s) archivados aparecen en la lista`);
   });
 });
+
+describe('Recolgar una tarea de otra madre', () => {
+  // Se descubrió el 04-09-2026: `actualizarTarea` NO leía `parentId`. Mover una
+  // tarea dentro de otra devolvía 200 y no movía nada — el peor tipo de fallo,
+  // porque el sistema decía que sí.
+  let madreA = null, madreB = null, hija = null;
+
+  test('1 · preparación', async () => {
+    const a = await pedir('/crm/tareas', { metodo: 'POST', cuerpo: { titulo: `${MARCA} madre A` } });
+    const b = await pedir('/crm/tareas', { metodo: 'POST', cuerpo: { titulo: `${MARCA} madre B` } });
+    alTerminar(async () => {
+      await pool.query('DELETE FROM tarea WHERE titulo LIKE $1', [`${MARCA}%`]);
+    });
+    madreA = a.datos?.tarea?.id || a.datos?.id;
+    madreB = b.datos?.tarea?.id || b.datos?.id;
+    if (!madreA) return;
+    const h = await pedir('/crm/tareas', {
+      metodo: 'POST', cuerpo: { titulo: `${MARCA} hija`, parentId: madreA },
+    });
+    hija = h.datos?.tarea?.id || h.datos?.id;
+  });
+
+  test('2 · una tarea suelta se puede meter dentro de otra', async () => {
+    if (!madreA || !madreB) return;
+    const r = await pedir(`/crm/tareas/${madreB}`, {
+      metodo: 'PUT', cuerpo: { parentId: madreA },
+    });
+    assert.ok([200, 201].includes(r.estado), `respondió ${r.estado}`);
+    const { rows } = await pool.query('SELECT parent_id FROM tarea WHERE id = $1', [madreB]);
+    assert.equal(String(rows[0].parent_id), String(madreA),
+      'el servidor respondió bien pero la tarea no se movió');
+  });
+
+  test('3 · RECHAZA que una tarea sea su propia madre', async () => {
+    if (!madreA) return;
+    const r = await pedir(`/crm/tareas/${madreA}`, {
+      metodo: 'PUT', cuerpo: { parentId: madreA },
+    });
+    assert.equal(r.estado, 400, `aceptó que una tarea colgara de sí misma (${r.estado})`);
+  });
+
+  test('4 · mover y crear usan el MISMO tope de profundidad', async () => {
+    // El sistema permite hasta la nieta y rechaza la bisnieta (ver crearTarea).
+    // Al agregar el movimiento se puso un tope más estricto por error, y quedaba
+    // que crear una subtarea ahí sí se podía y moverla no. Dos reglas distintas
+    // para lo mismo terminan en «a veces deja y a veces no».
+    if (!hija) return;
+
+    // Crear una nieta: permitido.
+    const nieta = await pedir('/crm/tareas', {
+      metodo: 'POST', cuerpo: { titulo: `${MARCA} nieta`, parentId: hija },
+    });
+    assert.ok([200, 201].includes(nieta.estado),
+      `crear una nieta respondió ${nieta.estado}`);
+    const nietaId = nieta.datos?.tarea?.id || nieta.datos?.id;
+
+    // Mover algo hasta ese mismo nivel: también debe permitirse.
+    const otra = await pedir('/crm/tareas', { metodo: 'POST', cuerpo: { titulo: `${MARCA} suelta` } });
+    const id = otra.datos?.tarea?.id || otra.datos?.id;
+    if (!id) return;
+    const r = await pedir(`/crm/tareas/${id}`, { metodo: 'PUT', cuerpo: { parentId: hija } });
+    assert.ok([200, 201].includes(r.estado),
+      `crear ahí se permite pero mover respondió ${r.estado}: los dos caminos discrepan`);
+
+    // Y un nivel MÁS abajo se rechaza por los dos caminos.
+    if (!nietaId) return;
+    const bisCrear = await pedir('/crm/tareas', {
+      metodo: 'POST', cuerpo: { titulo: `${MARCA} bisnieta`, parentId: nietaId },
+    });
+    assert.equal(bisCrear.estado, 400, `crear una bisnieta respondió ${bisCrear.estado}`);
+
+    const otra2 = await pedir('/crm/tareas', { metodo: 'POST', cuerpo: { titulo: `${MARCA} suelta2` } });
+    const id2 = otra2.datos?.tarea?.id || otra2.datos?.id;
+    if (!id2) return;
+    const bisMover = await pedir(`/crm/tareas/${id2}`, { metodo: 'PUT', cuerpo: { parentId: nietaId } });
+    assert.equal(bisMover.estado, 400, `mover a bisnieta respondió ${bisMover.estado}`);
+  });
+
+  test('5 · RECHAZA colgar una madre de su propia hija', async () => {
+    // Eso deja un ciclo, y cualquier consulta que recorra el árbol se cuelga.
+    if (!madreA || !hija) return;
+    const r = await pedir(`/crm/tareas/${madreA}`, { metodo: 'PUT', cuerpo: { parentId: hija } });
+    assert.equal(r.estado, 400, `permitió crear un ciclo (${r.estado})`);
+  });
+
+  test('6 · una madre inexistente se rechaza', async () => {
+    if (!madreA) return;
+    const r = await pedir(`/crm/tareas/${madreA}`, {
+      metodo: 'PUT', cuerpo: { parentId: '00000000-0000-0000-0000-000000000000' },
+    });
+    assert.equal(r.estado, 400, `aceptó una madre que no existe (${r.estado})`);
+  });
+});

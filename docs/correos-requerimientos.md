@@ -25,6 +25,17 @@ más todo lo que lo rodea: el remitente, las plantillas, las firmas y el registr
 > real** (transacción revertida, sin dejar datos) y la firma del token de baja
 > tiene prueba de intento de suplantación. Ver la **sección 7** al final.
 
+
+> **Revisión del 05-09-2026.** Se comprobó cada requerimiento marcado como
+> pendiente contra el código, no contra el recuerdo. **Seis estaban hechos y
+> figuraban como ❌**: RF-CO-11, 18, 19, 21, 22 y 32. Entre ellos el que el
+> propio documento llamaba «el más pedido de los que faltan» (adjuntar
+> archivos) y el formato de texto, que existe en `EditorRico.jsx` y lo usan
+> tres pantallas.
+>
+> Un documento que marca como pendiente algo ya hecho hace dudar de todo lo
+> demás que dice. Lo que sigue en ❌ más abajo sí se verificó que falta.
+
 ---
 
 ## 0. De dónde sale este documento
@@ -63,7 +74,7 @@ Contexto técnico que condiciona todo lo demás:
 | RF-CO-08 | Guardar una lista de destinatarios para reusarla | ❌ | Cada campaña se arma de cero |
 | RF-CO-09 | Escribir a un correo suelto que no es de la cartera | ❌ | Hoy solo se elige de la lista de empresas |
 | RF-CO-10 | Escribir a **prospectos**, no solo a clientes | ❌ | La tabla `persona` existe y tiene correos |
-| RF-CO-11 | Detectar que el **mismo correo** está en dos empresas distintas | ❌ | Hoy esa persona recibiría el mismo correo dos veces sin que nadie lo note |
+| RF-CO-11 | Detectar que el **mismo correo** está en dos empresas distintas | ✅ | La previa avisa y lista cuáles antes de enviar |
 
 ### 1.2 Redactar
 
@@ -75,11 +86,11 @@ Contexto técnico que condiciona todo lo demás:
 | RF-CO-15 | Avisar de marcas mal escritas (`{{valorplan}}`) antes de enviar | 🟡 | Se muestran en rojo |
 | RF-CO-16 | Firma de texto | 🟡 | |
 | RF-CO-17 | **Imagen** en la firma (logo) | 🟡 | Se achica a 400px y viaja como data URI |
-| RF-CO-18 | Dar formato: negrita, cursiva, **enlaces** | ❌ | Es texto plano. Un enlace se ve como URL cruda; para «haga clic aquí» no hay forma |
-| RF-CO-19 | Adjuntar archivos (PDF del informe, cartola, etc.) | ❌ | **El más pedido de los que faltan** |
+| RF-CO-18 | Dar formato: negrita, cursiva, **enlaces** | ✅ | `EditorRico.jsx`, sin librerías. Lo usan Plantillas, Responder y Envío |
+| RF-CO-19 | Adjuntar archivos (PDF del informe, cartola, etc.) | ✅ | Era «el más pedido de los que faltan». Ya funciona |
 | RF-CO-20 | Guardar un borrador sin enviarlo | ❌ | Si se cierra la pestaña, se pierde lo escrito |
-| RF-CO-21 | Responder-a (`reply-to`) distinto del remitente | ❌ | |
-| RF-CO-22 | Copia y copia oculta (CC / CCO) | ❌ | |
+| RF-CO-21 | Responder-a (`reply-to`) distinto del remitente | ✅ | |
+| RF-CO-22 | Copia y copia oculta (CC / CCO) | ✅ | |
 
 ### 1.3 Datos que se reemplazan por empresa
 
@@ -102,7 +113,7 @@ en el momento del envío.
 | RF-CO-23 | Avisar cuántas empresas recibirían un dato **en blanco o en cero** | 🟡 |
 | RF-CO-24 | Listar cuáles son, para poder corregirlas antes | 🟡 |
 | RF-CO-25 | Poder definir un **valor por defecto** por marca («si no tiene plan, decir "sin plan"») | ❌ |
-| RF-CO-26 | Más marcas: dirección, comuna, teléfono, fecha de vencimiento del cobro | ❌ |
+| RF-CO-26 | Más marcas: dirección, comuna, teléfono, fecha de vencimiento del cobro | ⚠️ | `{{vencimiento}}` ya existe. Faltan dirección, comuna y teléfono |
 
 ### 1.4 Vista previa
 
@@ -113,7 +124,7 @@ en el momento del envío.
 | RF-CO-29 | Ver el remitente que se va a usar | 🟡 | |
 | RF-CO-30 | La previa muestra **texto plano**, no el HTML final | ⚠️ | Lo que se ve no es exactamente lo que llega |
 | RF-CO-31 | Enviar **una prueba** a una casilla interna antes del envío real | 🟡 | Destino fijo en el código |
-| RF-CO-32 | Elegir a qué dirección va la prueba | ❌ | Está fijo en `felipe.veram2001@gmail.com` |
+| RF-CO-32 | Elegir a qué dirección va la prueba | ✅ | Ese correo quedó solo como valor por omisión |
 
 ### 1.5 Enviar
 

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Building2, User, Edit, DollarSign, Briefcase, FileSpreadsheet, Key, Send, Save, Clock, AlertTriangle, CheckCircle2, Landmark, Receipt, Layers, Plus, Trash2, MessageSquare, Ticket, History, RotateCcw, Search, Flag, CalendarClock, Phone, Mail, Copy, Bell, PenLine, Loader2, Check } from 'lucide-react';
+import { X, Building2, User, Edit, DollarSign, Briefcase, FileSpreadsheet, Key, Send, Save, Clock, AlertTriangle, CheckCircle2, Landmark, Receipt, Layers, Plus, Trash2, MessageSquare, Ticket, History, RotateCcw, Search, Flag, CalendarClock, Phone, Mail, Copy, Bell, PenLine, Loader2, Check, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { EditableField, SecureField, SelectField } from '../ui/CrmUI';
@@ -9,6 +9,8 @@ import LogoUploader from '@/components/ui/LogoUploader';
 import { PERIODICIDADES, etiquetaPeriodicidad, sumaAlMes } from '@/lib/periodicidades';
 import { createNotaApi, editarNotaApi, eliminarNotaApi, cambiarPlanApi, addServicioApi, removeServicioApi, editarServicioApi, reactivarServicioApi, toggleTicketApi } from '@/services/crmService';
 
+import UltimasFacturas from './UltimasFacturas';
+import ContactosEmpresa from './ContactosEmpresa';
 import { useAuth } from '@/hooks/useAuth';
 
 const getSessionId = () => {
@@ -797,126 +799,14 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                     </div>
                 </div>
 
-                {/* 1. INFO GENERAL */}
-                <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
-                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <User size={14} /> Contacto y Representante
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        <EditableField label="RUT Empresa" name="rut" value={isEditing ? (formData.rut || '') : rut} isEditing={isEditing} onChange={handleInputChange} isMono />
-                        <EditableField label="Neto mensual (honorario)" name="honorario" value={isEditing ? (formData.honorario ?? honorario) : fmt(honorario)} isEditing={isEditing} onChange={handleInputChange} />
-                        <EditableField label="Representante Legal" name="repNombre" value={isEditing ? formData.repNombre : repNombre} isEditing={isEditing} onChange={handleInputChange} />
-                        <EditableField label="RUT Representante" name="repRut" value={isEditing ? formData.repRut : repRut} isEditing={isEditing} onChange={handleInputChange} />
-                        <EditableField label="Correo Electrónico" name="correo" value={isEditing ? formData.correo : correo} isEditing={isEditing} onChange={handleInputChange} />
-                        <EditableField label="WhatsApp / Teléfono" name="whatsapp" value={isEditing ? formData.whatsapp : whatsapp} isEditing={isEditing} onChange={handleInputChange} />
-                        <EditableField label="Giro" name="giro" value={isEditing ? formData.giro : giro} isEditing={isEditing} onChange={handleInputChange} />
-                        <EditableField label="Régimen Tributario" name="regimen" value={isEditing ? formData.regimen : regimen} isEditing={isEditing} onChange={handleInputChange} />
-                    </div>
-
-                    {/* RESPONSABLE DEL SERVICIO · es de la OFICINA, no del cliente.
-                        Va aparte del representante legal justamente para que no se
-                        confundan: los dos son "el contacto", pero de lados opuestos. */}
-                    <div className="mt-3 pt-3 border-t border-[#efe8dd] flex items-center gap-2">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Responsable del servicio</span>
-                        {client.responsableNombre ? (
-                            <span className="text-xs font-bold text-emerald-700 bg-emerald-500/10 border border-emerald-500/25 rounded-lg px-2 py-0.5">
-                                {client.responsableNombre}
-                            </span>
-                        ) : (
-                            <span className="text-[11px] text-slate-400 italic">Sin asignar</span>
-                        )}
-                    </div>
-
-                    {/* Los demás representantes legales. Solo aparece si hay más de
-                        uno: con uno solo ya está arriba y repetirlo sobra. */}
-                    {Array.isArray(client.representantes) && client.representantes.length > 1 && (
-                        <div className="mt-3 pt-3 border-t border-[#efe8dd]">
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                                Otros representantes legales ({client.representantes.length - 1})
-                            </span>
-                            <div className="mt-1.5 space-y-1">
-                                {client.representantes.filter(r => !r.principal).map(r => (
-                                    <div key={r.id} className="flex items-center gap-2 flex-wrap text-xs bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5">
-                                        <span className="font-bold text-slate-700">{r.nombre}</span>
-                                        {r.rut && <span className="text-slate-500 font-mono text-[10px]">{r.rut}</span>}
-                                        {r.email && <span className="text-slate-400 text-[10px] truncate">{r.email}</span>}
-                                        {r.telefono && <span className="text-slate-400 text-[10px]">{r.telefono}</span>}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* PLANES · el negocio vende más de uno a la vez. Se muestra solo
-                    cuando hay más de uno; con uno solo ya está en la cabecera. */}
-                {Array.isArray(client.planes) && client.planes.length > 1 && (
-                    <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
-                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                            <Layers size={14} /> Planes contratados ({client.planes.length})
-                        </h3>
-                        <div className="space-y-1.5">
-                            {client.planes.map(p => (
-                                <div key={p.id} className="flex items-center gap-2 border border-[#efe8dd] rounded-lg px-3 py-2">
-                                    <span className="text-[9px] font-black text-slate-300 w-4">{p.principal ? '★' : ''}</span>
-                                    <span className="text-xs font-bold text-slate-700 flex-1 truncate">{p.nombre}</span>
-                                    <span className="text-xs font-black text-slate-900 tabular-nums">{fmt(p.precio)}</span>
-                                </div>
-                            ))}
-                            <div className="flex items-center gap-2 px-3 pt-2 border-t border-[#efe8dd]">
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex-1">Suma de planes</span>
-                                <span className="text-xs font-black text-emerald-700 tabular-nums">
-                                    {fmt(client.planes.reduce((s, p) => s + (Number(p.precio) || 0), 0))}
-                                </span>
-                            </div>
-                        </div>
-                        {/* Si la suma no calza con lo que se cobra, hay que verlo. */}
-                        {Math.round(client.planes.reduce((s, p) => s + (Number(p.precio) || 0), 0)) !== Math.round(Number(honorario) || 0) && (
-                            <p className="text-[10px] text-amber-700 bg-amber-500/10 border border-amber-500/25 rounded-lg px-2.5 py-1.5 mt-2">
-                                La suma de los planes no calza con el honorario cobrado ({fmt(honorario)}).
-                                El honorario es el que manda en la facturación.
-                            </p>
-                        )}
-                    </div>
-                )}
-
-                {/* DIRECCIÓN */}
-                <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
-                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Landmark size={14} /> Dirección (Casa Matriz)
-                    </h3>
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                        <EditableField label="Dirección" name="direccion" value={isEditing ? formData.direccion : direccion} isEditing={isEditing} onChange={handleInputChange} />
-                        <EditableField label="Comuna" name="comuna" value={isEditing ? formData.comuna : comuna} isEditing={isEditing} onChange={handleInputChange} />
-                        <EditableField label="Ciudad" name="ciudad" value={isEditing ? formData.ciudad : ciudad} isEditing={isEditing} onChange={handleInputChange} />
-                        {isEditing && (
-                            <div className="col-span-2 lg:col-span-3">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Logo del cliente</p>
-                                <LogoUploader
-                                    value={formData.logo || formData.logo_url || ''}
-                                    onChange={(dataUri) => setFormData(prev => ({ ...prev, logo: dataUri }))}
-                                    onError={(msg) => toast({ variant: 'destructive', title: 'Logo', description: msg })}
-                                />
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* 2. CREDENCIALES */}
-                <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-4">
-                    <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 flex items-center gap-2">
-                        <Key size={14} /> Accesos y Credenciales
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3">
-                        {/* Solo cambia la etiqueta; el `name` sigue siendo el que
-                            entiende la API. «Clave SII» a secas no decía de quién
-                            era, y son de dos personas distintas: una va con el RUT
-                            de la empresa y la otra con el del representante legal. */}
-                        <SecureField label="Clave SII · Empresa" name="claveWeb" value={isEditing ? formData.claveWeb : claveWeb} isEditing={isEditing} onChange={handleInputChange} />
-                        <SecureField label="Clave SII · Representante Legal" name="claveSII" value={isEditing ? formData.claveSII : claveSII} isEditing={isEditing} onChange={handleInputChange} />
-                    </div>
-                </div>
-
+                {/* ORDEN DE LA FICHA (04-09-2026).
+                    Antes: Estado -> Contacto -> Direccion -> Credenciales ->
+                    Plan -> Operacion. Lo que uno viene a mirar casi siempre
+                    —cuanto le cobro y si pago— quedaba en el medio, y la
+                    direccion, que es lo que menos se consulta, ocupaba un lugar
+                    privilegiado.
+                    Ahora el dinero va arriba: Estado -> Plan -> Operacion, y
+                    despues el contacto y el resto. */}
                 {/* PLAN Y SERVICIOS CONTRATADOS */}
                 <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-2xl p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -1239,6 +1129,149 @@ const ClientDetailDrawer = ({ client, onClose, onUpdateClient, onDelete, planes 
                         <EditableField label="Compras" name="compras" value={isEditing ? formData.compras : fmt(compras)} isEditing={isEditing} onChange={handleInputChange} />
                         <EditableField label="Fact. Total" name="facturacionTotal" value={isEditing ? formData.facturacionTotal : fmt(facturacionTotal)} isEditing={isEditing} onChange={handleInputChange} />
                         <EditableField label="Impuesto Único" name="impuestoUnico" value={isEditing ? formData.impuestoUnico : fmt(impuestoUnico)} isEditing={isEditing} onChange={handleInputChange} />
+                    </div>
+
+                    {/* LAS ÚLTIMAS FACTURAS.
+                        El «N° de Factura» de arriba es un campo suelto escrito a
+                        mano: con varias facturas al mes no dice cuál de todas es.
+                        Acá van las últimas de verdad, con su fecha, su estado,
+                        quién las pagó y si quedaron anuladas por nota de crédito. */}
+                    <div className="mt-3 pt-3 border-t border-emerald-500/10">
+                        <span className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block mb-1.5">
+                            Últimas facturas
+                        </span>
+                        <UltimasFacturas empresaId={client?.id} limite={3} />
+                    </div>
+                </div>
+
+                {/* 1. INFO GENERAL */}
+                <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
+                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <User size={14} /> Contacto y Representante
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        <EditableField label="RUT Empresa" name="rut" value={isEditing ? (formData.rut || '') : rut} isEditing={isEditing} onChange={handleInputChange} isMono />
+                        <EditableField label="Neto mensual (honorario)" name="honorario" value={isEditing ? (formData.honorario ?? honorario) : fmt(honorario)} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="Representante Legal" name="repNombre" value={isEditing ? formData.repNombre : repNombre} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="RUT Representante" name="repRut" value={isEditing ? formData.repRut : repRut} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="Correo Electrónico" name="correo" value={isEditing ? formData.correo : correo} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="WhatsApp / Teléfono" name="whatsapp" value={isEditing ? formData.whatsapp : whatsapp} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="Giro" name="giro" value={isEditing ? formData.giro : giro} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="Régimen Tributario" name="regimen" value={isEditing ? formData.regimen : regimen} isEditing={isEditing} onChange={handleInputChange} />
+                    </div>
+
+                    {/* RESPONSABLE DEL SERVICIO · es de la OFICINA, no del cliente.
+                        Va aparte del representante legal justamente para que no se
+                        confundan: los dos son "el contacto", pero de lados opuestos. */}
+                    <div className="mt-3 pt-3 border-t border-[#efe8dd] flex items-center gap-2">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Responsable del servicio</span>
+                        {client.responsableNombre ? (
+                            <span className="text-xs font-bold text-emerald-700 bg-emerald-500/10 border border-emerald-500/25 rounded-lg px-2 py-0.5">
+                                {client.responsableNombre}
+                            </span>
+                        ) : (
+                            <span className="text-[11px] text-slate-400 italic">Sin asignar</span>
+                        )}
+                    </div>
+
+                    {/* Los demás representantes legales. Solo aparece si hay más de
+                        uno: con uno solo ya está arriba y repetirlo sobra. */}
+                    {Array.isArray(client.representantes) && client.representantes.length > 1 && (
+                        <div className="mt-3 pt-3 border-t border-[#efe8dd]">
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                Otros representantes legales ({client.representantes.length - 1})
+                            </span>
+                            <div className="mt-1.5 space-y-1">
+                                {client.representantes.filter(r => !r.principal).map(r => (
+                                    <div key={r.id} className="flex items-center gap-2 flex-wrap text-xs bg-slate-50 border border-[#efe8dd] rounded-lg px-2.5 py-1.5">
+                                        <span className="font-bold text-slate-700">{r.nombre}</span>
+                                        {r.rut && <span className="text-slate-500 font-mono text-[10px]">{r.rut}</span>}
+                                        {r.email && <span className="text-slate-400 text-[10px] truncate">{r.email}</span>}
+                                        {r.telefono && <span className="text-slate-400 text-[10px]">{r.telefono}</span>}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* PLANES · el negocio vende más de uno a la vez. Se muestra solo
+                    cuando hay más de uno; con uno solo ya está en la cabecera. */}
+                {Array.isArray(client.planes) && client.planes.length > 1 && (
+                    <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
+                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                            <Layers size={14} /> Planes contratados ({client.planes.length})
+                        </h3>
+                        <div className="space-y-1.5">
+                            {client.planes.map(p => (
+                                <div key={p.id} className="flex items-center gap-2 border border-[#efe8dd] rounded-lg px-3 py-2">
+                                    <span className="text-[9px] font-black text-slate-300 w-4">{p.principal ? '★' : ''}</span>
+                                    <span className="text-xs font-bold text-slate-700 flex-1 truncate">{p.nombre}</span>
+                                    <span className="text-xs font-black text-slate-900 tabular-nums">{fmt(p.precio)}</span>
+                                </div>
+                            ))}
+                            <div className="flex items-center gap-2 px-3 pt-2 border-t border-[#efe8dd]">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex-1">Suma de planes</span>
+                                <span className="text-xs font-black text-emerald-700 tabular-nums">
+                                    {fmt(client.planes.reduce((s, p) => s + (Number(p.precio) || 0), 0))}
+                                </span>
+                            </div>
+                        </div>
+                        {/* Si la suma no calza con lo que se cobra, hay que verlo. */}
+                        {Math.round(client.planes.reduce((s, p) => s + (Number(p.precio) || 0), 0)) !== Math.round(Number(honorario) || 0) && (
+                            <p className="text-[10px] text-amber-700 bg-amber-500/10 border border-amber-500/25 rounded-lg px-2.5 py-1.5 mt-2">
+                                La suma de los planes no calza con el honorario cobrado ({fmt(honorario)}).
+                                El honorario es el que manda en la facturación.
+                            </p>
+                        )}
+                    </div>
+                )}
+
+                {/* PERSONAS DE LA EMPRESA · quién paga, el contador, a quién llamar.
+                    Distinto del representante legal de arriba, que es quien firma
+                    ante el SII y de quien el robot toma el RUT para entrar al
+                    portal. Acá van las personas con las que uno trata. */}
+                <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
+                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Users size={14} /> Personas de la empresa
+                    </h3>
+                    <ContactosEmpresa empresaId={client?.id} />
+                </div>
+
+                {/* DIRECCIÓN */}
+                <div className="bg-white border border-[#efe8dd] rounded-2xl p-4">
+                    <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Landmark size={14} /> Dirección (Casa Matriz)
+                    </h3>
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                        <EditableField label="Dirección" name="direccion" value={isEditing ? formData.direccion : direccion} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="Comuna" name="comuna" value={isEditing ? formData.comuna : comuna} isEditing={isEditing} onChange={handleInputChange} />
+                        <EditableField label="Ciudad" name="ciudad" value={isEditing ? formData.ciudad : ciudad} isEditing={isEditing} onChange={handleInputChange} />
+                        {isEditing && (
+                            <div className="col-span-2 lg:col-span-3">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Logo del cliente</p>
+                                <LogoUploader
+                                    value={formData.logo || formData.logo_url || ''}
+                                    onChange={(dataUri) => setFormData(prev => ({ ...prev, logo: dataUri }))}
+                                    onError={(msg) => toast({ variant: 'destructive', title: 'Logo', description: msg })}
+                                />
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* 2. CREDENCIALES */}
+                <div className="bg-blue-500/5 border border-blue-500/10 rounded-2xl p-4">
+                    <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <Key size={14} /> Accesos y Credenciales
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                        {/* Solo cambia la etiqueta; el `name` sigue siendo el que
+                            entiende la API. «Clave SII» a secas no decía de quién
+                            era, y son de dos personas distintas: una va con el RUT
+                            de la empresa y la otra con el del representante legal. */}
+                        <SecureField label="Clave SII · Empresa" name="claveWeb" value={isEditing ? formData.claveWeb : claveWeb} isEditing={isEditing} onChange={handleInputChange} />
+                        <SecureField label="Clave SII · Representante Legal" name="claveSII" value={isEditing ? formData.claveSII : claveSII} isEditing={isEditing} onChange={handleInputChange} />
                     </div>
                 </div>
 

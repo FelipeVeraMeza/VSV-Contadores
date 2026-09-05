@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Filter, ChevronDown, ChevronUp, Users, AlertTriangle, FileText, CheckCircle2, Building2, User, MessageSquare, SlidersHorizontal, Layers, Trash2, Download, X, CheckSquare, Mail, Copy, Archive } from 'lucide-react';
+import { Search, Filter, ChevronDown, ChevronUp, Users, AlertTriangle, FileText, CheckCircle2, Building2, User, MessageSquare, SlidersHorizontal, Layers, Trash2, Download, X, CheckSquare, Mail, Copy, Archive, DollarSign } from 'lucide-react';
 import { FilterChip } from '../ui/CrmUI';
 import { toast } from '@/components/ui/use-toast';
 
@@ -92,6 +92,17 @@ const CrmTableList = ({
             return n;
         });
     };
+    // Cuántos cobran distinto a su tramo, dentro de lo que se está mirando.
+    // Se cuenta sobre la lista ya filtrada, igual que los demás contadores de
+    // esta barra: el chip dice cuántos hay en la vista actual, no en toda la
+    // cartera. Al activar el filtro el número queda igual, porque los que
+    // quedan son justamente esos.
+    const descalzados = React.useMemo(() => (filteredClients || []).filter(c => {
+        const sug = c.precioSugerido ?? null;
+        const cobra = Number(c.precioMensual) || 0;
+        return sug !== null && cobra > 0 && Math.abs(sug - cobra) >= 1000;
+    }).length, [filteredClients]);
+
     const allVisibleSelected = sortedClients.length > 0 && sortedClients.every(c => selectedIds.has(c.id));
     const toggleAll = () => setSelectedIds(allVisibleSelected ? new Set() : new Set(sortedClients.map(c => c.id)));
     const clearSel = () => setSelectedIds(new Set());
@@ -109,7 +120,12 @@ const CrmTableList = ({
     const getPlanColor = (plan) => {
         const p = String(plan).toUpperCase();
         if (p.includes('TERMINO') || p.includes('BAJA')) return 'bg-slate-100 text-slate-500 border-slate-200';
-        if (p.includes('FREE')) return 'bg-slate-100 text-slate-500 border-slate-200';
+        // FREE con color propio. Antes era gris —el mismo del plan dado de baja
+        // y el mismo del valor por omisión—, así que se perdía entre las demás
+        // y había que leer la palabra para notarlo. Un cliente que no paga es
+        // justo lo que uno quiere ver de un vistazo al recorrer la columna.
+        if (p.includes('SIN PLAN')) return 'bg-amber-50 text-amber-700 border-amber-300';
+        if (p.includes('FREE')) return 'bg-teal-50 text-teal-700 border-teal-300';
         if (p.includes('FULL')) return 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200';
         if (p.includes('EXECUTIVE')) return 'bg-amber-50 text-amber-700 border-amber-200';
         if (p.includes('EMPRENDEDOR')) return 'bg-purple-50 text-purple-700 border-purple-200';
@@ -216,7 +232,15 @@ const CrmTableList = ({
         const completitud = getCompletitud(client);
         const faltantes = getFaltantes(client);
         const tipoCliente = client.tipo_cliente || client.type || 'Empresa';
-        const plan = client.plan || client.plan_nombre || 'FREE';
+        // Sin plan NO es lo mismo que FREE. Antes se caía a 'FREE' por omisión y
+        // eso etiquetaba como gratis a 74 empresas a las que simplemente nadie
+        // les asignó plan — afirmar «no paga» sobre un dato que no existe.
+        // Ahora se dice lo que hay: falta el dato.
+        const plan = client.plan || client.plan_nombre || 'SIN PLAN';
+        const ultimoFolio = client.ultimoFolio || null;
+        const ultimaEmision = client.ultimaEmision || null;
+        const facturasDelMes = client.facturasDelMes ?? 0;
+        const responsableNombre = client.responsableNombre || null;
         const importante = client.nota_urgente || client.importante || '';
 
         // Prioriza WhatsApp igual que la ficha (consistencia entre tabla y drawer)
@@ -228,12 +252,31 @@ const CrmTableList = ({
         const estadoFormulario = String(client.estado_f29 || client.estadoFormulario || 'PENDIENTE').trim().toUpperCase();
         const neto = Number(client.honorarioNeto ?? client.honorario_neto ?? 0);
 
+        // DESCALCE ENTRE LO QUE SE COBRA Y LO QUE DICE SU TRAMO.
+        //
+        // El plan no cobra lo mismo a todos: cobra según cuánto factura la
+        // empresa. Medido el 04-09-2026: 29 empresas cobran distinto al tramo
+        // que les corresponde, 16 de menos y 13 de más.
+        //
+        // Va DESPUÉS de `neto` a propósito: lo necesita para comparar. Cuando se
+        // insertó antes, `sugerido` quedaba sin declarar y el CRM entero se caía
+        // con «sugerido is not defined».
+        //
+        // Se ignoran diferencias menores a $1.000: hay precios históricos con
+        // centavos —BARBERIA cobra 60.504 contra un tramo de 60.500— y marcar
+        // eso enseñaría a ignorar el aviso.
+        const sugerido = client.precioSugerido ?? null;
+        const difPrecio = (sugerido !== null && neto > 0) ? sugerido - neto : 0;
+        const descalzado = Math.abs(difPrecio) >= 1000;
+
         const isAlDiaF29 = estadoFormulario === 'DECLARADO' || estadoFormulario === 'NO DECLARAR';
         const tieneImportante = importante && importante !== 'SIN_DATO';
         const moroso = Number(client.deudaVencida) > 0 || Boolean(client.cobroVencido);
 
         return {
             razonSocial, rut, completitud, faltantes, tipoCliente, plan, importante,
+            ultimoFolio, ultimaEmision, facturasDelMes, responsableNombre,
+            sugerido, difPrecio, descalzado,
             whatsapp, correo, estadoFormulario, neto, isAlDiaF29, tieneImportante, moroso,
             pSt: cobranzaStyle(client),   // deuda real, no el campo estático
             fSt: f29Style(estadoFormulario),
@@ -269,6 +312,15 @@ const CrmTableList = ({
                   <FilterChip icon={AlertTriangle} label="Con deuda vencida" value={stats?.criticos || 0} color="text-red-500" onClick={() => setStatusFilter('Críticos')} active={statusFilter === 'Críticos'} />
                   <FilterChip icon={FileText} label="F29 Pendientes" value={stats?.f29Pendientes || 0} color="text-amber-500" onClick={() => setStatusFilter('F29 Pendientes')} active={statusFilter === 'F29 Pendientes'} />
                   <FilterChip icon={CheckCircle2} label="Sin vencidos" value={stats?.alDia || 0} color="text-emerald-500" onClick={() => setStatusFilter('Al Día')} active={statusFilter === 'Al Día'} />
+                  {/* PRECIO DESCALZADO · cobran distinto a lo que dice su tramo.
+                      Solo se dibuja si hay alguno: un cero permanente es ruido.
+                      Medido el 04-09-2026: 32 empresas, 16 de menos y 16 de más. */}
+                  {descalzados > 0 && (
+                    <FilterChip icon={DollarSign} label="Precio descalzado" value={descalzados}
+                      color="text-amber-600"
+                      onClick={() => setStatusFilter('Precio descalzado')}
+                      active={statusFilter === 'Precio descalzado'} />
+                  )}
                 </>
               )}
             </div>
@@ -310,24 +362,21 @@ const CrmTableList = ({
                         </button>
                     )}
 
-                    {/* FUERA DE CARTERA · las empresas que salieron de la planilla de
-                        trabajo. Existen en la base pero no aparecían en ninguna
-                        pestaña: eran 81 fichas inalcanzables. Si un ex cliente
-                        volvía, no había forma de encontrarlo y terminaba duplicado.
-                        Es otro conjunto de datos, no un filtro: cambia la consulta. */}
-                    <button
-                        onClick={() => setCarteraModo(carteraModo === 'fuera' ? '' : 'fuera')}
-                        title={carteraModo === 'fuera'
-                            ? 'Volver a la cartera de trabajo'
-                            : 'Ver las empresas que salieron de la planilla de trabajo'}
-                        className={`flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                            carteraModo === 'fuera'
-                            ? 'bg-slate-700 text-white shadow-sm'
-                            : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'
-                        }`}
-                    >
-                        <Archive size={12} /> Fuera de cartera
-                    </button>
+                    {/* «FUERA DE CARTERA» SE SACÓ DE LA PANTALLA (04-09-2026).
+                        Pedido de Felipe: «fuera de cartera no va, eso es activo;
+                        de baja listo, solo 2».
+
+                        Eran tres botones para dos estados reales. Medido al
+                        sacarlo: de las 92 empresas fuera de cartera, 89 YA
+                        estaban de baja —o sea, ya salían en «De baja»— y solo 3
+                        seguían activas, que es donde corresponde que se vean.
+
+                        El mecanismo `carteraModo` NO se borró: sigue en el
+                        servidor y en `useBunkerData`. Existe porque estas fichas
+                        llegaron a ser inalcanzables —81 empresas que no aparecían
+                        en ninguna pestaña, y un ex cliente que volvía terminaba
+                        duplicado—. Lo que se quita es el botón, no la salida de
+                        emergencia. */}
                 </div>
 
                 {/* `flex-wrap`: los tres controles no caben en una fila de 390px.
@@ -339,7 +388,7 @@ const CrmTableList = ({
                         <input
                             type="text"
                             aria-label="Buscar clientes por nombre, RUT, correo, teléfono, representante, giro o comuna"
-                            placeholder="Buscar por nombre, RUT, correo, teléfono o representante..."
+                            placeholder="Buscar por nombre, RUT (empresa o representante), quien pagó, correo, teléfono..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full bg-slate-50 border border-[#e5ddd0] rounded-lg pl-10 pr-4 py-2 text-xs text-slate-900 outline-none focus:border-[#199b4d] transition-colors placeholder:text-slate-400"
@@ -478,6 +527,10 @@ const CrmTableList = ({
                       </th>
                       <th className="px-4 py-2.5 font-black">Contacto y Alertas</th>
                       <th className="px-4 py-2.5 font-black">Estados</th>
+                      {/* ÚLTIMA FACTURA · pedido el 04-09-2026: saber cuándo se
+                          le facturó por última vez y con qué folio sin tener que
+                          abrir la ficha de cada cliente. */}
+                      <th className="px-4 py-2.5 font-black">Última factura</th>
                       <th className="px-4 py-2.5 font-black text-right">
                         <button onClick={() => toggleSort('neto')} className="flex items-center gap-1 hover:text-slate-900 transition-colors uppercase tracking-widest ml-auto">
                           Neto mensual <SortIcon col="neto" />
@@ -489,6 +542,8 @@ const CrmTableList = ({
                     {sortedClients.map((client) => {
                       const {
                         razonSocial, rut, completitud, tipoCliente, plan, importante,
+                        ultimoFolio, ultimaEmision, facturasDelMes, responsableNombre,
+                        sugerido, difPrecio, descalzado,
                         whatsapp, correo, estadoFormulario, neto,
                         tieneImportante, pSt, fSt, cSt, accent, tituloFicha,
                       } = derivar(client);
@@ -513,6 +568,18 @@ const CrmTableList = ({
                               <div className="flex flex-col min-w-0">
                                  <span className="font-bold text-slate-900 text-xs uppercase tracking-tight truncate max-w-[220px]" title={razonSocial}>{razonSocial}</span>
                                  <span className="text-[10px] text-slate-500 font-mono tracking-wider">{rut}</span>
+                                 {/* RESPONSABLE · quién de la oficina atiende a este
+                                     cliente. Volvió a la lista el 04-09-2026, pero
+                                     bajo el nombre y no como columna propia: como
+                                     columna ocupaba ancho fijo para un dato que
+                                     muchas veces está vacío (97 de 99 empresas no lo
+                                     tienen cargado). Acá no ocupa nada cuando falta. */}
+                                 {responsableNombre && (
+                                    <span className="text-[9px] text-slate-400 truncate max-w-[220px]"
+                                          title={`Responsable del servicio: ${responsableNombre}`}>
+                                       {responsableNombre}
+                                    </span>
+                                 )}
                                  <div className="flex items-center gap-1.5 mt-1" title={tituloFicha}>
                                     <div className="h-1 w-16 bg-slate-200 rounded-full overflow-hidden">
                                        <div
@@ -588,10 +655,55 @@ const CrmTableList = ({
                              </div>
                           </td>
 
+                          {/* ÚLTIMA FACTURA · folio y cuándo se emitió.
+                              Si lleva más de una este mes se dice al lado: el
+                              folio solo muestra la más reciente, y desde que se
+                              permiten varias facturas por mes eso podría dar a
+                              entender que hubo una sola. */}
+                          <td className="px-4 py-2.5">
+                             {ultimoFolio ? (
+                                <div className="flex flex-col gap-0.5">
+                                    <span className="font-mono text-[11px] font-bold text-slate-700">
+                                        N° {ultimoFolio}
+                                        {facturasDelMes > 1 && (
+                                            <span className="ml-1.5 text-[8px] font-black text-amber-700 bg-amber-50 border border-amber-200 rounded px-1 py-0.5 uppercase"
+                                                  title={`${facturasDelMes} facturas emitidas este mes`}>
+                                                +{facturasDelMes - 1}
+                                            </span>
+                                        )}
+                                    </span>
+                                    <span className="text-[9px] text-slate-400">
+                                        {ultimaEmision ? new Date(ultimaEmision).toLocaleDateString('es-CL') : ''}
+                                    </span>
+                                </div>
+                             ) : (
+                                <span className="text-[10px] text-slate-300 italic">Sin facturas</span>
+                             )}
+                          </td>
+
                           <td className="px-4 py-2.5 text-right">
                              <div className="flex flex-col items-end gap-0.5">
                                  <span className="text-slate-400 text-[8px] font-black uppercase tracking-widest">Neto mensual</span>
                                  <span className={`font-mono font-bold text-sm ${neto > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>${(isNaN(neto) ? 0 : neto).toLocaleString('es-CL')}</span>
+                                 {/* SI NO CALZA CON SU TRAMO, SE DICE.
+                                     No se cambia el precio solo: subirle el precio a
+                                     un cliente es una conversación comercial, no un
+                                     cálculo. Acá solo se avisa y se dice cuánto
+                                     debería ser, para que alguien lo decida. */}
+                                 {descalzado && (
+                                    <span
+                                       title={`Factura lo suficiente para el tramo de $${sugerido.toLocaleString('es-CL')}, y se le cobra $${neto.toLocaleString('es-CL')}.
+
+${difPrecio > 0 ? 'Se le está cobrando de MENOS.' : 'Se le está cobrando de MÁS.'}
+
+Abre la ficha para revisarlo: el precio no se cambia solo.`}
+                                       className={`text-[9px] font-black tabular-nums px-1.5 py-0.5 rounded border ${
+                                          difPrecio > 0
+                                             ? 'text-amber-700 bg-amber-50 border-amber-200'
+                                             : 'text-blue-700 bg-blue-50 border-blue-200'}`}>
+                                       tramo ${sugerido.toLocaleString('es-CL')}
+                                    </span>
+                                 )}
                              </div>
                           </td>
                         </tr>

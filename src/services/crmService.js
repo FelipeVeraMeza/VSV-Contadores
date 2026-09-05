@@ -139,6 +139,54 @@ export const listarTareasApi = (sessionId, filtros = {}) => {
   return fetchWithAuth(`/crm/tareas${qs ? `?${qs}` : ''}`, sessionId);
 };
 
+// Buscar empresas por nombre o RUT, para vincular una tarea a un cliente.
+export const buscarEmpresasApi = (sessionId, q) =>
+  fetchWithAuth(`/clientes/crm/buscar?q=${encodeURIComponent(q)}`, sessionId);
+
+// Personas de una empresa y quién pagó cada factura.
+export const contactosApi = (sessionId, empresaId) =>
+  fetchWithAuth(`/clientes/crm/${empresaId}/contactos`, sessionId);
+export const crearContactoApi = (sessionId, empresaId, data) =>
+  fetchWithAuth(`/clientes/crm/${empresaId}/contactos`, sessionId, { method: 'POST', body: data });
+export const actualizarContactoApi = (sessionId, contactoId, data) =>
+  fetchWithAuth(`/clientes/crm/contactos/${contactoId}`, sessionId, { method: 'PUT', body: data });
+export const eliminarContactoApi = (sessionId, contactoId) =>
+  fetchWithAuth(`/clientes/crm/contactos/${contactoId}`, sessionId, { method: 'DELETE' });
+export const ultimasFacturasApi = (sessionId, empresaId, limite = 3) =>
+  fetchWithAuth(`/clientes/crm/${empresaId}/facturas?limite=${limite}`, sessionId);
+export const registrarPagoApi = (sessionId, cobroId, data) =>
+  fetchWithAuth(`/clientes/crm/cobros/${cobroId}/pago`, sessionId, { method: 'PATCH', body: data });
+
+// ---- DOCUMENTACIÓN · los .md del proyecto, dentro de la página ----
+export const documentosApi = (sessionId) =>
+  fetchWithAuth('/documentacion', sessionId);
+export const documentoApi = (sessionId, id) =>
+  fetchWithAuth(`/documentacion/${id}`, sessionId);
+
+// ---- CATÁLOGO · planes, sus tramos de precio y servicios ----
+export const catalogoApi = (sessionId) =>
+  fetchWithAuth('/clientes/catalogo', sessionId);
+
+export const crearPlanApi = (sessionId, data) =>
+  fetchWithAuth('/clientes/catalogo/planes', sessionId, { method: 'POST', body: data });
+
+export const actualizarPlanApi = (sessionId, id, data) =>
+  fetchWithAuth(`/clientes/catalogo/planes/${id}`, sessionId, { method: 'PUT', body: data });
+
+export const eliminarPlanApi = (sessionId, id) =>
+  fetchWithAuth(`/clientes/catalogo/planes/${id}`, sessionId, { method: 'DELETE' });
+
+// Los tramos van todos juntos: es una escalera, no filas sueltas.
+export const guardarTramosApi = (sessionId, planId, tramos) =>
+  fetchWithAuth(`/clientes/catalogo/planes/${planId}/tramos`, sessionId,
+    { method: 'PUT', body: { tramos } });
+
+export const crearServicioApi = (sessionId, data) =>
+  fetchWithAuth('/clientes/catalogo/servicios', sessionId, { method: 'POST', body: data });
+
+export const actualizarServicioApi = (sessionId, id, data) =>
+  fetchWithAuth(`/clientes/catalogo/servicios/${id}`, sessionId, { method: 'PUT', body: data });
+
 // Quién está conectado ahora mismo, solo de mi organización.
 export const conectadosApi = (sessionId) =>
   fetchWithAuth('/crm/conectados', sessionId);

@@ -265,6 +265,7 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
     // venía; «a quién contactar» la ordena por la fecha de próximo contacto y
     // convierte la lista en la agenda del día.
     const [orden, setOrden] = useState('recientes');
+    const [soloAtrasados, setSoloAtrasados] = useState(false);
 
     // ---- Trabajar sin salir de la lista ----
     // `expandido` es el prospecto abierto; `panel` guarda sus notas y acciones
@@ -471,19 +472,35 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
         return personas
             .filter(p => estado === 'Todos' || p.estado === estado)
             .filter(p => !miCartera || (userId && p.ejecutivoId === userId))
+            // ATRASADOS · a quién había que llamar y no se llamó.
+            // Ordenar por fecha no alcanzaba: con 129 de 132 vencidas, el orden
+            // deja las atrasadas arriba pero mezcladas con las demás y sin decir
+            // cuántas son. El filtro las aísla.
+            .filter(p => !soloAtrasados || (p.proximoContacto && new Date(p.proximoContacto) < new Date()))
             .filter(p => {
                 if (!term) return true;
+                // Los dígitos del término, para buscar teléfonos sin importar el
+                // formato. OJO: si el término es texto ("juan"), esto queda
+                // vacío — y `"56911".includes("")` es SIEMPRE verdadero, así que
+                // sin el guardia toda búsqueda de texto devolvía la lista
+                // entera. Es el mismo defecto que ya se corrigió en el servidor.
+                const digitos = term.replace(/\D/g, '');
                 return (
                     (p.nombreCompleto || '').toLowerCase().includes(term) ||
                     (p.rut || '').toLowerCase().includes(term) ||
                     (p.correos || []).some(c => c.toLowerCase().includes(term)) ||
-                    (p.telefonos || []).some(t => t.replace(/\D/g, '').includes(term.replace(/\D/g, '')))
+                    (digitos !== '' && (p.telefonos || []).some(t => t.replace(/\D/g, '').includes(digitos)))
                 );
             });
-    }, [personas, estado, search, miCartera, userId]);
+    }, [personas, estado, search, miCartera, userId, soloAtrasados]);
+
+    // Cuántos están atrasados: es el número que dice si hay trabajo acumulado.
+    const atrasados = useMemo(
+        () => personas.filter(p => p.proximoContacto && new Date(p.proximoContacto) < new Date()).length,
+        [personas]);
 
     // Al cambiar de filtro, la selección se limpia (evita operar sobre filas ocultas)
-    useEffect(() => { setSelectedIds(new Set()); }, [estado, miCartera]);
+    useEffect(() => { setSelectedIds(new Set()); }, [estado, miCartera, soloAtrasados]);
     const allSelected = lista.length > 0 && lista.every(p => selectedIds.has(p.id));
     const toggleAll = () => setSelectedIds(allSelected ? new Set() : new Set(lista.map(p => p.id)));
 
@@ -520,6 +537,29 @@ const PersonasPanel = ({ reloadKey = 0, onCrear }) => {
                                                  : 'bg-white border-[#efe8dd] text-slate-500 hover:text-slate-900'}`}>
                         <CalendarClock size={12} /> A quién contactar
                     </button>
+                    {/* ATRASADOS · el número que dice si hay trabajo acumulado.
+                        Medido el 04-09-2026: 129 de 132 prospectos tenían fecha
+                        de próximo contacto Y las 129 estaban vencidas, la más
+                        vieja del 06-08. El dato existía y nadie lo miraba: no
+                        faltaba cargarlo, faltaba mostrarlo.
+                        Solo se dibuja si hay alguno: un cero permanente en la
+                        barra es ruido. */}
+                    {atrasados > 0 && (
+                        <button
+                            onClick={() => setSoloAtrasados(v => !v)}
+                            title={soloAtrasados
+                                ? 'Ver todos los prospectos'
+                                : `Ver solo los ${atrasados} que ya debiste contactar`}
+                            className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-wider transition-all inline-flex items-center gap-1.5 ${
+                                soloAtrasados ? 'bg-red-600 border-red-500 text-white'
+                                              : 'bg-white border-red-200 text-red-600 hover:bg-red-50'}`}>
+                            <AlertTriangle size={12} /> Atrasados
+                            <span className={`text-[9px] tabular-nums px-1.5 py-0.5 rounded-full ${
+                                soloAtrasados ? 'bg-black/20' : 'bg-red-100'}`}>
+                                {atrasados}
+                            </span>
+                        </button>
+                    )}
                     <button onClick={cargar} title="Recargar" className="p-2 rounded-lg border border-[#efe8dd] bg-slate-50 text-slate-500 hover:text-slate-900">
                         <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
                     </button>

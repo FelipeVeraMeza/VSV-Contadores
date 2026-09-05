@@ -4,7 +4,7 @@ import {
     Plus, Search, Loader2, X, Trash2, Check, Clock, Folder, FolderPlus,
     MessageSquare, ListChecks, ChevronRight, Circle, CircleDot, CheckCircle2,
     Flag, User, Users, Calendar, Send, Paperclip, Download, Eye, Archive, ArchiveRestore,
-    List, Kanban, LayoutTemplate, Network, SlidersHorizontal,
+    List, Kanban, LayoutTemplate, Network, SlidersHorizontal, Building2,
 } from 'lucide-react';
 import { PRIO, PRIO_BARRA, ESTADO_PUNTO, iniciales, soyColaborador } from '@/components/tareas/estilos';
 import TableroTareas from '@/components/tareas/TableroTareas';
@@ -19,7 +19,7 @@ import {
     obtenerTareaApi, agregarComentarioApi, eliminarComentarioApi,
     subirAdjuntoApi, descargarAdjuntoApi, eliminarAdjuntoApi,
     listarProyectosApi, crearProyectoApi, eliminarProyectoApi, archivarTareaApi,
-    usarPlantillaApi, guardarComoPlantillaApi,
+    usarPlantillaApi, guardarComoPlantillaApi, buscarEmpresasApi,
 } from '@/services/crmService';
 import { getCatalogosApi as getCatalogosPersonasApi, listarPersonasApi } from '@/services/personaService';
 
@@ -101,6 +101,7 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
         proyectoId: proyectoActual || '', colaboradores: [],
         // De qué cliente es la tarea. Opcional: una tarea interna no tiene.
         personaId: null, personaNombre: '',
+        empresaId: null, empresaNombre: '',
         // «Quien crea la tarea puede definir quién la ve». Por defecto la ve todo
         // el proyecto; privada la deja solo para responsable, creador y colaboradores.
         visibilidad: 'proyecto',
@@ -119,6 +120,13 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
     // entera: son cientos de personas y un desplegable con cientos no se usa.
     const [buscaCliente, setBuscaCliente] = useState('');
     const [clientes, setClientes] = useState([]);
+    // EMPRESA · de qué cliente del despacho es esta tarea. Es distinto del
+    // «cliente» de arriba, que es una PERSONA del CRM (un prospecto). El pedido
+    // fue explícito: «si creo una tarea poder vincular una empresa, para saber a
+    // quién le debo trabajar». La base ya lo aceptaba (tarea.empresa_id) y el
+    // servidor también; lo que faltaba era poder decirlo al crear.
+    const [buscaEmpresa, setBuscaEmpresa] = useState('');
+    const [empresas, setEmpresas] = useState([]);
     useEffect(() => {
         const q = buscaCliente.trim();
         if (q.length < 3) { setClientes([]); return; }
@@ -131,6 +139,23 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
         }, 300);
         return () => clearTimeout(t);
     }, [buscaCliente]);
+
+    // Se busca contra un endpoint liviano que devuelve solo id, razón social y
+    // RUT. La lista completa del CRM trae decenas de campos por empresa
+    // —cobranza, F29, renta, credenciales— y para elegir un nombre en un
+    // desplegable eso es traer un camión para mover una caja.
+    useEffect(() => {
+        const q = buscaEmpresa.trim().toLowerCase();
+        if (q.length < 2) { setEmpresas([]); return; }
+        const t = setTimeout(async () => {
+            try {
+                const r = await buscarEmpresasApi(getSessionId(), q);
+                const d = await r.json();
+                if (d.success) setEmpresas(d.empresas || []);
+            } catch { /* sin resultados, el campo sigue sirviendo */ }
+        }, 300);
+        return () => clearTimeout(t);
+    }, [buscaEmpresa]);
 
     // Los archivos se juntan acá y se suben cuando la tarea ya existe (ver
     // `guardar`). Se quedan en memoria: no se sube nada hasta que se crea.
@@ -313,6 +338,48 @@ const CrearTareaModal = ({ onClose, onCreated, proyectos, usuarios, proyectoActu
                                 {proyectos.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
                             </select>
                         </label>
+                    </div>
+
+                    {/* EMPRESA · a qué cliente del despacho corresponde esta tarea.
+                        «Si creo una tarea poder vincular una empresa, para saber a
+                        quién le debo trabajar.» Es distinto del CLIENTE de abajo,
+                        que es una persona del CRM (un prospecto): una empresa es un
+                        cliente ya dado de alta, con su ficha y su cobranza. */}
+                    <div>
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Empresa (opcional)</span>
+                        {form.empresaId ? (
+                            <div className="flex items-center gap-2 mt-1 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
+                                <Building2 size={12} className="text-emerald-600 shrink-0" />
+                                <span className="text-xs text-slate-700 truncate flex-1">{form.empresaNombre}</span>
+                                <button type="button" title="Quitar la empresa"
+                                    onClick={() => { setForm(p => ({ ...p, empresaId: null, empresaNombre: '' })); setBuscaEmpresa(''); }}
+                                    className="text-slate-400 hover:text-red-600 transition-colors">
+                                    <X size={12} />
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="relative mt-1">
+                                <input value={buscaEmpresa} onChange={(e) => setBuscaEmpresa(e.target.value)}
+                                    placeholder="Buscar empresa por nombre o RUT…" className={inp} />
+                                {empresas.length > 0 && (
+                                    <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-[#efe8dd] rounded-lg shadow-lg overflow-hidden">
+                                        {empresas.map(e => (
+                                            <button type="button" key={e.id}
+                                                onClick={() => {
+                                                    setForm(prev => ({ ...prev, empresaId: e.id, empresaNombre: e.razonSocial }));
+                                                    setBuscaEmpresa(''); setEmpresas([]);
+                                                }}
+                                                className="block w-full text-left px-3 py-1.5 hover:bg-slate-50 transition-colors">
+                                                <span className="block text-xs text-slate-700 truncate">{e.razonSocial}</span>
+                                                <span className="block text-[9px] text-slate-400 font-mono">
+                                                    {e.rut || 'sin RUT'}{!e.activo && ' · de baja'}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* CLIENTE · de quién es esta tarea. Opcional: una tarea interna
